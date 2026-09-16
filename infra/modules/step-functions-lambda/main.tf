@@ -151,6 +151,12 @@ data "aws_iam_policy_document" "state_machine_invoke" {
     resources = [for fn in aws_lambda_function.this : fn.arn]
   }
 
+  statement {
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter"]
+    resources = [var.kill_switch_parameter_arn]
+  }
+
   dynamic "statement" {
     for_each = var.agentcore_runtime_arn == null ? [] : [1]
     content {
@@ -201,8 +207,37 @@ resource "aws_sfn_state_machine" "review" {
 
   definition = jsonencode({
     Comment = "ArchiBrief review pipeline outer job lifecycle (ADR-0028)"
-    StartAt = "Ingest"
+    StartAt = "CheckKillSwitch"
     States = {
+      # ADR-0030's "fast application kill switch checked before paid work
+      # starts" — fails immediately, before Ingest/RuleEngine/Bedrock, so
+      # a real incident stops new billed work without waiting on AWS
+      # Budgets (which has no native action to halt Bedrock spend).
+      CheckKillSwitch = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::aws-sdk:ssm:getParameter"
+        Parameters = {
+          Name = var.kill_switch_parameter_name
+        }
+        ResultPath = "$.killSwitch"
+        Next       = "KillSwitchGate"
+      }
+      KillSwitchGate = {
+        Type = "Choice"
+        Choices = [
+          {
+            Variable     = "$.killSwitch.Parameter.Value"
+            StringEquals = "true"
+            Next         = "KillSwitchActive"
+          }
+        ]
+        Default = "Ingest"
+      }
+      KillSwitchActive = {
+        Type  = "Fail"
+        Error = "KillSwitchActive"
+        Cause = "ADR-0030 application kill switch is set to true — no new paid work starts until it's reset."
+      }
       Ingest = {
         Type     = "Task"
         Resource = aws_lambda_function.this["ingest"].arn

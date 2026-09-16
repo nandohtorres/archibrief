@@ -57,6 +57,17 @@ variable "admin_authorizer_zip_path" {
   description = "Deployment package for the pre-shared admin-credential Lambda authorizer (ADR-0044)."
 }
 
+variable "alert_email" {
+  type        = string
+  description = "Email address for AWS Budgets threshold notifications (ADR-0040) — real value goes in terraform.tfvars (gitignored), never here."
+}
+
+variable "monthly_budget_usd" {
+  type        = number
+  default     = 50
+  description = "ADR-0024/ADR-0040 target/alert threshold, not an enforced ceiling."
+}
+
 # Titan V2's actual output dimension — baseline candidate, not a final
 # locked choice (ADR-0035). Confirm against the live retrieval evaluation
 # before treating this as settled.

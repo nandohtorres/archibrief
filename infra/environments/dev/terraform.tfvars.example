@@ -18,3 +18,8 @@ lambda_zip_paths = {
 
 # Pre-shared admin-credential authorizer on POST /reviews (ADR-0044).
 admin_authorizer_zip_path = "../../../backend/lambdas/admin_authorizer/build/admin_authorizer.zip"
+
+# AWS Budgets threshold notifications (ADR-0040) — a real inbox, not a
+# placeholder, since AWS SNS actually emails it.
+alert_email        = "REPLACE_ME@example.com"
+monthly_budget_usd = 50

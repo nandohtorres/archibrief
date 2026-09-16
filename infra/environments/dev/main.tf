@@ -44,6 +44,12 @@ module "guardrails" {
   tags        = var.tags
 }
 
+module "kill_switch" {
+  source      = "../../modules/kill-switch"
+  name_prefix = "${var.name_prefix}-${var.environment}"
+  tags        = var.tags
+}
+
 module "step_functions_lambda" {
   source                    = "../../modules/step-functions-lambda"
   name_prefix                = "${var.name_prefix}-${var.environment}"
@@ -55,6 +61,8 @@ module "step_functions_lambda" {
   permissions_boundary_arn   = module.iam.runtime_permissions_boundary_arn
   guardrail_id               = module.guardrails.guardrail_id
   guardrail_version           = module.guardrails.guardrail_version
+  kill_switch_parameter_name = module.kill_switch.parameter_name
+  kill_switch_parameter_arn  = module.kill_switch.parameter_arn
   tags                       = var.tags
 }
 
@@ -73,4 +81,12 @@ module "api_gateway" {
   admin_authorizer_zip_path     = var.admin_authorizer_zip_path
   permissions_boundary_arn      = module.iam.runtime_permissions_boundary_arn
   tags                           = var.tags
+}
+
+module "cost_controls" {
+  source                 = "../../modules/cost-controls"
+  name_prefix             = "${var.name_prefix}-${var.environment}"
+  monthly_budget_usd      = var.monthly_budget_usd
+  alert_email             = var.alert_email
+  tags                   = var.tags
 }

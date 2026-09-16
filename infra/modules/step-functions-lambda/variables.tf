@@ -60,6 +60,16 @@ variable "guardrail_version" {
   description = "Deployed Bedrock Guardrail version, paired with guardrail_id."
 }
 
+variable "kill_switch_parameter_name" {
+  type        = string
+  description = "SSM Parameter Store name (from modules/kill-switch) checked by the state machine's first state before any paid work starts (ADR-0030)."
+}
+
+variable "kill_switch_parameter_arn" {
+  type        = string
+  description = "SSM Parameter Store ARN, paired with kill_switch_parameter_name — used to scope the state machine role's ssm:GetParameter permission."
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
