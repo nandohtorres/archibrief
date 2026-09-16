@@ -127,6 +127,45 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
     resources = ["arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:guardrail/*"]
   }
 
+  # Missing until 2026-09-16 (found scoping AgentCore Runtime deployment,
+  # confirmed via AWS's own IAM docs and by reading this file directly):
+  # this boundary had ApplyGuardrail and S3 Vectors but no InvokeModel/
+  # GetInferenceProfile statement anywhere. A permissions boundary caps a
+  # role's EFFECTIVE permissions to the INTERSECTION of its own identity
+  # policy and this boundary — so attaching this boundary (as every
+  # runtime role in this project does, per this file's own top comment)
+  # to the new AgentCore execution role would have silently blocked its
+  # Converse/model calls even with a fully correct identity policy on the
+  # role itself. Per AWS's Converse API docs, Converse is authorized by
+  # bedrock:InvokeModel (no separate bedrock:Converse allow-action
+  # exists); GetInferenceProfile is separately required for the
+  # cross-region inference profile ARNs this project uses (see
+  # BedrockReasoningInvoke in deploy-role-policy.example.json for the
+  # same dual foundation-model + inference-profile ARN pattern, kept
+  # scoped to Claude Sonnet specifically rather than every Bedrock model).
+  statement {
+    sid    = "AllowBedrockReasoningInvoke"
+    effect = "Allow"
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream",
+      "bedrock:GetInferenceProfile",
+    ]
+    resources = [
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-5",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-5",
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+      # Titan V2 embeddings (ADR-0035) — this boundary statement caps the
+      # AgentCore execution role's own ReasoningInvoke grant (see
+      # modules/agentcore-runtime/main.tf), so it needs the same Titan ARN
+      # or the boundary intersection would silently strip that permission
+      # even though the role's identity policy grants it. Confirmed missing
+      # 2026-09-16 via Codex review, same fix applied in both places.
+      "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
+    ]
+  }
+
   statement {
     sid    = "AllowLogging"
     effect = "Allow"

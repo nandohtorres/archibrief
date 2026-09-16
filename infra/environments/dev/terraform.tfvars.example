@@ -6,7 +6,6 @@
 aws_account_id           = "000000000000"
 github_oidc_provider_arn = null
 github_repo              = "REPLACE_ME/archibrief"
-agentcore_runtime_arn    = null
 
 lambda_zip_paths = {
   ingest      = "../../../backend/lambdas/ingest/build/ingest.zip"
@@ -18,6 +17,11 @@ lambda_zip_paths = {
 
 # Pre-shared admin-credential authorizer on POST /reviews (ADR-0044).
 admin_authorizer_zip_path = "../../../backend/lambdas/admin_authorizer/build/admin_authorizer.zip"
+
+# AgentCore Runtime entrypoint package (backend/agent/runtime_entrypoint.py)
+# — TODO(account-setup): does not exist until a real CI packaging step
+# runs, built for Linux ARM64 (see modules/agentcore-runtime's own doc).
+agentcore_runtime_zip_path = "../../../backend/agent/build/agentcore-runtime.zip"
 
 # AWS Budgets threshold notifications (ADR-0040) — a real inbox, not a
 # placeholder, since AWS SNS actually emails it.

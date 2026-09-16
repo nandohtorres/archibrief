@@ -50,6 +50,18 @@ module "kill_switch" {
   tags        = var.tags
 }
 
+module "agentcore_runtime" {
+  source                    = "../../modules/agentcore-runtime"
+  name_prefix               = "${var.name_prefix}-${var.environment}"
+  agent_runtime_zip_path    = var.agentcore_runtime_zip_path
+  permissions_boundary_arn  = module.iam.runtime_permissions_boundary_arn
+  guardrail_id              = module.guardrails.guardrail_id
+  guardrail_version         = module.guardrails.guardrail_version
+  vector_bucket_name        = module.s3_vectors.vector_bucket_name
+  vector_index_name         = module.s3_vectors.index_name
+  tags                      = var.tags
+}
+
 module "step_functions_lambda" {
   source                    = "../../modules/step-functions-lambda"
   name_prefix                = "${var.name_prefix}-${var.environment}"
@@ -57,7 +69,14 @@ module "step_functions_lambda" {
   reports_bucket_arn         = module.s3.bucket_arn
   reviews_table_arn          = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.reviews_table_name}"
   audit_table_arn            = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.audit_log_table_name}"
-  agentcore_runtime_arn      = var.agentcore_runtime_arn
+  # Replaced the raw placeholder var with the real module output
+  # (2026-09-16) — module.agentcore_runtime.agent_runtime_arn is only
+  # actually resolvable once modules/agentcore-runtime's own real
+  # prerequisite (a packaged ZIP artifact — see that module's
+  # agent_runtime_zip_path TODO) exists; until then this still won't
+  # apply cleanly, same documented deferral as every other TODO(account-setup)
+  # placeholder in this environment, not a new problem this change causes.
+  agentcore_runtime_arn      = module.agentcore_runtime.agent_runtime_arn
   permissions_boundary_arn   = module.iam.runtime_permissions_boundary_arn
   guardrail_id               = module.guardrails.guardrail_id
   guardrail_version           = module.guardrails.guardrail_version
