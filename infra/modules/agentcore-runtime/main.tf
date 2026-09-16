@@ -69,7 +69,14 @@ resource "aws_s3_object" "runtime_code" {
   bucket = aws_s3_bucket.artifact.id
   key    = "runtime/agentcore-runtime.zip"
   source = var.agent_runtime_zip_path
-  etag   = filemd5(var.agent_runtime_zip_path)
+  # source_hash, not etag/filemd5 — confirmed 2026-09-16 against
+  # HashiCorp's own aws_s3_object docs: when the destination bucket uses
+  # SSE-KMS (this one does, see aws_s3_bucket_server_side_encryption_configuration
+  # above), the object's real S3 ETag is not a plain MD5 of the plaintext
+  # content, so comparing etag/filemd5 for change detection is unreliable.
+  # source_hash is computed client-side and doesn't depend on how S3
+  # computed its own ETag.
+  source_hash = filemd5(var.agent_runtime_zip_path)
 }
 
 data "aws_iam_policy_document" "agentcore_trust" {
@@ -133,6 +140,14 @@ data "aws_iam_policy_document" "agentcore_execution" {
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-5",
       "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+      # Titan V2 embeddings (ADR-0035) — confirmed missing 2026-09-16 via
+      # Codex review: retrieve_node's BedrockEmbeddingClient calls
+      # invoke_model against amazon.titan-embed-text-v2:0 (backend/shared/
+      # clients/__init__.py), and this runtime's own retrieve_node call
+      # (via compiled_graph()) needs this permission just as much as the
+      # reasoning call does. No inference profile needed for Titan — it's
+      # invoked directly by foundation-model ARN.
+      "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
     ]
   }
 
@@ -176,39 +191,57 @@ resource "aws_iam_role_policy" "agentcore_execution" {
   policy = data.aws_iam_policy_document.agentcore_execution.json
 }
 
-# UNVERIFIED field names/enum values, flagged rather than guessed with
-# false confidence (2026-09-16): the exact `runtime` enum value AgentCore
-# expects for a Python 3.12 ZIP artifact, and network_configuration's
-# exact required shape, were not confirmed against the live Terraform
-# provider schema (only the top-level required-argument list and
-# code_configuration's general shape were independently confirmed). A
-# `terraform validate` run (Fernando's, not run here per this task's
-# constraints) against this exact block is the fast, cheap way to catch a
-# wrong enum/attribute name — much cheaper than guessing further without
-# being able to check.
+# `PYTHON_3_12` and `network_mode = "PUBLIC"` confirmed correct against
+# the locked hashicorp/aws 6.63.0 provider docs (Codex review 2026-09-16,
+# cross-checked against this project's own independent research, not
+# taken purely on trust). entry_point and code.s3.prefix below were fixed
+# per that same review — entry_point must be a list (a single string was
+# rejected by the schema), and the S3 code source needs prefix to name
+# the exact ZIP object key (matching aws_s3_object.runtime_code.key
+# above), not a folder-style prefix that assumes AgentCore infers a
+# filename. Neither was independently re-derived beyond Codex's citation
+# of the provider docs — a real `terraform validate` (Fernando's, not run
+# here) is still the authoritative check.
 resource "aws_bedrockagentcore_agent_runtime" "review" {
   agent_runtime_name = replace(var.name_prefix, "-", "_")
   role_arn            = aws_iam_role.agentcore_execution.arn
 
   agent_runtime_artifact {
     code_configuration {
-      entry_point = "backend/agent/runtime_entrypoint.py"
+      entry_point = ["backend/agent/runtime_entrypoint.py"]
       runtime     = "PYTHON_3_12"
       code {
         s3 {
           bucket = aws_s3_bucket.artifact.id
-          prefix = "runtime/"
+          prefix = aws_s3_object.runtime_code.key
         }
       }
     }
+  }
+
+  # Explicit, not defaulted — a real deployment shouldn't depend on
+  # runtime_entrypoint.py's own os.environ.get(..., fallback) defaults,
+  # which exist only so the file stays importable/testable without a real
+  # environment (same reasoning as every other explicit env-var wiring in
+  # this project). ARCHIBRIEF_GUARDRAIL_ID defaulting to "" silently
+  # broke guardrails.check() with a confusing KeyError in this exact
+  # project already (see Work-Project-Issues-Log.md, 2026-09-16) — that
+  # failure mode is exactly what wiring this in for real prevents.
+  environment_variables = {
+    ARCHIBRIEF_GUARDRAIL_ID          = var.guardrail_id
+    ARCHIBRIEF_GUARDRAIL_VERSION     = var.guardrail_version
+    ARCHIBRIEF_VECTOR_BUCKET         = var.vector_bucket_name
+    ARCHIBRIEF_VECTOR_INDEX          = var.vector_index_name
+    ARCHIBRIEF_REASONING_MODEL_ID    = var.reasoning_model_id
+    ARCHIBRIEF_REASONING_MAX_TOKENS  = tostring(var.reasoning_max_tokens)
+    AWS_REGION                       = data.aws_region.current.name
   }
 
   # No VPC requirement identified for this workload (it only calls
   # Bedrock/S3 Vectors public AWS API endpoints, no private resources) —
   # PUBLIC is the documented default/simple path; AgentCore VPC is a
   # separate, optional add-on capability this module deliberately doesn't
-  # use. Exact required sub-shape of network_configuration for PUBLIC mode
-  # is part of the same unverified-schema caveat above.
+  # use.
   network_configuration {
     network_mode = "PUBLIC"
   }

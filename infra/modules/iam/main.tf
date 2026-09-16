@@ -156,6 +156,13 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-5",
       "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+      # Titan V2 embeddings (ADR-0035) — this boundary statement caps the
+      # AgentCore execution role's own ReasoningInvoke grant (see
+      # modules/agentcore-runtime/main.tf), so it needs the same Titan ARN
+      # or the boundary intersection would silently strip that permission
+      # even though the role's identity policy grants it. Confirmed missing
+      # 2026-09-16 via Codex review, same fix applied in both places.
+      "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
     ]
   }
 

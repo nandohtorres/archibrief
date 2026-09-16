@@ -194,6 +194,28 @@ resource "aws_iam_role_policy" "state_machine_invoke" {
 # Retrieve/Reason loop live inside AgentCore, not duplicated as states
 # here — "InvokeAgent" is a single opaque task from this state machine's
 # perspective.
+#
+# REQUIRED StartExecution Input shape (2026-09-16 fix — every field below
+# is read via a bare "$.xxx" JSONPath somewhere in this definition, and
+# Step Functions raises a States.Runtime error if a referenced path is
+# absent, so none of these are truly optional at the ASL layer even where
+# the Lambda handler itself would tolerate a missing key via .get()):
+#   {
+#     "review_id": "...",           # threaded through every stage; no
+#                                    # Lambda in this chain re-emits it
+#     "archive_path": "...",        # Ingest
+#     "workload_brief": "...",      # Ingest, then re-used by InvokeAgent
+#     "dest_dir": "...",            # optional for Ingest (has its own default)
+#     "retrieval_query": "...",     # InvokeAgent -> runtime_entrypoint.invoke()
+#     "baseline_answers": {},       # InvokeAgent + Audit (pass {} if none)
+#     "report_bucket": "...",       # Finalize (S3 write target)
+#     "reviews_table_name": "..."   # Finalize (DynamoDB pointer write)
+#   }
+# audit_table_name is deliberately NOT required here — Audit's Parameters
+# below omit it entirely (not merely leaving it null) so event.get(...)
+# on the Lambda side stays a genuine "skip the write" no-op rather than a
+# state-machine-level path error, matching this account's still-pending
+# DynamoDB table bootstrap.
 resource "aws_sfn_state_machine" "review" {
   name     = "${var.name_prefix}-review"
   role_arn = aws_iam_role.state_machine.arn
@@ -238,15 +260,71 @@ resource "aws_sfn_state_machine" "review" {
         Error = "KillSwitchActive"
         Cause = "ADR-0030 application kill switch is set to true — no new paid work starts until it's reset."
       }
+      # Fixed 2026-09-16 (Codex review, re-verified directly against
+      # backend/lambdas/ingest/handler.py): Ingest's raw return
+      # ({status, resources, variables, files_parsed, not_observable,
+      # workload_brief, guardrails_decisions}) used to REPLACE state
+      # entirely (no ResultPath) — losing review_id and everything else
+      # the original execution input carried before RuleEngine even ran.
+      # ResultPath merges it under $.ingestResult instead, alongside the
+      # untouched original input.
       Ingest = {
-        Type     = "Task"
-        Resource = aws_lambda_function.this["ingest"].arn
-        Next     = "RuleEngine"
+        Type       = "Task"
+        Resource   = aws_lambda_function.this["ingest"].arn
+        ResultPath = "$.ingestResult"
+        Next       = "RuleEngine"
+        # NOT HANDLED, flagged deliberately rather than silently ignored
+        # (2026-09-16): if Ingest returns status "rejected" or "blocked"
+        # (IngestRejected / a Guardrails block), $.ingestResult has no
+        # "resources" key and RuleEngine's parsed.get("resources", {})
+        # below just silently produces zero findings rather than halting
+        # the execution with a clear reason. Out of scope for this pass
+        # (not one of the enumerated fixes) — a Choice state gating on
+        # $.ingestResult.status the same way AgentResponseGate below
+        # gates on the agent's status is the natural follow-up.
       }
+      # RuleEngine's handler reads event["parsed"] and event["review_id"]
+      # directly (backend/lambdas/rule_engine/handler.py) — neither name
+      # exists at top level once Ingest's output moved to $.ingestResult
+      # above. Parameters rebuilds RuleEngine's input explicitly: the
+      # whole $.ingestResult dict already has the "resources"/"variables"
+      # shape rule_engine.py's _resources() helper expects under the key
+      # "parsed", so it's aliased wholesale rather than field-by-field.
       RuleEngine = {
-        Type     = "Task"
+        Type = "Task"
         Resource = aws_lambda_function.this["rule_engine"].arn
-        Next     = "InvokeAgent"
+        Parameters = {
+          "review_id.$" = "$.review_id"
+          "parsed.$"    = "$.ingestResult"
+        }
+        ResultPath = "$.ruleEngineResult"
+        Next       = "PrepareAgentInput"
+      }
+      # New state (2026-09-16 fix): backend/agent/runtime_entrypoint.py's
+      # invoke() reads payload["review_id"], payload["workload_brief"],
+      # payload["retrieval_query"] (all required — bare dict indexing,
+      # not .get()), plus optional baseline_answers and rule_findings
+      # (payload.get("rule_findings", [])). None of those survive as a
+      # flat object after RuleEngine's own ResultPath merge above (its
+      # findings live at $.ruleEngineResult.findings, named "findings"
+      # not "rule_findings"). This Pass state assembles exactly the
+      # object InvokeAgent's Payload needs into $.agentInput, pulling
+      # review_id/workload_brief/retrieval_query/baseline_answers from
+      # the original execution input (see the required-input contract
+      # comment above aws_sfn_state_machine.review) and rule_findings/
+      # deterministic_rule_version from RuleEngine's output.
+      PrepareAgentInput = {
+        Type = "Pass"
+        Parameters = {
+          "review_id.$"                   = "$.review_id"
+          "workload_brief.$"               = "$.workload_brief"
+          "baseline_answers.$"             = "$.baseline_answers"
+          "retrieval_query.$"              = "$.retrieval_query"
+          "rule_findings.$"                = "$.ruleEngineResult.findings"
+          "deterministic_rule_version.$"   = "$.ruleEngineResult.rule_version"
+        }
+        ResultPath = "$.agentInput"
+        Next       = "InvokeAgent"
       }
       InvokeAgent = {
         Type     = "Task"
@@ -261,14 +339,13 @@ resource "aws_sfn_state_machine" "review" {
           # until a real AgentCore Runtime ARN is supplied — deliberate,
           # documented deferral, see Work-Project-Issues-Log.md.
           "AgentRuntimeArn" = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
-          # Fixed 2026-09-16 (Codex review + AWS's own direct-integration
-          # sample confirmed this exact pattern): InvokeAgentRuntime's
           # Payload is a raw byte/string field, not a nested JSON
-          # structure — passing the raw state object via "Payload.$" = "$"
-          # sends ASL's internal representation, not valid JSON bytes the
-          # entrypoint's json.loads(payload) could parse. States.JsonToString
-          # serializes the whole prior state into one JSON string first.
-          "Payload.$" = "States.JsonToString($)"
+          # structure — States.JsonToString serializes PrepareAgentInput's
+          # curated $.agentInput object (not the whole state, which would
+          # include boto3-unrelated Step Functions bookkeeping keys like
+          # killSwitch/ingestResult that runtime_entrypoint.py neither
+          # needs nor expects).
+          "Payload.$" = "States.JsonToString($.agentInput)"
           # AgentCore requires a stable session ID for correlation; AWS's
           # docs (checked, not just Codex's claim) specify a minimum
           # length (commonly cited as 33 characters) that a short
@@ -279,64 +356,124 @@ resource "aws_sfn_state_machine" "review" {
           # review_id's real format isn't confirmed in this codebase).
           "RuntimeSessionId.$" = "States.Format('archibrief-review-session-{}', $.review_id)"
         }
-        # UNVERIFIED, flagged deliberately rather than guessed with false
-        # confidence (2026-09-16): no live example was found combining
-        # LangGraph + this exact AWS SDK integration action, so the real
-        # shape of the task's Result under this ResultPath — specifically
-        # whether the entrypoint's returned {"findings": [...]} JSON lands
-        # at $.agentResult.response, $.agentResult.response.findings, or
-        # requires further unwrapping (e.g. base64/stream decoding) — is
-        # NOT confirmed against a real execution. ResultPath merges the
-        # response into state rather than replacing it (the previous bug:
-        # no ResultPath at all meant the raw response REPLACED review_id,
-        # retrieved_chunks, and everything else state carried before
-        # Validate). The very first real execution's CloudWatch execution
-        # history is the source of truth for the exact field path — check
-        # that before assuming Validate's "findings.$" mapping below is
-        # correct, and correct it here if it isn't.
+        # ResultPath merges the task's Result under $.agentResult rather
+        # than replacing state — same reasoning as every other Task fix
+        # in this definition.
         ResultPath = "$.agentResult"
-        Next       = "Validate"
+        Next       = "ParseAgentResponse"
+      }
+      # Fixed 2026-09-16 (Codex review, citing AWS's own direct
+      # Step-Functions-to-Bedrock-Agent integration sample): the SDK
+      # integration's response body lands at $.agentResult.Response
+      # (capital R) as a raw JSON STRING, not at $.agentResult.response
+      # (lowercase) or any nested .findings path — it must be parsed with
+      # States.StringToJson before any field on it is reachable. ASL
+      # doesn't allow chaining a further ".findings" property access onto
+      # an intrinsic function's result in the same expression, so parsing
+      # happens here in its own Pass state; AgentResponseGate and Validate
+      # below both read from the resulting $.agentParsed.parsed object.
+      # Still genuinely unverified against a real execution (no live
+      # AgentCore+LangGraph+ZIP example exists to confirm the exact
+      # envelope) — the first real CloudWatch execution history is the
+      # authoritative check, same caveat as before.
+      ParseAgentResponse = {
+        Type = "Pass"
+        Parameters = {
+          "parsed.$" = "States.StringToJson($.agentResult.Response)"
+        }
+        ResultPath = "$.agentParsed"
+        Next       = "AgentResponseGate"
+      }
+      # New state (2026-09-16 fix): runtime_entrypoint.py's invoke() can
+      # return {"status": "needs_clarification", ...} with no "findings"
+      # key at all (PreflightGate pausing for a required field) — before
+      # this fix, InvokeAgent unconditionally went to Validate, whose
+      # handler does event["findings"] directly and would KeyError.
+      # needs_clarification is a real, expected, non-failure outcome per
+      # runtime_entrypoint.py's own docstring, not an error to Fail on.
+      AgentResponseGate = {
+        Type = "Choice"
+        Choices = [
+          {
+            Variable     = "$.agentParsed.parsed.status"
+            StringEquals = "needs_clarification"
+            Next         = "NeedsClarification"
+          }
+        ]
+        Default = "Validate"
+      }
+      # Succeeds the execution as-is (with $.agentParsed.parsed carrying
+      # needs_clarification/preflight_fields as the last thing written) —
+      # deliberately NOT a Fail state, matching runtime_entrypoint.py's
+      # own framing of this as a legitimate stop, not an error Step
+      # Functions' Catch/Retry machinery should react to.
+      NeedsClarification = {
+        Type = "Succeed"
       }
       Validate = {
         Type     = "Task"
         Resource = aws_lambda_function.this["validate"].arn
         # Validate's handler (backend/lambdas/validate/handler.py) reads
-        # event["findings"] directly — with ResultPath merging the agent
-        # response into $.agentResult instead of replacing state, Validate
-        # needs an explicit remap back to that flat shape. Best-effort
-        # mapping based on the entrypoint's documented return contract
-        # (backend/agent/runtime_entrypoint.py returns {"findings": [...]})
-        # and boto3's own invoke_agent_runtime response using a "response"
-        # field — genuinely unverified until a real execution confirms it,
-        # see the ResultPath comment above.
+        # event["findings"] directly — sourced from ParseAgentResponse's
+        # parsed object above, now that its real field path (.Response,
+        # parsed, capital-R) is confirmed rather than guessed.
         Parameters = {
-          "findings.$" = "$.agentResult.response.findings"
+          "findings.$" = "$.agentParsed.parsed.findings"
         }
-        Next = "Audit"
+        # Fixed 2026-09-16: Validate previously had no ResultPath either
+        # — its return ({status, valid_findings, rejected_count,
+        # rejected}) replaced state wholesale, same bare-replacement bug
+        # as every other task in this chain before this pass.
+        ResultPath = "$.validateResult"
+        Next       = "Audit"
       }
-      # FLAGGED, NOT FIXED — separate, pre-existing, out-of-scope bug found
-      # while fixing InvokeAgent's payload/ResultPath handling (2026-09-16):
-      # backend/lambdas/audit/handler.py's AuditLogEntry needs review_id,
-      # baseline_answers, guardrails_decisions, deterministic_rule_version,
-      # corpus_version, and model_id from its event — but Validate's own
-      # return value (backend/lambdas/validate/handler.py: status,
-      # valid_findings, rejected_count, rejected) never carried any of
-      # those fields, and Validate has no ResultPath here either, so its
-      # return REPLACES state for this task same as InvokeAgent used to.
-      # This predates this session's InvokeAgent fix entirely — Audit was
-      # never going to receive a compatible event regardless. Out of scope
-      # for the AgentCore Runtime deployment task this comment was added
-      # for; needs its own pass across Validate/Audit/Finalize's Parameters
-      # and ResultPath, mirroring the InvokeAgent fix above.
+      # Fixed 2026-09-16: backend/lambdas/audit/handler.py's
+      # AuditLogEntry needs review_id (required) plus optional
+      # baseline_answers/guardrails_decisions/deterministic_rule_version/
+      # corpus_version/model_id (all read via event.get(...), so omitting
+      # a key here is a safe no-op on the handler side, unlike omitting
+      # one of the required-input-contract fields above). Sourced from
+      # wherever each has actually accumulated in state so far:
+      # review_id/baseline_answers from the original execution input,
+      # guardrails_decisions from Ingest's own inline Guardrails check,
+      # deterministic_rule_version from RuleEngine's rule_version output.
+      # corpus_version and model_id have no equivalent source anywhere in
+      # this state machine (runtime_entrypoint.py never returns either)
+      # and are left absent rather than guessed.
       Audit = {
-        Type     = "Task"
+        Type = "Task"
         Resource = aws_lambda_function.this["audit"].arn
-        Next     = "Finalize"
+        Parameters = {
+          "review_id.$"                 = "$.review_id"
+          "baseline_answers.$"           = "$.baseline_answers"
+          "guardrails_decisions.$"       = "$.ingestResult.guardrails_decisions"
+          "deterministic_rule_version.$" = "$.ruleEngineResult.rule_version"
+        }
+        ResultPath = "$.auditResult"
+        Next       = "Finalize"
       }
+      # Fixed 2026-09-16: backend/lambdas/finalize/handler.py needs
+      # event["review_id"] and event["findings"] (both required — bare
+      # indexing) plus optional report_bucket/reviews_table_name.
+      # Audit's own return ({"status": "recorded", "audit_id": ...})
+      # carried neither review_id nor findings, so Finalize previously
+      # received an incompatible event regardless of every upstream fix.
+      # findings comes from Validate's valid_findings (the Finding-schema-
+      # validated list, not the agent's raw unvalidated output) — matches
+      # ADR-0022's layer 3/4 ordering (Validate gates what Audit/Finalize
+      # ever see). report_bucket/reviews_table_name are threaded straight
+      # from the original execution input per the required-input contract
+      # above; there's no other source for either in this state machine.
       Finalize = {
-        Type     = "Task"
+        Type = "Task"
         Resource = aws_lambda_function.this["finalize"].arn
-        End      = true
+        Parameters = {
+          "review_id.$"           = "$.review_id"
+          "findings.$"             = "$.validateResult.valid_findings"
+          "report_bucket.$"        = "$.report_bucket"
+          "reviews_table_name.$"   = "$.reviews_table_name"
+        }
+        End = true
       }
     }
   })

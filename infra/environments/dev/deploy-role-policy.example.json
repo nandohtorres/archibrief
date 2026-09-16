@@ -338,6 +338,20 @@
       }
     },
     {
+      "Sid": "BedrockAgentCoreRuntime",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreateAgentRuntime",
+        "bedrock-agentcore:UpdateAgentRuntime",
+        "bedrock-agentcore:DeleteAgentRuntime",
+        "bedrock-agentcore:GetAgentRuntime",
+        "bedrock-agentcore:ListAgentRuntimeVersions",
+        "bedrock-agentcore:TagResource",
+        "bedrock-agentcore:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/*"
+    },
+    {
       "Sid": "BedrockGuardrails",
       "Effect": "Allow",
       "Action": [

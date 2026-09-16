@@ -18,6 +18,11 @@ variable "guardrail_id" {
   description = "Deployed Bedrock Guardrail ID (ADR-0033) — see modules/guardrails."
 }
 
+variable "guardrail_version" {
+  type        = string
+  description = "Deployed Bedrock Guardrail version — see modules/guardrails."
+}
+
 variable "vector_bucket_name" {
   type        = string
   description = "S3 Vectors bucket name (ADR-0007) — see modules/s3-vectors."
@@ -26,6 +31,20 @@ variable "vector_bucket_name" {
 variable "vector_index_name" {
   type        = string
   description = "S3 Vectors index name, paired with vector_bucket_name."
+}
+
+# Same temporary Sonnet-4.6 placeholder as validate_reason_node.py and
+# runtime_entrypoint.py's own env-var default — kept in sync deliberately.
+# See Work-Project-Issues-Log.md/[[project_archibrief_rag_progress]] for
+# the Sonnet 5 access-blocker history and revert instructions.
+variable "reasoning_model_id" {
+  type    = string
+  default = "us.anthropic.claude-sonnet-4-6"
+}
+
+variable "reasoning_max_tokens" {
+  type    = number
+  default = 8192
 }
 
 variable "tags" {

@@ -56,6 +56,7 @@ module "agentcore_runtime" {
   agent_runtime_zip_path    = var.agentcore_runtime_zip_path
   permissions_boundary_arn  = module.iam.runtime_permissions_boundary_arn
   guardrail_id              = module.guardrails.guardrail_id
+  guardrail_version         = module.guardrails.guardrail_version
   vector_bucket_name        = module.s3_vectors.vector_bucket_name
   vector_index_name         = module.s3_vectors.index_name
   tags                      = var.tags
