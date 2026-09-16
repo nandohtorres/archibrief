@@ -56,6 +56,18 @@ class ReviewState(TypedDict, total=False):
     # LangGraph never carries an undeclared key past a node boundary.
     guardrails_client: GuardrailsClient
     reasoning_client: BedrockReasoningClient
+    # A THIRD instance of the exact same silent-drop bug, found while
+    # scoping AgentCore Runtime deployment (2026-09-16): reason_node also
+    # reads state.get("max_tokens", 4096), state.get("corpus_version",
+    # "unknown"), and state.get("deterministic_rule_version") — none of
+    # which were declared here. Any caller (including the real AgentCore
+    # entrypoint, backend/agent/runtime_entrypoint.py) that set these on
+    # the initial state before invoking the compiled graph would have had
+    # them silently dropped before reaching reason_node, silently falling
+    # back to the hardcoded defaults every time.
+    max_tokens: int
+    corpus_version: str
+    deterministic_rule_version: str | None
     reasoned_findings: list[dict]
 
 

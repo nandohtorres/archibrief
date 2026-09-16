@@ -261,15 +261,73 @@ resource "aws_sfn_state_machine" "review" {
           # until a real AgentCore Runtime ARN is supplied — deliberate,
           # documented deferral, see Work-Project-Issues-Log.md.
           "AgentRuntimeArn" = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
-          "Payload.$"       = "$"
+          # Fixed 2026-09-16 (Codex review + AWS's own direct-integration
+          # sample confirmed this exact pattern): InvokeAgentRuntime's
+          # Payload is a raw byte/string field, not a nested JSON
+          # structure — passing the raw state object via "Payload.$" = "$"
+          # sends ASL's internal representation, not valid JSON bytes the
+          # entrypoint's json.loads(payload) could parse. States.JsonToString
+          # serializes the whole prior state into one JSON string first.
+          "Payload.$" = "States.JsonToString($)"
+          # AgentCore requires a stable session ID for correlation; AWS's
+          # docs (checked, not just Codex's claim) specify a minimum
+          # length (commonly cited as 33 characters) that a short
+          # review_id alone might not satisfy — States.Format prepends a
+          # fixed literal to guarantee a floor length regardless of the
+          # real review_id format, which isn't fully pinned down yet
+          # (validate_reason_node.py's test id is ~30 chars; production
+          # review_id's real format isn't confirmed in this codebase).
+          "RuntimeSessionId.$" = "States.Format('archibrief-review-session-{}', $.review_id)"
         }
-        Next = "Validate"
+        # UNVERIFIED, flagged deliberately rather than guessed with false
+        # confidence (2026-09-16): no live example was found combining
+        # LangGraph + this exact AWS SDK integration action, so the real
+        # shape of the task's Result under this ResultPath — specifically
+        # whether the entrypoint's returned {"findings": [...]} JSON lands
+        # at $.agentResult.response, $.agentResult.response.findings, or
+        # requires further unwrapping (e.g. base64/stream decoding) — is
+        # NOT confirmed against a real execution. ResultPath merges the
+        # response into state rather than replacing it (the previous bug:
+        # no ResultPath at all meant the raw response REPLACED review_id,
+        # retrieved_chunks, and everything else state carried before
+        # Validate). The very first real execution's CloudWatch execution
+        # history is the source of truth for the exact field path — check
+        # that before assuming Validate's "findings.$" mapping below is
+        # correct, and correct it here if it isn't.
+        ResultPath = "$.agentResult"
+        Next       = "Validate"
       }
       Validate = {
         Type     = "Task"
         Resource = aws_lambda_function.this["validate"].arn
-        Next     = "Audit"
+        # Validate's handler (backend/lambdas/validate/handler.py) reads
+        # event["findings"] directly — with ResultPath merging the agent
+        # response into $.agentResult instead of replacing state, Validate
+        # needs an explicit remap back to that flat shape. Best-effort
+        # mapping based on the entrypoint's documented return contract
+        # (backend/agent/runtime_entrypoint.py returns {"findings": [...]})
+        # and boto3's own invoke_agent_runtime response using a "response"
+        # field — genuinely unverified until a real execution confirms it,
+        # see the ResultPath comment above.
+        Parameters = {
+          "findings.$" = "$.agentResult.response.findings"
+        }
+        Next = "Audit"
       }
+      # FLAGGED, NOT FIXED — separate, pre-existing, out-of-scope bug found
+      # while fixing InvokeAgent's payload/ResultPath handling (2026-09-16):
+      # backend/lambdas/audit/handler.py's AuditLogEntry needs review_id,
+      # baseline_answers, guardrails_decisions, deterministic_rule_version,
+      # corpus_version, and model_id from its event — but Validate's own
+      # return value (backend/lambdas/validate/handler.py: status,
+      # valid_findings, rejected_count, rejected) never carried any of
+      # those fields, and Validate has no ResultPath here either, so its
+      # return REPLACES state for this task same as InvokeAgent used to.
+      # This predates this session's InvokeAgent fix entirely — Audit was
+      # never going to receive a compatible event regardless. Out of scope
+      # for the AgentCore Runtime deployment task this comment was added
+      # for; needs its own pass across Validate/Audit/Finalize's Parameters
+      # and ResultPath, mirroring the InvokeAgent fix above.
       Audit = {
         Type     = "Task"
         Resource = aws_lambda_function.this["audit"].arn

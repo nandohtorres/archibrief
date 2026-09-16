@@ -10,6 +10,11 @@ dependencies = [
     "python-hcl2>=6.0",
     "beautifulsoup4>=4.12",
     "pypdf>=5.0",
+    # AgentCore Runtime entrypoint SDK (BedrockAgentCoreApp, @app.entrypoint)
+    # — backend/agent/runtime_entrypoint.py. Was missing entirely before
+    # 2026-09-16's AgentCore Runtime deployment work, confirmed by reading
+    # this file directly.
+    "bedrock-agentcore>=0.1",
 ]
 
 [project.optional-dependencies]

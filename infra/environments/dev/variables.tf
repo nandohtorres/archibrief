@@ -37,11 +37,6 @@ variable "github_repo" {
   default = "REPLACE_ME/archibrief"
 }
 
-variable "agentcore_runtime_arn" {
-  type    = string
-  default = null
-}
-
 variable "lambda_zip_paths" {
   type = object({
     ingest      = string
@@ -55,6 +50,11 @@ variable "lambda_zip_paths" {
 variable "admin_authorizer_zip_path" {
   type        = string
   description = "Deployment package for the pre-shared admin-credential Lambda authorizer (ADR-0044)."
+}
+
+variable "agentcore_runtime_zip_path" {
+  type        = string
+  description = "Deployment package for the AgentCore Runtime entrypoint (backend/agent/runtime_entrypoint.py) — see modules/agentcore-runtime's own variable doc for the real packaging prerequisite this depends on."
 }
 
 variable "alert_email" {
