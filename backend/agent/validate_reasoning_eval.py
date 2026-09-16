@@ -121,10 +121,27 @@ def _run_brief(
 def _print_report(label: str, results: list[dict]) -> None:
     print(f"=== {label} ===")
     scored = [r for r in results if "topic_recall" in r]
+    blocked = [r for r in results if r.get("blocked_by_guardrails")]
+    failed = [r for r in results if r.get("finding_validation_failed")]
     if scored:
         overall = sum(r["topics_covered"] for r in scored) / sum(r["topics_total"] for r in scored)
+        # Previously this headline silently dropped blocked/failed briefs
+        # with no indication the number was partial (Codex review
+        # 2026-09-16, confirmed) — now says so explicitly whenever it is.
+        completeness_note = (
+            ""
+            if len(scored) == len(results)
+            else (
+                f"  [INCOMPLETE RUN: {len(scored)}/{len(results)} briefs scored — "
+                f"{len(blocked)} blocked, {len(failed)} failed validation — this "
+                f"number does NOT represent the full brief set]"
+            )
+        )
         print(f"Overall topic recall: {overall:.0%} "
-              f"({sum(r['topics_covered'] for r in scored)}/{sum(r['topics_total'] for r in scored)})\n")
+              f"({sum(r['topics_covered'] for r in scored)}/{sum(r['topics_total'] for r in scored)})"
+              f"{completeness_note}\n")
+    else:
+        print(f"No briefs scored ({len(blocked)} blocked, {len(failed)} failed validation)\n")
     for r in results:
         print(f"--- {r['brief_id']} ---")
         if r.get("blocked_by_guardrails"):
@@ -139,13 +156,17 @@ def _print_report(label: str, results: list[dict]) -> None:
         for hit in r["topic_hits"]:
             status = "OK  " if hit["covered"] else "MISS"
             flag = ""
-            if hit["citation_from_plausible_source"] is False:
+            relevance = hit["citation_relevance"]
+            if relevance == "implausible":
                 flag = "  [citation from an unexpected document — review]"
+            elif relevance == "missing":
+                flag = "  [covering finding has no citation at all — review]"
             print(f"    {status} {hit['topic_id']}: {hit['description']}{flag}")
         if r["unmatched_findings"]:
-            print("  unmatched findings (not necessarily wrong — review):")
+            print("  unmatched findings (not necessarily wrong — review, label precision_label after reading):")
             for uf in r["unmatched_findings"]:
-                print(f"    - [{uf['category']}] {uf['finding']}")
+                f = uf["finding"]
+                print(f"    - [{f['category']}] {f['finding']}")
     print()
 
 
