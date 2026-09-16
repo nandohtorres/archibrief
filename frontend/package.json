@@ -3,12 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "description": "ArchiBrief frontend — Next.js, static/client-first rendering (ADR-0016/0042)",
+  "engines": {
+    "node": "20.x || 22.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
-    "test": "vitest"
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write . ../tests/frontend",
+    "format:check": "prettier --check . ../tests/frontend",
+    "test": "vitest run --globals --environment node --pool threads --maxWorkers 1 --minWorkers 1 --dir ../tests/frontend",
+    "test:watch": "vitest --globals --environment node --pool threads --maxWorkers 1 --minWorkers 1 --dir ../tests/frontend"
   },
   "dependencies": {
     "next": "^15.0.0",
@@ -16,11 +23,14 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "typescript": "^5.6.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.0.0",
     "prettier": "^3.3.0",
-    "vitest": "^2.0.0",
-    "@playwright/test": "^1.47.0"
+    "vitest": "^2.0.0"
   }
 }

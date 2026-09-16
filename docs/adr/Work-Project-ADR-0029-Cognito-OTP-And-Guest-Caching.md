@@ -15,7 +15,14 @@ superseded by
 [[Work-Project-ADR-0043-Auth-Method-Simplified-Password-Plus-Email-Code]]**
 (2026-09-04): the "no magic link" OTP correction and the guest-caching
 decision below both stand; passkeys-as-primary was replaced with
-email/password-primary + emailed auth code as a second factor.
+email/password-primary + emailed auth code as a second factor. **The
+auth-method question is now moot: superseded by
+[[Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential]]**
+(2026-09-11), which removes user accounts entirely. This ADR's
+guest-caching *principle* (serve a precomputed/cached report, don't run
+the pipeline fresh per visitor) carries forward unchanged into ADR-0044,
+now applied to the only public-facing path rather than as an
+anonymous-user special case.
 
 ## Context
 

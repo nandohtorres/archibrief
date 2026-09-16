@@ -12,7 +12,10 @@ status: accepted
 **Status:** Accepted (2026-09-03) — **amended by
 [[Work-Project-ADR-0042-Minor-Amendments-Batch]]** (2026-09-03): Cognito
 choice stands; specifies user-pool-only (not identity-pool AWS-credential
-issuance) with server-side token/role validation.
+issuance) with server-side token/role validation. **Superseded by
+[[Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential]]**
+(2026-09-11): no user accounts, so no auth provider needed — Cognito is
+dropped entirely in favor of a single pre-shared admin credential.
 
 ## Context
 

@@ -4,7 +4,6 @@
 # (see .gitignore / ADR-0015).
 
 aws_account_id           = "000000000000"
-ses_source_arn           = "arn:aws:ses:us-east-1:000000000000:identity/archibrief.dev"
 github_oidc_provider_arn = null
 github_repo              = "REPLACE_ME/archibrief"
 agentcore_runtime_arn    = null
@@ -16,3 +15,6 @@ lambda_zip_paths = {
   audit       = "../../../backend/lambdas/audit/build/audit.zip"
   finalize    = "../../../backend/lambdas/finalize/build/finalize.zip"
 }
+
+# Pre-shared admin-credential authorizer on POST /reviews (ADR-0044).
+admin_authorizer_zip_path = "../../../backend/lambdas/admin_authorizer/build/admin_authorizer.zip"

@@ -68,5 +68,6 @@ active design:
 
 Python (backend) · Next.js/TypeScript (frontend) · Terraform (infra) ·
 AWS Lambda + Step Functions + API Gateway · DynamoDB · S3 + S3 Vectors ·
-Bedrock (Claude + Titan V2 + Guardrails) · LangGraph on Bedrock AgentCore
-· Cognito.
+Bedrock (Claude + Titan V2 + Guardrails) · LangGraph on Bedrock AgentCore.
+No user accounts — a single pre-shared admin credential gates the live
+pipeline; guest/demo mode is fully static and needs no auth (ADR-0044).

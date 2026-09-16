@@ -18,7 +18,10 @@ report rather than a fresh pipeline run per visitor. **Primary sign-in
 method further simplified by
 [[Work-Project-ADR-0043-Auth-Method-Simplified-Password-Plus-Email-Code]]**
 (2026-09-04): email/password primary + emailed auth code as a second
-factor, passkeys deferred past v1.
+factor, passkeys deferred past v1. **Entirely superseded by
+[[Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential]]**
+(2026-09-11): no user accounts at all; single admin pre-shared
+credential + fully static guest mode.
 
 ## Context
 

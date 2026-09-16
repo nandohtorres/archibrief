@@ -12,7 +12,11 @@ status: accepted
 **Status:** Accepted (2026-09-03) — **recruiter-admin proposal superseded
 by [[Work-Project-ADR-0037-Admin-Fernando-Only]]** (2026-09-03): the
 per-function IAM model stands; `admin` is now Fernando-only with a
-separate constrained `reviewer` role for recruiters, added later.
+separate constrained `reviewer` role for recruiters, added later. **The
+application-RBAC portion (layer 2) is superseded by
+[[Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential]]**
+(2026-09-11): no user accounts, so no app-level roles at all — the
+per-function AWS IAM model (layer 1) is unaffected and stands.
 
 ## Context
 

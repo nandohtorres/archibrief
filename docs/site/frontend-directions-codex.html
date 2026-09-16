@@ -257,6 +257,13 @@
       letter-spacing: 0.055em;
       color: var(--text-faint);
     }
+    .category-tag {
+      padding: 0.05rem 0.45rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-s);
+      font: 600 0.72rem/1.4 var(--font-body);
+      color: var(--text-muted);
+    }
     .confidence {
       display: inline-flex;
       align-items: center;
@@ -324,12 +331,15 @@
       border-bottom: 1px solid var(--border);
     }
     .a-bento .tile { background: var(--surface); padding: var(--sp-4); }
+    .a-bento .tile-label { font: 700 0.7rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 0.3rem; }
     .a-bento .figure { font: 600 1.7rem/1.1 var(--font-mono); font-variant-numeric: tabular-nums; }
     .a-bento .critical-number { color: var(--sev-critical); }
     .a-bento .caption { margin-top: var(--sp-1); font-size: 0.78rem; color: var(--text-muted); }
     .coverage { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: var(--sp-2); }
-    .coverage span { padding: 0.1rem 0.4rem; border-radius: var(--radius-s); background: var(--surface-2); color: var(--text-muted); font: 0.68rem/1.5 var(--font-mono); }
+    .coverage span { padding: 0.1rem 0.4rem; border-radius: var(--radius-s); background: var(--surface-2); color: var(--text-muted); font: 0.68rem/1.5 var(--font-mono); cursor: help; }
     .coverage span.hit { background: var(--a-accent-tint); color: var(--a-accent); }
+    .pillar-legend { grid-column: 1 / -1; padding: 0.6rem var(--sp-4); background: var(--surface-2); border-top: 1px solid var(--border); font-size: 0.72rem; color: var(--text-faint); }
+    .pillar-legend strong { color: var(--text-muted); font-weight: 600; }
     .a-toolbar {
       display: grid;
       grid-template-columns: minmax(12rem, 1fr) auto;
@@ -406,6 +416,212 @@
       color: var(--a-accent);
       font-weight: 700;
     }
+    .topbar-actions, .finding-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--sp-2);
+    }
+    .topbar-actions .secondary-button, .finding-actions .secondary-button { margin-top: 0; }
+    .report-section {
+      padding: var(--sp-5) var(--sp-4);
+      border-top: 1px solid var(--border);
+      scroll-margin-top: var(--sp-3);
+    }
+    .section-heading-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--sp-4);
+      margin-bottom: var(--sp-4);
+    }
+    .section-heading-row h2 { font-size: 1.2rem; }
+    .section-heading-row p { margin: var(--sp-1) 0 0; color: var(--text-muted); font-size: 0.9rem; }
+    .concept-label {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0.2rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font: 600 0.7rem/1.4 var(--font-mono);
+      white-space: nowrap;
+    }
+    .architecture-shell {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-l);
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .architecture-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--sp-3);
+      padding: var(--sp-3);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+    .architecture-toolbar p { margin: 0; color: var(--text-muted); font-size: 0.8rem; }
+    .view-toggle {
+      display: inline-flex;
+      flex: none;
+      gap: var(--sp-1);
+      padding: var(--sp-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      background: var(--surface);
+    }
+    .view-toggle button {
+      border: 0;
+      border-radius: var(--radius-s);
+      padding: 0.45rem 0.75rem;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .view-toggle button[aria-pressed="true"] { background: var(--a-accent-tint); color: var(--a-accent); }
+    .architecture-canvas {
+      overflow-x: auto;
+      padding: var(--sp-3);
+      background-color: var(--surface);
+      background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    .architecture-svg { display: block; width: 100%; min-width: 820px; height: auto; }
+    .architecture-svg .edge { fill: none; stroke: var(--text-faint); stroke-width: 2; marker-end: url(#arrow); }
+    .architecture-svg .edge.recommended { stroke: var(--a-accent); stroke-width: 2.5; stroke-dasharray: 7 5; }
+    .architecture-svg .node-box { fill: var(--surface); stroke: var(--border); stroke-width: 2; rx: 10; }
+    .architecture-svg .risk-box { stroke: var(--sev-warning); stroke-width: 3; }
+    .architecture-svg .change-box { stroke: var(--a-accent); stroke-width: 3; }
+    .architecture-svg .new-box { fill: var(--a-accent-tint); stroke: var(--a-accent); stroke-width: 3; stroke-dasharray: 7 4; }
+    .architecture-svg .node-title { fill: var(--text); font: 700 15px var(--font-body); text-anchor: middle; }
+    .architecture-svg .node-meta { fill: var(--text-muted); font: 12px var(--font-mono); text-anchor: middle; }
+    .architecture-svg .finding-marker { fill: var(--sev-warning-bg); stroke: var(--sev-warning); stroke-width: 1.5; }
+    .architecture-svg .finding-text { fill: var(--sev-warning); font: 700 11px var(--font-mono); text-anchor: middle; }
+    .architecture-svg .change-marker { fill: var(--a-accent-tint); stroke: var(--a-accent); stroke-width: 1.5; }
+    .architecture-svg .change-text { fill: var(--a-accent); font: 700 11px var(--font-mono); text-anchor: middle; }
+    .architecture-shell[data-view="submitted"] .recommended-only,
+    .architecture-shell[data-view="recommended"] .submitted-only { display: none; }
+    .architecture-caption {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--sp-3);
+      padding: var(--sp-3);
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+    .legend-item { display: inline-flex; align-items: center; gap: var(--sp-2); }
+    .legend-swatch { width: 1.15rem; height: 0.7rem; border: 2px solid var(--border); border-radius: 3px; background: var(--surface); }
+    .legend-swatch.risk { border-color: var(--sev-warning); }
+    .legend-swatch.change { border-color: var(--a-accent); background: var(--a-accent-tint); border-style: dashed; }
+    .architecture-findings {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--sp-2);
+      margin-top: var(--sp-3);
+    }
+    .architecture-link {
+      min-width: 0;
+      padding: var(--sp-2) var(--sp-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      background: var(--surface);
+      color: var(--text);
+      text-align: left;
+      font-size: 0.82rem;
+    }
+    .architecture-link:hover, .architecture-link[aria-current="true"] { border-color: var(--a-accent); background: var(--a-accent-tint); }
+    .architecture-link strong { display: block; margin-bottom: 0.15rem; color: var(--a-accent); font: 700 0.7rem/1.4 var(--font-mono); }
+    .review-boundary {
+      margin-top: var(--sp-3);
+      padding: var(--sp-3);
+      border-left: 4px solid var(--sev-unknown);
+      border-radius: var(--radius-s);
+      background: var(--sev-unknown-bg);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .review-boundary strong { color: var(--text); }
+    .chat-section { background: var(--surface-2); }
+    .grounding-note {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: var(--sp-3);
+      align-items: start;
+      padding: var(--sp-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .grounding-icon {
+      display: grid;
+      place-items: center;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--a-accent-tint);
+      color: var(--a-accent);
+      font-weight: 800;
+    }
+    .grounding-note strong { display: block; color: var(--text); }
+    .suggested-prompts { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
+    .prompt-button {
+      padding: 0.45rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--a-accent);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .prompt-button:hover { border-color: var(--a-accent); background: var(--a-accent-tint); }
+    .chat-log {
+      display: grid;
+      gap: var(--sp-3);
+      min-height: 150px;
+      max-height: 390px;
+      overflow-y: auto;
+      padding: var(--sp-3);
+      border: 1px solid var(--border);
+      border-bottom: 0;
+      border-radius: var(--radius-m) var(--radius-m) 0 0;
+      background: var(--surface);
+    }
+    .chat-message { max-width: min(88%, 70ch); }
+    .chat-message.user { justify-self: end; }
+    .chat-role { margin-bottom: var(--sp-1); color: var(--text-faint); font: 700 0.68rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; }
+    .chat-bubble { padding: 0.75rem var(--sp-3); border-radius: var(--radius-m); background: var(--surface-2); }
+    .chat-message.user .chat-bubble { background: var(--a-accent); color: var(--a-accent-ink); }
+    .chat-bubble p { margin: 0; }
+    .chat-citation { display: inline-flex; margin-top: var(--sp-2); font-size: 0.78rem; font-weight: 700; }
+    .chat-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--sp-2);
+      padding: var(--sp-3);
+      border: 1px solid var(--border);
+      border-radius: 0 0 var(--radius-m) var(--radius-m);
+      background: var(--surface);
+    }
+    .chat-form input {
+      min-width: 0;
+      min-height: 48px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      background: var(--surface);
+      color: var(--text);
+      padding: 0.65rem 0.8rem;
+    }
+    .chat-form .primary-button { min-width: 92px; }
+    .chat-disclaimer { margin: var(--sp-2) 0 0; color: var(--text-faint); font-size: 0.76rem; }
 
     /* Option B — Guided Report */
     .b-wrap { max-width: 780px; margin: 0 auto; padding: var(--sp-6) var(--sp-6) var(--sp-7); }
@@ -472,6 +688,11 @@
       .a-body { grid-template-columns: 1fr; }
       .a-list { max-height: none; border-right: 0; border-bottom: 1px solid var(--border); }
       .a-detail { padding: var(--sp-4); }
+      .section-heading-row, .architecture-toolbar { flex-direction: column; }
+      .view-toggle { width: 100%; }
+      .view-toggle button { flex: 1; }
+      .architecture-findings { grid-template-columns: 1fr; }
+      .chat-form { grid-template-columns: 1fr; }
       .b-wrap { padding: var(--sp-5) var(--sp-3) var(--sp-6); }
       .b-summary { padding: var(--sp-4); }
       .b-stepper { grid-template-columns: 1fr; }
@@ -517,14 +738,18 @@
             <h2>payments-api — architecture review</h2>
             <div class="subline">terraform-ref: infra/payments-api@a91f3c2 · submitted 2026-09-08 14:02 · account: standard</div>
           </div>
-          <button id="export-button" class="primary-button" type="button">Export evidence ledger</button>
+          <div class="topbar-actions">
+            <button id="ask-header-button" class="secondary-button" type="button">Ask questions ↓</button>
+            <button id="export-button" class="primary-button" type="button">Export evidence ledger</button>
+          </div>
         </div>
         <div class="snapshot-bar">Reproducibility snapshot · rules 2026.09.1 · corpus 2026-09-06 · prompt v1.4 · model ID recorded · static review only</div>
         <div class="a-bento" aria-label="Review summary">
-          <div class="tile"><div class="figure">7</div><div class="caption">Sample findings shown</div></div>
-          <div class="tile"><div class="figure critical-number">3</div><div class="caption">High risk, unresolved</div></div>
-          <div class="tile"><div class="figure">Medium</div><div class="caption">Estimated cost tier · $150–220/mo</div></div>
-          <div class="tile"><div class="figure">4/6</div><div class="caption">Well-Architected pillars touched</div><div class="coverage" aria-label="Security, reliability, cost optimization, and operational excellence covered"><span class="hit">SEC</span><span class="hit">REL</span><span class="hit">COST</span><span class="hit">OPS</span><span>PERF</span><span>SUS</span></div></div>
+          <div class="tile"><div class="tile-label">Total findings</div><div class="figure">7</div><div class="caption">Across all categories in this review</div></div>
+          <div class="tile"><div class="tile-label">Needs action</div><div class="figure critical-number">3</div><div class="caption">High-risk findings, unresolved</div></div>
+          <div class="tile"><div class="tile-label">Cost tier</div><div class="figure">Medium</div><div class="caption">Estimated $150–220/mo at current design</div></div>
+          <div class="tile"><div class="tile-label">Framework coverage</div><div class="figure">4 / 6</div><div class="caption">Well-Architected pillars this review touched</div><div class="coverage" aria-label="Security, reliability, cost optimization, and operational excellence covered; performance efficiency and sustainability not covered"><span class="hit" title="Security">SEC</span><span class="hit" title="Reliability">REL</span><span class="hit" title="Cost Optimization">COST</span><span class="hit" title="Operational Excellence">OPS</span><span title="Performance Efficiency — not covered">PERF</span><span title="Sustainability — not covered">SUS</span></div></div>
+          <div class="pillar-legend"><strong>Pillars:</strong> SEC = Security · REL = Reliability · COST = Cost Optimization · OPS = Operational Excellence · PERF = Performance Efficiency · SUS = Sustainability. Highlighted = covered by this review.</div>
         </div>
         <div class="a-toolbar" aria-label="Finding tools">
           <label class="field-label" for="finding-search">Find findings
@@ -555,6 +780,159 @@
           <article class="a-detail" id="a-detail" aria-live="polite" aria-atomic="true"></article>
         </div>
         <p id="a-action-status" class="page-status" role="status"></p>
+
+        <section class="report-section" id="architecture-impact" aria-labelledby="architecture-heading">
+          <div class="section-heading-row">
+            <div>
+              <h2 id="architecture-heading">Architecture impact</h2>
+              <p>See what was submitted, then overlay only the changes supported by this report's findings.</p>
+            </div>
+            <span class="concept-label">Interactive concept preview</span>
+          </div>
+
+          <div class="architecture-shell" id="architecture-shell" data-view="submitted">
+            <div class="architecture-toolbar">
+              <div class="view-toggle" role="group" aria-label="Architecture view">
+                <button type="button" data-architecture-view="submitted" aria-pressed="true">Submitted design</button>
+                <button type="button" data-architecture-view="recommended" aria-pressed="false">Recommended changes</button>
+              </div>
+              <p id="architecture-status" role="status">Showing resources and gaps observable in the submitted Terraform.</p>
+            </div>
+
+            <div class="architecture-canvas">
+              <svg class="architecture-svg" viewBox="0 0 1000 480" role="img" aria-labelledby="architecture-diagram-title architecture-diagram-description">
+                <title id="architecture-diagram-title">Payments API submitted architecture and recommended-change overlay</title>
+                <desc id="architecture-diagram-description">Internet traffic enters API Gateway and Lambda. Lambda uses an IAM role and connects to an RDS database and an S3 audit-log bucket. The recommended view overlays bounded changes supported by five findings.</desc>
+                <defs>
+                  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-faint)"></path>
+                  </marker>
+                </defs>
+
+                <path class="edge" d="M140 230 H190"></path>
+                <path class="edge" d="M340 230 H405"></path>
+                <path class="edge" d="M565 215 C620 215 620 120 680 120"></path>
+                <path class="edge" d="M565 245 C620 245 620 290 680 290"></path>
+                <path class="edge" d="M485 365 V270"></path>
+
+                <g>
+                  <rect class="node-box" x="20" y="190" width="120" height="80"></rect>
+                  <text class="node-title" x="80" y="225">Internet</text>
+                  <text class="node-meta" x="80" y="248">HTTPS traffic</text>
+                </g>
+                <g>
+                  <rect class="node-box" x="190" y="190" width="150" height="80"></rect>
+                  <text class="node-title" x="265" y="225">API Gateway</text>
+                  <text class="node-meta" x="265" y="248">public API</text>
+                </g>
+                <g>
+                  <rect class="node-box" x="405" y="190" width="160" height="80"></rect>
+                  <text class="node-title" x="485" y="225">Payments Lambda</text>
+                  <text class="node-meta" x="485" y="248">application logic</text>
+                </g>
+                <g>
+                  <rect class="node-box" x="680" y="80" width="180" height="80"></rect>
+                  <text class="node-title" x="770" y="115">Amazon RDS</text>
+                  <text class="node-meta" x="770" y="138">payments-db</text>
+                </g>
+                <g>
+                  <rect class="node-box" x="680" y="250" width="180" height="80"></rect>
+                  <text class="node-title" x="770" y="285">Amazon S3</text>
+                  <text class="node-meta" x="770" y="308">audit-log bucket</text>
+                </g>
+                <g>
+                  <rect class="node-box" x="405" y="365" width="160" height="80"></rect>
+                  <text class="node-title" x="485" y="400">IAM role</text>
+                  <text class="node-meta" x="485" y="423">lambda-exec-payments</text>
+                </g>
+
+                <g class="submitted-only">
+                  <rect class="finding-marker" x="402" y="157" width="166" height="25" rx="12"></rect>
+                  <text class="finding-text" x="485" y="174">F-005 · NO LIMIT</text>
+                  <rect class="finding-marker" x="677" y="47" width="186" height="25" rx="12"></rect>
+                  <text class="finding-text" x="770" y="64">F-006 · SINGLE-AZ</text>
+                  <rect class="finding-marker" x="677" y="217" width="186" height="25" rx="12"></rect>
+                  <text class="finding-text" x="770" y="234">F-001 · BPA NOT DECLARED</text>
+                  <rect class="finding-marker" x="402" y="332" width="166" height="25" rx="12"></rect>
+                  <text class="finding-text" x="485" y="349">F-002 · S3:* ON *</text>
+                  <rect class="node-box risk-box" x="680" y="365" width="180" height="80" stroke-dasharray="7 5"></rect>
+                  <text class="node-title" x="770" y="400">CloudTrail</text>
+                  <text class="node-meta" x="770" y="423">F-003 · not observable</text>
+                </g>
+
+                <g class="recommended-only">
+                  <rect class="change-box" x="405" y="190" width="160" height="80" fill="none" rx="10"></rect>
+                  <rect class="change-marker" x="402" y="157" width="166" height="25" rx="12"></rect>
+                  <text class="change-text" x="485" y="174">MOD · CONCURRENCY LIMIT</text>
+                  <rect class="change-box" x="680" y="80" width="180" height="80" fill="none" rx="10"></rect>
+                  <rect class="change-marker" x="677" y="47" width="186" height="25" rx="12"></rect>
+                  <text class="change-text" x="770" y="64">MOD · MULTI-AZ</text>
+                  <rect class="change-box" x="680" y="250" width="180" height="80" fill="none" rx="10"></rect>
+                  <rect class="change-marker" x="677" y="217" width="186" height="25" rx="12"></rect>
+                  <text class="change-text" x="770" y="234">ADD · BLOCK PUBLIC ACCESS</text>
+                  <rect class="change-box" x="405" y="365" width="160" height="80" fill="none" rx="10"></rect>
+                  <rect class="change-marker" x="402" y="332" width="166" height="25" rx="12"></rect>
+                  <text class="change-text" x="485" y="349">MOD · LEAST PRIVILEGE</text>
+                  <rect class="new-box" x="680" y="365" width="180" height="80"></rect>
+                  <text class="node-title" x="770" y="400">CloudTrail</text>
+                  <text class="node-meta" x="770" y="423">ADD · multi-Region trail</text>
+                </g>
+              </svg>
+            </div>
+
+            <div class="architecture-caption" aria-label="Diagram legend">
+              <span class="legend-item"><span class="legend-swatch"></span>Submitted resource</span>
+              <span class="legend-item"><span class="legend-swatch risk"></span>Finding or evidence gap</span>
+              <span class="legend-item"><span class="legend-swatch change"></span>Finding-supported addition or modification</span>
+            </div>
+          </div>
+
+          <div class="architecture-findings" aria-label="Findings represented in the architecture view">
+            <button class="architecture-link" type="button" data-finding-id="1"><strong>F-001 · Exposure</strong>Bucket-level public-access protection</button>
+            <button class="architecture-link" type="button" data-finding-id="2"><strong>F-002 · IAM</strong>Overly broad Lambda execution role</button>
+            <button class="architecture-link" type="button" data-finding-id="3"><strong>F-003 · Observability</strong>CloudTrail not observable</button>
+            <button class="architecture-link" type="button" data-finding-id="5"><strong>F-005 · Availability</strong>Lambda concurrency guardrail</button>
+            <button class="architecture-link" type="button" data-finding-id="6"><strong>F-006 · Recovery</strong>RDS Multi-AZ recommendation</button>
+          </div>
+
+          <div class="review-boundary"><strong>Review boundary:</strong> This concept visualizes submitted Terraform plus bounded, finding-supported changes. It does not prove live AWS state, resolve external modules, or generate a replacement architecture from scratch.</div>
+        </section>
+
+        <section class="report-section chat-section" id="ask-review" aria-labelledby="ask-review-heading">
+          <div class="section-heading-row">
+            <div>
+              <h2 id="ask-review-heading">Ask ArchiBrief about this review</h2>
+              <p>After reviewing the findings and architecture impact, ask for a cited explanation in your own words.</p>
+            </div>
+            <span class="concept-label">Grounded Q&amp;A concept preview</span>
+          </div>
+
+          <div class="grounding-note">
+            <span class="grounding-icon" aria-hidden="true">✓</span>
+            <div><strong>Bound to this report snapshot</strong>Answers use this submitted repository, workload brief, typed findings, and captured evidence. They cannot inspect the live AWS account or silently change the original report.</div>
+          </div>
+
+          <div class="suggested-prompts" aria-label="Suggested questions">
+            <button class="prompt-button" type="button">Which issues should I address first?</button>
+            <button class="prompt-button" type="button">Explain the IAM finding in plain English.</button>
+            <button class="prompt-button" type="button">Which changes could affect monthly cost?</button>
+            <button class="prompt-button" type="button">What could not be determined?</button>
+          </div>
+
+          <div class="chat-log" id="chat-log" aria-live="polite" aria-label="Report questions and answers">
+            <div class="chat-message assistant">
+              <div class="chat-role">ArchiBrief</div>
+              <div class="chat-bubble"><p>I can explain this report, compare its findings, or translate technical evidence. My answers stay tied to review snapshot <span class="mono">a91f3c2</span> and include a finding or source reference.</p></div>
+            </div>
+          </div>
+
+          <form class="chat-form" id="chat-form">
+            <label class="sr-only" for="chat-input">Ask about this architecture review</label>
+            <input id="chat-input" type="text" autocomplete="off" placeholder="Ask about a finding, tradeoff, source, or recommended change…">
+            <button class="primary-button" type="submit">Ask</button>
+          </form>
+          <p class="chat-disclaimer">Static interaction preview — no model is called and no conversation is stored.</p>
+        </section>
       </section>
 
       <section id="panel-b" class="option-frame" role="tabpanel" aria-labelledby="tab-b" tabindex="0" hidden>
@@ -695,7 +1073,7 @@
         const main = make("span", "rowmain");
         main.append(make("span", "rowtitle", finding.title));
         const meta = make("span", "rowmeta");
-        meta.append(makePill(finding), make("span", "type-tag", finding.type));
+        meta.append(makePill(finding), make("span", "category-tag", finding.category), make("span", "type-tag", finding.type));
         main.append(meta);
         const score = make("span", "row-score", finding.confidence === null ? "Not scored" : `${finding.confidence}% · ${finding.confidenceLabel}`);
         button.append(main, score);
@@ -755,12 +1133,24 @@
         finding.alternatives.forEach((alternative) => list.append(make("li", "", alternative)));
         detail.append(list);
       }
+      const actions = make("div", "finding-actions");
       if (finding.type !== "not-observable") {
-        const button = make("button", "secondary-button", "Go deeper on this finding");
-        button.type = "button";
-        button.addEventListener("click", () => announceAction("a-action-status", `Mockup: a versioned deep review would start for “${finding.title}”.`));
-        detail.append(button);
+        const deeperButton = make("button", "secondary-button", "Go deeper");
+        deeperButton.type = "button";
+        deeperButton.addEventListener("click", () => announceAction("a-action-status", `Mockup: a versioned deep review would start for “${finding.title}”.`));
+        actions.append(deeperButton);
       }
+      if ([1, 2, 3, 5, 6].includes(finding.id)) {
+        const architectureButton = make("button", "secondary-button", "Show on architecture");
+        architectureButton.type = "button";
+        architectureButton.addEventListener("click", () => showOnArchitecture(finding.id));
+        actions.append(architectureButton);
+      }
+      const askButton = make("button", "secondary-button", "Ask about this finding");
+      askButton.type = "button";
+      askButton.addEventListener("click", () => scrollToAsk(`Explain finding F-${String(finding.id).padStart(3, "0")}: ${finding.title}`));
+      actions.append(askButton);
+      detail.append(actions);
     }
 
     function selectFinding(id) {
@@ -791,6 +1181,94 @@
       document.getElementById(targetId).textContent = message;
     }
 
+    function setArchitectureView(view) {
+      const shell = document.getElementById("architecture-shell");
+      shell.dataset.view = view;
+      document.querySelectorAll("[data-architecture-view]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.architectureView === view));
+      });
+      document.getElementById("architecture-status").textContent = view === "submitted"
+        ? "Showing resources and gaps observable in the submitted Terraform."
+        : "Showing bounded additions and modifications supported by findings F-001, F-002, F-003, F-005, and F-006.";
+    }
+
+    function showOnArchitecture(findingId) {
+      setArchitectureView("recommended");
+      document.querySelectorAll(".architecture-link").forEach((button) => {
+        button.setAttribute("aria-current", String(Number(button.dataset.findingId) === findingId));
+      });
+      document.getElementById("architecture-impact").scrollIntoView({ block: "start" });
+    }
+
+    function openFinding(findingId) {
+      selectedId = findingId;
+      activeFilter = "all";
+      document.getElementById("finding-search").value = "";
+      document.querySelectorAll(".filter-button").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.filter === "all"));
+      });
+      renderRows();
+      document.getElementById("a-detail").scrollIntoView({ block: "start" });
+    }
+
+    function scrollToAsk(prefill = "") {
+      const input = document.getElementById("chat-input");
+      if (prefill) input.value = prefill;
+      document.getElementById("ask-review").scrollIntoView({ block: "start" });
+      window.requestAnimationFrame(() => input.focus());
+    }
+
+    function answerForQuestion(question) {
+      const normalized = question.toLowerCase();
+      if (normalized.includes("iam") || normalized.includes("permission") || normalized.includes("role")) {
+        return { findingId: 2, text: "The Lambda role can currently request every S3 action against every S3 resource. In plain English, a compromised function could reach far beyond the audit bucket it needs. The report recommends limiting both the allowed actions and resource ARNs, then refining them against observed usage." };
+      }
+      if (normalized.includes("cost") || normalized.includes("monthly")) {
+        return { findingId: 6, text: "Multi-AZ database deployment and some concurrency choices can change monthly cost. This snapshot identifies those tradeoffs but does not have enough live utilization data to promise a dollar impact. Validate the availability target and expected load before treating the illustrative cost tier as a forecast." };
+      }
+      if (normalized.includes("not be determined") || normalized.includes("unknown") || normalized.includes("residency")) {
+        return { findingId: 7, text: "The workload brief did not provide regulatory or data-residency requirements, and the review did not inspect live AWS state or remote-module internals. Related conclusions remain not observable instead of being guessed." };
+      }
+      if (normalized.includes("first") || normalized.includes("priorit") || normalized.includes("address")) {
+        return { findingId: 1, text: "Start by validating the three high-risk items: bucket-level public-access protection, the broad Lambda IAM policy, and whether an organization-level CloudTrail trail exists outside this repository. Their shared severity makes them the first review queue; actual implementation order still depends on live account controls and deployment ownership." };
+      }
+      const finding = findings.find((entry) => entry.id === selectedId) || findings[0];
+      return { findingId: finding.id, text: `This mock answer is grounded in F-${String(finding.id).padStart(3, "0")}. ${finding.observed} Recommended next step: ${finding.recommendation}` };
+    }
+
+    function appendChatMessage(role, text, findingId = null) {
+      const log = document.getElementById("chat-log");
+      const message = make("div", `chat-message ${role}`);
+      message.append(make("div", "chat-role", role === "user" ? "You" : "ArchiBrief · mock answer"));
+      const bubble = make("div", "chat-bubble");
+      bubble.append(make("p", "", text));
+      if (findingId !== null) {
+        const finding = findings.find((entry) => entry.id === findingId);
+        const citation = make("a", "chat-citation", `View F-${String(findingId).padStart(3, "0")} · ${finding.category}`);
+        citation.href = "#a-detail";
+        citation.addEventListener("click", (event) => {
+          event.preventDefault();
+          openFinding(findingId);
+        });
+        bubble.append(citation);
+      }
+      message.append(bubble);
+      log.append(message);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function askReportQuestion(question) {
+      const trimmed = question.trim();
+      if (!trimmed) {
+        document.getElementById("chat-input").focus();
+        return;
+      }
+      appendChatMessage("user", trimmed);
+      const answer = answerForQuestion(trimmed);
+      appendChatMessage("assistant", answer.text, answer.findingId);
+      document.getElementById("chat-input").value = "";
+    }
+
     document.querySelectorAll('[role="tab"]').forEach((tab, index, tabs) => {
       tab.addEventListener("click", () => showOption(tab.id.slice(-1)));
       tab.addEventListener("keydown", (event) => {
@@ -810,6 +1288,14 @@
     document.getElementById("finding-search").addEventListener("input", renderRows);
     document.getElementById("finding-sort").addEventListener("change", renderRows);
     document.getElementById("export-button").addEventListener("click", () => announceAction("a-action-status", "Mockup: export would download the versioned HTML/JSON evidence ledger."));
+    document.getElementById("ask-header-button").addEventListener("click", () => scrollToAsk());
+    document.querySelectorAll("[data-architecture-view]").forEach((button) => button.addEventListener("click", () => setArchitectureView(button.dataset.architectureView)));
+    document.querySelectorAll(".architecture-link").forEach((button) => button.addEventListener("click", () => openFinding(Number(button.dataset.findingId))));
+    document.querySelectorAll(".prompt-button").forEach((button) => button.addEventListener("click", () => askReportQuestion(button.textContent)));
+    document.getElementById("chat-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      askReportQuestion(document.getElementById("chat-input").value);
+    });
     document.querySelectorAll(".deeper-button").forEach((button) => button.addEventListener("click", () => announceAction("b-action-status", `Mockup: a versioned deep review would start for “${button.dataset.finding}”.`)));
 
     const themeSelect = document.getElementById("theme-select");

@@ -1,27 +1,8 @@
 # Terraform module: dynamodb
-# Application profile/entitlements/job metadata/counters (ADR-0017,
-# ADR-0034) — Cognito owns authentication identities, this module owns
-# everything else. Every key pattern includes an ownership check at the
-# application layer (ownerId in Reviews/GuestSessions); transient job
-# records carry a TTL. Large payloads live in S3, not here — items are
-# capped at 400 KB (ADR-0034), enforced in backend/lambdas/finalize.
-
-resource "aws_dynamodb_table" "users" {
-  name         = "${var.table_prefix}-users"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "userId"
-
-  attribute {
-    name = "userId"
-    type = "S"
-  }
-
-  point_in_time_recovery {
-    enabled = true
-  }
-
-  tags = var.tags
-}
+# Job metadata/counters (ADR-0017, ADR-0034). No user accounts (ADR-0044)
+# — no Users table, no per-user ownerId. Transient job records carry a
+# TTL. Large payloads live in S3, not here — items are capped at 400 KB
+# (ADR-0034), enforced in backend/lambdas/finalize.
 
 resource "aws_dynamodb_table" "guest_sessions" {
   name         = "${var.table_prefix}-guest-sessions"
@@ -56,14 +37,17 @@ resource "aws_dynamodb_table" "reviews" {
   }
 
   attribute {
-    name = "ownerId"
+    name = "idempotencyKey"
     type = "S"
   }
 
+  # Lets the app look up an existing review by idempotencyKey before
+  # creating a new one, per ADR-0034 — without this index the table has
+  # no way to detect a retried POST /reviews short of a full table scan.
   global_secondary_index {
-    name            = "ownerId-index"
-    hash_key        = "ownerId"
-    projection_type = "ALL"
+    name            = "idempotencyKey-index"
+    hash_key        = "idempotencyKey"
+    projection_type = "KEYS_ONLY"
   }
 
   ttl {

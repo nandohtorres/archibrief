@@ -23,8 +23,17 @@ from dataclasses import dataclass
 
 from backend.shared.clients import BedrockEmbeddingClient, S3VectorsClient
 
+# The plain [A-Z]{2,}-\d+ branch never matched real AWS Well-Architected
+# best-practice IDs like "SEC01-BP01" or "COST01-BP01" — those have
+# digits between the letters and the hyphen on both sides, which the
+# original pattern's letters-only-before-hyphen requirement excluded
+# entirely. Found 2026-09-14 via Codex review of the first retrieval
+# validation, confirmed by testing the pattern directly against every
+# real WAF pillar ID prefix (SEC/COST/OPS/PERF/REL/SUS) — all failed to
+# match before this fix.
 AWS_IDENTIFIER_PATTERN = re.compile(
-    r"\b(?:AWS::[A-Za-z0-9]+::[A-Za-z0-9]+|aws_[a-z0-9_]+|[A-Z]{2,}-\d+(?:\.\d+)?)\b"
+    r"\b(?:AWS::[A-Za-z0-9]+::[A-Za-z0-9]+|aws_[a-z0-9_]+"
+    r"|[A-Z]{2,}\d{1,3}-[A-Z]{2,}\d{1,3}|[A-Z]{2,}-\d+(?:\.\d+)?)\b"
 )
 
 
@@ -39,6 +48,15 @@ class RetrievedChunk:
     corpus_version: str
     score: float
     match_type: str  # "vector" | "lexical"
+    # Citation-reproducibility fields (ADR-0027/ADR-0036) that used to be
+    # dropped between the real Chunk model (backend/corpus/models.py) and
+    # this retrieval-layer shape — reason_node needs all three to build a
+    # real Citation without a second lookup. Found via Codex review of the
+    # first real reason_node run, 2026-09-16.
+    retrieved_at: str = ""
+    source_edition: str | None = None
+    parser_version: str = ""
+    content_type: str = "prose"
 
 
 def extract_lexical_terms(query: str) -> list[str]:
@@ -68,6 +86,10 @@ def lexical_companion_lookup(
                     corpus_version=chunk["corpus_version"],
                     score=1.0,
                     match_type="lexical",
+                    retrieved_at=chunk.get("retrieved_at", ""),
+                    source_edition=chunk.get("source_edition"),
+                    parser_version=chunk.get("parser_version", ""),
+                    content_type=chunk.get("content_type", "prose"),
                 )
             )
     return results
@@ -85,6 +107,18 @@ def vector_search(
     results = []
     for match in matches:
         metadata = match.get("metadata", {})
+        # embed.py's to_vector_record() stores the raw chunk dict as metadata
+        # verbatim, so heading_path arrives here as list[str] (Chunk's real
+        # type), never the pre-joined string lexical_index.py produces for
+        # the lexical path — join it the same way here so RetrievedChunk's
+        # heading_path is consistently a str regardless of match_type. Bug
+        # found via Codex review 2026-09-16: the old `metadata.get(...,  "")`
+        # default silently accepted a list at runtime despite the dataclass
+        # annotation claiming str.
+        raw_heading_path = metadata.get("heading_path", [])
+        heading_path = (
+            " > ".join(raw_heading_path) if isinstance(raw_heading_path, list) else raw_heading_path
+        )
         results.append(
             RetrievedChunk(
                 chunk_id=metadata.get("chunk_id", match.get("key", "")),
@@ -92,10 +126,14 @@ def vector_search(
                 text=metadata.get("text", ""),
                 source_url=metadata.get("source_url", ""),
                 content_hash=metadata.get("content_hash", ""),
-                heading_path=metadata.get("heading_path", ""),
+                heading_path=heading_path,
                 corpus_version=metadata.get("corpus_version", ""),
                 score=match.get("distance", 0.0),
                 match_type="vector",
+                retrieved_at=metadata.get("retrieved_at", ""),
+                source_edition=metadata.get("source_edition"),
+                parser_version=metadata.get("parser_version", ""),
+                content_type=metadata.get("content_type", "prose"),
             )
         )
     return results

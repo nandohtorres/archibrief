@@ -10,7 +10,13 @@ status: accepted
 # ADR 0037: Admin Role Restricted to Fernando; Reviewer Role for Recruiters
 
 **Status:** Accepted (2026-09-03) — **supersedes** ADR-0021's proposal to
-grant `admin` to recruiters
+grant `admin` to recruiters. **Amended by
+[[Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential]]**
+(2026-09-11): the admin-Fernando-only *principle* carries forward
+unchanged, but the mechanism changes from a Cognito RBAC role to a single
+pre-shared credential (there are no user accounts to have roles at all).
+The `reviewer`/`demo` role for recruiters below is **cut, not deferred**
+— see ADR-0044.
 
 ## Context
 

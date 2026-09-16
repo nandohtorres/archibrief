@@ -157,26 +157,26 @@
 
   <section class="block">
     <h2 class="section-title"><span class="num">1</span> System architecture — the pieces</h2>
-    <p class="section-sub">What each component is and how they connect. The browser talks to Next.js directly for static assets and to Cognito directly for auth; application API calls go through API Gateway. Step Functions owns the durable job and writes to storage itself at the ingest/finalize boundaries; the AgentCore/LangGraph subworkflow reads/writes storage for retrieval and evidence during reasoning.</p>
+    <p class="section-sub">What each component is and how they connect. There are no user accounts — the browser talks to Next.js directly for static assets and to API Gateway for application calls; only the one admin-gated path (Fernando, running a real review) checks a pre-shared credential first. Step Functions owns the durable job and writes to storage itself at the ingest/finalize boundaries; the AgentCore/LangGraph subworkflow reads/writes storage for retrieval and evidence during reasoning.</p>
     <div class="diagram-card">
       <pre class="mermaid">
 flowchart TB
     User(["User — browser"])
     FE["Next.js frontend<br/>static/client-first"]
-    Cognito["Cognito user pool<br/>email+password + emailed<br/>auth code, standard/reviewer/admin RBAC"]
+    AdminGate["Pre-shared admin credential check<br/>(API Gateway authorizer)<br/>Fernando-only, no user accounts<br/>(ADR-0044)"]
     APIGW["API Gateway<br/>application API requests only<br/>(throttling, best-effort, not a ceiling)"]
     SF["Step Functions (Standard)<br/>owns outer durable job<br/>reads/writes storage at ingest + finalize"]
     Lambda["Lambda — bounded stateless work<br/>(ingest parse, rule_engine,<br/>validate, audit, finalize)"]
     Agent["AgentCore Runtime + LangGraph<br/>preflight + retrieve + reason<br/>the one reasoning subworkflow"]
-    DDB[("DynamoDB<br/>profile, entitlements, job metadata,<br/>counters, indexes")]
+    DDB[("DynamoDB<br/>review history, guest sessions,<br/>counters, indexes<br/>(no Users table)")]
     S3[("S3 — immutable source of truth<br/>normalized docs, archives, reports")]
     S3V[("S3 Vectors<br/>rebuildable index over S3")]
     Bedrock["Bedrock<br/>Claude (reasoning) +<br/>Titan V2 embeddings<br/>(baseline candidate, not final)"]
     Guardrails["Bedrock Guardrails<br/>prompt-attack detection —<br/>tagged input only, not tool results"]
 
-    User -- static assets --> FE
-    User -- auth --> Cognito
-    FE -- API calls --> APIGW
+    User --> FE
+    FE -. admin path only .-> AdminGate
+    FE --> APIGW
     APIGW --> SF
     SF --> Lambda
     SF --> Agent
@@ -193,10 +193,10 @@ flowchart TB
 
   <section class="block">
     <h2 class="section-title"><span class="num">2</span> The full product lifecycle — step by step</h2>
-    <p class="section-sub">Two separate paths, not one continuous line. A guest only ever sees a cached demo — they never run their own review or use "go deeper." Amber-ringed steps are decision points where the path branches.</p>
+    <p class="section-sub">Two separate paths, not one continuous line — and no conversion between them. There are no user accounts at all (ADR-0044): a visitor only ever sees a cached demo, full stop; the actual pipeline is only ever run by Fernando, through the admin-gated path. Amber-ringed steps are decision points where the path branches.</p>
 
     <div class="path-divider guest">
-      Path A — Guest (no account) <span class="sub">— cached demo only, never runs the real pipeline</span>
+      Path A — Guest (public, no account) <span class="sub">— cached demo only, never runs the real pipeline</span>
     </div>
     <div class="timeline guest">
 
@@ -204,55 +204,36 @@ flowchart TB
         <div class="dot">G1</div>
         <div class="card">
           <h3>Land on the site, try it instantly as a guest</h3>
-          <p class="subtitle">No signup required for a first look</p>
+          <p class="subtitle">No signup required — and no signup exists</p>
           <div class="explain-grid">
-            <div class="explain plain"><span class="label">In plain words</span>You show up and can immediately click "try the demo" — no account, no credit card, no waiting. You see a real, complete example report for a fixed sample project, not your own code.</div>
-            <div class="explain tech"><span class="label">Technically</span><code>GET /demo</code> serves a <strong>precomputed/cached</strong> report for a fixed reference Terraform example — not a fresh pipeline run per visitor, and not connected to the full review pipeline below. Rate-limited by a salted/rotated session identifier, never a raw IP.</div>
+            <div class="explain plain"><span class="label">In plain words</span>You show up and can immediately click "try the demo" — no account, no credit card, no waiting. You see a real, complete example report for a fixed sample project, not your own code. This is the entire public experience — there's nothing to sign up for.</div>
+            <div class="explain tech"><span class="label">Technically</span><code>GET /demo</code> serves a <strong>fully static, precomputed</strong> report for a fixed reference Terraform example — generated once by Fernando via the admin-gated path below, then served to every visitor with no live pipeline invocation, no Bedrock/Titan calls, and no marginal cost per visitor.</div>
           </div>
           <div class="chips">
-            <a class="chip" href="../adr/Work-Project-ADR-0010-Auth-And-Demo-Access.md">ADR-0010</a>
-            <a class="chip" href="../adr/Work-Project-ADR-0029-Cognito-OTP-And-Guest-Caching.md">ADR-0029</a>
+            <a class="chip" href="../adr/Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential.md">ADR-0044</a>
             <a class="chip" href="../adr/Work-Project-ADR-0030-Rate-Limiting-Reframed.md">ADR-0030</a>
-          </div>
-        </div>
-      </div>
-
-      <div class="step gated">
-        <div class="dot">G2</div>
-        <div class="card">
-          <h3>Prompted to create a free account</h3>
-          <p class="subtitle">End of the guest path</p>
-          <div class="explain-grid">
-            <div class="explain plain"><span class="label">In plain words</span>After your one free guest look, you're invited — not forced — to create a free account if you want to review your own infrastructure.</div>
-            <div class="explain tech"><span class="label">Technically</span><code>GuestSessions.useCount</code> tracked per salted/rotated session key, capped at one use, then prompts account creation. Accepting moves you to Path B below — a guest never runs the real pipeline or uses "go deeper" directly.</div>
-          </div>
-          <div class="chips">
-            <a class="chip" href="../adr/Work-Project-ADR-0010-Auth-And-Demo-Access.md">ADR-0010</a>
           </div>
         </div>
       </div>
     </div>
 
     <div class="path-divider full">
-      Path B — Full review (real account) <span class="sub">— your own Terraform, the actual pipeline</span>
+      Path B — Admin-gated review (Fernando only) <span class="sub">— the actual pipeline, not a public signup flow</span>
     </div>
     <div class="timeline full">
 
       <div class="step">
         <div class="dot">1</div>
         <div class="card">
-          <h3>Create a real account, or log in</h3>
-          <p class="subtitle">Required for a real review</p>
+          <h3>Enter the admin key</h3>
+          <p class="subtitle">Fernando only — not a public login</p>
           <div class="explain-grid">
-            <div class="explain plain"><span class="label">In plain words</span>You sign up the normal way — email and password. You also get a one-time code emailed to you as an extra security step.</div>
-            <div class="explain tech"><span class="label">Technically</span>Cognito user pool, email/password as the primary credential, an emailed one-time auth code as a second factor. Backend validates the Cognito access token and enforces app roles server-side — no AWS credentials issued to the browser.</div>
+            <div class="explain plain"><span class="label">In plain words</span>There's no account system and no public signup. Only Fernando can run a real review, using a private key — like a password, but shared by no one else. Everyone else only ever sees the static demo above; there's no way for a random visitor to trigger the real pipeline.</div>
+            <div class="explain tech"><span class="label">Technically</span>A single pre-shared secret, checked by an API Gateway REQUEST authorizer Lambda against a value stored in AWS Secrets Manager (<code>hmac.compare_digest</code>, constant-time). The frontend sends it as an <code>x-admin-key</code> request header, held client-side — no session, no token refresh, no password reset, no MFA.</div>
           </div>
-          <div class="not-decided-note">Not yet decided: whether the emailed code is required on every login, only new devices, or only for sensitive actions.</div>
           <div class="chips">
-            <a class="chip" href="../adr/Work-Project-ADR-0018-Auth-Provider-Cognito.md">ADR-0018</a>
-            <a class="chip" href="../adr/Work-Project-ADR-0043-Auth-Method-Simplified-Password-Plus-Email-Code.md">ADR-0043</a>
+            <a class="chip" href="../adr/Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential.md">ADR-0044</a>
             <a class="chip" href="../adr/Work-Project-ADR-0037-Admin-Fernando-Only.md">ADR-0037</a>
-            <a class="chip" href="../adr/Work-Project-ADR-0042-Minor-Amendments-Batch.md">ADR-0042</a>
           </div>
         </div>
       </div>
@@ -453,7 +434,7 @@ flowchart TB
         <div class="dot">14</div>
         <div class="card">
           <h3>"Go deeper" on any one finding</h3>
-          <p class="subtitle">Optional, on-demand branch — real accounts only</p>
+          <p class="subtitle">Optional, on-demand branch — admin-gated path only</p>
           <div class="explain-grid">
             <div class="explain plain"><span class="label">In plain words</span>Curious about one specific finding? You can ask for a deeper look at just that one thing, without waiting for the whole review to run again.</div>
             <div class="explain tech"><span class="label">Technically</span><code>POST /reviews/{id}/findings/{id}/deeper</code> re-runs Retrieve → Reason (deep mode) → Validate scoped to one <code>findingId</code>. The result is a <strong>versioned child</strong> of the original snapshot — never a disconnected re-run that could silently contradict it.</div>
@@ -468,13 +449,14 @@ flowchart TB
       <div class="step">
         <div class="dot">15</div>
         <div class="card">
-          <h3>Admin access (Fernando only)</h3>
-          <p class="subtitle">Not part of the normal user path — shown separately, not step 16 of the main flow</p>
+          <h3>Recording demo videos/presentations</h3>
+          <p class="subtitle">Same admin-gated access as step 1 — not a separate role</p>
           <div class="explain-grid">
-            <div class="explain plain"><span class="label">In plain words</span>Fernando can access an elevated view — used for recording demo videos and presentations, not something any user or recruiter gets by default. The exact scope of that view isn't designed yet, just who can have it.</div>
-            <div class="explain tech"><span class="label">Technically</span><code>admin</code> role restricted to Fernando, granted through an out-of-band audited procedure — never an in-app self-service endpoint. A separate, constrained <code>reviewer</code> role for recruiters is planned later, not built in v1.</div>
+            <div class="explain plain"><span class="label">In plain words</span>There's no separate "admin view" beyond the same admin key from step 1 — Fernando uses that same access to record demo videos and presentations for recruiters/hiring managers. There's no self-service elevated role for anyone else, and none is planned — a recruiter who wants to see it run live gets that handed to them directly, or watches a recording.</div>
+            <div class="explain tech"><span class="label">Technically</span>Same pre-shared admin credential as step 1, no distinct RBAC tier. The <code>reviewer</code> role once planned for recruiters was cut entirely, not deferred (ADR-0044) — there is no in-app elevated-access mechanism for anyone but Fernando.</div>
           </div>
           <div class="chips">
+            <a class="chip" href="../adr/Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential.md">ADR-0044</a>
             <a class="chip" href="../adr/Work-Project-ADR-0037-Admin-Fernando-Only.md">ADR-0037</a>
           </div>
         </div>

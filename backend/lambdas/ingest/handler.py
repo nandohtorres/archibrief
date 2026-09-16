@@ -21,6 +21,8 @@ from pathlib import PurePosixPath
 import hcl2
 from hcl2.utils import SerializationOptions
 
+from backend.shared.clients import GuardrailsClient
+
 _SERIALIZATION_OPTIONS = SerializationOptions(strip_string_quotes=True)
 
 MAX_ARCHIVE_MEMBERS = 500
@@ -127,7 +129,30 @@ def _references_remote_module(body: dict) -> bool:
     )
 
 
-def handler(event, context):
+def _resolve_guardrails_client(
+    event: dict, guardrails_client: GuardrailsClient | None
+) -> GuardrailsClient | None:
+    """Injected client wins (tests); otherwise build one from config.
+
+    Checks the event payload first, then falls back to the Lambda's own
+    `GUARDRAIL_ID`/`GUARDRAIL_VERSION` environment variables (set by
+    Terraform once a real Bedrock Guardrail is deployed) — the deployed
+    Guardrail is fixed per environment, not something the Step Functions
+    state machine's payload needs to carry on every invocation. Absent
+    both sources, Guardrails is skipped rather than failing — the same
+    "blocked on a deployed resource, not on missing code" pattern as the
+    Audit/Finalize Lambdas' DynamoDB/S3 writes.
+    """
+    if guardrails_client is not None:
+        return guardrails_client
+    guardrail_id = event.get("guardrail_id") or os.environ.get("GUARDRAIL_ID")
+    guardrail_version = event.get("guardrail_version") or os.environ.get("GUARDRAIL_VERSION")
+    if guardrail_id and guardrail_version:
+        return GuardrailsClient(guardrail_id=guardrail_id, guardrail_version=guardrail_version)
+    return None
+
+
+def handler(event, context, guardrails_client: GuardrailsClient | None = None):
     archive_path = event["archive_path"]
     workload_brief = event["workload_brief"]
     dest_dir = event.get("dest_dir", "/tmp/archibrief-ingest")
@@ -139,6 +164,23 @@ def handler(event, context):
     except IngestRejected as exc:
         return {"status": "rejected", "reason": exc.reason}
 
+    # Guardrails runs inline here and again before Reason (ADR-0033) — see
+    # backend/agent/nodes/reason.py's module docstring. Only the workload
+    # brief (free-text, attacker-controlled) is checked; the parsed HCL
+    # itself is never natural-language content passed to a prompt-attack
+    # classifier.
+    guardrails_decisions: list[dict] = []
+    client = _resolve_guardrails_client(event, guardrails_client)
+    if client is not None:
+        allowed = client.check(workload_brief, source="INPUT")
+        guardrails_decisions.append({"stage": "ingest", "allowed": allowed})
+        if not allowed:
+            return {
+                "status": "blocked",
+                "reason": "Guardrails blocked the workload brief at ingest",
+                "guardrails_decisions": guardrails_decisions,
+            }
+
     return {
         "status": "parsed",
         "resources": parsed.resources,
@@ -146,4 +188,5 @@ def handler(event, context):
         "files_parsed": parsed.files_parsed,
         "not_observable": parsed.not_observable,
         "workload_brief": workload_brief,
+        "guardrails_decisions": guardrails_decisions,
     }

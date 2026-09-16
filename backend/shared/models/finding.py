@@ -38,7 +38,11 @@ class DepthLevel(str, Enum):
 
 class Citation(BaseModel):
     source_url: str
-    source_edition: str
+    # Optional to match the real corpus Chunk model (backend/corpus/models.py)
+    # — some source docs (HTML pages) have no dated edition to record, per
+    # embed.py's to_vector_record docstring. Was `str` (required) here,
+    # which would reject a real, legitimately-edition-less chunk's citation.
+    source_edition: str | None
     retrieved_at: datetime
     canonical_url: str | None = None
     document_id: str

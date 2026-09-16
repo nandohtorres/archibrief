@@ -20,6 +20,12 @@ from langgraph.graph import END, StateGraph
 from backend.agent.nodes.preflight import preflight_node
 from backend.agent.nodes.reason import reason_node
 from backend.agent.nodes.retrieve import retrieve_node
+from backend.shared.clients import (
+    BedrockEmbeddingClient,
+    BedrockReasoningClient,
+    GuardrailsClient,
+    S3VectorsClient,
+)
 
 
 class ReviewState(TypedDict, total=False):
@@ -30,8 +36,26 @@ class ReviewState(TypedDict, total=False):
     needs_clarification: list[str]
     status: str
     retrieval_query: str
+    # LangGraph's StateGraph only tracks channels declared on this
+    # TypedDict — a key a node reads/writes that isn't declared here gets
+    # silently dropped between nodes even though preflight_node's own
+    # `**state` passthrough looks like it should carry it forward.
+    # Confirmed directly (2026-09-15): invoking the compiled graph with
+    # embedding_client/vectors_client in the initial state raised
+    # KeyError inside retrieve_node, since preflight->retrieve had already
+    # dropped them. These three must stay declared here for retrieve_node
+    # to actually receive real client instances + the lexical index when
+    # invoked through the compiled graph, not just when called directly.
+    embedding_client: BedrockEmbeddingClient
+    vectors_client: S3VectorsClient
+    lexical_corpus_index: dict[str, list[dict]]
     retrieved_chunks: list[dict]
     rule_findings: list[dict]
+    # Same silent-drop failure mode as the three fields above, confirmed
+    # by the same mechanism — reason_node reads these two off state but
+    # LangGraph never carries an undeclared key past a node boundary.
+    guardrails_client: GuardrailsClient
+    reasoning_client: BedrockReasoningClient
     reasoned_findings: list[dict]
 
 

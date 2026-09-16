@@ -1,9 +1,9 @@
-# Dev environment root — wires infra/modules together.
-# Cannot be applied until AWS account/IAM bootstrap exists (see
-# Work-Project-Deployment-Roadmap.md) — provider auth, account_id, and
-# several module inputs (SES ARN, GitHub OIDC provider, AgentCore Runtime
-# ARN, Lambda deployment packages) are placeholders until then, marked
-# TODO(account-setup) at their source.
+# Dev environment root — wires infra/modules together. No user accounts
+# (ADR-0044) — no auth module; the API is gated by a single pre-shared
+# admin credential generated inside the api-gateway module. Several
+# module inputs (GitHub OIDC provider, AgentCore Runtime ARN, Lambda
+# deployment packages) are placeholders until AWS account/IAM bootstrap
+# work not yet done, marked TODO(account-setup) at their source.
 
 provider "aws" {
   region = var.region
@@ -30,17 +30,6 @@ module "dynamodb" {
   tags         = var.tags
 }
 
-module "auth" {
-  source              = "../../modules/auth"
-  user_pool_name      = "${var.name_prefix}-${var.environment}"
-  domain              = var.domain
-  callback_urls       = ["https://${var.domain}/auth/callback"]
-  logout_urls         = ["https://${var.domain}/"]
-  ses_source_arn      = var.ses_source_arn
-  from_email_address  = "no-reply@${var.domain}"
-  tags                = var.tags
-}
-
 module "iam" {
   source                    = "../../modules/iam"
   name_prefix               = "${var.name_prefix}-${var.environment}"
@@ -49,23 +38,39 @@ module "iam" {
   tags                      = var.tags
 }
 
+module "guardrails" {
+  source      = "../../modules/guardrails"
+  name_prefix = "${var.name_prefix}-${var.environment}"
+  tags        = var.tags
+}
+
 module "step_functions_lambda" {
-  source                  = "../../modules/step-functions-lambda"
-  name_prefix              = "${var.name_prefix}-${var.environment}"
-  lambda_zip_paths         = var.lambda_zip_paths
-  reports_bucket_arn       = module.s3.bucket_arn
-  reviews_table_arn        = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.reviews_table_name}"
-  audit_table_arn          = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.audit_log_table_name}"
-  agentcore_runtime_arn    = var.agentcore_runtime_arn
-  tags                     = var.tags
+  source                    = "../../modules/step-functions-lambda"
+  name_prefix                = "${var.name_prefix}-${var.environment}"
+  lambda_zip_paths           = var.lambda_zip_paths
+  reports_bucket_arn         = module.s3.bucket_arn
+  reviews_table_arn          = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.reviews_table_name}"
+  audit_table_arn            = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.audit_log_table_name}"
+  agentcore_runtime_arn      = var.agentcore_runtime_arn
+  permissions_boundary_arn   = module.iam.runtime_permissions_boundary_arn
+  guardrail_id               = module.guardrails.guardrail_id
+  guardrail_version           = module.guardrails.guardrail_version
+  tags                       = var.tags
+}
+
+module "frontend_hosting" {
+  source      = "../../modules/frontend-hosting"
+  name_prefix = "${var.name_prefix}-${var.environment}"
+  bucket_name = "${var.name_prefix}-${var.environment}-frontend"
+  tags        = var.tags
 }
 
 module "api_gateway" {
   source                       = "../../modules/api-gateway"
   name_prefix                   = "${var.name_prefix}-${var.environment}"
-  cognito_user_pool_id          = module.auth.user_pool_id
-  cognito_user_pool_client_id   = module.auth.user_pool_client_id
   state_machine_arn             = module.step_functions_lambda.state_machine_arn
   domain_name                   = "api.${var.domain}"
+  admin_authorizer_zip_path     = var.admin_authorizer_zip_path
+  permissions_boundary_arn      = module.iam.runtime_permissions_boundary_arn
   tags                           = var.tags
 }

@@ -32,10 +32,11 @@ data "aws_iam_policy_document" "lambda_trust" {
 }
 
 resource "aws_iam_role" "lambda" {
-  for_each           = local.lambda_specs
-  name               = "${var.name_prefix}-${each.key}"
-  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
-  tags               = var.tags
+  for_each             = local.lambda_specs
+  name                 = "${var.name_prefix}-${each.key}"
+  assume_role_policy   = data.aws_iam_policy_document.lambda_trust.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic_logs" {
@@ -44,8 +45,8 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Ingest/RuleEngine/Validate are pure compute on their event payload —
-# no direct DynamoDB/S3 access needed beyond CloudWatch Logs.
+# RuleEngine/Validate are pure compute on their event payload — no
+# direct DynamoDB/S3/Bedrock access needed beyond CloudWatch Logs.
 data "aws_iam_policy_document" "audit_finalize_data_access" {
   statement {
     effect    = "Allow"
@@ -66,6 +67,32 @@ resource "aws_iam_role_policy" "audit_finalize_data_access" {
   policy   = data.aws_iam_policy_document.audit_finalize_data_access.json
 }
 
+# Ingest calls Guardrails inline (ADR-0033) — see the Ingest Lambda's
+# handler and its GUARDRAIL_ID/GUARDRAIL_VERSION environment variables
+# above. Always created: this module's caller (infra/environments/dev)
+# always wires a real module.guardrails output here, so guardrail_id is
+# never actually optional in practice — a count/for_each conditioned on
+# it would depend on a value unknown until apply (the guardrail doesn't
+# exist yet on a fresh account) and Terraform can't plan a resource
+# count from an unknown value. See Work-Project-Issues-Log.md, 2026-09-09.
+data "aws_caller_identity" "current" {}
+
+data "aws_iam_policy_document" "ingest_guardrails_apply" {
+  statement {
+    effect  = "Allow"
+    actions = ["bedrock:ApplyGuardrail"]
+    resources = [
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:guardrail/${var.guardrail_id}",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "ingest_guardrails_apply" {
+  name   = "${var.name_prefix}-ingest-guardrails-apply"
+  role   = aws_iam_role.lambda["ingest"].id
+  policy = data.aws_iam_policy_document.ingest_guardrails_apply.json
+}
+
 resource "aws_lambda_function" "this" {
   for_each      = local.lambda_specs
   function_name = "${var.name_prefix}-${each.key}"
@@ -76,6 +103,19 @@ resource "aws_lambda_function" "this" {
   source_code_hash = fileexists(each.value.zip) ? filebase64sha256(each.value.zip) : null
 
   reserved_concurrent_executions = var.lambda_reserved_concurrency
+
+  # Only Ingest calls Guardrails directly (ADR-0033) — Reason's own call
+  # happens inside AgentCore Runtime, not this Lambda, and reads the same
+  # deployed Guardrail by ID/version through its own config path.
+  dynamic "environment" {
+    for_each = each.key == "ingest" ? [1] : []
+    content {
+      variables = {
+        GUARDRAIL_ID      = var.guardrail_id
+        GUARDRAIL_VERSION = var.guardrail_version
+      }
+    }
+  }
 
   tags = var.tags
 }
@@ -98,9 +138,10 @@ data "aws_iam_policy_document" "state_machine_trust" {
 }
 
 resource "aws_iam_role" "state_machine" {
-  name               = "${var.name_prefix}-review-state-machine"
-  assume_role_policy = data.aws_iam_policy_document.state_machine_trust.json
-  tags               = var.tags
+  name                 = "${var.name_prefix}-review-state-machine"
+  assume_role_policy   = data.aws_iam_policy_document.state_machine_trust.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
 }
 
 data "aws_iam_policy_document" "state_machine_invoke" {
@@ -176,7 +217,15 @@ resource "aws_sfn_state_machine" "review" {
         Type     = "Task"
         Resource = "arn:aws:states:::aws-sdk:bedrockagentcore:invokeAgentRuntime"
         Parameters = {
-          "AgentRuntimeArn" = var.agentcore_runtime_arn
+          # Amazon States Language requires a string here, not null.
+          # AgentCore Runtime isn't deployed yet (agentcore_runtime_arn
+          # defaults to null in tfvars) — a real apply against a null
+          # value would fail ASL schema validation at CreateStateMachine.
+          # This placeholder lets the state machine itself be created
+          # now; the InvokeAgent task will fail at actual execution time
+          # until a real AgentCore Runtime ARN is supplied — deliberate,
+          # documented deferral, see Work-Project-Issues-Log.md.
+          "AgentRuntimeArn" = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
           "Payload.$"       = "$"
         }
         Next = "Validate"

@@ -1,7 +1,11 @@
 # /frontend/app
 
-Next.js App Router pages go here. Scaffolding only — no routes yet.
+Next.js App Router entrypoint for the static/client-first ArchiBrief UI.
+Interactive workflow components live in `/frontend/components`; API and
+evidence-ledger contracts live in `/frontend/lib`. Unit tests mirror that
+structure under `/tests/frontend`.
 
-Planned vertical-slice milestones (ADR-0032, Build-Plan Phase 5):
-submission, preflight interaction, progress display, one complete typed
-finding with citation display, failure/empty states, responsive shell.
+Without `NEXT_PUBLIC_API_BASE_URL`, the app runs the reviewable fixture flow.
+With it, submission calls the deployed `POST /reviews` contract and reports
+the expected limitation that status/clarification/deeper endpoints are not
+deployed yet.

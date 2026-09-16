@@ -27,10 +27,6 @@ variable "aws_account_id" {
   type = string
 }
 
-variable "ses_source_arn" {
-  type = string
-}
-
 variable "github_oidc_provider_arn" {
   type    = string
   default = null
@@ -54,6 +50,11 @@ variable "lambda_zip_paths" {
     audit       = string
     finalize    = string
   })
+}
+
+variable "admin_authorizer_zip_path" {
+  type        = string
+  description = "Deployment package for the pre-shared admin-credential Lambda authorizer (ADR-0044)."
 }
 
 # Titan V2's actual output dimension — baseline candidate, not a final

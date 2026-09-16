@@ -25,4 +25,14 @@ resource "aws_s3vectors_index" "knowledge_base" {
   metadata_configuration {
     non_filterable_metadata_keys = var.non_filterable_metadata_keys
   }
+
+  # AWS itself refuses to edit dimension/distance_metric in place, but
+  # Terraform's own default behavior for an unsatisfiable in-place update
+  # is destroy-and-recreate — silently wiping the whole embedded corpus.
+  # This turns "immutable by decision" (ADR-0007/0042) into "Terraform
+  # will refuse to do this even by accident" — found during the
+  # 2026-09-08 audit sweep, see Work-Project-Issues-Log.
+  lifecycle {
+    prevent_destroy = true
+  }
 }

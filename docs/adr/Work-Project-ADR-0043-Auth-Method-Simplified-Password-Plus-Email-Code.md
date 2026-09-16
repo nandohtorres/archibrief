@@ -12,7 +12,10 @@ status: accepted
 **Status:** Accepted (2026-09-04) — **supersedes the auth-method framing in
 [[Work-Project-ADR-0029-Cognito-OTP-And-Guest-Caching]]**: guest-mode
 caching and the "no magic link" correction in ADR-0029 both stand
-unchanged; only the passkey-primary decision is replaced.
+unchanged; only the passkey-primary decision is replaced. **Entirely
+superseded by
+[[Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential]]**
+(2026-09-11): no user accounts, so no sign-in method is needed at all.
 
 ## Context
 
