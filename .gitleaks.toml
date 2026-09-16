@@ -1,0 +1,27 @@
+# ArchiBrief secret-scanning config, wired into .github/workflows/ci.yml's
+# secrets-scan job. Denylist per ADR-0015/0042: *.tfstate*, saved plan
+# files, .terraform/, crash logs, local overrides, backend config,
+# uploaded test/fixture repositories.
+
+title = "archibrief-gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+  '''\.terraform/''',
+  '''tests/.*/fixtures/.*''',
+]
+
+[[rules]]
+id = "aws-account-id-placeholder"
+description = "Flag non-placeholder AWS account IDs committed in tfvars/tf files"
+regex = '''aws_account_id\s*=\s*"(?!000000000000)\d{12}"'''
+tags = ["aws", "account-id"]
+
+[[rules]]
+id = "terraform-state-file"
+description = "Terraform state or plan files should never be committed"
+path = '''(\.tfstate(\.backup)?|\.tfplan)$'''
+tags = ["terraform", "state"]

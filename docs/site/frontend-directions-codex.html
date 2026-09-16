@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>ArchiBrief Frontend Directions — Codex Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400;1,8..60,600&amp;display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f4f7f9;
+      --surface: #ffffff;
+      --surface-2: #eaeff3;
+      --border: #c5d0d9;
+      --text: #131c24;
+      --text-muted: #43596c;
+      --text-faint: #566b7d;
+      --focus: #005ea8;
+
+      --sev-critical: #a52f24;
+      --sev-critical-bg: #fbeae8;
+      --sev-warning: #7f500f;
+      --sev-warning-bg: #faf1e2;
+      --sev-info: #28577f;
+      --sev-info-bg: #e9f1f9;
+      --sev-success: #1f6d51;
+      --sev-success-bg: #e6f4ef;
+      --sev-unknown: #5c4d73;
+      --sev-unknown-bg: #f0ebf6;
+
+      --a-accent: #235f7a;
+      --a-accent-ink: #ffffff;
+      --a-accent-tint: #e1edf2;
+      --b-accent: #713648;
+      --b-accent-ink: #ffffff;
+      --b-accent-tint: #f3e8ec;
+
+      --font-body: "IBM Plex Sans", system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --font-serif: "Source Serif 4", Georgia, serif;
+
+      --sp-1: 0.25rem;
+      --sp-2: 0.5rem;
+      --sp-3: 1rem;
+      --sp-4: 1.5rem;
+      --sp-5: 2rem;
+      --sp-6: 3rem;
+      --sp-7: 4rem;
+      --radius-s: 4px;
+      --radius-m: 8px;
+      --radius-l: 14px;
+      color-scheme: light;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0d1319;
+        --surface: #141d26;
+        --surface-2: #1a2530;
+        --border: #46596b;
+        --text: #e7edf2;
+        --text-muted: #a8bac9;
+        --text-faint: #879aac;
+        --focus: #8bd5ff;
+        --sev-critical: #ee887b;
+        --sev-critical-bg: #2c1815;
+        --sev-warning: #e2ae61;
+        --sev-warning-bg: #2b2013;
+        --sev-info: #8bbce8;
+        --sev-info-bg: #142330;
+        --sev-success: #77d2ae;
+        --sev-success-bg: #102820;
+        --sev-unknown: #c4a8e2;
+        --sev-unknown-bg: #261c32;
+        --a-accent: #7bc1df;
+        --a-accent-ink: #06222c;
+        --a-accent-tint: #16323e;
+        --b-accent: #e2a9bc;
+        --b-accent-ink: #2e0f18;
+        --b-accent-tint: #2c1a20;
+        color-scheme: dark;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0d1319;
+      --surface: #141d26;
+      --surface-2: #1a2530;
+      --border: #46596b;
+      --text: #e7edf2;
+      --text-muted: #a8bac9;
+      --text-faint: #879aac;
+      --focus: #8bd5ff;
+      --sev-critical: #ee887b;
+      --sev-critical-bg: #2c1815;
+      --sev-warning: #e2ae61;
+      --sev-warning-bg: #2b2013;
+      --sev-info: #8bbce8;
+      --sev-info-bg: #142330;
+      --sev-success: #77d2ae;
+      --sev-success-bg: #102820;
+      --sev-unknown: #c4a8e2;
+      --sev-unknown-bg: #261c32;
+      --a-accent: #7bc1df;
+      --a-accent-ink: #06222c;
+      --a-accent-tint: #16323e;
+      --b-accent: #e2a9bc;
+      --b-accent-ink: #2e0f18;
+      --b-accent-tint: #2c1a20;
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.55;
+    }
+    h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
+    p { max-width: 72ch; }
+    a { color: var(--a-accent); text-underline-offset: 0.18em; }
+    button, input, select { font: inherit; }
+    button, summary, select { min-height: 44px; }
+    button { cursor: pointer; }
+    :where(a, button, input, select, summary):focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+    }
+    .skip-link {
+      position: fixed;
+      z-index: 10;
+      top: var(--sp-2);
+      left: var(--sp-2);
+      transform: translateY(-160%);
+      padding: var(--sp-2) var(--sp-3);
+      border-radius: var(--radius-s);
+      background: var(--text);
+      color: var(--surface);
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .app-shell {
+      width: min(100% - 2rem, 1240px);
+      margin: 0 auto;
+      padding: var(--sp-4) 0 var(--sp-7);
+    }
+    .meta-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--sp-3);
+      padding-bottom: var(--sp-4);
+      margin-bottom: var(--sp-5);
+      border-bottom: 1px solid var(--border);
+    }
+    .brand { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
+    .brand h1 { font: 600 1rem/1.3 var(--font-mono); letter-spacing: 0.02em; }
+    .brand span { font-size: 0.82rem; color: var(--text-faint); }
+    .meta-controls { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+    .theme-control { display: flex; align-items: center; gap: var(--sp-2); font-size: 0.82rem; color: var(--text-muted); }
+    .theme-control select {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      background: var(--surface);
+      color: var(--text);
+      padding: 0 var(--sp-2);
+    }
+    .switcher {
+      display: inline-grid;
+      grid-template-columns: 1fr 1fr;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .switcher button {
+      border: 0;
+      background: transparent;
+      color: var(--text-muted);
+      padding: 0.55rem 1rem;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .switcher button[aria-selected="true"] {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+    }
+    .option-frame {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-l);
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .option-frame[hidden] { display: none; }
+    .option-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--sp-3);
+      padding: var(--sp-3) var(--sp-4);
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+    .mock-label {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.15rem 0.55rem;
+      font: 600 0.7rem/1.5 var(--font-mono);
+      color: var(--text);
+      background: var(--surface);
+      white-space: nowrap;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .pill::before { content: ""; width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; }
+    .pill.critical { background: var(--sev-critical-bg); color: var(--sev-critical); }
+    .pill.warning { background: var(--sev-warning-bg); color: var(--sev-warning); }
+    .pill.info { background: var(--sev-info-bg); color: var(--sev-info); }
+    .pill.success { background: var(--sev-success-bg); color: var(--sev-success); }
+    .pill.unknown { background: var(--sev-unknown-bg); color: var(--sev-unknown); }
+    .type-tag {
+      font: 600 0.72rem/1.4 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.055em;
+      color: var(--text-faint);
+    }
+    .confidence {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font: 500 0.76rem/1.4 var(--font-mono);
+      color: var(--text-muted);
+    }
+    .citation-block {
+      margin: 0;
+      font-size: 0.88rem;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      padding: var(--sp-3);
+    }
+    .citation-block dt {
+      margin-top: var(--sp-2);
+      font: 600 0.72rem/1.4 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.055em;
+      color: var(--text-faint);
+    }
+    .citation-block dt:first-child { margin-top: 0; }
+    .citation-block dd { margin: 0; overflow-wrap: anywhere; }
+    .citation-block .mono { font-family: var(--font-mono); font-size: 0.8rem; }
+    .citation-block blockquote {
+      margin: var(--sp-1) 0 0;
+      padding-left: var(--sp-2);
+      border-left: 3px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    /* Option A — Evidence Dashboard */
+    .a-topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--sp-3);
+      padding: var(--sp-4);
+      border-bottom: 1px solid var(--border);
+    }
+    .a-topbar h2 { font-size: 1.2rem; }
+    .subline { margin-top: var(--sp-1); color: var(--text-muted); font: 0.8rem/1.5 var(--font-mono); overflow-wrap: anywhere; }
+    .primary-button {
+      border: 0;
+      border-radius: var(--radius-m);
+      padding: 0.6rem 1rem;
+      background: var(--a-accent);
+      color: var(--a-accent-ink);
+      font-weight: 700;
+    }
+    .snapshot-bar {
+      padding: 0.7rem var(--sp-4);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font: 0.76rem/1.5 var(--font-mono);
+    }
+    .a-bento {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .a-bento .tile { background: var(--surface); padding: var(--sp-4); }
+    .a-bento .figure { font: 600 1.7rem/1.1 var(--font-mono); font-variant-numeric: tabular-nums; }
+    .a-bento .critical-number { color: var(--sev-critical); }
+    .a-bento .caption { margin-top: var(--sp-1); font-size: 0.78rem; color: var(--text-muted); }
+    .coverage { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: var(--sp-2); }
+    .coverage span { padding: 0.1rem 0.4rem; border-radius: var(--radius-s); background: var(--surface-2); color: var(--text-muted); font: 0.68rem/1.5 var(--font-mono); }
+    .coverage span.hit { background: var(--a-accent-tint); color: var(--a-accent); }
+    .a-toolbar {
+      display: grid;
+      grid-template-columns: minmax(12rem, 1fr) auto;
+      gap: var(--sp-3);
+      align-items: end;
+      padding: var(--sp-3) var(--sp-4);
+      border-bottom: 1px solid var(--border);
+    }
+    .field-label { display: grid; gap: var(--sp-1); color: var(--text-muted); font-size: 0.78rem; font-weight: 600; }
+    .field-label input, .field-label select {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      background: var(--surface);
+      color: var(--text);
+      padding: 0.55rem 0.75rem;
+    }
+    .filter-row {
+      display: flex;
+      gap: var(--sp-2);
+      padding: var(--sp-3) var(--sp-4);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .filter-button {
+      min-height: 44px;
+      padding: 0.35rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .filter-button[aria-pressed="true"] { border-color: var(--a-accent); background: var(--a-accent-tint); color: var(--a-accent); font-weight: 700; }
+    .results-status { padding: 0.55rem var(--sp-4); border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 0.8rem; }
+    .a-body { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.35fr); }
+    .a-list { border-right: 1px solid var(--border); max-height: 670px; overflow-y: auto; }
+    .a-rows { margin: 0; padding: 0; list-style: none; }
+    .a-row {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--sp-3);
+      width: 100%;
+      min-height: 72px;
+      padding: var(--sp-3) var(--sp-4);
+      border: 0;
+      border-bottom: 1px solid var(--border);
+      border-left: 4px solid transparent;
+      background: var(--surface);
+      color: var(--text);
+      text-align: left;
+    }
+    .a-row:hover { background: var(--surface-2); }
+    .a-row[aria-current="true"] { background: var(--a-accent-tint); border-left-color: var(--a-accent); }
+    .rowmain { min-width: 0; flex: 1; }
+    .rowtitle { display: block; margin-bottom: 0.35rem; font-size: 0.92rem; font-weight: 600; overflow-wrap: anywhere; }
+    .rowmeta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
+    .row-score { flex: none; color: var(--text-muted); font: 0.76rem/1.4 var(--font-mono); }
+    .a-detail { padding: var(--sp-4) var(--sp-5); min-width: 0; }
+    .a-detail .dtitle { font-size: 1.1rem; font-weight: 700; margin-bottom: var(--sp-2); }
+    .dtags { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+    .a-detail h3 { margin: var(--sp-4) 0 var(--sp-2); color: var(--text-faint); font: 700 0.74rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; }
+    .a-detail p { margin: 0; font-size: 0.94rem; }
+    .alt-list { margin: 0; padding-left: 1.15rem; color: var(--text-muted); font-size: 0.9rem; }
+    .alt-list li + li { margin-top: var(--sp-1); }
+    .secondary-button {
+      margin-top: var(--sp-4);
+      border: 1px solid var(--a-accent);
+      border-radius: var(--radius-m);
+      padding: 0.55rem 0.9rem;
+      background: transparent;
+      color: var(--a-accent);
+      font-weight: 700;
+    }
+
+    /* Option B — Guided Report */
+    .b-wrap { max-width: 780px; margin: 0 auto; padding: var(--sp-6) var(--sp-6) var(--sp-7); }
+    .b-eyebrow { margin-bottom: var(--sp-2); color: var(--b-accent); font: 600 0.74rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.07em; }
+    .b-title { font: 600 clamp(1.8rem, 4vw, 2.2rem)/1.2 var(--font-serif); margin-bottom: var(--sp-2); }
+    .b-sub { margin: 0 0 var(--sp-4); color: var(--text-muted); }
+    .scope-note {
+      margin: 0 0 var(--sp-5);
+      padding: var(--sp-3);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--b-accent);
+      border-radius: var(--radius-m);
+      background: var(--surface-2);
+      font-size: 0.9rem;
+    }
+    .scope-note strong { display: block; margin-bottom: var(--sp-1); }
+    .b-summary { margin-bottom: var(--sp-5); padding: var(--sp-4) var(--sp-5); border-radius: var(--radius-l); background: var(--b-accent-tint); }
+    .b-summary h3 { margin-bottom: var(--sp-2); color: var(--b-accent); font: italic 600 1.15rem/1.35 var(--font-serif); }
+    .b-summary p { margin: 0 0 var(--sp-2); }
+    .b-summary p:last-child { margin-bottom: 0; }
+    .b-stepper {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--sp-3);
+      margin-bottom: var(--sp-6);
+      padding: var(--sp-4);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-m);
+    }
+    .b-step .num { color: var(--text-faint); font: 0.74rem/1.4 var(--font-mono); }
+    .b-step .q { margin: 0.2rem 0; font-size: 0.88rem; font-weight: 600; }
+    .b-step .answer { color: var(--text-muted); font-size: 0.84rem; }
+    .b-step.done .answer { color: var(--sev-success); }
+    .b-step.unknown .answer { color: var(--sev-unknown); font-weight: 600; }
+    .b-section-head { margin: 0 0 var(--sp-3); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--border); font: 600 1.35rem/1.3 var(--font-serif); }
+    .b-card { margin-bottom: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-m); overflow: clip; }
+    .b-card summary { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); list-style: none; cursor: pointer; }
+    .b-card summary::-webkit-details-marker { display: none; }
+    .summary-copy { min-width: 0; flex: 1; }
+    .summary-title { display: block; margin-top: 0.35rem; font-weight: 700; overflow-wrap: anywhere; }
+    .chev { flex: none; color: var(--text-faint); font-size: 1.3rem; transition: transform 0.15s ease; }
+    .b-card[open] .chev { transform: rotate(90deg); }
+    .b-card-body { padding: 0 var(--sp-4) var(--sp-4); }
+    .b-card-body p { margin: 0 0 var(--sp-3); }
+    .b-card-body h3 { margin: var(--sp-3) 0 var(--sp-1); font-size: 0.95rem; }
+    .b-card-body h3:first-child { margin-top: 0; }
+    .confidence-note { padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-m); background: var(--surface-2); color: var(--text-muted); font-size: 0.86rem; }
+    .source-details { margin-top: var(--sp-3); border-top: 1px solid var(--border); }
+    .source-details summary { min-height: 44px; padding: var(--sp-2) 0; color: var(--b-accent); font: 700 0.84rem/1.4 var(--font-mono); }
+    .source-details .citation-block { margin-bottom: var(--sp-2); }
+    .b-action { margin-top: var(--sp-3); border-color: var(--b-accent); color: var(--b-accent); }
+    .page-status { min-height: 1.5rem; margin: var(--sp-3) 0 0; color: var(--text-muted); font-size: 0.86rem; }
+
+    @media (max-width: 760px) {
+      .app-shell { width: min(100% - 1rem, 1240px); padding-top: var(--sp-3); }
+      .meta-header, .meta-controls { align-items: stretch; }
+      .meta-controls, .switcher { width: 100%; }
+      .theme-control { justify-content: space-between; }
+      .switcher button { padding-inline: var(--sp-2); white-space: normal; }
+      .option-label { align-items: flex-start; flex-direction: column; }
+      .a-bento { grid-template-columns: repeat(2, 1fr); }
+      .a-toolbar { grid-template-columns: 1fr; }
+      .filter-row { padding-inline: var(--sp-3); }
+      .a-body { grid-template-columns: 1fr; }
+      .a-list { max-height: none; border-right: 0; border-bottom: 1px solid var(--border); }
+      .a-detail { padding: var(--sp-4); }
+      .b-wrap { padding: var(--sp-5) var(--sp-3) var(--sp-6); }
+      .b-summary { padding: var(--sp-4); }
+      .b-stepper { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to comparison</a>
+  <div class="app-shell">
+    <header class="meta-header">
+      <div class="brand">
+        <h1>ArchiBrief</h1>
+        <span>frontend direction comparison</span>
+      </div>
+      <div class="meta-controls">
+        <label class="theme-control" for="theme-select">Theme
+          <select id="theme-select">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <div class="switcher" role="tablist" aria-label="Design direction">
+          <button type="button" role="tab" id="tab-a" aria-selected="true" aria-controls="panel-a" tabindex="0">A · Evidence Dashboard</button>
+          <button type="button" role="tab" id="tab-b" aria-selected="false" aria-controls="panel-b" tabindex="-1">B · Guided Report</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section id="panel-a" class="option-frame" role="tabpanel" aria-labelledby="tab-a" tabindex="0">
+        <div class="option-label">
+          <span>Option A — dense, technical review workspace. Filter findings, then inspect provenance and remediation.</span>
+          <span class="mock-label">Illustrative data</span>
+        </div>
+        <div class="a-topbar">
+          <div>
+            <h2>payments-api — architecture review</h2>
+            <div class="subline">terraform-ref: infra/payments-api@a91f3c2 · submitted 2026-09-08 14:02 · account: standard</div>
+          </div>
+          <button id="export-button" class="primary-button" type="button">Export evidence ledger</button>
+        </div>
+        <div class="snapshot-bar">Reproducibility snapshot · rules 2026.09.1 · corpus 2026-09-06 · prompt v1.4 · model ID recorded · static review only</div>
+        <div class="a-bento" aria-label="Review summary">
+          <div class="tile"><div class="figure">7</div><div class="caption">Sample findings shown</div></div>
+          <div class="tile"><div class="figure critical-number">3</div><div class="caption">High risk, unresolved</div></div>
+          <div class="tile"><div class="figure">Medium</div><div class="caption">Estimated cost tier · $150–220/mo</div></div>
+          <div class="tile"><div class="figure">4/6</div><div class="caption">Well-Architected pillars touched</div><div class="coverage" aria-label="Security, reliability, cost optimization, and operational excellence covered"><span class="hit">SEC</span><span class="hit">REL</span><span class="hit">COST</span><span class="hit">OPS</span><span>PERF</span><span>SUS</span></div></div>
+        </div>
+        <div class="a-toolbar" aria-label="Finding tools">
+          <label class="field-label" for="finding-search">Find findings
+            <input id="finding-search" type="search" placeholder="Search title, category, or type" autocomplete="off">
+          </label>
+          <label class="field-label" for="finding-sort">Sort
+            <select id="finding-sort">
+              <option value="severity">Risk: high to low</option>
+              <option value="confidence">Confidence: high to low</option>
+              <option value="title">Title: A–Z</option>
+            </select>
+          </label>
+        </div>
+        <div class="filter-row" aria-label="Filter findings">
+          <button class="filter-button" type="button" data-filter="all" aria-pressed="true">All (7)</button>
+          <button class="filter-button" type="button" data-filter="critical" aria-pressed="false">High risk (3)</button>
+          <button class="filter-button" type="button" data-filter="IAM" aria-pressed="false">IAM</button>
+          <button class="filter-button" type="button" data-filter="Exposure" aria-pressed="false">Exposure</button>
+          <button class="filter-button" type="button" data-filter="Encryption" aria-pressed="false">Encryption</button>
+          <button class="filter-button" type="button" data-filter="Recovery" aria-pressed="false">Recovery</button>
+          <button class="filter-button" type="button" data-filter="not-observable" aria-pressed="false">Not observable (1)</button>
+        </div>
+        <div id="results-status" class="results-status" role="status">7 findings shown.</div>
+        <div class="a-body">
+          <div class="a-list" aria-label="Findings">
+            <ul id="row-container" class="a-rows"></ul>
+          </div>
+          <article class="a-detail" id="a-detail" aria-live="polite" aria-atomic="true"></article>
+        </div>
+        <p id="a-action-status" class="page-status" role="status"></p>
+      </section>
+
+      <section id="panel-b" class="option-frame" role="tabpanel" aria-labelledby="tab-b" tabindex="0" hidden>
+        <div class="option-label">
+          <span>Option B — stakeholder-facing reading flow. Decisions first; technical proof remains available on demand.</span>
+          <span class="mock-label">Illustrative data</span>
+        </div>
+        <div class="b-wrap">
+          <div class="b-eyebrow">Architecture review · generated 2026-09-08 · 4 of 7 sample findings shown</div>
+          <h2 class="b-title">payments-api</h2>
+          <p class="b-sub">Reviewed against AWS Well-Architected and AWS security guidance. Three findings warrant action before production.</p>
+
+          <div class="scope-note">
+            <strong>What this review can and cannot establish</strong>
+            It statically reviews the submitted Terraform and workload brief. It does not run the code, inspect live AWS accounts, certify compliance, or see remote-module internals that were not submitted.
+          </div>
+
+          <div class="b-summary">
+            <h3>What this means for decision makers</h3>
+            <p>The submitted design shows three high-risk configuration gaps: bucket-level public-access protection is not declared for an audit-log bucket, one IAM role is broader than necessary, and no account-wide CloudTrail trail is observable in the submitted code.</p>
+            <p>These findings indicate focused configuration work, not a demonstrated need for a redesign. Engineering effort and production impact still need validation in the actual environment.</p>
+            <p><strong>Coverage limit:</strong> data-residency requirements were not provided, so compliance-dependent conclusions are marked not observable rather than guessed.</p>
+          </div>
+
+          <div class="b-stepper" aria-label="Workload context used by this review">
+            <div class="b-step done"><div class="num">01</div><div class="q">Expected traffic / scale?</div><div class="answer">Answered — about 40 requests/second peak</div></div>
+            <div class="b-step done"><div class="num">02</div><div class="q">Availability requirement?</div><div class="answer">Answered — 99.9% target</div></div>
+            <div class="b-step unknown"><div class="num">03</div><div class="q">Regulatory / data residency?</div><div class="answer">Not answered — related conclusions not assessed</div></div>
+          </div>
+
+          <h2 class="b-section-head">Exposure and access</h2>
+          <details class="b-card" open>
+            <summary><span class="summary-copy"><span class="pill critical">High risk</span><span class="summary-title">Bucket-level public-access protection is not declared</span></span><span class="chev" aria-hidden="true">›</span></summary>
+            <div class="b-card-body">
+              <h3>Why it matters</h3>
+              <p>The submitted Terraform does not enable S3 Block Public Access at the bucket level. For a bucket intended to hold transaction audit trails, unintended exposure would undermine confidentiality and the integrity of the evidence trail.</p>
+              <h3>Recommended action</h3>
+              <p>Enable S3 Block Public Access at both the bucket and account levels, then validate the effective bucket policy.</p>
+              <p class="confidence-note"><strong>Confidence: High.</strong> A deterministic rule found the relevant Terraform setting directly. Confidence describes evidence strength, not a guarantee that no runtime exception exists.</p>
+              <details class="source-details"><summary>View evidence and source</summary><dl class="citation-block"><dt>Observed evidence</dt><dd class="mono">aws_s3_bucket_public_access_block absent for payments-audit-logs</dd><dt>Guidance</dt><dd><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html">Amazon S3 Block Public Access documentation</a></dd><dt>Snapshot</dt><dd class="mono">retrieved 2026-09-08 · chunk sec-s3-bpa-07 · content hash recorded</dd><dt>Captured passage</dt><dd><blockquote>Illustrative excerpt location. Production reports display the exact versioned source span captured by the retrieval pipeline.</blockquote></dd></dl></details>
+              <button class="secondary-button b-action deeper-button" type="button" data-finding="Bucket-level public-access protection is not declared">Go deeper on this finding</button>
+            </div>
+          </details>
+
+          <details class="b-card">
+            <summary><span class="summary-copy"><span class="pill critical">High risk</span><span class="summary-title">Lambda execution role is broader than necessary</span></span><span class="chev" aria-hidden="true">›</span></summary>
+            <div class="b-card-body">
+              <h3>Why it matters</h3>
+              <p>The role grants every S3 action against every resource. If the function were compromised, those permissions could expose unrelated buckets—not only the audit-log bucket it needs.</p>
+              <h3>Recommended action</h3>
+              <p>Limit the policy to the required S3 actions and the specific bucket resources, then refine it against observed usage.</p>
+              <p class="confidence-note"><strong>Confidence: High.</strong> The broad action and resource wildcards are directly present in the submitted policy.</p>
+              <details class="source-details"><summary>View evidence and source</summary><dl class="citation-block"><dt>Observed evidence</dt><dd class="mono">Action: s3:* · Resource: *</dd><dt>Guidance</dt><dd><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html">AWS IAM security best practices</a></dd><dt>Snapshot</dt><dd class="mono">retrieved 2026-09-08 · chunk iam-bp-002 · content hash recorded</dd></dl></details>
+              <button class="secondary-button b-action deeper-button" type="button" data-finding="Lambda execution role is broader than necessary">Go deeper on this finding</button>
+            </div>
+          </details>
+
+          <h2 class="b-section-head" style="margin-top:2rem;">Data protection and review limits</h2>
+          <details class="b-card">
+            <summary><span class="summary-copy"><span class="pill success">Confirmed</span><span class="summary-title">Database storage encryption is declared</span></span><span class="chev" aria-hidden="true">›</span></summary>
+            <div class="b-card-body">
+              <h3>What was observed</h3>
+              <p>The submitted Terraform declares storage encryption for <code>payments-db</code>. This is a configuration observation, not proof of the live resource state.</p>
+              <p class="confidence-note"><strong>Confidence: High.</strong> The setting is directly observable in submitted code; deployment state was not inspected.</p>
+              <details class="source-details"><summary>View evidence and source</summary><dl class="citation-block"><dt>Observed evidence</dt><dd class="mono">storage_encrypted = true · kms_key_id declared</dd><dt>Guidance</dt><dd><a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Overview.Encryption.html">Amazon RDS encryption documentation</a></dd><dt>Snapshot</dt><dd class="mono">retrieved 2026-09-08 · chunk rds-encryption-03 · content hash recorded</dd></dl></details>
+            </div>
+          </details>
+
+          <details class="b-card">
+            <summary><span class="summary-copy"><span class="pill unknown">Not observable</span><span class="summary-title">Data-residency requirement was not provided</span></span><span class="chev" aria-hidden="true">›</span></summary>
+            <div class="b-card-body">
+              <h3>Why it matters</h3>
+              <p>The workload brief does not establish where regulated or customer data may be processed. ArchiBrief therefore does not make compliance or residency claims that depend on that missing fact.</p>
+              <h3>Next step</h3>
+              <p>Confirm the applicable requirements and include them in the workload brief for a new review so the affected conclusions can be evaluated.</p>
+              <p class="confidence-note"><strong>Confidence: Not scored.</strong> This is an explicit evidence gap, not an AI prediction.</p>
+              <details class="source-details"><summary>View decision trace</summary><dl class="citation-block"><dt>Policy result</dt><dd class="mono">not-observable · dependent conclusions stopped</dd><dt>Policy version</dt><dd class="mono">preflight policy v1.2</dd></dl></details>
+            </div>
+          </details>
+          <p id="b-action-status" class="page-status" role="status"></p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const findings = [
+      { id: 1, severity: "critical", severityLabel: "High risk", rank: 4, title: "Bucket-level S3 public-access protection is not declared", category: "Exposure", type: "deterministic-rule-result", confidence: 98, confidenceLabel: "High", confidenceBasis: "The submitted repository contains the bucket but no bucket-level public-access-block resource. An account-level control could still exist outside the submitted code.", observed: "aws_s3_bucket_public_access_block is absent for payments-audit-logs.", source: "Amazon S3 Block Public Access documentation", sourceUrl: "https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html", section: "Configuring block public access", chunk: "sec-s3-bpa-07", snapshot: "retrieved 2026-09-08 · content hash recorded", passage: "Illustrative excerpt location; production output shows the exact captured source span.", recommendation: "Enable S3 Block Public Access at the bucket and account levels, then validate the effective policy.", alternatives: ["A network-based bucket-policy restriction is weaker because later policy changes can reopen access.", "Monitoring alone detects exposure after the control has already failed."] },
+      { id: 2, severity: "critical", severityLabel: "High risk", rank: 4, title: "IAM role lambda-exec-payments grants s3:* on *", category: "IAM", type: "deterministic-rule-result", confidence: 95, confidenceLabel: "High", confidenceBasis: "The action and resource wildcards are directly present in the submitted policy.", observed: "Action: s3:* · Resource: *", source: "AWS IAM security best practices", sourceUrl: "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html", section: "Apply least-privilege permissions", chunk: "iam-bp-002", snapshot: "retrieved 2026-09-08 · content hash recorded", passage: "Illustrative excerpt location; production output shows the exact captured source span.", recommendation: "Scope the policy to the S3 actions and resources the function actually uses.", alternatives: ["AWS managed ReadOnlyAccess remains broader than this workload requires."] },
+      { id: 3, severity: "critical", severityLabel: "High risk", rank: 4, title: "No account-wide CloudTrail trail is observable", category: "Observability", type: "deterministic-rule-result", confidence: 90, confidenceLabel: "High", confidenceBasis: "No trail resource appears in the submitted repository; an externally managed trail could still exist.", observed: "No aws_cloudtrail resource found in the submitted repository.", source: "AWS Security Hub CloudTrail controls", sourceUrl: "https://docs.aws.amazon.com/securityhub/latest/userguide/cloudtrail-controls.html", section: "CloudTrail controls", chunk: "fsbp-cloudtrail-1", snapshot: "retrieved 2026-09-08 · content hash recorded", passage: "Illustrative excerpt location; production output shows the exact captured source span.", recommendation: "Confirm whether an organization-level trail exists; otherwise create a multi-Region trail with log-file validation.", alternatives: [] },
+      { id: 4, severity: "success", severityLabel: "Confirmed", rank: 1, title: "RDS storage encryption is declared", category: "Encryption", type: "fact", confidence: 99, confidenceLabel: "High", confidenceBasis: "The setting is directly observable in code, but live deployment state was not inspected.", observed: "storage_encrypted = true · kms_key_id declared", source: "Amazon RDS encryption documentation", sourceUrl: "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Overview.Encryption.html", section: "Encrypting Amazon RDS resources", chunk: "rds-encryption-03", snapshot: "retrieved 2026-09-08 · content hash recorded", passage: "Illustrative excerpt location; production output shows the exact captured source span.", recommendation: "No baseline change indicated. Revisit key ownership if customer-managed rotation is required.", alternatives: [] },
+      { id: 5, severity: "warning", severityLabel: "Review", rank: 3, title: "Lambda reserved concurrency is not configured", category: "Availability", type: "deterministic-rule-result", confidence: 82, confidenceLabel: "Medium", confidenceBasis: "The setting is absent, but the correct limit depends on live downstream capacity.", observed: "reserved_concurrent_executions is not declared.", source: "AWS Lambda reserved concurrency documentation", sourceUrl: "https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html", section: "Configuring reserved concurrency", chunk: "lambda-concurrency-04", snapshot: "retrieved 2026-09-08 · content hash recorded", passage: "Illustrative excerpt location; production output shows the exact captured source span.", recommendation: "Size reserved concurrency against downstream database connection limits and expected peak demand.", alternatives: ["Provisioned concurrency adds standing cost and addresses startup latency rather than only limiting concurrency."] },
+      { id: 6, severity: "warning", severityLabel: "Review", rank: 3, title: "Multi-AZ is not enabled for payments-db", category: "Recovery", type: "inference", confidence: 68, confidenceLabel: "Medium", confidenceBasis: "The recommendation depends on whether the stated availability target is a hard requirement.", observed: "multi_az = false in the submitted database resource.", source: "Amazon RDS Multi-AZ documentation", sourceUrl: "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html", section: "Multi-AZ deployments", chunk: "rds-multiaz-05", snapshot: "retrieved 2026-09-08 · content hash recorded", passage: "Illustrative excerpt location; production output shows the exact captured source span.", recommendation: "Enable Multi-AZ if the 99.9% target requires managed failover at the database tier.", alternatives: ["A read replica does not provide the same automatic failover behavior."] },
+      { id: 7, severity: "unknown", severityLabel: "Not observable", rank: 2, title: "Data-residency requirement is missing", category: "Compliance-adjacent", type: "not-observable", confidence: null, confidenceLabel: "Not scored", confidenceBasis: "This is an explicit evidence gap, not a probabilistic finding.", observed: "The workload brief does not state regulatory or residency requirements.", source: "ArchiBrief preflight policy", sourceUrl: "", section: "Cannot safely infer", chunk: "preflight-policy-v1.2", snapshot: "policy version 1.2", passage: "Dependent compliance and residency conclusions are stopped until the user supplies the missing context.", recommendation: "Confirm applicable requirements and include them in the workload brief for a new review.", alternatives: [] }
+    ];
+
+    const severityOrder = { critical: 4, warning: 3, unknown: 2, success: 1 };
+    let activeFilter = "all";
+    let selectedId = 1;
+
+    function make(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    function makePill(finding) {
+      return make("span", `pill ${finding.severity}`, finding.severityLabel);
+    }
+
+    function visibleFindings() {
+      const query = document.getElementById("finding-search").value.trim().toLowerCase();
+      const sort = document.getElementById("finding-sort").value;
+      const filtered = findings.filter((finding) => {
+        const matchesFilter = activeFilter === "all" || finding.severity === activeFilter || finding.category === activeFilter || finding.type === activeFilter;
+        const haystack = `${finding.title} ${finding.category} ${finding.type}`.toLowerCase();
+        return matchesFilter && haystack.includes(query);
+      });
+      return filtered.sort((a, b) => {
+        if (sort === "confidence") return (b.confidence ?? -1) - (a.confidence ?? -1);
+        if (sort === "title") return a.title.localeCompare(b.title);
+        return severityOrder[b.severity] - severityOrder[a.severity] || a.id - b.id;
+      });
+    }
+
+    function renderRows() {
+      const container = document.getElementById("row-container");
+      const visible = visibleFindings();
+      container.replaceChildren();
+      visible.forEach((finding) => {
+        const item = make("li");
+        const button = make("button", "a-row");
+        button.type = "button";
+        button.dataset.id = String(finding.id);
+        button.setAttribute("aria-current", String(finding.id === selectedId));
+        button.setAttribute("aria-controls", "a-detail");
+        const main = make("span", "rowmain");
+        main.append(make("span", "rowtitle", finding.title));
+        const meta = make("span", "rowmeta");
+        meta.append(makePill(finding), make("span", "type-tag", finding.type));
+        main.append(meta);
+        const score = make("span", "row-score", finding.confidence === null ? "Not scored" : `${finding.confidence}% · ${finding.confidenceLabel}`);
+        button.append(main, score);
+        button.addEventListener("click", () => selectFinding(finding.id));
+        item.append(button);
+        container.append(item);
+      });
+      const status = document.getElementById("results-status");
+      status.textContent = `${visible.length} ${visible.length === 1 ? "finding" : "findings"} shown.`;
+      if (!visible.length) {
+        container.append(make("li", "results-status", "No findings match. Clear the search or choose another filter."));
+        document.getElementById("a-detail").replaceChildren(make("p", "", "No finding selected."));
+        return;
+      }
+      if (!visible.some((finding) => finding.id === selectedId)) selectedId = visible[0].id;
+      renderDetail(selectedId);
+      document.querySelectorAll(".a-row").forEach((row) => row.setAttribute("aria-current", String(row.dataset.id === String(selectedId))));
+    }
+
+    function appendDefinition(list, term, value, className) {
+      list.append(make("dt", "", term), make("dd", className || "", value));
+    }
+
+    function renderDetail(id) {
+      const finding = findings.find((entry) => entry.id === id);
+      const detail = document.getElementById("a-detail");
+      detail.replaceChildren();
+      detail.append(make("h2", "dtitle", finding.title));
+      const tags = make("div", "dtags");
+      tags.append(makePill(finding), make("span", "type-tag", finding.type), make("span", "type-tag", finding.category), make("span", "confidence", finding.confidence === null ? "Confidence · not scored" : `Confidence · ${finding.confidenceLabel} (${finding.confidence}%)`));
+      detail.append(tags);
+      detail.append(make("h3", "", "Observed evidence"), make("p", "", finding.observed));
+      detail.append(make("h3", "", "Why this confidence"), make("p", "", finding.confidenceBasis));
+      detail.append(make("h3", "", "Source provenance"));
+      const citation = make("dl", "citation-block");
+      if (finding.sourceUrl) {
+        citation.append(make("dt", "", "Source"));
+        const sourceValue = make("dd");
+        const link = make("a", "", finding.source);
+        link.href = finding.sourceUrl;
+        sourceValue.append(link);
+        citation.append(sourceValue);
+      } else {
+        appendDefinition(citation, "Source", finding.source);
+      }
+      appendDefinition(citation, "Section", finding.section);
+      appendDefinition(citation, "Chunk ID", finding.chunk, "mono");
+      appendDefinition(citation, "Snapshot", finding.snapshot, "mono");
+      citation.append(make("dt", "", "Captured passage"));
+      const passageValue = make("dd");
+      passageValue.append(make("blockquote", "", finding.passage));
+      citation.append(passageValue);
+      detail.append(citation, make("h3", "", "Recommendation"), make("p", "", finding.recommendation));
+      if (finding.alternatives.length) {
+        detail.append(make("h3", "", "Alternatives considered"));
+        const list = make("ul", "alt-list");
+        finding.alternatives.forEach((alternative) => list.append(make("li", "", alternative)));
+        detail.append(list);
+      }
+      if (finding.type !== "not-observable") {
+        const button = make("button", "secondary-button", "Go deeper on this finding");
+        button.type = "button";
+        button.addEventListener("click", () => announceAction("a-action-status", `Mockup: a versioned deep review would start for “${finding.title}”.`));
+        detail.append(button);
+      }
+    }
+
+    function selectFinding(id) {
+      selectedId = id;
+      renderDetail(id);
+      document.querySelectorAll(".a-row").forEach((row) => row.setAttribute("aria-current", String(row.dataset.id === String(id))));
+      if (window.matchMedia("(max-width: 760px)").matches) document.getElementById("a-detail").scrollIntoView({ block: "start" });
+    }
+
+    function setActiveFilter(button) {
+      activeFilter = button.dataset.filter;
+      document.querySelectorAll(".filter-button").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+      renderRows();
+    }
+
+    function showOption(id, focusTab = false) {
+      const tabs = [...document.querySelectorAll('[role="tab"]')];
+      tabs.forEach((tab) => {
+        const active = tab.id === `tab-${id}`;
+        tab.setAttribute("aria-selected", String(active));
+        tab.tabIndex = active ? 0 : -1;
+        document.getElementById(tab.getAttribute("aria-controls")).hidden = !active;
+        if (active && focusTab) tab.focus();
+      });
+    }
+
+    function announceAction(targetId, message) {
+      document.getElementById(targetId).textContent = message;
+    }
+
+    document.querySelectorAll('[role="tab"]').forEach((tab, index, tabs) => {
+      tab.addEventListener("click", () => showOption(tab.id.slice(-1)));
+      tab.addEventListener("keydown", (event) => {
+        let next = null;
+        if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+        if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === "Home") next = 0;
+        if (event.key === "End") next = tabs.length - 1;
+        if (next !== null) {
+          event.preventDefault();
+          showOption(tabs[next].id.slice(-1), true);
+        }
+      });
+    });
+
+    document.querySelectorAll(".filter-button").forEach((button) => button.addEventListener("click", () => setActiveFilter(button)));
+    document.getElementById("finding-search").addEventListener("input", renderRows);
+    document.getElementById("finding-sort").addEventListener("change", renderRows);
+    document.getElementById("export-button").addEventListener("click", () => announceAction("a-action-status", "Mockup: export would download the versioned HTML/JSON evidence ledger."));
+    document.querySelectorAll(".deeper-button").forEach((button) => button.addEventListener("click", () => announceAction("b-action-status", `Mockup: a versioned deep review would start for “${button.dataset.finding}”.`)));
+
+    const themeSelect = document.getElementById("theme-select");
+    try {
+      const storedTheme = localStorage.getItem("archibrief-mockup-theme") || "system";
+      themeSelect.value = storedTheme;
+      document.documentElement.dataset.theme = storedTheme;
+    } catch (_) {
+      document.documentElement.dataset.theme = "system";
+    }
+    themeSelect.addEventListener("change", () => {
+      document.documentElement.dataset.theme = themeSelect.value;
+      try { localStorage.setItem("archibrief-mockup-theme", themeSelect.value); } catch (_) { /* Local file storage can be unavailable. */ }
+    });
+
+    renderRows();
+  </script>
+</body>
+</html>

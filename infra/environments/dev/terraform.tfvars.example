@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars and fill in real values once AWS account/IAM
+# bootstrap is done (Work-Project-Deployment-Roadmap.md). Every value
+# below is a placeholder — do NOT commit a real terraform.tfvars
+# (see .gitignore / ADR-0015).
+
+aws_account_id           = "000000000000"
+ses_source_arn           = "arn:aws:ses:us-east-1:000000000000:identity/archibrief.dev"
+github_oidc_provider_arn = null
+github_repo              = "REPLACE_ME/archibrief"
+agentcore_runtime_arn    = null
+
+lambda_zip_paths = {
+  ingest      = "../../../backend/lambdas/ingest/build/ingest.zip"
+  rule_engine = "../../../backend/lambdas/rule_engine/build/rule_engine.zip"
+  validate    = "../../../backend/lambdas/validate/build/validate.zip"
+  audit       = "../../../backend/lambdas/audit/build/audit.zip"
+  finalize    = "../../../backend/lambdas/finalize/build/finalize.zip"
+}

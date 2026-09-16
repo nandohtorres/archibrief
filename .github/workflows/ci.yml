@@ -1,0 +1,77 @@
+# ArchiBrief CI — advisory (not yet gating merges; Phase 7 tightens this
+# to required/blocking status checks per Work-Project-Build-Plan.md).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # backend/ isn't installed as a package — call sites import
+      # "backend.xxx" from the repo root (see backend/pyproject.toml's
+      # pythonpath = [".."] pytest setting), so CI installs dependencies
+      # directly rather than `pip install -e backend`.
+      - run: pip install pydantic boto3 langgraph python-hcl2 ruff pytest pytest-cov "moto[dynamodb,s3]"
+      - run: ruff format --check backend
+      - run: ruff check backend
+      - run: pytest --cov=backend --cov-report=term-missing
+        working-directory: backend
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: has_app
+        run: |
+          if [ -f frontend/package.json ] && [ -n "$(find frontend/app -type f 2>/dev/null)" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.has_app.outputs.present == 'true'
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        if: steps.has_app.outputs.present == 'true'
+        working-directory: frontend
+      - run: npm run lint
+        if: steps.has_app.outputs.present == 'true'
+        working-directory: frontend
+      - run: npx prettier --check .
+        if: steps.has_app.outputs.present == 'true'
+        working-directory: frontend
+      - run: npm run test
+        if: steps.has_app.outputs.present == 'true'
+        working-directory: frontend
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+      - run: terraform fmt -check -recursive infra
+      - uses: terraform-linters/setup-tflint@v4
+      - run: tflint --recursive --chdir=infra
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
