@@ -1,0 +1,18 @@
+# Direct runtime dependencies for backend/agent/runtime_entrypoint.py, the
+# AgentCore Runtime deployment package's entry point. Scoped to exactly
+# what's imported by the real code path (graph.py -> preflight/retrieve/
+# reason nodes -> shared/clients, shared/models, corpus/lexical_index) —
+# confirmed by grep, not copied from backend/pyproject.toml's full dependency
+# list. beautifulsoup4/pypdf/python-hcl2 are ingestion-only and deliberately
+# excluded; they are never imported by anything reachable from this
+# entrypoint.
+#
+# Bounds match backend/pyproject.toml so both environments stay consistent.
+# Compile to runtime_requirements.lock.txt with build_runtime_package.py's
+# --relock flag (uv pip compile --python-platform aarch64-manylinux2014
+# --python-version 3.12) — this file alone is not what gets installed for a
+# real build; the lock is.
+pydantic>=2.0
+boto3>=1.34
+langgraph>=0.2
+bedrock-agentcore>=0.1

@@ -67,7 +67,9 @@ module "step_functions_lambda" {
   name_prefix                = "${var.name_prefix}-${var.environment}"
   lambda_zip_paths           = var.lambda_zip_paths
   reports_bucket_arn         = module.s3.bucket_arn
+  reports_bucket_name        = module.s3.bucket_id
   reviews_table_arn          = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.reviews_table_name}"
+  reviews_table_name         = module.dynamodb.reviews_table_name
   audit_table_arn            = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.audit_log_table_name}"
   # Replaced the raw placeholder var with the real module output
   # (2026-09-16) — module.agentcore_runtime.agent_runtime_arn is only

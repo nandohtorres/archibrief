@@ -157,6 +157,18 @@ data "aws_iam_policy_document" "state_machine_invoke" {
     resources = [var.kill_switch_parameter_arn]
   }
 
+  # For the new leading IdempotencyGate Task (2026-09-17 fix) — a
+  # conditional PutItem, called directly by the state machine's own SDK
+  # integration (not by any Lambda), so this permission belongs on the
+  # state machine's role, not the Finalize Lambda's own
+  # audit_finalize_data_access statement (which already covers Finalize's
+  # separate, later PutItem call).
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:PutItem"]
+    resources = [var.reviews_table_arn]
+  }
+
   dynamic "statement" {
     for_each = var.agentcore_runtime_arn == null ? [] : [1]
     content {
@@ -195,27 +207,36 @@ resource "aws_iam_role_policy" "state_machine_invoke" {
 # here — "InvokeAgent" is a single opaque task from this state machine's
 # perspective.
 #
-# REQUIRED StartExecution Input shape (2026-09-16 fix — every field below
+# REQUIRED StartExecution Input shape (2026-09-17 fix — every field below
 # is read via a bare "$.xxx" JSONPath somewhere in this definition, and
 # Step Functions raises a States.Runtime error if a referenced path is
 # absent, so none of these are truly optional at the ASL layer even where
 # the Lambda handler itself would tolerate a missing key via .get()):
 #   {
-#     "review_id": "...",           # threaded through every stage; no
-#                                    # Lambda in this chain re-emits it
+#     "review_id": "...",           # client-generated (a UUID the client
+#                                    # already needs, to poll GET
+#                                    # /reviews/{review_id} afterward — see
+#                                    # api-gateway module's TODO for that
+#                                    # route). Doubles as the idempotency
+#                                    # token: IdempotencyGate below rejects
+#                                    # a second execution for the same
+#                                    # review_id before any paid work runs.
 #     "archive_path": "...",        # Ingest
 #     "workload_brief": "...",      # Ingest, then re-used by InvokeAgent
 #     "dest_dir": "...",            # optional for Ingest (has its own default)
 #     "retrieval_query": "...",     # InvokeAgent -> runtime_entrypoint.invoke()
-#     "baseline_answers": {},       # InvokeAgent + Audit (pass {} if none)
-#     "report_bucket": "...",       # Finalize (S3 write target)
-#     "reviews_table_name": "..."   # Finalize (DynamoDB pointer write)
+#     "baseline_answers": {}        # InvokeAgent + Audit (pass {} if none)
 #   }
-# audit_table_name is deliberately NOT required here — Audit's Parameters
-# below omit it entirely (not merely leaving it null) so event.get(...)
-# on the Lambda side stays a genuine "skip the write" no-op rather than a
-# state-machine-level path error, matching this account's still-pending
-# DynamoDB table bootstrap.
+# report_bucket/reviews_table_name are DELIBERATELY NOT part of this
+# contract (removed 2026-09-17, see Work-Project-Issues-Log.md) — they're
+# Terraform-known infra constants (var.reports_bucket_name/
+# reviews_table_name), not caller-supplied input; requiring the client to
+# know real internal AWS resource names was a real bug, not a design
+# choice. audit_table_name is deliberately NOT required here either —
+# Audit's Parameters below omit it entirely (not merely leaving it null)
+# so event.get(...) on the Lambda side stays a genuine "skip the write"
+# no-op rather than a state-machine-level path error, matching this
+# account's still-pending DynamoDB table bootstrap.
 resource "aws_sfn_state_machine" "review" {
   name     = "${var.name_prefix}-review"
   role_arn = aws_iam_role.state_machine.arn
@@ -229,8 +250,52 @@ resource "aws_sfn_state_machine" "review" {
 
   definition = jsonencode({
     Comment = "ArchiBrief review pipeline outer job lifecycle (ADR-0028)"
-    StartAt = "CheckKillSwitch"
+    StartAt = "IdempotencyGate"
     States = {
+      # New state (2026-09-17 fix): a retried/duplicated POST /reviews for
+      # the same client-supplied review_id must not re-run paid work
+      # (Bedrock calls in particular) a second time. A conditional PutItem
+      # is the standard pure-ASL idempotency pattern for a direct API
+      # Gateway -> Step Functions integration with no BFF Lambda
+      # (ADR-0016/0042) — first execution to claim a given review_id wins,
+      # any later one for the same ID fails the condition and short-
+      # circuits before CheckKillSwitch/Ingest/RuleEngine/InvokeAgent ever
+      # run. Note this can't change the original HTTP response (StartExecution
+      # itself already returned 200 with an execution ARN before this task
+      # runs — that's inherent to the async AWS_PROXY integration, not a
+      # gap in this fix) — its value is purely cost/duplicate-work
+      # protection, not client-visible dedup signaling.
+      IdempotencyGate = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::aws-sdk:dynamodb:putItem"
+        Parameters = {
+          TableName = var.reviews_table_name
+          Item = {
+            reviewId       = { "S.$" = "$.review_id" }
+            idempotencyKey = { "S.$" = "$.review_id" }
+            status         = { S = "pending" }
+            createdAt      = { "S.$" = "$$.State.EnteredTime" }
+          }
+          ConditionExpression = "attribute_not_exists(reviewId)"
+        }
+        ResultPath = "$.idempotencyResult"
+        Catch = [
+          {
+            ErrorEquals = ["DynamoDB.ConditionalCheckFailedException"]
+            ResultPath  = "$.idempotencyError"
+            Next        = "DuplicateReviewSubmission"
+          }
+        ]
+        Next = "CheckKillSwitch"
+      }
+      # Succeeds (not Fails) — a duplicate submission isn't an error
+      # condition for the ALREADY-RETURNED HTTP response, it's this
+      # second execution correctly declining to redo paid work. Real
+      # status (from the first, real execution) is only ever visible via
+      # GET /reviews/{review_id}, never this execution's own outcome.
+      DuplicateReviewSubmission = {
+        Type = "Succeed"
+      }
       # ADR-0030's "fast application kill switch checked before paid work
       # starts" — fails immediately, before Ingest/RuleEngine/Bedrock, so
       # a real incident stops new billed work without waiting on AWS
@@ -461,17 +526,18 @@ resource "aws_sfn_state_machine" "review" {
       # findings comes from Validate's valid_findings (the Finding-schema-
       # validated list, not the agent's raw unvalidated output) — matches
       # ADR-0022's layer 3/4 ordering (Validate gates what Audit/Finalize
-      # ever see). report_bucket/reviews_table_name are threaded straight
-      # from the original execution input per the required-input contract
-      # above; there's no other source for either in this state machine.
+      # ever see). report_bucket/reviews_table_name (fixed 2026-09-17):
+      # plain literal Terraform values now, not "$.xxx" JSONPath — these
+      # are infra constants known at apply time, never part of the
+      # caller's request (see the required-input-contract comment above).
       Finalize = {
         Type = "Task"
         Resource = aws_lambda_function.this["finalize"].arn
         Parameters = {
-          "review_id.$"           = "$.review_id"
-          "findings.$"             = "$.validateResult.valid_findings"
-          "report_bucket.$"        = "$.report_bucket"
-          "reviews_table_name.$"   = "$.reviews_table_name"
+          "review_id.$"         = "$.review_id"
+          "findings.$"          = "$.validateResult.valid_findings"
+          "report_bucket"       = var.reports_bucket_name
+          "reviews_table_name"  = var.reviews_table_name
         }
         End = true
       }

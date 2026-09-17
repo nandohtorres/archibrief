@@ -18,8 +18,18 @@ variable "reports_bucket_arn" {
   type = string
 }
 
+variable "reports_bucket_name" {
+  type        = string
+  description = "S3 bucket name (not ARN) for Finalize's Parameters and the state machine's own literal reference — a Terraform-known infra constant, never caller-supplied input (see 2026-09-17 fix: this used to be sourced from the StartExecution request body, which leaked an internal resource name into the public API contract)."
+}
+
 variable "reviews_table_arn" {
   type = string
+}
+
+variable "reviews_table_name" {
+  type        = string
+  description = "DynamoDB table name (not ARN) for Finalize's Parameters and the leading idempotency-check Task — same Terraform-known-constant reasoning as reports_bucket_name."
 }
 
 variable "audit_table_arn" {

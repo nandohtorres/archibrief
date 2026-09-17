@@ -21,6 +21,8 @@
         "s3:ListBucket",
         "s3:PutBucketTagging",
         "s3:GetBucketTagging",
+        "s3:PutObjectTagging",
+        "s3:GetObjectTagging",
         "s3:PutBucketPolicy",
         "s3:DeleteBucketPolicy"
       ],
@@ -50,14 +52,7 @@
         "s3vectors:DeleteIndex",
         "s3vectors:GetIndex",
         "s3vectors:TagResource",
-        "s3vectors:ListTagsForResource"
-      ],
-      "Resource": "arn:aws:s3vectors:us-east-1:123456789012:bucket/archibrief-*/index/*"
-    },
-    {
-      "Sid": "S3VectorsDataPlane",
-      "Effect": "Allow",
-      "Action": [
+        "s3vectors:ListTagsForResource",
         "s3vectors:PutVectors",
         "s3vectors:GetVectors",
         "s3vectors:ListVectors",
@@ -82,12 +77,6 @@
         "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
         "arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-sonnet-4-6"
       ]
-    },
-    {
-      "Sid": "BedrockGuardrailsApply",
-      "Effect": "Allow",
-      "Action": "bedrock:ApplyGuardrail",
-      "Resource": "arn:aws:bedrock:us-east-1:123456789012:guardrail/EXAMPLEGUARDRAILID"
     },
     {
       "Sid": "DynamoDBTables",
@@ -129,30 +118,6 @@
         "cloudfront:DeleteResponseHeadersPolicy"
       ],
       "Resource": "*"
-    },
-    {
-      "Sid": "CognitoTransitionalDestroyOnly",
-      "Effect": "Allow",
-      "Action": [
-        "cognito-idp:CreateUserPool",
-        "cognito-idp:DeleteUserPool",
-        "cognito-idp:UpdateUserPool",
-        "cognito-idp:DescribeUserPool",
-        "cognito-idp:CreateUserPoolClient",
-        "cognito-idp:DeleteUserPoolClient",
-        "cognito-idp:UpdateUserPoolClient",
-        "cognito-idp:DescribeUserPoolClient",
-        "cognito-idp:CreateUserPoolDomain",
-        "cognito-idp:DeleteUserPoolDomain",
-        "cognito-idp:DescribeUserPoolDomain",
-        "cognito-idp:GetUserPoolMfaConfig",
-        "cognito-idp:SetUserPoolMfaConfig",
-        "cognito-idp:TagResource"
-      ],
-      "Resource": "*",
-      "Condition": {
-        "StringEquals": { "aws:RequestedRegion": "us-east-1" }
-      }
     },
     {
       "Sid": "SecretsManagerAdminKey",
@@ -213,9 +178,9 @@
       ]
     },
     {
-      "Sid": "CloudWatchLogsDescribeIsAccountWide",
+      "Sid": "DescribeIsAccountWide",
       "Effect": "Allow",
-      "Action": "logs:DescribeLogGroups",
+      "Action": ["logs:DescribeLogGroups", "ssm:DescribeParameters"],
       "Resource": "*"
     },
     {
@@ -255,6 +220,17 @@
       ]
     },
     {
+      "Sid": "CreateAgentCoreRuntimeIdentitySLR",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "arn:aws:iam::123456789012:role/aws-service-role/runtime-identity.bedrock-agentcore.amazonaws.com/*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": "runtime-identity.bedrock-agentcore.amazonaws.com"
+        }
+      }
+    },
+    {
       "Sid": "IamCreateRoleRequiresRuntimeBoundary",
       "Effect": "Allow",
       "Action": "iam:CreateRole",
@@ -291,7 +267,7 @@
       "Resource": "arn:aws:iam::123456789012:role/archibrief-dev-*",
       "Condition": {
         "StringEquals": {
-          "iam:PassedToService": ["lambda.amazonaws.com", "states.amazonaws.com", "apigateway.amazonaws.com"]
+          "iam:PassedToService": ["lambda.amazonaws.com", "states.amazonaws.com", "apigateway.amazonaws.com", "bedrock-agentcore.amazonaws.com"]
         }
       }
     },
@@ -346,10 +322,19 @@
         "bedrock-agentcore:DeleteAgentRuntime",
         "bedrock-agentcore:GetAgentRuntime",
         "bedrock-agentcore:ListAgentRuntimeVersions",
+        "bedrock-agentcore:CreateAgentRuntimeEndpoint",
+        "bedrock-agentcore:UpdateAgentRuntimeEndpoint",
+        "bedrock-agentcore:DeleteAgentRuntimeEndpoint",
+        "bedrock-agentcore:GetAgentRuntimeEndpoint",
+        "bedrock-agentcore:ListAgentRuntimeEndpoints",
         "bedrock-agentcore:TagResource",
-        "bedrock-agentcore:ListTagsForResource"
+        "bedrock-agentcore:ListTagsForResource",
+        "bedrock-agentcore:CreateWorkloadIdentity"
       ],
-      "Resource": "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/*"
+      "Resource": [
+        "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/*",
+        "arn:aws:bedrock-agentcore:us-east-1:123456789012:workload-identity-directory/*"
+      ]
     },
     {
       "Sid": "BedrockGuardrails",
@@ -360,20 +345,11 @@
         "bedrock:GetGuardrail",
         "bedrock:UpdateGuardrail",
         "bedrock:DeleteGuardrail",
+        "bedrock:ApplyGuardrail",
         "bedrock:TagResource",
         "bedrock:ListTagsForResource"
       ],
       "Resource": "arn:aws:bedrock:us-east-1:123456789012:guardrail/*"
-    },
-    {
-      "Sid": "WafRateLimitCleanupOnly",
-      "Effect": "Allow",
-      "Action": [
-        "wafv2:GetWebACL",
-        "wafv2:DeleteWebACL",
-        "wafv2:ListTagsForResource"
-      ],
-      "Resource": "arn:aws:wafv2:us-east-1:123456789012:regional/webacl/archibrief-*/*"
     },
     {
       "Sid": "SnsBudgetAlerts",
@@ -413,12 +389,6 @@
         "ssm:ListTagsForResource"
       ],
       "Resource": "arn:aws:ssm:us-east-1:123456789012:parameter/archibrief-*"
-    },
-    {
-      "Sid": "SsmDescribeParametersIsAccountWide",
-      "Effect": "Allow",
-      "Action": "ssm:DescribeParameters",
-      "Resource": "*"
     },
     {
       "Sid": "TerraformStateBackend",
