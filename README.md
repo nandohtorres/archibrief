@@ -27,9 +27,12 @@ state-changing route sits behind a single pre-shared admin credential
   reasoning subworkflow, the `Finding` pydantic model, a 16-scenario
   deterministic RuleEngine, and every Terraform module are implemented,
   deployed, and have produced a real finding set against a real
-  submitted Terraform repo. Backend test suite: 237 passing (`pytest`,
-  no AWS credentials required — AWS calls go through adapters
-  mocked/stubbed in tests).
+  submitted Terraform repo. Backend test suite (`pytest`, no AWS
+  credentials required — AWS calls go through moto or stubbed
+  adapters): 307 passing, plus 17 `xfail` cases that document known
+  rule-engine gaps (see "Known gaps"). 4 of the 307 check the real
+  ingested corpus and skip when `backend/corpus/data/` (gitignored) is
+  absent.
 - **RAG knowledge base**: AWS Well-Architected Framework + security
   best-practice sources normalized, chunked, embedded via Titan V2, and
   indexed in S3 Vectors; a deterministic lexical companion index covers
@@ -40,19 +43,27 @@ state-changing route sits behind a single pre-shared admin credential
   exposed to the client), a real yes/no + multi-select clarification UI
   for human-in-the-loop pauses, three one-click quick-test presets
   (`detailed`/`medium`/`loose` severity), and a "go deeper" per-finding
-  re-analysis action. 16 passing frontend unit tests (Vitest).
+  re-analysis action. 29 frontend unit tests (Vitest) and 3 Playwright
+  E2E tests: the guest/demo fixture path, and the admin-gated submit →
+  report → "go deeper" path plus admin-key handling, both against a
+  mocked network (never real AWS).
 - **Security**: Bedrock Guardrails gates every path into the model
-  (ingest, and again before reasoning); the model has no AWS credentials
-  and no tool-calling surface beyond a schema-validated `emit_findings`
-  call; every emitted finding is independently re-verified server-side
-  (citations must resolve to a real retrieved chunk). A real adversarial
-  prompt-injection regression suite exists and runs in CI on every push.
+  (ingest, and again before reasoning). The model itself has no AWS
+  credentials and no tool-calling surface beyond a schema-validated
+  `emit_findings` call; the AgentCore *runtime* that hosts the agent
+  code does have an IAM role, limited to read/invoke actions (Bedrock
+  InvokeModel/ApplyGuardrail, S3 Vectors query, `s3:GetObject` on its
+  own code-artifact bucket, logs) with nothing mutating. Every emitted finding is independently
+  re-verified server-side (citations must resolve to a real retrieved
+  chunk). Prompt-injection regression tests for the reasoning node run
+  in CI against a stubbed model (no Bedrock calls).
   Full sanitization audit (XSS/command-injection/DB-injection/path-
   traversal/prompt-injection) completed 2026-10-13 — see
   `docs/adr/Work-Project-ADR-0038...` and the issues log for the full
   writeup.
-- **CI**: `ci.yml` runs real `ruff`/`pytest`/Vitest/`terraform fmt`/
-  `tflint`/`gitleaks` on every push and PR — currently advisory, not a
+- **CI**: `ci.yml` runs real `ruff`/`pytest`/Vitest/Playwright/
+  `terraform fmt`/`tflint`/`gitleaks` on every push and PR — currently
+  advisory, not a
   blocking merge gate (GitHub branch protection requires either a public
   repo or GitHub Pro; this repo is currently private).
 
@@ -61,9 +72,10 @@ state-changing route sits behind a single pre-shared admin credential
 Tracked in detail in the Leonardo vault's Build Plan/Issues Log
 (private, not duplicated here). As of 2026-10-14:
 
-**Closed since the last pass** — per-Lambda least-privilege IAM
-(audited directly against the live roles, no over-permissioning
-found), the kill switch (live-triggered against the real deployment,
+**Closed since the last pass** — per-Lambda IAM roles (audited
+against the live roles 2026-10-13; a 2026-10-15 review still found
+Audit and Finalize sharing one over-broad policy, now split in code and
+pending apply), the kill switch (live-triggered against the real deployment,
 confirmed zero paid work runs while active), `GET /demo` rate
 limiting (now an isolated throttle bucket, separate from the
 admin-gated routes'), the Titan-vs-Cohere embedding comparison
@@ -76,14 +88,21 @@ customer-managed policies, applied and verified live).
 
 **Still genuinely open:**
 
-1. Frontend and E2E test coverage is thin — a few Vitest unit tests
-   exist, but no Playwright coverage of the real critical path yet
-   (submit review → view findings → "go deeper"; guest/demo report
-   view).
-2. The adversarial regression suite and the retrieval-evaluation
-   harness are run manually, not wired into CI as automated,
-   re-runnable checks yet.
-3. Full CI gating (branch-protection required status checks) — blocked
+1. **Rule-engine trap suite**: `tests/backend/traps/` runs adversarial
+   Terraform through the real parser + rule engine. Its first run
+   (2026-10-15) found the engine missed all 14 sneaky-but-dangerous
+   configs and flagged 3 of 4 safe red herrings. Those are recorded as
+   17 strict `xfail` cases, so CI stays green while the gaps are open
+   and a fix that closes one fails the run until its marker is removed.
+   The engine is not yet a reliable detector for these patterns.
+2. The model-side trap briefs (`backend/agent/trap_eval.py`) and the
+   retrieval-evaluation harness call real Bedrock, so they are run
+   manually with explicit approval, not in CI.
+3. "Go deeper" is synchronous behind the HTTP API's 30-second limit:
+   the agent call is capped at ~24 s and returns a clean timeout
+   error beyond that. Moving it to an async job is the follow-up if
+   real runs need longer.
+4. Full CI gating (branch-protection required status checks) — blocked
    on either making this repo public or a GitHub Pro upgrade; every
    test suite described above already runs on every push regardless,
    this only affects whether a failing check can block a merge.
