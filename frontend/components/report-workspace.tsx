@@ -13,8 +13,11 @@ import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
 import {
   filterAndSortFindings,
   formatFindingId,
+  reportSourceLabels,
+  reportTitle,
   type FindingFilter,
   type FindingSort,
+  type ReportSource,
 } from "@/lib/workflow";
 import { ArchitectureView } from "./architecture-view";
 import { FindingDetail } from "./finding-detail";
@@ -23,6 +26,7 @@ import { ReportQuestions } from "./report-questions";
 
 interface ReportWorkspaceProps {
   report: ReviewReport;
+  source: ReportSource;
   adminKey: string;
   onNewReview: () => void;
 }
@@ -31,7 +35,7 @@ const DEFAULT_DETAIL_PANE_WIDTH = 75;
 const MIN_DETAIL_PANE_WIDTH = 45;
 const MAX_DETAIL_PANE_WIDTH = 85;
 
-export function ReportWorkspace({ report, adminKey, onNewReview }: ReportWorkspaceProps) {
+export function ReportWorkspace({ report, source, adminKey, onNewReview }: ReportWorkspaceProps) {
   const [view, setView] = useState<"technical" | "stakeholder">("technical");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FindingFilter>("all");
@@ -126,6 +130,14 @@ export function ReportWorkspace({ report, adminKey, onNewReview }: ReportWorkspa
   }
 
   async function goDeeper(findingId: string) {
+    // The sample is precomputed and has no stored review behind it, so
+    // there is nothing to take deeper (and no paid run to start).
+    if (source === "sample") {
+      setStatus(
+        `Going deeper runs a new analysis on your own reviews. ${formatFindingId(findingId)} is part of the precomputed sample.`,
+      );
+      return;
+    }
     if (!getApiBaseUrl()) {
       setStatus(
         `Fixture only: ${formatFindingId(findingId)} would create a versioned child finding. The endpoint is not deployed.`,
@@ -161,7 +173,11 @@ export function ReportWorkspace({ report, adminKey, onNewReview }: ReportWorkspa
     anchor.download = `${report.review_id}-evidence-ledger.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setStatus("Fixture evidence ledger exported as JSON.");
+    setStatus(
+      source === "fixture"
+        ? "Fixture evidence ledger exported as JSON."
+        : "Evidence ledger exported as JSON.",
+    );
   }
 
   return (
@@ -169,8 +185,8 @@ export function ReportWorkspace({ report, adminKey, onNewReview }: ReportWorkspa
       <div className="report-summary">
         <header className="report-header">
           <div>
-            <span className="report-overline">Complete · fixture evidence ledger</span>
-            <h1 id="report-heading">payments-api architecture review</h1>
+            <span className="report-overline">{reportSourceLabels[source]}</span>
+            <h1 id="report-heading">{reportTitle(report.terraform_repo_ref)}</h1>
             <p>
               {report.terraform_repo_ref} ·{" "}
               {new Date(report.created_at).toLocaleString("en-US", {
@@ -204,7 +220,11 @@ export function ReportWorkspace({ report, adminKey, onNewReview }: ReportWorkspa
           <Metric
             label="Total findings"
             value={String(findings.length)}
-            detail="Across the complete fixture ledger"
+            detail={
+              source === "fixture"
+                ? "Across the complete fixture ledger"
+                : "Across the full evidence ledger"
+            }
           />
           <Metric
             label="Needs action"

@@ -237,3 +237,18 @@ export function isSubmitReviewResponse(value: unknown): value is SubmitReviewRes
       candidate.status === "complete")
   );
 }
+
+// Shape check for a finished report from GET /demo (or a complete GET
+// /reviews/{id}). Shallow on purpose: it guards against an error body or
+// a pending pointer being rendered as a report, not against every field.
+export function isReviewReport(value: unknown): value is ReviewReport {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.status === "complete" &&
+    typeof candidate.review_id === "string" &&
+    typeof candidate.terraform_repo_ref === "string" &&
+    Array.isArray(candidate.findings) &&
+    Array.isArray(candidate.baseline_answers)
+  );
+}

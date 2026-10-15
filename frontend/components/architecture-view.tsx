@@ -238,8 +238,8 @@ export function ArchitectureView({ onOpenFinding }: ArchitectureViewProps) {
         ))}
       </div>
       <p className="review-boundary">
-        <strong>Boundary:</strong> This fixture visualizes submitted Terraform plus bounded,
-        finding-supported changes. In-product diagram generation remains deferred past v1.
+        <strong>Boundary:</strong> This diagram is illustrative: it shows submitted Terraform plus
+        bounded, finding-supported changes. Generated diagrams are not built yet.
       </p>
     </section>
   );

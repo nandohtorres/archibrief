@@ -1,6 +1,10 @@
 import type { FindingPriority, ReportFinding } from "./contracts";
 
 export type AppScreen = "submission" | "preflight" | "progress" | "clarify" | "report" | "failure";
+// Where the report on screen came from: the public sample (GET /demo),
+// a real review the admin ran, or the bundled fixture in a build with no
+// API configured. Drives labels and whether paid actions are offered.
+export type ReportSource = "sample" | "live" | "fixture";
 export type FindingFilter = "all" | FindingPriority;
 export type FindingSort = "priority" | "confidence" | "title";
 
@@ -74,3 +78,16 @@ export function failureMessageFor(code: string | undefined): string {
     "Something went wrong on our side while running this review. Please try again."
   );
 }
+
+// "github.com/example/payments-api@a91f3c2" -> "payments-api". Falls back
+// to a generic title when the reference has no recognizable name.
+export function reportTitle(terraformRepoRef: string): string {
+  const name = terraformRepoRef.split("@")[0].split("/").filter(Boolean).pop()?.trim();
+  return name ? `${name} architecture review` : "Architecture review";
+}
+
+export const reportSourceLabels: Record<ReportSource, string> = {
+  sample: "Sample review · hypothetical workload",
+  live: "Complete · evidence ledger",
+  fixture: "Complete · fixture evidence ledger",
+};

@@ -1,4 +1,5 @@
 import {
+  isReviewReport,
   isSubmitReviewResponse,
   type ClarificationRequest,
   type CreateUploadRequest,
@@ -133,6 +134,21 @@ export async function fetchReview(
     headers: requestHeaders(adminKey),
   });
   return (await readJson(response)) as ReviewReport | ReviewStatusPointer;
+}
+
+// GET /demo — the one public, unauthenticated route. Serves a
+// precomputed sample report (backend/lambdas/get_demo), never a fresh
+// pipeline run, so no admin key is sent.
+export async function fetchDemoReport(): Promise<ReviewReport> {
+  const response = await fetch(`${requireApiBaseUrl()}/demo`);
+  const value = await readJson(response);
+  if (!isReviewReport(value)) {
+    throw new ApiRequestError(
+      "The sample review came back in an unexpected format.",
+      response.status,
+    );
+  }
+  return value;
 }
 
 export async function submitClarification(

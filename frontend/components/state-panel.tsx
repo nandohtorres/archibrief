@@ -1,10 +1,11 @@
 interface FailurePanelProps {
   message: string;
   onRetry: () => void;
-  onUseFixture: () => void;
+  onOpenSample: () => void;
+  sampleLoading: boolean;
 }
 
-export function FailurePanel({ message, onRetry, onUseFixture }: FailurePanelProps) {
+export function FailurePanel({ message, onRetry, onOpenSample, sampleLoading }: FailurePanelProps) {
   return (
     <section className="flow-card state-card failure-state" aria-labelledby="failure-heading">
       <span className="state-icon" aria-hidden="true">
@@ -24,8 +25,13 @@ export function FailurePanel({ message, onRetry, onUseFixture }: FailurePanelPro
         <button className="button secondary" type="button" onClick={onRetry}>
           Edit submission
         </button>
-        <button className="button primary" type="button" onClick={onUseFixture}>
-          Open complete fixture report
+        <button
+          className="button primary"
+          type="button"
+          onClick={onOpenSample}
+          disabled={sampleLoading}
+        >
+          {sampleLoading ? "Loading sample…" : "View the sample review"}
         </button>
       </div>
     </section>

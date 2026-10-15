@@ -38,7 +38,7 @@ export function ReportQuestions({
     {
       id: 1,
       role: "assistant",
-      text: "I can explain this fixture report or translate its evidence. No model is connected; every preview answer stays linked to a typed finding.",
+      text: "I can explain this report or translate its evidence. No model is connected yet; every preview answer stays linked to a typed finding.",
     },
   ]);
 

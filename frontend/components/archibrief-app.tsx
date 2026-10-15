@@ -10,6 +10,7 @@ import { ProgressStep } from "./progress-step";
 import { ReportWorkspace } from "./report-workspace";
 import { SubmissionStep, type SubmissionValues } from "./submission-step";
 import {
+  fetchDemoReport,
   fetchReview,
   getApiBaseUrl,
   requestUpload,
@@ -25,6 +26,7 @@ import {
   failureMessageFor,
   makeIdempotencyKey,
   type AppScreen,
+  type ReportSource,
 } from "@/lib/workflow";
 
 type ThemeChoice = "system" | "light" | "dark";
@@ -51,6 +53,8 @@ export function ArchiBriefApp() {
   const [clarifySubmitting, setClarifySubmitting] = useState(false);
   const [clarifyError, setClarifyError] = useState<string | null>(null);
   const [report, setReport] = useState<ReviewReport>(fixtureReport);
+  const [reportSource, setReportSource] = useState<ReportSource>("fixture");
+  const [sampleLoading, setSampleLoading] = useState(false);
   const [failureMessage, setFailureMessage] = useState(
     "The fixture failure state shows how ArchiBrief responds when a pipeline stage cannot complete.",
   );
@@ -102,6 +106,7 @@ export function ArchiBriefApp() {
         setLiveCurrentStage((result as ReviewStatusPointer).currentStage ?? null);
         if (result.status === "complete") {
           setReport(result as ReviewReport);
+          setReportSource("live");
           setScreen("report");
           return;
         }
@@ -221,6 +226,31 @@ export function ArchiBriefApp() {
     }
   }
 
+  // Opens the public sample review: the real GET /demo response in a
+  // build pointed at the API, the bundled fixture otherwise.
+  async function openSample() {
+    if (!apiConfigured) {
+      setReport(fixtureReport);
+      setReportSource("fixture");
+      setScreen("report");
+      return;
+    }
+    setSampleLoading(true);
+    try {
+      setReport(await fetchDemoReport());
+      setReportSource("sample");
+      setScreen("report");
+    } catch (error) {
+      console.error("sample review could not be loaded", error);
+      setFailureMessage(
+        "The sample review could not be loaded right now. Please try again shortly.",
+      );
+      setScreen("failure");
+    } finally {
+      setSampleLoading(false);
+    }
+  }
+
   async function handleClarifySubmit(answers: Record<string, string>, additionalNotes: string) {
     if (!liveReviewId) return;
     setClarifySubmitting(true);
@@ -246,6 +276,7 @@ export function ArchiBriefApp() {
 
   function handlePreflightComplete(fields: PreflightField[]) {
     const traffic = fields.find((field) => field.id === "expected_traffic_scale")?.value;
+    setReportSource("fixture");
     setReport({
       ...fixtureReport,
       terraform_repo_ref: submission.terraformRepoRef || fixtureReport.terraform_repo_ref,
@@ -285,6 +316,9 @@ export function ArchiBriefApp() {
         onAdminKeyChange={handleAdminKeyChange}
       />
       <main id="main-content">
+        {screen === "submission" && (
+          <SampleBanner loading={sampleLoading} onOpenSample={openSample} />
+        )}
         {screen === "submission" && (
           <SubmissionStep
             apiConfigured={apiConfigured}
@@ -328,6 +362,7 @@ export function ArchiBriefApp() {
         {screen === "report" && (
           <ReportWorkspace
             report={report}
+            source={reportSource}
             adminKey={adminKey}
             onNewReview={() => setScreen("submission")}
           />
@@ -336,7 +371,8 @@ export function ArchiBriefApp() {
           <FailurePanel
             message={failureMessage}
             onRetry={() => setScreen("submission")}
-            onUseFixture={() => setScreen("report")}
+            onOpenSample={openSample}
+            sampleLoading={sampleLoading}
           />
         )}
       </main>
@@ -349,5 +385,19 @@ export function ArchiBriefApp() {
         </span>
       </footer>
     </div>
+  );
+}
+
+function SampleBanner({ loading, onOpenSample }: { loading: boolean; onOpenSample: () => void }) {
+  return (
+    <section className="sample-banner" aria-labelledby="sample-banner-heading">
+      <div>
+        <h2 id="sample-banner-heading">See a finished review first</h2>
+        <p>A precomputed review of a hypothetical payments API. Nothing is uploaded.</p>
+      </div>
+      <button className="button primary" type="button" onClick={onOpenSample} disabled={loading}>
+        {loading ? "Loading sample…" : "View sample review"}
+      </button>
+    </section>
   );
 }
