@@ -10,7 +10,7 @@ status: accepted
 # ADR 0033: Corrected Hugging Face Implementation Path
 
 **Status:** Accepted (2026-09-03) — **supersedes** ADR-0014's proposed
-implementation path (the resume-signal goal itself stands)
+implementation path (the underlying goal itself stands)
 
 ## Context
 
@@ -31,7 +31,7 @@ this path. ADR-0014's proposed implementation was factually broken.
   **shadow/evaluation candidate**, not the production path, and only
   promote it if measured false-positive/false-negative rate, latency, and
   cost justify it on ArchiBrief's own adversarial test set.
-- If Custom Model Import specifically matters for the resume, select an
+- If Custom Model Import is still wanted, select an
   actually-supported architecture (Mistral, Llama, Qwen, etc.) for a real,
   useful, measured task — not forced through for a task it can't perform.
 - Budget for Custom Model Import's real cost shape: five-minute billing
@@ -40,8 +40,8 @@ this path. ADR-0014's proposed implementation was factually broken.
 
 ## Consequences
 
-- Preserves the original resume-signal goal (real Hugging Face/Bedrock
-  integration experience) while fixing the technical error.
+- Preserves the original goal (real Hugging Face/Bedrock integration)
+  while fixing the technical error.
 - ADR-0022 (prompt-injection defense) updates layer 1 accordingly — see
   ADR-0038.
 

@@ -23,7 +23,7 @@ Replace the percentage with concrete, buildable milestones: an early
 vertical slice containing submission, preflight interaction, progress
 display, one complete typed finding with citation display, failure/empty
 states, and the responsive shell. Use contract-generated fixtures (from
-the system design notes's data models) while the backend is
+the system design notes' data models) while the backend is
 incomplete. Defer decorative refinement and screens without a working
 data contract behind them.
 

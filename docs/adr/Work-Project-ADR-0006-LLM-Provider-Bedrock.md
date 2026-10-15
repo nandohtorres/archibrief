@@ -18,7 +18,7 @@ ID with every report.
 ## Context
 
 Weighed AWS Bedrock (hosted Claude) vs. calling Anthropic/OpenAI APIs
-directly, on both technical fit and resume/hiring-signal value.
+directly.
 Bedrock-hosted and Anthropic-direct Claude use identical model
 weights/outputs — the real differences are operational (release lag,
 fine-tuning availability).
@@ -27,17 +27,17 @@ fine-tuning availability).
 
 **Bedrock as the deployed default**, built behind a thin provider-agnostic
 code layer so Anthropic/OpenAI-direct remains usable, not hard-locked out.
-Keeps the AWS-native/SAA-C03 story intact as the production path while
-staying architecturally flexible.
+Keeps the production path AWS-native (IAM, VPC endpoints, one bill)
+while staying architecturally flexible.
 
 ## Consequences
 
-- Real resume line: "provider-agnostic LLM integration layer, deployed on
-  Bedrock for production."
+- A provider-agnostic LLM integration layer, deployed on Bedrock in
+  production.
 - Enables ADR-0014 (optional Hugging Face sub-task via the same
   abstraction, through Bedrock Custom Model Import).
 
 ## Full reasoning
 
 See the project decision log §"W1-W4 stack research findings" and
-Research Work LLM Provider.
+the private research notes on LLM providers.

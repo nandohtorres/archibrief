@@ -66,7 +66,7 @@ once the project is built, to show design thinking publicly.
 | [ADR-0034](Work-Project-ADR-0034-Aurora-Cost-Comparison-Corrected.md) | Corrected Aurora Serverless v2 cost comparison | Accepted, supersedes 0017 (reasoning) |
 | [ADR-0035](Work-Project-ADR-0035-Titan-Baseline-Not-Cost-Locked.md) | Titan V2 as baseline candidate, formal eval deferred | Accepted, supersedes 0019 (framing) |
 | [ADR-0036](Work-Project-ADR-0036-Structure-Aware-Chunking-Baseline.md) | Structure-aware chunking baseline, richer citation metadata | Accepted, extends 0020 |
-| [ADR-0037](Work-Project-ADR-0037-Admin-Fernando-Only.md) | Admin role Fernando-only; scoped reviewer role for recruiters (later) | Admin-Fernando-only principle carried into 0044 (as pre-shared credential, not RBAC role); reviewer role cut by 0044 |
+| [ADR-0037](Work-Project-ADR-0037-Admin-Fernando-Only.md) | Admin role owner-only; scoped reviewer role for invited reviewers (later) | Admin-Fernando-only principle carried into 0044 (as pre-shared credential, not RBAC role); reviewer role cut by 0044 |
 | [ADR-0038](Work-Project-ADR-0038-Prompt-Injection-Architectural-Boundaries.md) | Prompt-injection defense — architectural boundaries added | Accepted, extends 0022 |
 | [ADR-0039](Work-Project-ADR-0039-Base-Report-Field-Completeness.md) | Base report field completeness + versioned "go deeper" snapshots | Accepted, extends 0023 |
 | [ADR-0040](Work-Project-ADR-0040-Budget-As-Target-Real-Cost-Reporting.md) | Budget as target/alert threshold; real measured cost always reported | Accepted, supersedes 0024 (framing) |

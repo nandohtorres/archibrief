@@ -9,10 +9,10 @@ status: accepted
 
 # ADR 0021: IAM Model and Application-Level RBAC
 
-**Status:** Accepted (2026-09-03) — **recruiter-admin proposal superseded
+**Status:** Accepted (2026-09-03) — **external-reviewer admin proposal superseded
 by [ADR-0037](Work-Project-ADR-0037-Admin-Fernando-Only.md)** (2026-09-03): the
 per-function IAM model stands; `admin` is now Fernando-only with a
-separate constrained `reviewer` role for recruiters, added later. **The
+separate constrained `reviewer` role for invited reviewers, added later. **The
 application-RBAC portion (layer 2) is superseded by
 [ADR-0044](Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential.md)**
 (2026-09-11): no user accounts, so no app-level roles at all — the
@@ -37,16 +37,16 @@ practice.
 **Application-level RBAC (frontend/app):** at minimum two user roles —
 `standard` and `admin`. Admin role is for Fernando's own use post-launch
 (full authorized access while recording demo/presentation videos) and
-may later be selectively granted to interested recruiters who want to
+may later be selectively granted to invited reviewers who want to
 explore beyond the standard/guest experience — exact grant mechanism
 deferred, not yet designed.
 
 ## Consequences
 
-- Two separate, real permission-control stories for the portfolio: real
-  per-function AWS IAM least-privilege, and real application-level RBAC
-  — genuinely different skills, both demonstrated.
-- Admin-role grant mechanism (how a recruiter would actually receive
+- Two separate, real permission-control layers: per-function AWS IAM
+  least-privilege, and application-level RBAC — genuinely different
+  controls, both implemented.
+- Admin-role grant mechanism (how an invited reviewer would actually receive
   elevated access) is an open implementation detail, not yet decided.
 
 ## Full reasoning

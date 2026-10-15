@@ -25,9 +25,9 @@ credential + fully static guest mode.
 
 ## Context
 
-Fernando wants both real, genuinely-implemented auth (demonstrates
-skill) and frictionless access for recruiters reviewing the portfolio —
-these aren't mutually exclusive if designed together.
+The goal was both real, genuinely implemented auth and frictionless
+access for first-time visitors — these aren't mutually exclusive if
+designed together.
 
 ## Decision
 
@@ -40,8 +40,8 @@ input, to control cost/abuse on the unauthenticated path.
 
 ## Consequences
 
-- Real auth work is itself genuine resume-worthy security evidence, not
-  just a login form.
+- Real auth work is substantive security engineering, not just a login
+  form.
 - Guest-mode scoping ties directly into ADR-0011's rate-limiting/cost
   requirements.
 - Specific provider (Cognito vs. Auth0 vs. custom) remains open.
@@ -49,4 +49,4 @@ input, to control cost/abuse on the unauthenticated path.
 ## Full reasoning
 
 See the project decision log §"W1-W4 stack research findings" and
-Research Work Auth.
+the private research notes on auth providers.

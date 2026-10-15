@@ -17,19 +17,19 @@ Terraform versions.
 
 ## Context
 
-Needed one IaC tool, shared with Personal Website so there's only one
+Needed one IaC tool, shared with the author's personal-website project so there's only one
 to learn deeply. Candidates: Terraform vs. AWS CDK.
 
 ## Decision
 
-**Terraform** primary. CDK optional/secondary only. Answered as a
-side-finding across the P-SYNTH career-positioning research rather than a
-dedicated research pass — Terraform showed up consistently as the
-expected/recognized tool across the target-role research.
+**Terraform** primary. CDK optional/secondary only. Terraform is the most
+widely used cloud-agnostic IaC tool, covers every AWS service this
+project uses, and keeps the infrastructure reviewable as plain HCL — the
+same format ArchiBrief itself reviews.
 
 ## Consequences
 
-- Shared decision with Personal Website — same tool learned once,
+- Shared decision with the personal-website project — same tool learned once,
   reused across both projects.
 - ArchiBrief's own input format is explicitly Terraform (bounded repo +
   workload brief) — this decision is doubly load-bearing since it's both
@@ -37,4 +37,4 @@ expected/recognized tool across the target-role research.
 
 ## Full reasoning
 
-See Research Findings Positioning Synthesis §3.
+See the project's private research notes.

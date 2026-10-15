@@ -20,10 +20,8 @@ back-and-forth in v1." Draft history:
 kept the public path static: one precomputed report, and only Fernando
 could run the paid pipeline. The reason was cost and abuse. A static demo
 can't show what the product does; a real run on a visitor's own
-Terraform can. The project's purpose is to get Fernando hired, so the
-public experience *and* the visible engineering around cost, abuse and
-injection both matter. The guardrails are part of the portfolio story,
-not just a restriction.
+Terraform can. Opening it up makes the engineering around cost, abuse,
+and injection central rather than optional.
 
 [ADR-0030](Work-Project-ADR-0030-Rate-Limiting-Reframed.md) already called for a
 stricter anonymous allowance and salted, minimally retained IP
@@ -154,7 +152,7 @@ direct upload, idempotency, reserved concurrency, and the kill switch.
    rules, fix false positives, until the trap suite passes.
 3. **Public submissions** with the quota layers.
 4. **Chat** with stages 1–7 and the chat trap set.
-5. **README, demo GIF, public repo, resume.**
+5. **README, demo GIF, public repo.**
 
 ## Consequences
 

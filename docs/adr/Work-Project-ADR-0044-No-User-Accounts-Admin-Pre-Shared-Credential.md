@@ -27,14 +27,12 @@ security-conscious AWS system — not to be a multi-tenant SaaS product
 today. A real user-accounts system (Cognito user pool, MFA, SES-backed
 email, signup/login UI, per-user RBAC tiers) was consuming real build
 time and carrying a real external dependency (SES domain verification +
-AWS production-access approval, both with unbounded wait time — see
-project archibrief ses deferred) without adding proportional value to
-the actual goal: getting a working, honest system in front of recruiters
-and hiring managers quickly. The skills a login system would showcase
-(AWS-native identity, IAM depth) are already demonstrated elsewhere in
-the build — per-Lambda least-privilege IAM, Bedrock Guardrails, the RAG
-pipeline, Step Functions orchestration — so cutting auth doesn't reduce
-the portfolio's actual signal.
+AWS production-access approval, both with unbounded wait time) without
+adding proportional value to the actual goal: getting a working, honest
+system in front of real users quickly. The security depth a login system
+would add (AWS-native identity, IAM) is already present elsewhere in the
+build — per-Lambda least-privilege IAM, Bedrock Guardrails, the RAG
+pipeline, Step Functions orchestration.
 
 Separately, Fernando raised the real follow-on question: without
 accounts, what stops abuse/cost-farming by anonymous visitors (IP
@@ -67,8 +65,8 @@ whether visitors have accounts.
   anonymous-user special case, because there is no other kind of
   public-facing case anymore.
 - **The `reviewer`/`demo` role from ADR-0037 is cut, not deferred.**
-  There is no in-app elevated-access mechanism for recruiters. A
-  recruiter or hiring manager who wants to see the system run live gets
+  There is no in-app elevated-access mechanism for external reviewers.
+  An external reviewer who wants to see the system run live gets
   that through the admin-gated path handed to them directly by Fernando
   (or a recorded demo video, already planned) — not a self-service role.
 - **Abuse/cost protection is reframed, not dropped**, per
@@ -83,15 +81,15 @@ whether visitors have accounts.
 
 ## Consequences
 
-- **Removes the SES dependency entirely** — closes out
-  project archibrief ses deferred's TODO as moot, not just deferred;
-  there is no email-based MFA to re-enable because there is no login.
+- **Removes the SES dependency entirely** — the pending SES setup becomes
+  moot, not just deferred; there is no email-based MFA to re-enable
+  because there is no login.
 - **Infra:** `infra/modules/auth/` (Cognito user pool/client/domain) is
   removed from the Terraform root module; the API Gateway authorizer
   changes from Cognito JWT to a single pre-shared-secret check. This is
   a real infra change against already-applied resources — Fernando runs
-  `terraform plan`/`apply` (and the Cognito resource destroy) himself,
-  per feedback no terraform execution.
+  `terraform plan`/`apply` (and the Cognito resource destroy) himself;
+  automation never applies infrastructure.
 - **Backend:** the `Users` DynamoDB table and any per-user ownership
   checks are dropped; `GuestSessions` (if kept) becomes purely a
   rate-limiting/session-scoping construct for the gated admin path, not
@@ -107,9 +105,8 @@ whether visitors have accounts.
 - **Threat model (ADR-0041)** must reflect the simplified trust
   boundary: one shared operator secret rather than per-user identity —
   this should be stated explicitly as a deliberate, right-sized decision
-  for a single-operator demo, not an oversight, per
-  feedback challenge dont blindly agree's spirit of documenting real
-  tradeoffs honestly.
+  for a single-operator demo, not an oversight — documenting the real
+  tradeoff honestly.
 - Updates required in the project spec (v1 scope, application
   authorization section), the system design notes (architecture
   diagram, RBAC section, DynamoDB Users table, API auth routes),

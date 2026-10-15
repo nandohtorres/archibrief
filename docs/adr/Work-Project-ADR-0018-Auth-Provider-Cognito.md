@@ -24,15 +24,15 @@ ADR-0010. Research showed Cognito trails Clerk/Auth0 on developer
 experience specifically (documented friction: clunky hosted UI, poor
 docs) — it is not the "best" choice on UX grounds. It is, however,
 AWS-native (billed on the AWS account, deep IAM integration) and widely
-used in AWS-centric/enterprise/gov contexts, appearing frequently in
-Solutions Architect reference architectures and job descriptions.
+used in AWS-centric/enterprise/gov contexts and AWS reference
+architectures.
 
 ## Decision
 
-**Amazon Cognito**, chosen deliberately for the AWS-native story over
-Clerk's superior DX — genuinely working through Cognito's real rough
-edges is itself a defensible interview story about AWS identity/IAM
-depth, which matters more here than implementation speed.
+**Amazon Cognito**, chosen deliberately for AWS-native IAM integration
+over Clerk's superior DX — accepting Cognito's rough edges in exchange
+for identity living in the same account, IAM model, and bill as
+everything else.
 
 ## Consequences
 

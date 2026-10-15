@@ -50,7 +50,7 @@ contract actually work.
 ## Consequences
 
 - More metadata fields than originally scoped in
-  the system design notes's S3 Vectors structure — update that doc
+  the system design notes' S3 Vectors structure — update that doc
   accordingly.
 
 ## Full reasoning

@@ -36,7 +36,7 @@ idempotent job creation.
 
 ## Consequences
 
-- the system design notes's DynamoDB data models section gains
+- the system design notes' DynamoDB data models section gains
   the ownership-check/TTL/idempotency requirements.
 - No architecture change — this ADR only corrects the stated reasoning.
 

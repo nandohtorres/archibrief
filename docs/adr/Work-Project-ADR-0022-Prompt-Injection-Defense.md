@@ -50,7 +50,7 @@ Scoped-down stack, four layers plus one cost-specific addition:
   patterns, typed MCP tool calls) — could be added later if real abuse
   patterns emerge.
 - Covers **W5** (threat modeling + prompt-injection defenses) from
-  Research — see that task's status update.
+  the research task list.
 
 ## Full reasoning
 

@@ -18,9 +18,7 @@ LangGraph.
 ## Context
 
 Considered serverless (Lambda + Step Functions + API Gateway) vs.
-ECS/Fargate vs. Kubernetes/EKS. Kubernetes was seriously discussed for its
-"prestige/seniority signal" value toward Fernando's long-term Solutions
-Architect goal.
+ECS/Fargate vs. Kubernetes/EKS.
 
 ## Decision
 
@@ -33,10 +31,9 @@ cost default.
 
 Kubernetes/EKS explicitly rejected as a non-goal: real cost data (EKS
 control plane alone ~$0.10/hr / ~$73/mo minimum, before worker nodes, vs.
-near-$0 idle serverless cost) plus Fernando's own confirmation he doesn't
-want to commit to operating EKS with genuine depth (real autoscaling, a
-real node-failure recovery, real upgrades) rather than deploying it
-shallowly for signal alone.
+near-$0 idle serverless cost), and running a cluster responsibly means
+real autoscaling, node-failure recovery, and upgrades — operational load
+a bursty, low-volume workload doesn't justify.
 
 ## Consequences
 

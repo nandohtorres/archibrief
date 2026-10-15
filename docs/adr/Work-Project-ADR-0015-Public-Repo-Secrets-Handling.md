@@ -16,8 +16,8 @@ GitHub secret scanning/push protection alongside local/CI gitleaks.
 
 ## Context
 
-Project will be published publicly on GitHub so hiring managers can
-review real code. Considered whether a separate "dummy"/skeleton repo
+Project will be published publicly on GitHub so the real code can be
+reviewed. Considered whether a separate "dummy"/skeleton repo
 should sit alongside the real one to avoid exposing sensitive details.
 
 ## Decision

@@ -51,7 +51,7 @@ build time, rather than deciding it all now.
   domain early" concern no longer applies to v1).
 - Updates the project spec's v1 scope bullet,
   the build plan's Phase 6 auth step, and
-  Research Work Auth.
+  the private research notes on auth providers.
 - Still uses Cognito (ADR-0018 stands) and still avoids a magic-link flow
   (ADR-0029's correction stands) — this ADR only changes which method is
   primary vs. secondary.

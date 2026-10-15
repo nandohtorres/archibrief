@@ -26,8 +26,8 @@ choices, but no hard number had been set as an actual enforced threshold.
 **$50/month** as the target AWS Budgets alert threshold. Explicit
 direction if real costs come in under pressure: **tighten the number
 further rather than raise it** — a smaller real number under genuine
-constraint is a better resume/interview story ("I engineered this to run
-under $30/month") than a looser one. Revisit and lower if costs allow,
+constraint is a stronger engineering result ("this runs under
+$30/month") than a looser one. Revisit and lower if costs allow,
 raise only if genuinely necessary.
 
 ## Consequences

@@ -62,8 +62,8 @@ since none is substantial enough alone to warrant its own ADR.
   this demonstrates Cognito/OIDC/JWT/RBAC integration cleanly, which is a
   strength, not a lesser version of the skill.
 - **ADR-0025 (diagram tooling):** the recognized skill is architecture
-  communication and AWS judgment, not the specific library — temper any
-  resume claim accordingly. Manually review generated diagrams for
+  communication and AWS judgment, not the specific library — describe the
+  skill accordingly. Manually review generated diagrams for
   legibility/trust-boundaries/data-flow accuracy. Don't treat
   `mingrammer/diagrams` as a head start on the future in-app diagram
   feature — that feature needs a safe intermediate representation of

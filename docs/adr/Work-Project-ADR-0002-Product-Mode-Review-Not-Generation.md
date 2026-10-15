@@ -47,7 +47,5 @@ is a launch criterion.
 
 ## Full reasoning
 
-See the project decision log §"Product direction," and
-Research ArchGuard Differentiation Claude /
-Research ArchGuard Differentiation Codex for the competitive research
-that drove this.
+See the project decision log §"Product direction" and the private
+competitive-research notes that drove this.

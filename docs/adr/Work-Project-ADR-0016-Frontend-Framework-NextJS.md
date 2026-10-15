@@ -18,16 +18,15 @@ concrete requirement justifies it.
 ## Context
 
 Weighed Next.js vs. Astro vs. Remix. This is an interactive, authenticated,
-dynamic-data SaaS app (not a content-first site like Personal Website,
+dynamic-data SaaS app (not a content-first site like a personal website,
 where Astro was a real contender) — Astro is built for shipping minimal
 JS on content sites and would fight against this app's shape.
 
 ## Decision
 
 **Next.js.** Best technical fit for an authenticated SaaS dashboard with
-dynamic data; strongest hiring-signal weight for SWE roles specifically
-(deepest ecosystem, most hireable skill set); leverages Fernando's
-existing React background.
+dynamic data; the deepest React ecosystem; leverages existing React
+experience.
 
 ## Consequences
 

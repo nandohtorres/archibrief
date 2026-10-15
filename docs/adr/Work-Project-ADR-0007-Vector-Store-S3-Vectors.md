@@ -19,7 +19,7 @@ truth itself.
 
 Bedrock Knowledge Bases' default backend, OpenSearch Serverless, has a
 hard floor of roughly $345-700/month (2 OCU minimum) regardless of actual
-usage — a real, verified cost trap for a low-traffic portfolio project.
+usage — a real, verified cost trap for a low-traffic project.
 Aurora Serverless v2 + pgvector is cheaper but still has a small
 always-on minimum-capacity cost. Third-party (Pinecone/Qdrant) steps
 outside the AWS-native story for no clear benefit here.
@@ -40,4 +40,4 @@ compute decision (ADR-0005).
 ## Full reasoning
 
 See the project decision log §"W1-W4 stack research findings" and
-Research Work Vector Store.
+the private research notes on vector stores.
