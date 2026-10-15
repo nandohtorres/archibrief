@@ -116,7 +116,7 @@ export function ReportQuestions({
           <h2 id="questions-heading">Ask ArchiBrief about this review</h2>
           <p>Request a cited explanation after reviewing the findings and architecture impact.</p>
         </div>
-        <span className="concept-label">Fixture-only concept</span>
+        <span className="concept-label">Preview feature</span>
       </div>
 
       <div className="grounding-note">

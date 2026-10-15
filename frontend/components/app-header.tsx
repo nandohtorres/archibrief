@@ -45,10 +45,11 @@ export function AppHeader({
           </div>
         </div>
         <div className="header-controls">
-          <span className={`mode-badge ${apiConfigured ? "live" : "fixture"}`}>
-            <span aria-hidden="true">●</span>{" "}
-            {apiConfigured ? "Live API configured" : "Fixture mode"}
-          </span>
+          {!apiConfigured && (
+            <span className="mode-badge fixture">
+              <span aria-hidden="true">●</span> Fixture mode
+            </span>
+          )}
           {apiConfigured && (
             <label className="admin-key-control" htmlFor="admin-key-input">
               Admin key
@@ -76,25 +77,25 @@ export function AppHeader({
           </label>
         </div>
       </header>
-      <details className="fixture-controls">
-        <summary>Fixture preview controls</summary>
-        <div className="preview-buttons" aria-label="Preview application state">
-          {previews.map((preview) => (
-            <button
-              type="button"
-              key={preview.screen}
-              aria-pressed={screen === preview.screen}
-              onClick={() => onPreview(preview.screen)}
-            >
-              {preview.label}
-            </button>
-          ))}
-        </div>
-        <p>
-          These controls expose each ADR-0032 state while most read/status endpoints are not yet
-          deployed. They are not production navigation.
-        </p>
-      </details>
+      {/* Development aid only - never rendered in a build pointed at a real API. */}
+      {!apiConfigured && (
+        <details className="fixture-controls">
+          <summary>Fixture preview controls</summary>
+          <div className="preview-buttons" aria-label="Preview application state">
+            {previews.map((preview) => (
+              <button
+                type="button"
+                key={preview.screen}
+                aria-pressed={screen === preview.screen}
+                onClick={() => onPreview(preview.screen)}
+              >
+                {preview.label}
+              </button>
+            ))}
+          </div>
+          <p>Jump to any screen of the flow with fixture data. Development builds only.</p>
+        </details>
+      )}
     </>
   );
 }

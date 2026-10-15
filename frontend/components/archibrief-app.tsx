@@ -334,7 +334,11 @@ export function ArchiBriefApp() {
       </main>
       <footer className="site-footer">
         <span>ArchiBrief · auditable second opinion</span>
-        <span>Fixture build · no live AWS access</span>
+        <span>
+          {apiConfigured
+            ? "Static analysis only · never accesses your AWS account"
+            : "Fixture build · no live AWS access"}
+        </span>
       </footer>
     </div>
   );

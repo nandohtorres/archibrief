@@ -175,8 +175,8 @@ export function SubmissionStep({
           placeholder="github.com/organization/repository@commit"
         />
         <div id="terraform-ref-help" className="field-help">
-          Stored for display only — ArchiBrief reviews the archive you upload below, not this
-          reference (ADR-0045).
+          A label for your report only — ArchiBrief reviews the archive you upload below, not this
+          link.
         </div>
         {repoError && (
           <div id="terraform-ref-error" className="field-error" role="alert">

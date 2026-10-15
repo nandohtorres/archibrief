@@ -31,7 +31,7 @@ export function ArchitectureView({ onOpenFinding }: ArchitectureViewProps) {
           <h2 id="architecture-heading">Architecture impact</h2>
           <p>Overlay only the changes supported by this report’s findings.</p>
         </div>
-        <span className="concept-label">Fixture-only concept</span>
+        <span className="concept-label">Preview feature</span>
       </div>
 
       <div
