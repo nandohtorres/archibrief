@@ -802,6 +802,8 @@ resource "aws_sfn_state_machine" "review" {
           "retrieval_query.$"            = "$.retrieval_query"
           "rule_findings.$"              = "$.ruleEngineResult.findings"
           "deterministic_rule_version.$" = "$.ruleEngineResult.rule_version"
+          # What the Terraform declares, so Reason doesn't guess (#15b).
+          "terraform_resources.$" = "$.ruleEngineResult.resource_summary"
         }
         ResultPath = "$.agentInput"
         Next       = "RecordStageReasoning"

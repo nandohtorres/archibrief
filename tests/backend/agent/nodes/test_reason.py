@@ -461,3 +461,32 @@ def test_user_typed_clarification_answers_are_screened_by_guardrails():
     screened = state["guardrails_client"].checked[0]
     assert "ignore all rules" in screened
     assert "us-east-1" not in screened  # server-chosen defaults aren't user input
+
+
+# --- Resource summary (#15b) --------------------------------------------
+
+
+def test_reason_node_sends_the_resource_summary_to_the_model():
+    import json
+
+    summary = {
+        "resources": [
+            {
+                "type": "aws_db_instance",
+                "name": "billing",
+                "settings": {"multi_az": True},
+            }
+        ],
+        "truncated": False,
+    }
+    state = _reason_state([_valid_finding_item()])
+    state["terraform_resources"] = summary
+    reason_node(state)
+    sent = json.loads(state["reasoning_client"].calls[0]["user_content"])
+    assert sent["terraform_resources"] == summary
+    assert "terraform_resources" in SYSTEM_PROMPT
+
+
+def test_missing_resource_summary_sends_an_empty_list_not_null():
+    content = build_user_content("brief", [], [])
+    assert content["terraform_resources"] == {"resources": [], "truncated": False}

@@ -17,6 +17,10 @@ Two sources feed it (ADR-0048):
 Resource names reach finding text only through display_name(), which
 restricts them to identifier characters and truncates them (master-list
 #14): rule findings are part of the reasoning model's input.
+
+It also returns resource_summary (resource_summary.py): what the
+Terraform declares and its key settings, so the model reasons from facts
+instead of guessing about settings no rule mentions (#15b).
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from backend.lambdas.rule_engine.hcl_eval import (
     resolve,
     truthy,
 )
+from backend.lambdas.rule_engine.resource_summary import build_resource_summary
 from backend.shared.clients import S3Client
 from backend.shared.models.finding import (
     ConfidenceInputs,
@@ -860,4 +865,5 @@ def handler(event, context):
         "status": "complete",
         "rule_version": RULE_VERSION,
         "findings": [f.model_dump(mode="json") for f in findings],
+        "resource_summary": build_resource_summary(parsed),
     }

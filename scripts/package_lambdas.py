@@ -147,6 +147,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/rule_engine/__init__.py",
             "backend/lambdas/rule_engine/handler.py",
             "backend/lambdas/rule_engine/hcl_eval.py",
+            "backend/lambdas/rule_engine/resource_summary.py",
             "backend/shared/__init__.py",
             "backend/shared/clients/__init__.py",
             "backend/shared/models/__init__.py",

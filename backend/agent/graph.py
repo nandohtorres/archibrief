@@ -58,6 +58,9 @@ class ReviewState(TypedDict, total=False):
     lexical_corpus_index: dict[str, list[dict]]
     retrieved_chunks: list[dict]
     rule_findings: list[dict]
+    # RuleEngine's resource_summary (#15b); undeclared, it would be dropped
+    # before reason_node like the fields above.
+    terraform_resources: dict[str, Any]
     # Same silent-drop failure mode as the three fields above, confirmed
     # by the same mechanism — reason_node reads these two off state but
     # LangGraph never carries an undeclared key past a node boundary.

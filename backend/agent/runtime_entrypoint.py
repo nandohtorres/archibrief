@@ -156,6 +156,7 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
         "baseline_answers": payload.get("baseline_answers", {}),
         "retrieval_query": payload["retrieval_query"],
         "rule_findings": payload.get("rule_findings", []),
+        "terraform_resources": payload.get("terraform_resources", {}),
         "embedding_client": _EMBEDDING_CLIENT,
         "vectors_client": _VECTORS_CLIENT,
         "lexical_corpus_index": _LEXICAL_CORPUS_INDEX,
