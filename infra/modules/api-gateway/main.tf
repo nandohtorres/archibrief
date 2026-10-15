@@ -276,8 +276,9 @@ resource "aws_apigatewayv2_route" "get_review" {
   authorization_type = "CUSTOM"
 }
 
-# clarify_review needs GetItem+PutItem (reads the pending token, clears
-# it after resuming) plus states:SendTaskSuccess — which AWS requires be
+# clarify_review needs GetItem+UpdateItem (reads the pending token, then
+# claims it with a conditional field-level update before resuming — Codex
+# F20) plus states:SendTaskSuccess — which AWS requires be
 # scoped to resource "*" (the task-token API has no ARN-scoped resource
 # to restrict by; the token itself is the authorization), not to this
 # state machine's own ARN.
@@ -290,7 +291,7 @@ data "aws_iam_policy_document" "clarify_review_data_access" {
   }
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
     resources = [var.reviews_table_arn]
   }
   statement {

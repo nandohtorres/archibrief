@@ -61,6 +61,12 @@ class DynamoDBClient:
         response = self._table.query(**kwargs)
         return response.get("Items", [])
 
+    def update_item(self, **kwargs: Any) -> None:
+        """Field-level update (with an optional ConditionExpression), so
+        callers don't overwrite fields written concurrently by others —
+        unlike put_item, which replaces the whole item."""
+        self._table.update_item(**kwargs)
+
 
 @dataclass
 class S3Client:
