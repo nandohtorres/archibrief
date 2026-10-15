@@ -55,6 +55,14 @@ def _find_parent_finding(ledger: dict[str, Any], finding_id: str) -> dict[str, A
     return None
 
 
+def _findings_table_item(finding: Any) -> dict[str, Any]:
+    """The Findings table is keyed reviewId (hash) + findingId (range)
+    (infra/modules/dynamodb), but Finding serializes snake_case — add the
+    table's key attributes or DynamoDB rejects the write."""
+    item = finding.model_dump(mode="json")
+    return {"reviewId": item["review_id"], "findingId": item["finding_id"], **item}
+
+
 def handler(event: dict, _context: object) -> dict:
     path_params = event.get("pathParameters") or {}
     review_id = path_params.get("reviewId")
@@ -122,7 +130,7 @@ def handler(event: dict, _context: object) -> dict:
 
     findings_table = DynamoDBClient(table_name=os.environ["FINDINGS_TABLE_NAME"])
     for finding in valid_findings:
-        findings_table.put_item(finding.model_dump(mode="json"))
+        findings_table.put_item(_findings_table_item(finding))
 
     return _response(
         200,

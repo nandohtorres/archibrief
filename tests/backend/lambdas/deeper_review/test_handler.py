@@ -12,8 +12,15 @@ class _FakeDynamoDBClient:
         return _FakeDynamoDBClient.TABLES[self.table_name].get(key["reviewId"])
 
     def put_item(self, item: dict) -> None:
+        # Mirror DynamoDB: a write missing the table's key attributes is
+        # rejected. A permissive fake hid exactly this bug (Codex F02).
+        keys = _FakeDynamoDBClient.KEY_SCHEMA.get(self.table_name, [])
+        missing = [k for k in keys if k not in item]
+        if missing:
+            raise ValueError(f"Missing the key {missing[0]} in the item")
         _FakeDynamoDBClient.PUT_ITEMS.setdefault(self.table_name, []).append(item)
 
+    KEY_SCHEMA: dict = {"findings": ["reviewId", "findingId"]}
     TABLES: dict = {}
     PUT_ITEMS: dict = {}
 
@@ -51,7 +58,11 @@ _VALID_RAW_FINDING = {
     "evidence": "evidence text",
     "citation": None,
     "confidence": 0.7,
-    "confidence_inputs": {"evidence_directness": 0.7, "source_agreement": 0.7, "rule_determinism": 0.0},
+    "confidence_inputs": {
+        "evidence_directness": 0.7,
+        "source_agreement": 0.7,
+        "rule_determinism": 0.0,
+    },
     "risk_impact": "low",
     "recommendation": "do nothing",
     "framework_mapping": [],
@@ -69,18 +80,28 @@ def _event(review_id: str | None, finding_id: str | None) -> dict:
     }
 
 
-def _setup(monkeypatch, *, review_item: dict | None, ledger: dict | None, agent_response: dict):
+def _setup(
+    monkeypatch, *, review_item: dict | None, ledger: dict | None, agent_response: dict
+):
     monkeypatch.setenv("REVIEWS_TABLE_NAME", "reviews")
     monkeypatch.setenv("REPORTS_BUCKET_NAME", "reports")
     monkeypatch.setenv("FINDINGS_TABLE_NAME", "findings")
-    monkeypatch.setenv("AGENTCORE_RUNTIME_ARN", "arn:aws:bedrock-agentcore:us-east-1:000:runtime/x")
+    monkeypatch.setenv(
+        "AGENTCORE_RUNTIME_ARN", "arn:aws:bedrock-agentcore:us-east-1:000:runtime/x"
+    )
     monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
     monkeypatch.setattr(handler_module, "S3Client", _FakeS3Client)
-    monkeypatch.setattr(handler_module, "AgentCoreRuntimeClient", _FakeAgentCoreRuntimeClient)
+    monkeypatch.setattr(
+        handler_module, "AgentCoreRuntimeClient", _FakeAgentCoreRuntimeClient
+    )
 
     _FakeDynamoDBClient.TABLES = {"reviews": {"r1": review_item} if review_item else {}}
     _FakeDynamoDBClient.PUT_ITEMS = {}
-    _FakeS3Client.OBJECTS = {"reports/r1/evidence-ledger.json": json.dumps(ledger).encode("utf-8")} if ledger else {}
+    _FakeS3Client.OBJECTS = (
+        {"reports/r1/evidence-ledger.json": json.dumps(ledger).encode("utf-8")}
+        if ledger
+        else {}
+    )
     _FakeAgentCoreRuntimeClient.response = agent_response
     _FakeAgentCoreRuntimeClient.calls = []
 
@@ -88,10 +109,15 @@ def _setup(monkeypatch, *, review_item: dict | None, ledger: dict | None, agent_
 def test_runs_deeper_pass_and_persists_new_finding(monkeypatch):
     _setup(
         monkeypatch,
-        review_item={"reviewId": "r1", "reportS3Key": "reports/r1/evidence-ledger.json"},
+        review_item={
+            "reviewId": "r1",
+            "reportS3Key": "reports/r1/evidence-ledger.json",
+        },
         ledger={
             "workload_brief": "a 3-tier web app on ECS",
-            "findings": [{"finding_id": "f1", "category": "iam", "finding": "original finding"}],
+            "findings": [
+                {"finding_id": "f1", "category": "iam", "finding": "original finding"}
+            ],
         },
         agent_response={"status": "complete", "findings": [_VALID_RAW_FINDING]},
     )
@@ -104,7 +130,9 @@ def test_runs_deeper_pass_and_persists_new_finding(monkeypatch):
     assert len(body["findings"]) == 1
     # Same {record, presentation} shape build_review_report uses, so the
     # frontend can render this through the normal ReportFinding display.
-    assert body["findings"][0]["record"]["finding_id"] == _VALID_RAW_FINDING["finding_id"]
+    assert (
+        body["findings"][0]["record"]["finding_id"] == _VALID_RAW_FINDING["finding_id"]
+    )
     assert body["findings"][0]["presentation"]["priority"]
     assert body["findings"][0]["presentation"]["short_label"]
     assert _FakeAgentCoreRuntimeClient.calls[0]["payload"]["mode"] == "deeper"
@@ -126,7 +154,12 @@ def test_returns_404_for_unknown_review(monkeypatch):
 
 
 def test_returns_409_when_review_has_no_report_yet(monkeypatch):
-    _setup(monkeypatch, review_item={"reviewId": "r1", "status": "pending"}, ledger=None, agent_response={})
+    _setup(
+        monkeypatch,
+        review_item={"reviewId": "r1", "status": "pending"},
+        ledger=None,
+        agent_response={},
+    )
     result = handler(_event("r1", "f1"), None)
     assert result["statusCode"] == 409
 
@@ -134,7 +167,10 @@ def test_returns_409_when_review_has_no_report_yet(monkeypatch):
 def test_returns_404_when_finding_not_in_ledger(monkeypatch):
     _setup(
         monkeypatch,
-        review_item={"reviewId": "r1", "reportS3Key": "reports/r1/evidence-ledger.json"},
+        review_item={
+            "reviewId": "r1",
+            "reportS3Key": "reports/r1/evidence-ledger.json",
+        },
         ledger={"workload_brief": "brief", "findings": []},
         agent_response={},
     )
@@ -145,7 +181,10 @@ def test_returns_404_when_finding_not_in_ledger(monkeypatch):
 def test_returns_409_when_workload_brief_was_never_persisted(monkeypatch):
     _setup(
         monkeypatch,
-        review_item={"reviewId": "r1", "reportS3Key": "reports/r1/evidence-ledger.json"},
+        review_item={
+            "reviewId": "r1",
+            "reportS3Key": "reports/r1/evidence-ledger.json",
+        },
         ledger={"findings": [{"finding_id": "f1", "category": "iam", "finding": "x"}]},
         agent_response={},
     )
@@ -156,7 +195,10 @@ def test_returns_409_when_workload_brief_was_never_persisted(monkeypatch):
 def test_returns_502_when_agent_produces_no_valid_findings(monkeypatch):
     _setup(
         monkeypatch,
-        review_item={"reviewId": "r1", "reportS3Key": "reports/r1/evidence-ledger.json"},
+        review_item={
+            "reviewId": "r1",
+            "reportS3Key": "reports/r1/evidence-ledger.json",
+        },
         ledger={
             "workload_brief": "brief",
             "findings": [{"finding_id": "f1", "category": "iam", "finding": "x"}],
