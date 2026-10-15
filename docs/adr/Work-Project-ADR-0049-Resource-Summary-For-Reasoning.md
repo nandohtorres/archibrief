@@ -78,6 +78,16 @@ because it means matching free-text claims to settings.
     claim is gone.
 - The go-deeper path doesn't send the summary yet; it gets an empty one.
 
+## Amendment (2026-10-15, after the live and trap runs)
+
+The first version fixed the Multi-AZ claim, but runs showed three gaps, now closed (`d6887af`):
+
+- **Defaults:** the model guessed provider defaults, sometimes wrongly. Settings with a fixed, documented default now read `"not set (default: X)"`; ones that depend on the account, AMI or subnet stay plain `"not set"` and must not be asserted.
+- **Values:** a 19-character `IGNORE_ALL_FINDINGS` engine passed the 32-character identifier check. String values now only come from each setting's real formats (known engines, `db.x.y` instance classes, and so on); anything else is `"unknown"`. Resource names are the only free-form text left, as accepted in T14.
+- **Coverage:** the model read settings missing from the summary as missing from the code. The summary now carries a fixed note that only named settings were checked.
+
+Prompt version `reason_prompt@2026-10-15d`. Trap briefs trap09 (injection) and trap10 (contradiction) cover the summary.
+
 ## Alternatives considered
 
 - **Raw Terraform to the model:** the most context, but it reopens the
