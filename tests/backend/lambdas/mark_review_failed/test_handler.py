@@ -79,6 +79,7 @@ def test_input_without_review_id_is_ignored(table):
         ("FAILED", "KillSwitchActive", "paused"),
         ("FAILED", "AgentInvocationTimedOut", "timed_out"),
         ("FAILED", "ClarificationTimedOut", "clarification_expired"),
+        ("FAILED", "ClarificationLimitReached", "clarification_limit"),
         ("FAILED", "Lambda.Unknown", "internal_error"),
         ("FAILED", None, "internal_error"),
         ("TIMED_OUT", None, "timed_out"),

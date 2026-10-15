@@ -91,3 +91,9 @@ variable "mark_review_failed_zip_path" {
   default     = "../../../backend/lambdas/mark_review_failed/build/mark_review_failed.zip"
   description = "Deployment package for the mark-review-failed Lambda (built by scripts/package_lambdas.py)."
 }
+
+variable "max_clarification_rounds" {
+  type        = number
+  default     = 2
+  description = "How many times one review may pause for clarification before it fails with ClarificationLimitReached."
+}

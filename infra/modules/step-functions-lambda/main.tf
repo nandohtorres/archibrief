@@ -606,7 +606,7 @@ resource "aws_sfn_state_machine" "review" {
           "report_bucket"   = var.reports_bucket_name
         }
         ResultPath = "$.ruleEngineResult"
-        Next       = "PrepareAgentInput"
+        Next       = "InitEffectiveInput"
       }
       # New state (2026-09-16 fix): backend/agent/runtime_entrypoint.py's
       # invoke() reads payload["review_id"], payload["workload_brief"],
@@ -621,12 +621,27 @@ resource "aws_sfn_state_machine" "review" {
       # the original execution input (see the required-input contract
       # comment above aws_sfn_state_machine.review) and rule_findings/
       # deterministic_rule_version from RuleEngine's output.
+      # $.effective holds the review's current brief + answers, folded
+      # forward across clarification rounds (ApplyClarification below), so
+      # Reason, Audit, and Finalize all see the same context and a second
+      # round keeps the first round's answers (Codex F06). rounds bounds
+      # how many times a review may pause for clarification.
+      InitEffectiveInput = {
+        Type = "Pass"
+        Parameters = {
+          "workload_brief.$"   = "$.workload_brief"
+          "baseline_answers.$" = "$.baseline_answers"
+          "rounds"             = 0
+        }
+        ResultPath = "$.effective"
+        Next       = "PrepareAgentInput"
+      }
       PrepareAgentInput = {
         Type = "Pass"
         Parameters = {
           "review_id.$"                  = "$.review_id"
-          "workload_brief.$"             = "$.workload_brief"
-          "baseline_answers.$"           = "$.baseline_answers"
+          "workload_brief.$"             = "$.effective.workload_brief"
+          "baseline_answers.$"           = "$.effective.baseline_answers"
           "retrieval_query.$"            = "$.retrieval_query"
           "rule_findings.$"              = "$.ruleEngineResult.findings"
           "deterministic_rule_version.$" = "$.ruleEngineResult.rule_version"
@@ -634,10 +649,8 @@ resource "aws_sfn_state_machine" "review" {
         ResultPath = "$.agentInput"
         Next       = "RecordStageReasoning"
       }
-      # Shared by both PrepareAgentInput and PrepareAgentInputAfterClarification
-      # below — ASL allows multiple states to transition into the same
-      # next state, and "reasoning" means the same thing on either path
-      # into InvokeAgent.
+      # Reached from PrepareAgentInput on both the first pass and every
+      # pass after a clarification round.
       RecordStageReasoning = {
         Type     = "Task"
         Resource = "arn:aws:states:::aws-sdk:dynamodb:updateItem"
@@ -826,63 +839,41 @@ resource "aws_sfn_state_machine" "review" {
             Next        = "ClarificationTimedOut"
           }
         ]
-        Next = "PrepareAgentInputAfterClarification"
+        Next = "ApplyClarification"
       }
       ClarificationTimedOut = {
         Type  = "Fail"
         Error = "ClarificationTimedOut"
         Cause = "No answer was submitted via POST /reviews/{reviewId}/clarify within the 7-day window."
       }
-      # Rebuilds $.agentInput the same way PrepareAgentInput does, except
-      # baseline_answers is folded through States.JsonMerge with
-      # clarify_review.handler's SendTaskSuccess output
-      # ({"baseline_answers": {...}}, landed at $.clarificationAnswer per
-      # StoreClarificationToken's own ResultPath above) instead of being
-      # copied straight from the original request. A separate state
-      # (rather than adding a Choice inside PrepareAgentInput) because ASL
-      # has no way to conditionally pick between a plain JSONPath copy and
-      # an intrinsic-function merge for the same field within one
-      # Parameters block.
-      #
-      # This can't be done as "$.baseline_answers.$" = JsonMerge(...) with
-      # ResultPath "$.baseline_answers" on its own Pass state: ResultPath
-      # replaces the path with whatever the Parameters object evaluates
-      # to, and Parameters must itself be a JSON object literal — so that
-      # approach would write {"baseline_answers": <merged>} AT
-      # $.baseline_answers (double-nested), not <merged> itself. Folding
-      # the merge into one of agentInput's own named fields sidesteps the
-      # problem entirely, since agentInput's shape is static and known.
-      #
-      # Known, deliberately out-of-scope gap: (1) this does not update the
-      # top-level $.baseline_answers, so Audit's own log of baseline_answers
-      # later in this execution still reflects the pre-clarification
-      # value, not the merged one — acceptable for now since Audit's
-      # purpose is auditing the original request, not the agent's actual
-      # input, but worth revisiting if that distinction matters later.
-      # (2) if the agent asks for clarification again on this second pass
-      # (the human's answer still didn't satisfy preflight_node), this
-      # loops back through StoreClarificationToken with no cap on
-      # repetitions. No evidence yet that this happens in practice;
-      # revisit with a retry-count guard if it does.
-      PrepareAgentInputAfterClarification = {
+      # Folds this round's answers and note into $.effective: answers merge
+      # over earlier rounds (later wins per field), the note is appended to
+      # the brief that Reason reads and Finalize persists.
+      ApplyClarification = {
         Type = "Pass"
         Parameters = {
-          "review_id.$" = "$.review_id"
-          # clarification_note is always present on clarificationAnswer
-          # (clarify_review.handler always returns it, "" when the user
-          # left the notes box empty — see that handler's own comment)
-          # — appended here because workload_brief is the only field
-          # reason_node's prompt actually reads; baseline_answers itself
-          # never reaches the model (added 2026-10-13, frontend
-          # clarify-step.tsx's shared "anything else" box).
-          "workload_brief.$"             = "States.Format('{}{}', $.workload_brief, $.clarificationAnswer.clarification_note)"
-          "baseline_answers.$"           = "States.JsonMerge($.baseline_answers, $.clarificationAnswer.baseline_answers, false)"
-          "retrieval_query.$"            = "$.retrieval_query"
-          "rule_findings.$"              = "$.ruleEngineResult.findings"
-          "deterministic_rule_version.$" = "$.ruleEngineResult.rule_version"
+          "workload_brief.$"   = "States.Format('{}{}', $.effective.workload_brief, $.clarificationAnswer.clarification_note)"
+          "baseline_answers.$" = "States.JsonMerge($.effective.baseline_answers, $.clarificationAnswer.baseline_answers, false)"
+          "rounds.$"           = "States.MathAdd($.effective.rounds, 1)"
         }
-        ResultPath = "$.agentInput"
-        Next       = "RecordStageReasoning"
+        ResultPath = "$.effective"
+        Next       = "ClarificationRoundGate"
+      }
+      ClarificationRoundGate = {
+        Type = "Choice"
+        Choices = [
+          {
+            Variable           = "$.effective.rounds"
+            NumericGreaterThan = var.max_clarification_rounds
+            Next               = "ClarificationLimitReached"
+          }
+        ]
+        Default = "PrepareAgentInput"
+      }
+      ClarificationLimitReached = {
+        Type  = "Fail"
+        Error = "ClarificationLimitReached"
+        Cause = "The review asked for clarification more times than max_clarification_rounds allows."
       }
       Validate = {
         Type     = "Task"
@@ -924,7 +915,8 @@ resource "aws_sfn_state_machine" "review" {
       # a key here is a safe no-op on the handler side, unlike omitting
       # one of the required-input-contract fields above). Sourced from
       # wherever each has actually accumulated in state so far:
-      # review_id/baseline_answers from the original execution input,
+      # review_id from the execution input, baseline_answers from
+      # $.effective (including any clarification rounds),
       # guardrails_decisions from Ingest's own inline Guardrails check,
       # deterministic_rule_version from RuleEngine's rule_version output.
       # corpus_version and model_id have no equivalent source anywhere in
@@ -935,7 +927,7 @@ resource "aws_sfn_state_machine" "review" {
         Resource = aws_lambda_function.this["audit"].arn
         Parameters = {
           "review_id.$"                  = "$.review_id"
-          "baseline_answers.$"           = "$.baseline_answers"
+          "baseline_answers.$"           = "$.effective.baseline_answers"
           "guardrails_decisions.$"       = "$.ingestResult.guardrails_decisions"
           "deterministic_rule_version.$" = "$.ruleEngineResult.rule_version"
         }
@@ -986,15 +978,17 @@ resource "aws_sfn_state_machine" "review" {
       # ADR-0031) were never persisted anywhere. $.agentParsed.parsed is
       # whichever InvokeAgent response actually completed the review — the
       # first one, or (after a needs_clarification round trip) the retry
-      # following PrepareAgentInputAfterClarification — either way it's
+      # after ApplyClarification — either way it's
       # the right, final preflight outcome to persist.
       Finalize = {
         Type     = "Task"
         Resource = aws_lambda_function.this["finalize"].arn
         Parameters = {
-          "review_id.$"        = "$.review_id"
-          "findings.$"         = "$.validateResult.valid_findings"
-          "workload_brief.$"   = "$.workload_brief"
+          "review_id.$" = "$.review_id"
+          "findings.$"  = "$.validateResult.valid_findings"
+          # Effective brief: includes any clarification notes, so "go
+          # deeper" later reasons over the same context (Codex F06).
+          "workload_brief.$"   = "$.effective.workload_brief"
           "preflight_fields.$" = "$.agentParsed.parsed.preflight_fields"
           "defaults_version.$" = "$.agentParsed.parsed.defaults_version"
           # Feeds compute_cost_estimate_tier. Always present here:
