@@ -83,8 +83,17 @@ Three landing designs were mocked up as static pages
 - The phone/contrast checks start each page already in its theme.
   Switching themes mid-test was flaky in headless Chrome: a few elements
   kept the old theme's colors.
-- A deep mobile UI pass is still to do. These checks are the baseline,
-  not that pass.
+- Phone pass done the same day:
+  - The header is compact: brand and theme share one row, and the admin
+    key sits below.
+  - The report's summary numbers sit two per row.
+  - Finding filters wrap instead of being cut off.
+  - The diagram says it can be swiped sideways.
+  - Inputs are 16px, so iOS doesn't zoom on focus.
+  - Phone tests now enforce 24px tap targets and 16px inputs on every
+    screen.
+  - Checked in Chrome's phone emulation at 390px, not on a physical
+    device.
 - The sample's citation text still says "Illustrative … span". It is
   replaced when the real samples are generated.
 
