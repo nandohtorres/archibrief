@@ -1,27 +1,35 @@
 import { useState, type FormEvent } from "react";
 
-// Bundled quick-test presets (2026-10-13) — each loads a real sample
-// Terraform archive (frontend/public/fixtures/*.tar, served as a static
-// asset by the Next.js export) plus matching text fields, so testing the
-// live pipeline doesn't require hand-building a .tar every time. Archive
-// content/rule-finding counts verified directly against
-// backend/lambdas/rule_engine/handler.py's real rules before being
-// bundled here, not just written to look plausible — see each preset's
-// comment for the exact finding count at the time it was built.
-interface SubmissionPreset {
+import { createTar } from "@/lib/tar";
+
+// The "try it" section of the landing page (2026-10-15): where the story
+// turns into the product. Reuses the original testing form, plus:
+// - pre-made example architectures in plain words (Fernando: pre-made, not
+//   generated live), each a real bundled Terraform archive;
+// - upload a .tar, or paste Terraform (turned into a .tar in the browser,
+//   lib/tar.ts, so it takes the same upload + ingest path);
+// - the admin key next to the submit button. Submitting stays owner-only
+//   until public submissions open (ADR-0046/0047).
+
+// Bundled examples (2026-10-13): each loads a real Terraform archive
+// (frontend/public/fixtures/*.tar) plus a matching brief. Finding counts
+// were verified against the real rule engine when they were built.
+interface ExampleArchitecture {
   id: string;
   label: string;
+  size: string;
   description: string;
   fixturePath: string;
   terraformRepoRef: string;
   workloadBrief: string;
 }
 
-const submissionPresets: SubmissionPreset[] = [
+const examples: ExampleArchitecture[] = [
   {
     id: "detailed",
-    label: "Detailed (complex, cross-checked)",
-    description: "12 resources across S3/RDS/IAM/Lambda/DynamoDB/EBS — 15 real findings.",
+    label: "Payments platform",
+    size: "Complex · 12 resources",
+    description: "Global payments with PCI-DSS and GDPR needs and a 99.95% availability target.",
     fixturePath: "/fixtures/preset-detailed.tar",
     terraformRepoRef: "github.com/example/complex-multi-service@abc1234",
     workloadBrief:
@@ -29,8 +37,9 @@ const submissionPresets: SubmissionPreset[] = [
   },
   {
     id: "medium",
-    label: "Medium",
-    description: "6 resources, a handful of real findings — a realistic, moderately clean setup.",
+    label: "Internal analytics dashboard",
+    size: "Medium · 6 resources",
+    description: "A business-hours tool for about 20 employees. Brief downtime is fine.",
     fixturePath: "/fixtures/preset-medium.tar",
     terraformRepoRef: "github.com/example/medium-analytics@def5678",
     workloadBrief:
@@ -38,8 +47,9 @@ const submissionPresets: SubmissionPreset[] = [
   },
   {
     id: "loose",
-    label: "Loose (minimal, sparse)",
-    description: "A single under-specified resource — high violation density, almost no content.",
+    label: "Side project",
+    size: "Minimal · 1 resource",
+    description: "An early project with unclear requirements and very little configuration.",
     fixturePath: "/fixtures/preset-loose.tar",
     terraformRepoRef: "github.com/example/loose-sandbox@9a8b7c6",
     workloadBrief:
@@ -50,12 +60,16 @@ const submissionPresets: SubmissionPreset[] = [
 export interface SubmissionValues {
   terraformRepoRef: string;
   workloadBrief: string;
-  // Added 2026-10-12 (ADR-0045, direct-upload archive_path design) — the
-  // file the client actually uploads to S3. Only required in live-API
-  // mode (apiConfigured); the fixture flow never reads it, since there's
-  // no real Ingest Lambda on the other end to send it to.
+  // The archive the client uploads to S3 (ADR-0045). Only required in
+  // live-API mode; the fixture flow never reads it. Pasted Terraform is
+  // turned into this archive on submit.
   archiveFile: File | null;
 }
+
+type Source = "upload" | "paste";
+
+// A pasted config this large is better uploaded as an archive.
+export const MAX_PASTE_BYTES = 200 * 1024;
 
 interface SubmissionStepProps {
   apiConfigured: boolean;
@@ -63,6 +77,8 @@ interface SubmissionStepProps {
   submitting: boolean;
   // Shown under the submit button, e.g. while submissions are owner-only.
   notice?: string | null;
+  adminKey: string;
+  onAdminKeyChange: (value: string) => void;
   onSubmit: (values: SubmissionValues) => Promise<void>;
 }
 
@@ -73,100 +89,225 @@ const fixtureValues: SubmissionValues = {
   archiveFile: null,
 };
 
+export function pastedArchive(terraform: string): File {
+  const tar = createTar([{ name: "main.tf", content: terraform }]);
+  return new File([tar], "pasted-terraform.tar", { type: "application/x-tar" });
+}
+
 export function SubmissionStep({
   apiConfigured,
   initialValues,
   submitting,
   notice = null,
+  adminKey,
+  onAdminKeyChange,
   onSubmit,
 }: SubmissionStepProps) {
   const [values, setValues] = useState(initialValues);
+  const [source, setSource] = useState<Source>("upload");
+  const [pasted, setPasted] = useState("");
+  const [exampleId, setExampleId] = useState<string | null>(null);
   const [attempted, setAttempted] = useState(false);
-  const [loadingPresetId, setLoadingPresetId] = useState<string | null>(null);
-  const [presetError, setPresetError] = useState<string | null>(null);
+  const [loadingExampleId, setLoadingExampleId] = useState<string | null>(null);
+  const [exampleError, setExampleError] = useState<string | null>(null);
+
+  const pastedBytes = new TextEncoder().encode(pasted).length;
   const repoError = attempted && values.terraformRepoRef.trim().length < 5;
   const briefError = attempted && values.workloadBrief.trim().length < 40;
-  const archiveError = attempted && apiConfigured && !values.archiveFile;
+  const archiveError = attempted && apiConfigured && source === "upload" && !values.archiveFile;
+  const pasteError =
+    attempted &&
+    apiConfigured &&
+    source === "paste" &&
+    (pasted.trim().length < 20 || pastedBytes > MAX_PASTE_BYTES);
+  const loadedExample = examples.find((example) => example.id === exampleId);
 
-  async function loadPreset(preset: SubmissionPreset) {
-    setLoadingPresetId(preset.id);
-    setPresetError(null);
+  async function loadExample(example: ExampleArchitecture) {
+    setLoadingExampleId(example.id);
+    setExampleError(null);
     try {
-      const response = await fetch(preset.fixturePath);
+      const response = await fetch(example.fixturePath);
       if (!response.ok) {
-        throw new Error(`Could not load the bundled preset archive (HTTP ${response.status}).`);
+        throw new Error(`Could not load the example archive (HTTP ${response.status}).`);
       }
       const blob = await response.blob();
-      const archiveFile = new File([blob], `${preset.id}.tar`, { type: "application/x-tar" });
+      const archiveFile = new File([blob], `${example.id}.tar`, { type: "application/x-tar" });
       setValues({
-        terraformRepoRef: preset.terraformRepoRef,
-        workloadBrief: preset.workloadBrief,
+        terraformRepoRef: example.terraformRepoRef,
+        workloadBrief: example.workloadBrief,
         archiveFile,
       });
+      setSource("upload");
+      setExampleId(example.id);
       setAttempted(false);
     } catch (error) {
-      setPresetError(error instanceof Error ? error.message : "Could not load this preset.");
+      setExampleError(error instanceof Error ? error.message : "Could not load this example.");
     } finally {
-      setLoadingPresetId(null);
+      setLoadingExampleId(null);
     }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAttempted(true);
-    if (
-      values.terraformRepoRef.trim().length < 5 ||
-      values.workloadBrief.trim().length < 40 ||
-      (apiConfigured && !values.archiveFile)
-    ) {
+    if (values.terraformRepoRef.trim().length < 5 || values.workloadBrief.trim().length < 40) {
       return;
     }
+    if (!apiConfigured) {
+      await onSubmit(values);
+      return;
+    }
+    if (source === "paste") {
+      if (pasted.trim().length < 20 || pastedBytes > MAX_PASTE_BYTES) return;
+      await onSubmit({ ...values, archiveFile: pastedArchive(pasted) });
+      return;
+    }
+    if (!values.archiveFile) return;
     await onSubmit(values);
   }
 
   return (
     <section className="flow-card submission-card" aria-labelledby="submission-heading">
-      <div className="step-kicker">Review your own Terraform · Step 1 of 3</div>
-      <h2 id="submission-heading">Review an existing AWS architecture</h2>
+      <div className="step-kicker">Try it · Step 1 of 3</div>
+      <h2 id="submission-heading">Review your own Terraform</h2>
       <p className="lede">
-        Submit a bounded Terraform reference and a workload brief. ArchiBrief statically reviews the
-        code—it never runs Terraform or accesses your live AWS account.
+        Upload or paste your Terraform, or start from an example architecture, and add a short brief
+        about the workload. ArchiBrief reads the code; it never runs Terraform or touches your AWS
+        account.
       </p>
 
       <div className="boundary-callout">
         <strong>Before you submit</strong>
         <span>
-          Remove secrets and customer data. Remote-module internals remain not observable unless
-          separately allowlisted.
+          Remove secrets and customer data. Modules pulled from elsewhere aren&apos;t reviewed; they
+          show up as gaps.
         </span>
       </div>
 
       {apiConfigured && (
-        <div className="preset-grid" role="group" aria-label="Quick-test presets">
-          {submissionPresets.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              className="button small secondary preset-button"
-              disabled={loadingPresetId !== null}
-              onClick={() => loadPreset(preset)}
-            >
-              <strong>{loadingPresetId === preset.id ? "Loading…" : preset.label}</strong>
-              <span>{preset.description}</span>
-            </button>
-          ))}
-        </div>
+        <>
+          <h3 className="example-heading" id="examples-heading">
+            Start from an example architecture
+          </h3>
+          <div className="preset-grid" role="group" aria-labelledby="examples-heading">
+            {examples.map((example) => (
+              <button
+                key={example.id}
+                type="button"
+                className={`button small secondary preset-button${exampleId === example.id ? " selected" : ""}`}
+                aria-pressed={exampleId === example.id}
+                disabled={loadingExampleId !== null}
+                onClick={() => loadExample(example)}
+              >
+                <strong>{loadingExampleId === example.id ? "Loading…" : example.label}</strong>
+                <small>{example.size}</small>
+                <span>{example.description}</span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
-      {presetError && (
+      {exampleError && (
         <p className="field-error" role="alert">
-          {presetError}
+          {exampleError}
         </p>
       )}
 
       <form className="submission-form" onSubmit={handleSubmit} noValidate>
+        {apiConfigured && (
+          <fieldset className="source-toggle">
+            <legend>Your Terraform</legend>
+            <label>
+              <input
+                type="radio"
+                name="source"
+                value="upload"
+                checked={source === "upload"}
+                onChange={() => setSource("upload")}
+              />
+              Upload an archive
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="source"
+                value="paste"
+                checked={source === "paste"}
+                onChange={() => {
+                  setSource("paste");
+                  setExampleId(null);
+                }}
+              />
+              Paste Terraform
+            </label>
+          </fieldset>
+        )}
+
+        {source === "upload" ? (
+          <>
+            <label htmlFor="terraform-archive">
+              Terraform archive
+              <span>A .tar or .tar.gz of the configuration to review (max 20 MB)</span>
+            </label>
+            <input
+              id="terraform-archive"
+              name="archiveFile"
+              type="file"
+              accept=".tar,.tar.gz,.tgz"
+              aria-invalid={archiveError}
+              aria-describedby={archiveError ? "terraform-archive-error" : "terraform-archive-help"}
+              onChange={(event) => {
+                setValues({ ...values, archiveFile: event.target.files?.[0] ?? null });
+                setExampleId(null);
+              }}
+            />
+            <div id="terraform-archive-help" className="field-help">
+              {loadedExample
+                ? `Using the ${loadedExample.label} example. Choose a file to use your own instead.`
+                : apiConfigured
+                  ? "Uploaded straight to storage, never through this site's API."
+                  : "Only needed against a deployed API. The fixture flow doesn't need a real archive."}
+            </div>
+            {archiveError && (
+              <div id="terraform-archive-error" className="field-error" role="alert">
+                Choose a Terraform archive, or pick an example above.
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <label htmlFor="terraform-paste">
+              Terraform
+              <span>Paste one or more .tf files&apos; contents; it&apos;s reviewed as main.tf</span>
+            </label>
+            <textarea
+              id="terraform-paste"
+              name="terraformPaste"
+              className="code-input"
+              rows={12}
+              spellCheck={false}
+              value={pasted}
+              aria-invalid={pasteError}
+              aria-describedby={pasteError ? "terraform-paste-error" : "terraform-paste-help"}
+              onChange={(event) => setPasted(event.target.value)}
+              placeholder={'resource "aws_s3_bucket" "logs" {\n  bucket = "my-logs"\n}'}
+            />
+            <div id="terraform-paste-help" className="field-help">
+              Packed into an archive in your browser and uploaded the same way as a file.
+            </div>
+            {pasteError && (
+              <div id="terraform-paste-error" className="field-error" role="alert">
+                {pastedBytes > MAX_PASTE_BYTES
+                  ? "That's too much to paste. Upload it as an archive instead."
+                  : "Paste the Terraform you want reviewed."}
+              </div>
+            )}
+          </>
+        )}
+
         <label htmlFor="terraform-ref">
-          Terraform repository reference
-          <span>Repository URL or immutable commit reference (label only)</span>
+          Name for the report
+          <span>A repository link, commit, or any name you&apos;ll recognize (label only)</span>
         </label>
         <input
           id="terraform-ref"
@@ -178,38 +319,11 @@ export function SubmissionStep({
           placeholder="github.com/organization/repository@commit"
         />
         <div id="terraform-ref-help" className="field-help">
-          A label for your report only — ArchiBrief reviews the archive you upload below, not this
-          link.
+          Shown on your report only. ArchiBrief reviews the Terraform above, not this link.
         </div>
         {repoError && (
           <div id="terraform-ref-error" className="field-error" role="alert">
-            Enter a repository or immutable Terraform reference.
-          </div>
-        )}
-
-        <label htmlFor="terraform-archive">
-          Terraform archive
-          <span>A .tar/.tar.gz of the configuration to review (max 20 MB)</span>
-        </label>
-        <input
-          id="terraform-archive"
-          name="archiveFile"
-          type="file"
-          accept=".tar,.tar.gz,.tgz"
-          aria-invalid={archiveError}
-          aria-describedby={archiveError ? "terraform-archive-error" : "terraform-archive-help"}
-          onChange={(event) =>
-            setValues({ ...values, archiveFile: event.target.files?.[0] ?? null })
-          }
-        />
-        <div id="terraform-archive-help" className="field-help">
-          {apiConfigured
-            ? "Uploaded directly to storage via a presigned URL — never routed through this API."
-            : "Only required against a deployed API. The fixture flow below doesn't need a real archive."}
-        </div>
-        {archiveError && (
-          <div id="terraform-archive-error" className="field-error" role="alert">
-            Select a Terraform archive to submit.
+            Enter a name or reference of at least 5 characters.
           </div>
         )}
 
@@ -220,7 +334,7 @@ export function SubmissionStep({
         <textarea
           id="workload-brief"
           name="workloadBrief"
-          rows={7}
+          rows={6}
           value={values.workloadBrief}
           aria-invalid={briefError}
           aria-describedby={briefError ? "workload-brief-error" : "workload-brief-help"}
@@ -228,7 +342,7 @@ export function SubmissionStep({
           placeholder="Describe what the system does and the constraints the review should evaluate…"
         />
         <div id="workload-brief-help" className="field-help">
-          At least a few sentences prevents the model from inventing missing business context.
+          A few sentences stop the review from guessing at missing business context.
         </div>
         {briefError && (
           <div id="workload-brief-error" className="field-error" role="alert">
@@ -237,22 +351,38 @@ export function SubmissionStep({
         )}
 
         <div className="form-actions">
-          <button
-            className="button secondary"
-            type="button"
-            onClick={() => {
-              setValues(fixtureValues);
-              setAttempted(false);
-            }}
-          >
-            Load reference fixture
-          </button>
+          {apiConfigured ? (
+            <div className="admin-key-control">
+              <label htmlFor="admin-key-input">Admin key</label>
+              <input
+                id="admin-key-input"
+                type="password"
+                autoComplete="off"
+                placeholder="Owner only, for now"
+                value={adminKey}
+                onChange={(event) => onAdminKeyChange(event.target.value)}
+              />
+              {/* Kept for this tab only (lib/admin-key.ts); this clears it now. */}
+              {adminKey && (
+                <button type="button" className="button quiet" onClick={() => onAdminKeyChange("")}>
+                  Forget key
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => {
+                setValues(fixtureValues);
+                setAttempted(false);
+              }}
+            >
+              Load reference fixture
+            </button>
+          )}
           <button className="button primary" type="submit" disabled={submitting}>
-            {submitting
-              ? "Submitting…"
-              : apiConfigured
-                ? "Submit to deployed API"
-                : "Continue with fixture"}
+            {submitting ? "Submitting…" : apiConfigured ? "Start review" : "Continue with fixture"}
           </button>
         </div>
         {notice && (

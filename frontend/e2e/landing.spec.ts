@@ -9,9 +9,7 @@ test.describe("landing page", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("with the receipts");
     await expect(page.getByRole("heading", { name: "Sample reviews" })).toBeVisible();
     await expect(page.getByText("Coming soon", { exact: true }).first()).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Review an existing AWS architecture" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
     await expect(page.getByLabel("Admin key")).toBeVisible();
 
     await page.getByRole("link", { name: "Review your own Terraform" }).click();
@@ -27,14 +25,12 @@ test.describe("landing page", () => {
       await route.fulfill({ status: 500, body: "" });
     });
     await page.goto(LIVE_URL);
-    await page.getByRole("button", { name: /Detailed \(complex, cross-checked\)/ }).click();
-    await page.getByRole("button", { name: "Submit to deployed API" }).click();
+    await page.getByRole("button", { name: /Payments platform/ }).click();
+    await page.getByRole("button", { name: "Start review" }).click();
 
     await expect(page.locator(".submit-notice")).toContainText("limited to the site owner");
     expect(called).toBe(false);
-    await expect(
-      page.getByRole("heading", { name: "Review an existing AWS architecture" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
   });
 
   test("a rejected key gets a plain message, not an error screen", async ({ page }) => {
@@ -47,8 +43,8 @@ test.describe("landing page", () => {
     );
     await page.goto(LIVE_URL);
     await page.getByLabel("Admin key").fill("wrong-key");
-    await page.getByRole("button", { name: /Detailed \(complex, cross-checked\)/ }).click();
-    await page.getByRole("button", { name: "Submit to deployed API" }).click();
+    await page.getByRole("button", { name: /Payments platform/ }).click();
+    await page.getByRole("button", { name: "Start review" }).click();
 
     await expect(page.locator(".submit-notice")).toContainText("That key wasn't accepted");
     await expect(page.getByText("Unauthorized")).toHaveCount(0);

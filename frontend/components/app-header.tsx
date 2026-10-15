@@ -8,8 +8,6 @@ interface AppHeaderProps {
   theme: ThemeChoice;
   onThemeChange: (theme: ThemeChoice) => void;
   onPreview: (screen: AppScreen) => void;
-  adminKey: string;
-  onAdminKeyChange: (value: string) => void;
 }
 
 const previews: Array<{ screen: AppScreen; label: string }> = [
@@ -26,8 +24,6 @@ export function AppHeader({
   theme,
   onThemeChange,
   onPreview,
-  adminKey,
-  onAdminKeyChange,
 }: AppHeaderProps) {
   return (
     <>
@@ -49,25 +45,6 @@ export function AppHeader({
             <span className="mode-badge fixture">
               <span aria-hidden="true">●</span> Fixture mode
             </span>
-          )}
-          {apiConfigured && (
-            <div className="admin-key-control">
-              <label htmlFor="admin-key-input">Admin key</label>
-              <input
-                id="admin-key-input"
-                type="password"
-                autoComplete="off"
-                placeholder="Paste admin key"
-                value={adminKey}
-                onChange={(event) => onAdminKeyChange(event.target.value)}
-              />
-              {/* Kept for this tab only (lib/admin-key.ts); this clears it now. */}
-              {adminKey && (
-                <button type="button" className="button quiet" onClick={() => onAdminKeyChange("")}>
-                  Forget key
-                </button>
-              )}
-            </div>
           )}
           <label className="theme-control" htmlFor="theme-select">
             <span className="theme-label">Theme</span>

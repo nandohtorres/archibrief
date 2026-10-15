@@ -338,8 +338,6 @@ export function ArchiBriefApp() {
         theme={theme}
         onThemeChange={setTheme}
         onPreview={preview}
-        adminKey={adminKey}
-        onAdminKeyChange={handleAdminKeyChange}
       />
       <main id="main-content">
         {screen === "submission" && (
@@ -351,6 +349,8 @@ export function ArchiBriefApp() {
                 initialValues={submission}
                 submitting={submitting}
                 notice={submitNotice}
+                adminKey={adminKey}
+                onAdminKeyChange={handleAdminKeyChange}
                 onSubmit={handleSubmission}
               />
             </div>

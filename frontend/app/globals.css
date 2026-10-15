@@ -514,6 +514,77 @@ h4 {
   resize: vertical;
 }
 
+/* Try-it section (2026-10-15): example architectures, upload/paste
+   switch, admin key beside the submit button. */
+.example-heading {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 0.95rem;
+}
+
+.preset-button small {
+  color: var(--accent);
+  font: 600 0.72rem/1.4 var(--font-mono);
+}
+
+.preset-button.selected {
+  border-width: 2px;
+  background: var(--accent-tint);
+}
+
+.source-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  border: 0;
+}
+
+.source-toggle legend {
+  width: 100%;
+  margin-bottom: var(--space-1);
+  padding: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.submission-form .source-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submission-form .source-toggle input {
+  width: 1.1rem;
+  min-height: 0;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.submission-form .code-input {
+  font: 400 0.85rem/1.55 var(--font-mono);
+  tab-size: 2;
+}
+
+.submission-form .admin-key-control label {
+  display: inline;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.submission-form .admin-key-control input {
+  width: 13rem;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+}
+
 .submission-form [aria-invalid="true"] {
   border-color: var(--critical);
 }
@@ -2860,5 +2931,12 @@ h4 {
 
   .diagram-swipe-hint {
     display: block;
+  }
+}
+
+@media (max-width: 680px) {
+  .submission-form .admin-key-control input {
+    width: auto;
+    flex: 1;
   }
 }

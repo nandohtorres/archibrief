@@ -64,14 +64,12 @@ test.describe("admin-gated live critical path (mocked network)", () => {
     });
 
     await page.goto(LIVE_URL);
-    await expect(
-      page.getByRole("heading", { name: "Review an existing AWS architecture" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
     await page.getByLabel("Admin key").fill("e2e-admin-key");
 
-    await page.getByRole("button", { name: /Detailed \(complex, cross-checked\)/ }).click();
-    await expect(page.getByRole("button", { name: "Submit to deployed API" })).toBeEnabled();
-    await page.getByRole("button", { name: "Submit to deployed API" }).click();
+    await page.getByRole("button", { name: /Payments platform/ }).click();
+    await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
+    await page.getByRole("button", { name: "Start review" }).click();
 
     await expect(page.locator("#report-heading")).toBeVisible({ timeout: 20_000 });
     expect(capturedReviewId).not.toBe("");
@@ -101,14 +99,55 @@ test.describe("admin-gated live critical path (mocked network)", () => {
     await page.reload();
     await expect(page.getByLabel("Admin key")).toHaveValue("e2e-admin-key");
 
-    await page.getByRole("button", { name: /Detailed \(complex, cross-checked\)/ }).click();
-    await page.getByRole("button", { name: "Submit to deployed API" }).click();
+    await page.getByRole("button", { name: /Payments platform/ }).click();
+    await page.getByRole("button", { name: "Start review" }).click();
     await expect.poll(() => sentKey).toBe("e2e-admin-key");
 
+    // The key field lives in the form (next to "Start review"), so return
+    // to it; the key is still there for this tab, and can be forgotten.
+    await page.goto(LIVE_URL);
+    await expect(page.getByLabel("Admin key")).toHaveValue("e2e-admin-key");
     await page.getByRole("button", { name: "Forget key" }).click();
     await expect(page.getByLabel("Admin key")).toHaveValue("");
     expect(
       await page.evaluate(() => window.sessionStorage.getItem("archibrief-admin-key")),
     ).toBeNull();
+  });
+  test("pasted Terraform is uploaded as a tar holding main.tf", async ({ page }) => {
+    let uploaded = "";
+    await page.route("**/mock-api/uploads", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          archiveKey: "archive/e2e-paste.tar",
+          uploadUrl: `${LIVE_URL}/mock-api/s3-upload`,
+          uploadFields: {},
+        }),
+      });
+    });
+    await page.route("**/mock-api/s3-upload", async (route) => {
+      uploaded = route.request().postDataBuffer()?.toString("latin1") ?? "";
+      await route.fulfill({ status: 204, body: "" });
+    });
+    await page.route("**/mock-api/reviews", async (route) => {
+      await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+    });
+
+    await page.goto(LIVE_URL);
+    await page.getByLabel("Paste Terraform").check();
+    await page
+      .getByLabel(/^Terraform/)
+      .fill(['resource "aws_s3_bucket" "logs" {', '  bucket = "e2e-logs"', "}", ""].join("\n"));
+    await page.getByLabel(/^Name for the report/).fill("e2e-paste-check");
+    await page
+      .getByLabel(/^Workload brief/)
+      .fill("An internal log bucket for a small team. No regulatory requirements known.");
+    await page.getByLabel("Admin key").fill("e2e-admin-key");
+    await page.getByRole("button", { name: "Start review" }).click();
+
+    await expect.poll(() => uploaded).toContain("main.tf");
+    expect(uploaded).toContain("ustar");
+    expect(uploaded).toContain('bucket = "e2e-logs"');
   });
 });

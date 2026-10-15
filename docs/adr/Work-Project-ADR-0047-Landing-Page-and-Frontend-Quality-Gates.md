@@ -122,9 +122,23 @@ finalize this layout"), and it's now the app's landing (`c30134d`):
 - **Glass variant:** `option-master-glass.html` (see-through cards over
   faint color glows) was tried. Fernando kept the plain master, and the
   glass file stays for reference.
-- **Planned next, waiting on Fernando's answers:** a fuller "try it"
-  section in that spot, with instant sample, paste or upload, and
-  example architectures for non-technical users.
+- **Try-it section (built, same day).** Fernando's answers: "the sample
+  can open the full report and they architecture can be pre made and
+  upload only but also a paste box works too, we are basically re using
+  the current home page we had previouslly ... and yes put admin key
+  there and progress should be the full screen progress view". So:
+  - the old submission form is reused as "Try it · Step 1 of 3";
+  - three example architectures (payments platform, internal analytics
+    dashboard, side project) with size labels fill in a ready-made
+    archive and brief;
+  - an Upload/Paste switch. Pasted Terraform is packed in the browser
+    into a tar holding `main.tf` (`frontend/lib/tar.ts`, 200 KB cap), so
+    it goes through the same upload and ingest path as a file; no new
+    API. A browser-built tar was checked against the real backend
+    ingest;
+  - the admin key moved out of the site header into the form, next to
+    "Start review", with "Forget key". It's still tab-scoped;
+  - progress keeps the full-screen progress view.
 
 **Fonts were never loading.** The Google Fonts `@import` in
 `globals.css` separated families with `&amp;`. That is HTML escaping,
