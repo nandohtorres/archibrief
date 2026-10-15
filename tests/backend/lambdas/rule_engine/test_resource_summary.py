@@ -220,3 +220,46 @@ resource "aws_lambda_function" "fn" {
 def test_every_string_format_is_for_an_allowlisted_setting():
     all_settings = {path for paths in SETTINGS.values() for path in paths}
     assert set(STRING_FORMATS) <= all_settings
+
+
+def test_count_and_for_each_copies_are_stated(tmp_path):
+    # The FEC demo run (2026-10-15): with three instances made by
+    # count = 3, the model stated as fact that each cluster had one.
+    parsed = _parse_text(
+        tmp_path,
+        """
+variable "replicas" {
+  default = 2
+}
+variable "unknown_count" {}
+
+resource "aws_rds_cluster_instance" "prod" {
+  count = 3
+}
+resource "aws_rds_cluster_instance" "stage" {
+  count = var.replicas
+}
+resource "aws_rds_cluster_instance" "dev" {
+  count = var.unknown_count
+}
+resource "aws_s3_bucket" "regional" {
+  for_each = toset(["us", "eu"])
+}
+resource "aws_s3_bucket" "listed" {
+  for_each = { a = 1, b = 2, c = 3 }
+}
+resource "aws_s3_bucket" "single" {}
+""",
+    )
+    copies = {
+        r["name"]: r.get("copies") for r in build_resource_summary(parsed)["resources"]
+    }
+    assert copies == {
+        "prod": 3,
+        "stage": 2,
+        "dev": UNKNOWN,
+        "regional": UNKNOWN,
+        "listed": 3,
+        "single": None,
+    }
+    assert "copies" in build_resource_summary(parsed)["note"]

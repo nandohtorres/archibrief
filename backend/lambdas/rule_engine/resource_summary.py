@@ -41,8 +41,12 @@ NOT_SET = "not set"
 # from the code ("no CloudWatch log exports are present").
 COVERAGE_NOTE = (
     "Only the settings named for each resource were checked. A setting not "
-    "named here may still be set in the code: never describe it as missing."
+    "named here may still be set in the code: never describe it as missing. "
+    '"copies" is how many instances count or for_each creates ("unknown" when '
+    "it can't be worked out from the code); a resource without it is created once."
 )
+# A count above this is reported as unknown rather than trusted.
+MAX_COPIES = 1000
 UNKNOWN = "unknown"
 MAX_RESOURCES = 80
 # Provider resource types are lowercase snake case and some real ones are
@@ -261,6 +265,27 @@ def _safe_value(value: object, path: str) -> object:
     return UNKNOWN
 
 
+def _copies(body: dict, parsed: dict, module: str) -> int | str | None:
+    """How many instances count/for_each creates; None when neither is set.
+
+    The FEC demo run (2026-10-15) stated as fact that each Aurora cluster
+    had one instance; the code made three with count = 3.
+    """
+    if "count" in body:
+        value = resolve(body["count"], parsed, module)
+        if isinstance(value, str) and value.isdigit():
+            value = int(value)
+        if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= MAX_COPIES:
+            return value
+        return UNKNOWN
+    if "for_each" in body:
+        value = resolve(body["for_each"], parsed, module)
+        if isinstance(value, (dict, list)) and len(value) <= MAX_COPIES:
+            return len(value)
+        return UNKNOWN
+    return None
+
+
 def build_resource_summary(parsed: dict) -> dict:
     """{"resources": [{"type", "name", "settings"}...], "truncated": bool,
     "note": str}."""
@@ -286,5 +311,9 @@ def build_resource_summary(parsed: dict) -> dict:
                 else UNKNOWN
                 for path in SETTINGS.get(resource_type, ())
             }
-            entries.append({"type": resource_type, "name": display_name(key), "settings": settings})
+            entry = {"type": resource_type, "name": display_name(key), "settings": settings}
+            copies = _copies(body, parsed, module) if isinstance(body, dict) else None
+            if copies is not None:
+                entry["copies"] = copies
+            entries.append(entry)
     return {"resources": entries, "truncated": total > len(entries), "note": COVERAGE_NOTE}

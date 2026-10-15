@@ -54,9 +54,17 @@ locals {
   # parsing via lark is real CPU work, on top of the S3 download and
   # Bedrock Guardrails call); the rest get a moderate bump over the
   # 128 MB default since none of them had ever been sized deliberately.
+  #
+  # rule_engine raised to Ingest's sizing 2026-10-15: since the trap work
+  # it also parses HCL (hcl_eval resolves jsonencode() policies with
+  # hcl2.loads), and the first call in a process builds lark's parser
+  # (~1.1s on a dev machine, no cache file ships in the zip). At 256 MB
+  # that blew the 10s timeout on every review whose IAM policies use
+  # jsonencode() (the CloudGoat demo, twice); other inputs never built
+  # the parser, which is why it went unnoticed.
   lambda_specs = {
     ingest      = { handler = "backend.lambdas.ingest.handler.handler", zip = var.lambda_zip_paths.ingest, timeout = 30, memory_size = 1024 }
-    rule_engine = { handler = "backend.lambdas.rule_engine.handler.handler", zip = var.lambda_zip_paths.rule_engine, timeout = 10, memory_size = 256 }
+    rule_engine = { handler = "backend.lambdas.rule_engine.handler.handler", zip = var.lambda_zip_paths.rule_engine, timeout = 30, memory_size = 1024 }
     validate    = { handler = "backend.lambdas.validate.handler.handler", zip = var.lambda_zip_paths.validate, timeout = 10, memory_size = 256 }
     audit       = { handler = "backend.lambdas.audit.handler.handler", zip = var.lambda_zip_paths.audit, timeout = 10, memory_size = 256 }
     finalize    = { handler = "backend.lambdas.finalize.handler.handler", zip = var.lambda_zip_paths.finalize, timeout = 15, memory_size = 256 }
