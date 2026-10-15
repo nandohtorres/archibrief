@@ -47,7 +47,7 @@ from backend.shared.models.finding import (
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
 from backend.shared.trivy_checks import TRIVY_OWNED_CONCERNS, TRUSTED_CHECKS
 
-RULE_VERSION = "rule_engine@2026-10-15"
+RULE_VERSION = "rule_engine@2026-10-15b"
 
 ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}
@@ -629,6 +629,203 @@ def rule_iam_role_no_mfa_condition_on_assume(parsed: dict, review_id: str) -> li
     return findings
 
 
+# --- Credentials reachable by running code ----------------------------------
+# Together these two are the attack path publicly reported for the 2019
+# Capital One breach: a request forgery on a server reads its role's
+# credentials from the instance metadata service (IMDSv1 answers plain
+# GETs), and a role with broad permissions turns that into reading every
+# bucket. Trivy (AWS-0028) only covers the first half, and not on every
+# run (it can be unavailable), so ArchiBrief owns both.
+
+# Principals whose role credentials live inside running code.
+_COMPUTE_SERVICES = {
+    "ec2.amazonaws.com",
+    "lambda.amazonaws.com",
+    "ecs-tasks.amazonaws.com",
+    "pods.eks.amazonaws.com",
+}
+# AWS-managed policies broad enough that leaked credentials mean
+# account-wide damage. Named ones appear in finding text as-is; any other
+# "...FullAccess" policy is described generically, so a made-up policy
+# name from the submission never reaches the model.
+_BROAD_MANAGED_POLICIES = frozenset(
+    {
+        "AdministratorAccess",
+        "PowerUserAccess",
+        "IAMFullAccess",
+        "AmazonS3FullAccess",
+        "AmazonDynamoDBFullAccess",
+        "AmazonEC2FullAccess",
+        "AmazonRDSFullAccess",
+        "AmazonSQSFullAccess",
+        "AmazonSNSFullAccess",
+        "AmazonSSMFullAccess",
+        "AWSLambda_FullAccess",
+        "SecretsManagerReadWrite",
+    }
+)
+_MANAGED_POLICY_ARN = re.compile(
+    r":iam::aws:policy/(?:[A-Za-z0-9_+=,.@-]+/)*([A-Za-z0-9_+=,.@-]+)$"
+)
+
+
+def _broad_policy_label(arn: object, parsed: dict, module: str) -> str | None:
+    resolved = resolve(arn, parsed, module)
+    if not isinstance(resolved, str):
+        return None
+    match = _MANAGED_POLICY_ARN.search(resolved)
+    if not match:
+        return None
+    name = match.group(1)
+    if name in _BROAD_MANAGED_POLICIES:
+        return name
+    if name.endswith("FullAccess"):
+        return "an AWS-managed *FullAccess policy"
+    return None
+
+
+def _trusts_compute(body: dict, parsed: dict) -> bool:
+    statements = policy_statements(body.get("assume_role_policy"), parsed, module_of(body)) or []
+    for statement in statements:
+        principal = statement.get("Principal")
+        if statement.get("Effect", "Allow") != "Allow" or not isinstance(principal, dict):
+            continue
+        if {str(s) for s in _as_list(principal.get("Service"))} & _COMPUTE_SERVICES:
+            return True
+    return False
+
+
+def _role_key(value: object, body: dict, parsed: dict) -> str | None:
+    """A role referenced by an attachment, by reference or by literal name."""
+    key = _referenced_key(value, body, parsed, "aws_iam_role")
+    if key:
+        return key
+    for role_key, role in parsed.get("resources", {}).get("aws_iam_role", {}).items():
+        if isinstance(role, dict) and isinstance(value, str) and role.get("name") == value:
+            return role_key
+    return None
+
+
+def _broad_compute_roles(parsed: dict) -> dict[str, list[str]]:
+    """{role key: [broad policy labels]} for roles that running code assumes."""
+    attached: dict[str, list[str]] = {}
+
+    def add(role_key: str | None, arn: object, module: str) -> None:
+        label = _broad_policy_label(arn, parsed, module)
+        if role_key and label:
+            attached.setdefault(role_key, []).append(label)
+
+    for key, body in _resources(parsed, "aws_iam_role"):
+        for arn in _as_list(resolve(body.get("managed_policy_arns"), parsed, module_of(body))):
+            add(key, arn, module_of(body))
+    for _, body in _resources(parsed, "aws_iam_role_policy_attachment"):
+        add(_role_key(body.get("role"), body, parsed), body.get("policy_arn"), module_of(body))
+    for _, body in _resources(parsed, "aws_iam_policy_attachment"):
+        roles = resolve(body.get("roles"), parsed, module_of(body))
+        for role in _as_list(roles):
+            add(_role_key(role, body, parsed), body.get("policy_arn"), module_of(body))
+
+    roles = dict(_resources(parsed, "aws_iam_role"))
+    return {
+        key: sorted(set(labels))
+        for key, labels in attached.items()
+        if key in roles and _trusts_compute(roles[key], parsed)
+    }
+
+
+@concern("iam_compute_broad_managed")
+def rule_compute_role_broad_managed_policy(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    for key, labels in sorted(_broad_compute_roles(parsed).items()):
+        name = display_name(key)
+        policies = ", ".join(labels)
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.IAM,
+                f"IAM role '{name}' is used by running code and has {policies}",
+                f'resource "aws_iam_role" "{name}" trusts a compute service '
+                f"(EC2, Lambda, ECS tasks or EKS pods) and has {policies} attached",
+                "Anyone who gets code running on this compute, or tricks it into a "
+                "request forgery, gets these permissions across the whole account.",
+                "Replace the managed policy with a customer-managed one that names only "
+                "the actions and resource ARNs this workload uses.",
+                ["AWS Well-Architected: Security Pillar", "SEC03-BP02", "CIS Controls v8: 5.4"],
+            )
+        )
+    return findings
+
+
+def _profile_role(profile_ref: object, body: dict, parsed: dict) -> str | None:
+    profile_key = _referenced_key(profile_ref, body, parsed, "aws_iam_instance_profile")
+    profiles = parsed.get("resources", {}).get("aws_iam_instance_profile", {})
+    profile = profiles.get(profile_key) if profile_key else None
+    if not isinstance(profile, dict):
+        return None
+    return _role_key(profile.get("role"), profile, parsed)
+
+
+def _account_requires_imdsv2(parsed: dict) -> bool:
+    return any(
+        resolve(body.get("http_tokens"), parsed, module_of(body)) == "required"
+        for _, body in _resources(parsed, "aws_ec2_instance_metadata_defaults")
+    )
+
+
+@concern("ec2_imdsv2")
+def rule_ec2_imdsv2_required(parsed: dict, review_id: str) -> list[Finding]:
+    """Instances and launch templates that don't require IMDSv2 tokens.
+
+    Unset is flagged: whether IMDSv1 then works depends on the AMI and the
+    account default, which the code doesn't show, unless the code sets
+    that account default itself (aws_ec2_instance_metadata_defaults).
+    """
+    if _account_requires_imdsv2(parsed):
+        return []
+    broad_roles = _broad_compute_roles(parsed)
+    findings = []
+    for resource_type in ("aws_instance", "aws_launch_template"):
+        for key, body in _resources(parsed, resource_type):
+            options = _first_block(body.get("metadata_options"))
+            module = module_of(body)
+            tokens = resolve(options.get("http_tokens"), parsed, module)
+            if tokens == "required":
+                continue
+            if resolve(options.get("http_endpoint"), parsed, module) == "disabled":
+                continue
+            name = display_name(key)
+            setting = "is not set" if tokens is None else 'is not "required"'
+            risk = (
+                "IMDSv1 answers plain HTTP GETs, so a request forgery or open proxy on this "
+                "server can read its role's temporary credentials."
+            )
+            if resource_type == "aws_launch_template":
+                profile = _first_block(body.get("iam_instance_profile"))
+                role_key = _profile_role(profile.get("name") or profile.get("arn"), body, parsed)
+            else:
+                role_key = _profile_role(body.get("iam_instance_profile"), body, parsed)
+            if role_key in broad_roles:
+                risk += (
+                    f" Its role '{display_name(role_key)}' has "
+                    f"{', '.join(broad_roles[role_key])}, so those credentials reach far "
+                    "beyond this server."
+                )
+            kind = "EC2 instance" if resource_type == "aws_instance" else "Launch template"
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.EXPOSURE,
+                    f"{kind} '{name}' does not require IMDSv2 tokens",
+                    f'resource "{resource_type}" "{name}" metadata_options.http_tokens {setting}',
+                    risk,
+                    'Set metadata_options { http_tokens = "required" } (or require IMDSv2 '
+                    "account-wide with aws_ec2_instance_metadata_defaults).",
+                    ["AWS Well-Architected: Security Pillar", "SEC06-BP05"],
+                )
+            )
+    return findings
+
+
 # --- Observability and cost -------------------------------------------------
 
 
@@ -750,6 +947,8 @@ ALL_RULES: list[Callable[[dict, str], list[Finding]]] = [
     rule_cloudtrail_log_validation,
     rule_dynamodb_pitr,
     rule_iam_role_no_mfa_condition_on_assume,
+    rule_compute_role_broad_managed_policy,
+    rule_ec2_imdsv2_required,
     rule_lambda_no_vpc_for_sensitive_env,
     rule_api_gateway_no_throttling,
     rule_public_subnet_auto_assign_ip,

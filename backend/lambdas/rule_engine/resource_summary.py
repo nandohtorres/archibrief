@@ -98,6 +98,7 @@ SETTINGS: dict[str, tuple[str, ...]] = {
         "metadata_options.http_tokens",
         "root_block_device.encrypted",
     ),
+    "aws_launch_template": ("instance_type", "metadata_options.http_tokens"),
     "aws_ebs_volume": ("encrypted", "type", "size"),
     "aws_autoscaling_group": ("min_size", "max_size", "desired_capacity"),
     "aws_lb": ("internal", "load_balancer_type", "drop_invalid_header_fields"),

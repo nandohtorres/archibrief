@@ -141,6 +141,37 @@ our CI.
 - **Trivy can also scan for secrets,** which would cover master-list #19
   (secret scan on uploads) with the same layer. Not enabled yet.
 
+## Amendment (2026-10-15, later): credential-theft rules ArchiBrief owns
+
+A free parse of the planned demo slices showed a gap. On Rhino Security
+Labs' CloudGoat `cloud_breach_s3` (the attack path publicly reported for
+the 2019 Capital One breach), the review caught the bucket issues but not
+the cause: Trivy flagged IMDSv1 (AWS-0028), and nothing flagged the EC2
+role's `AmazonS3FullAccess`.
+
+**Decision:** two new ArchiBrief rules (`rule_engine@2026-10-15b`):
+- `rule_ec2_imdsv2_required`: instances and launch templates whose
+  `metadata_options.http_tokens` isn't `"required"`, unless the code
+  requires IMDSv2 account-wide (`aws_ec2_instance_metadata_defaults`).
+  When the instance's role is broad, the finding's risk text names the
+  role and its policy, so the chain is in one finding and doesn't depend
+  on the model joining two.
+- `rule_compute_role_broad_managed_policy`: roles trusted by EC2,
+  Lambda, ECS tasks or EKS pods with a broad AWS-managed policy
+  (`AdministratorAccess`, `PowerUserAccess`, the named `*FullAccess`
+  policies), attached any of the three ways. Unknown `*FullAccess` names
+  are described generically, so a made-up name never reaches the model.
+  Roles only people assume are out of scope (red herring f06).
+
+**Why ArchiBrief owns IMDS instead of trusting AWS-0028:** Trivy can be
+unavailable on a run, and the trusted-check path would make our rule
+step aside, losing the linked role detail. AWS-0028 stays untrusted, so
+there's exactly one IMDS finding either way.
+
+**Tests:** traps t15, t16 (must flag) and f05, f06 (must not flag), in
+both modes; 58 trap tests and 413 backend tests pass. On the CloudGoat
+slice the review now reports both halves of the chain.
+
 ## Alternatives considered
 
 - **Our own engine only, with Trivy in tests:** no infra change, but we'd

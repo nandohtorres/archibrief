@@ -143,6 +143,27 @@ DANGEROUS = [
         ("b_legacy/logs",),
         "bucket shadowed by a same-named one",
     ),
+    ("t15_ec2_imdsv1_with_broad_role", ("'proxy'", "IMDSv2"), "IMDSv1 left allowed"),
+    (
+        "t15_ec2_imdsv1_with_broad_role",
+        ("'workers'", "IMDSv2"),
+        "launch template http_tokens = optional",
+    ),
+    (
+        "t15_ec2_imdsv1_with_broad_role",
+        ("proxy_role", "AmazonS3FullAccess"),
+        "S3FullAccess on an EC2 instance role",
+    ),
+    (
+        "t16_compute_role_broad_managed_policy",
+        ("task_role", "AdministratorAccess"),
+        "AdministratorAccess via attachment, partition interpolated",
+    ),
+    (
+        "t16_compute_role_broad_managed_policy",
+        ("report_fn", "AmazonDynamoDBFullAccess"),
+        "FullAccess via aws_iam_policy_attachment roles list",
+    ),
 ]
 
 
@@ -197,6 +218,33 @@ def test_controls_referencing_bucket_through_local_not_flagged(
 @pytest.mark.parametrize("mode", MODES)
 def test_intentionally_public_https_not_flagged(mode: str, tmp_path: Path) -> None:
     assert not _flagged(_findings("f04_sg_https_only", mode, tmp_path), "web")
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_imdsv2_required_not_flagged(mode: str, tmp_path: Path) -> None:
+    assert not _flagged(_findings("f05_imdsv2_required", mode, tmp_path), "IMDSv2")
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_narrow_compute_role_and_human_admin_role_not_flagged(
+    mode: str, tmp_path: Path
+) -> None:
+    findings = _findings("f06_scoped_compute_role", mode, tmp_path)
+    assert not _flagged(findings, "'app'")
+    # AdministratorAccess on a role only people assume (with MFA) is a
+    # different question from credentials reachable by running code.
+    assert not _flagged(findings, "breakglass")
+
+
+def test_imds_finding_names_the_broad_role_it_exposes() -> None:
+    # The two halves of the chain are linked in one finding's risk text,
+    # deterministically, so the report doesn't rely on the model to join them.
+    findings = run_rules(_parse("t15_ec2_imdsv1_with_broad_role"), "trap-review")
+    proxy = next(
+        f for f in findings if "'proxy'" in f.finding and "IMDSv2" in f.finding
+    )
+    assert "proxy_role" in proxy.risk_impact
+    assert "AmazonS3FullAccess" in proxy.risk_impact
 
 
 # --- c*: injection attempts -------------------------------------------------
