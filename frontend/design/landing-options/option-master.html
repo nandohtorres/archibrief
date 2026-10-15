@@ -97,8 +97,11 @@ a { color: var(--accent); text-underline-offset: .18em; }
 .button.secondary { border: 1px solid var(--border); background: var(--surface); color: var(--text); }
 .button:hover { filter: brightness(1.06); }
 /* C: check-mark badges */
-.badges { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin: 1.75rem 0 0; padding: 0; list-style: none;
-  color: var(--text-muted); font-size: .88rem; }
+/* Buttons and check marks as one block; the check marks center under the
+   buttons and wrap to the buttons' width (width: 0 + min-width: 100%). */
+.cta { display: inline-flex; flex-direction: column; }
+.badges { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem 1.5rem; width: 0; min-width: 100%;
+  margin: 1.5rem 0 0; padding: 0; list-style: none; color: var(--text-muted); font-size: .88rem; text-align: center; }
 .badges li::before { content: "✓"; margin-right: .45rem; color: var(--success); font-weight: 700; }
 
 /* Sections */
@@ -222,6 +225,7 @@ footer a { color: var(--text-muted); }
   .brand small { display: none; }
   .theme-toggle button { padding: 0 .55rem; }
   .actions .button { flex: 1 1 100%; }
+  .cta { display: flex; }
   .flow::before, .flow .progress { left: 1rem; top: 1rem; }
   .step { padding-left: 3rem; }
   .step::before { width: 2rem; height: 2rem; font-size: .82rem; }
@@ -262,6 +266,7 @@ footer a { color: var(--text-muted); }
       every finding points to the resource it's about and the AWS guidance behind it. If it can't support
       a claim, it says so instead of guessing.
     </p>
+    <div class="cta">
     <div class="actions">
       <a class="button primary" href="#samples">View sample review <span aria-hidden="true">→</span></a>
       <a class="button secondary" href="#submit">Review your own Terraform</a>
@@ -272,6 +277,7 @@ footer a { color: var(--text-muted); }
       <li>Never touches your AWS account</li>
       <li>Every finding cites its source</li>
     </ul>
+    </div>
   </div>
 
   <!-- B: sample review cards -->
