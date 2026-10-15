@@ -26,9 +26,8 @@ import os
 import sys
 
 from backend.agent.nodes.reason import (
-    FindingValidationError,
     call_reasoning_model,
-    parse_model_findings,
+    verify_model_findings,
 )
 from backend.agent.nodes.retrieve import retrieve_node
 from backend.agent.reasoning_eval import (
@@ -103,25 +102,30 @@ def _run_brief(
         terraform_resources=brief.terraform_resources,
     )
 
-    try:
-        model_findings = parse_model_findings(
-            raw_findings=raw_findings,
-            review_id=f"reasoning-eval-{brief.brief_id}",
-            model_id=reasoning_client.model_id,
-            corpus_version=corpus_version,
-            retrieved_chunks=retrieved_chunks,
-            deterministic_rule_version=None,
-        )
-    except FindingValidationError as exc:
+    # Same rule as the live pipeline (Codex F04): a finding whose citation
+    # fails is dropped and the rest are scored. Strict all-or-nothing used
+    # to discard whole briefs over one bad quote (3 of 10 traps on
+    # 2026-10-15), hiding what the model actually did. Every failure is
+    # still reported, under dropped_findings.
+    model_findings, failures = verify_model_findings(
+        raw_findings=raw_findings,
+        review_id=f"reasoning-eval-{brief.brief_id}",
+        model_id=reasoning_client.model_id,
+        corpus_version=corpus_version,
+        retrieved_chunks=retrieved_chunks,
+        deterministic_rule_version=None,
+    )
+    if raw_findings and not model_findings:
         return {
             "brief_id": brief.brief_id,
             "finding_validation_failed": True,
-            "failures": exc.failures,
+            "failures": failures,
         }
 
     result = score_reasoning(model_findings, brief)
     result["retrieved_chunk_count"] = len(retrieved_chunks)
     result["raw_model_finding_count"] = len(raw_findings)
+    result["dropped_findings"] = failures
     return result
 
 
@@ -164,6 +168,8 @@ def _print_report(label: str, results: list[dict]) -> None:
         print(
             f"  topic recall: {r['topic_recall']:.0%} ({r['topics_covered']}/{r['topics_total']})"
         )
+        for f in r.get("dropped_findings", []):
+            print(f"  dropped (citation failed): {f}")
         for hit in r["topic_hits"]:
             status = "OK  " if hit["covered"] else "MISS"
             flag = ""
@@ -216,6 +222,8 @@ def main() -> None:
             print(f"{verdict:16} {r['brief_id']}: {r['trick']}")
             if r.get("forbidden_phrase_hits"):
                 print(f"{'':16} took the bait: {r['forbidden_phrase_hits']}")
+            if r.get("dropped_findings"):
+                print(f"{'':16} {len(r['dropped_findings'])} finding(s) dropped: citation failed")
         print(json.dumps({"traps": trap_results}, indent=2, default=str))
         return
 
