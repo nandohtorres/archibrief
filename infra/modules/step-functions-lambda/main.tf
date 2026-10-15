@@ -11,6 +11,17 @@
 # (agentcore_runtime_arn) that doesn't exist until account bootstrap.
 
 locals {
+  lambda_environment = {
+    ingest = {
+      GUARDRAIL_ID      = var.guardrail_id
+      GUARDRAIL_VERSION = var.guardrail_version
+    }
+    audit = {
+      # Table name is the last segment of arn:aws:dynamodb:<region>:<acct>:table/<name>.
+      AUDIT_TABLE_NAME = element(split("/", var.audit_table_arn), 1)
+    }
+  }
+
   # `timeout` added 2026-10-12, live-tested: none of these Lambdas ever
   # had an explicit timeout, so every one of them silently ran on AWS
   # Lambda's bare 3-second default (confirmed directly — Ingest's
@@ -184,16 +195,14 @@ resource "aws_lambda_function" "this" {
 
   reserved_concurrent_executions = var.lambda_reserved_concurrency
 
-  # Only Ingest calls Guardrails directly (ADR-0033) — Reason's own call
-  # happens inside AgentCore Runtime, not this Lambda, and reads the same
-  # deployed Guardrail by ID/version through its own config path.
+  # Per-function environment (see local.lambda_environment). Only Ingest
+  # calls Guardrails directly (ADR-0033) — Reason's own call happens inside
+  # AgentCore Runtime. Audit needs its table name, or it would have nowhere
+  # to write (Codex F13).
   dynamic "environment" {
-    for_each = each.key == "ingest" ? [1] : []
+    for_each = contains(keys(local.lambda_environment), each.key) ? [1] : []
     content {
-      variables = {
-        GUARDRAIL_ID      = var.guardrail_id
-        GUARDRAIL_VERSION = var.guardrail_version
-      }
+      variables = local.lambda_environment[each.key]
     }
   }
 
@@ -348,11 +357,8 @@ resource "aws_iam_role_policy" "state_machine_invoke" {
 # Terraform-known infra constants (var.reports_bucket_name/
 # reviews_table_name), not caller-supplied input; requiring the client to
 # know real internal AWS resource names was a real bug, not a design
-# choice. audit_table_name is deliberately NOT required here either —
-# Audit's Parameters below omit it entirely (not merely leaving it null)
-# so event.get(...) on the Lambda side stays a genuine "skip the write"
-# no-op rather than a state-machine-level path error, matching this
-# account's still-pending DynamoDB table bootstrap.
+# choice. The Audit table name likewise comes from the Lambda's
+# AUDIT_TABLE_NAME environment variable, not the execution input.
 resource "aws_sfn_state_machine" "review" {
   name     = "${var.name_prefix}-review"
   role_arn = aws_iam_role.state_machine.arn

@@ -2,14 +2,14 @@
 
 Records inputs, defaults applied, and Guardrails decisions for one review
 execution (ADR-0022 layer 4) — the traceability record, separate from the
-evidence ledger itself (Finalize). The DynamoDB write goes through
-backend.shared.clients.DynamoDBClient, which cannot succeed without a
-deployed table (Work-Project-Deployment-Roadmap.md AWS-account blocker),
-but the record shape and logic here are real and independently testable.
+evidence ledger itself (Finalize). The table name comes from the
+AUDIT_TABLE_NAME environment variable (set by Terraform); a missing table
+is an error, never a silent "recorded" with nothing written.
 """
 
 from __future__ import annotations
 
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -53,9 +53,14 @@ def build_audit_entry(event: dict) -> AuditLogEntry:
     )
 
 
+class AuditTableNotConfigured(Exception):
+    pass
+
+
 def handler(event, context):
     entry = build_audit_entry(event)
-    table_name = event.get("audit_table_name")
-    if table_name:
-        DynamoDBClient(table_name=table_name).put_item(entry.to_item())
+    table_name = os.environ.get("AUDIT_TABLE_NAME")
+    if not table_name:
+        raise AuditTableNotConfigured("AUDIT_TABLE_NAME is not set; refusing to report success")
+    DynamoDBClient(table_name=table_name).put_item(entry.to_item())
     return {"status": "recorded", "audit_id": entry.audit_id}
