@@ -26,11 +26,13 @@ state-changing route sits behind a single pre-shared admin credential
 - **Backend**: Python Lambda handlers, the LangGraph/Bedrock AgentCore
   reasoning subworkflow, the `Finding` pydantic model, a deterministic
   layer of Trivy's trusted checks plus ArchiBrief's own rules (ADR-0048),
-  and every Terraform module are implemented,
+  a sanitized resource summary so the model reasons from the real
+  settings without seeing raw Terraform (ADR-0049), and every Terraform
+  module are implemented,
   deployed, and have produced a real finding set against a real
   submitted Terraform repo. Backend test suite (`pytest`, no AWS
   credentials required — AWS calls go through moto or stubbed
-  adapters): 377 passing, including an adversarial trap suite that
+  adapters): 398 passing, including an adversarial trap suite that
   runs with and without Trivy. 4 of them check the real
   ingested corpus and skip when `backend/corpus/data/` (gitignored) is
   absent.

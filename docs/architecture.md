@@ -108,7 +108,10 @@ flowchart LR
 6. **RuleEngine** — deterministic checks against the parsed Terraform,
    independent of any model call: Trivy's 16 trusted checks when Scan
    ran, plus ArchiBrief's own rules for what Trivy misses (and for
-   everything, if Scan didn't run).
+   everything, if Scan didn't run). It also builds a sanitized resource
+   summary (allowlisted settings, documented defaults, values restricted
+   to each setting's real formats) that Reason receives instead of the
+   raw Terraform (ADR-0049).
 7. **PreflightGate → Retrieve → Reason** (AgentCore Runtime) — resolves
    per-field missing-data policy, retrieves relevant RAG chunks from S3
    Vectors (embedded via Titan V2), and reasons over
