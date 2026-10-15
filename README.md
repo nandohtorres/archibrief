@@ -93,14 +93,15 @@ customer-managed policies, applied and verified live).
 
 **Still genuinely open:**
 
-1. **Trap suite coverage, and the Scan step's first deploy**:
+1. **Trap suite coverage, and the Scan step's first live run**:
    `tests/backend/traps/` runs adversarial Terraform through the real
    parser, Trivy and the rule engine. Its first run (2026-10-15) found
    the engine missed all 14 sneaky-but-dangerous configs and flagged 3
    of 4 safe ones; with Trivy plus rebuilt rules (ADR-0048) it now
    catches 14/14 with no false positives, with and without Trivy. The
-   suite only proves the patterns it contains, and the Scan Lambda and
-   Trivy layer are built but not yet deployed.
+   suite only proves the patterns it contains. The Scan Lambda and
+   Trivy layer are deployed (2026-10-15) but haven't yet run inside a
+   real end-to-end review.
 2. The model-side trap briefs (`backend/agent/trap_eval.py`) and the
    retrieval-evaluation harness call real Bedrock, so they are run
    manually with explicit approval, not in CI.

@@ -127,7 +127,13 @@ our CI.
     `GetLayerVersion`, `DeleteLayerVersion` and `ListLayerVersions` on
     `layer:archibrief-dev-*`);
   - building the layer;
-  - one `terraform apply` (10 to add, 4 to change, 0 to destroy).
+  - `terraform apply`. Done 2026-10-15. The first apply stopped at
+    publishing the layer: pinning `s3_object_version` needs
+    `s3:GetObjectVersion`, which the deploy role lacks. Fixed in Terraform
+    rather than IAM, because the pin added nothing: Lambda copies the zip
+    when it publishes, so a layer version never changes. The layer now
+    republishes on `source_code_hash`. The zip upload uses `source_hash`,
+    because a multipart upload's S3 etag never matches the file's MD5.
 - **Accepted findings on our own infra,** recorded in `.trivyignore`:
   - SSE-S3 instead of customer-managed KMS keys;
   - the unencrypted budget-alert SNS topic, which AWS Budgets requires;
