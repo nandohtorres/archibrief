@@ -9,7 +9,7 @@ status: accepted
 
 # ADR 0047: Landing Page (Option A) and Frontend Quality Gates
 
-**Status:** Accepted (2026-10-15). Decided by Fernando.
+**Status:** Accepted (2026-10-15). Decided by Fernando. Decision 2 amended the same day (see below).
 
 ## Context
 
@@ -37,13 +37,18 @@ Three landing designs were mocked up as static pages
    holds the existing submission form. B and C stay in the repo; their
    supporting sections (B's finding preview and "what it checks" grid,
    C's step-by-step flow) may be folded in later.
-2. **The submission form stays out of the public page until public
-   submissions open** (ADR-0046, Phase 3). Visitors see an "opening
-   soon" panel that points to the sample instead. The admin key field
-   and the real form appear with `?admin` in the URL, or when a key is
-   already set for the tab.
-   - Why: otherwise a visitor scrolling down hits a form that can only
-     fail without the admin key.
+2. **The full submission form is on the public page, but only the
+   owner can submit, until public submissions open** (ADR-0046, Phase 3).
+   - The admin key field stays in the header until Fernando says to
+     remove it.
+   - Without a key, pressing submit sends nothing and explains that
+     submissions are limited to the site owner, pointing to the sample.
+   - A rejected key gets a plain message instead of the error screen.
+   - The real lock is server-side: every submit route already requires
+     the admin key (ADR-0044). The page only answers visitors plainly.
+   - *Amended 2026-10-15:* the first version hid the form and key field
+     from the public, behind `?admin`. Fernando preferred the full page
+     visible to everyone, with submitting restricted to him.
 3. **Sample cards are honest about what exists.** Only the payments
    sample (`GET /demo`) is marked Ready. The streaming and marketplace
    samples are marked "Coming soon" until they're generated. All
@@ -87,8 +92,10 @@ Three landing designs were mocked up as static pages
 
 - **Option B or C as the landing page.** Fernando preferred A's
   headline and tone. Parts of B and C stay available.
-- **Showing the form to everyone now.** Rejected for the reason in
-  decision 2.
+- **Hiding the form from the public until Phase 3** (the first version
+  of decision 2). Replaced the same day: the full page with an
+  owner-only submit shows visitors what's coming and keeps the admin
+  workflow on the same page.
 - **Running Lighthouse ad hoc via `npx` with no dependency.** It runs
   the same code without a pinned version or committed score floors, so
   results wouldn't be repeatable.
