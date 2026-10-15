@@ -1,0 +1,23 @@
+#!/bin/sh
+# Blocks a commit when staged changes contain a secret, using the same
+# .gitleaks.toml rules as CI's secrets-scan job. Catching it here means
+# the secret never enters git history (CI only sees it after commit).
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Emergency bypass:       git commit --no-verify
+
+# winget adds gitleaks to the user PATH, but shells/GUI git clients
+# started before the install won't see it - fall back to winget's dirs.
+for d in "$HOME"/AppData/Local/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_* \
+         "$HOME/AppData/Local/Microsoft/WinGet/Links"; do
+  [ -d "$d" ] && PATH="$PATH:$d"
+done
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks not found - commit blocked." >&2
+  echo "Install it (winget install Gitleaks.Gitleaks) or bypass with --no-verify." >&2
+  exit 1
+fi
+
+exec gitleaks git --pre-commit --staged --redact --no-banner -v \
+  --config "$(git rev-parse --show-toplevel)/.gitleaks.toml"
