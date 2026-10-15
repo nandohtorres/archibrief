@@ -10,9 +10,9 @@
 
 **Out of scope** (real limitations, not oversights):
 - **Supply-chain security** of third-party dependencies (PyPI/npm packages, Terraform provider binaries) — covered by normal dependency hygiene (`gitleaks`, dependency pinning), not modeled as its own threat surface here.
-- **AWS account/control-plane compromise** (stolen root credentials, IAM Identity Center compromise) — mitigated by standard account hygiene (root MFA'd and never used day-to-day, least-privilege deploy identity, permissions boundary — see [[Work-Project-Build-Plan]]) but not re-litigated here; this document assumes the AWS account itself is not already compromised.
+- **AWS account/control-plane compromise** (stolen root credentials, IAM Identity Center compromise) — mitigated by standard account hygiene (root MFA'd and never used day-to-day, least-privilege deploy identity, permissions boundary, per the project build plan) but not re-litigated here; this document assumes the AWS account itself is not already compromised.
 - **Physical/endpoint security** of the admin's own workstation.
-- **The product's own future diagram-generation feature** (deferred past v1, per ADR-0025/[[Work-Project-Spec]]).
+- **The product's own future diagram-generation feature** (deferred past v1, per ADR-0025 and the product spec).
 
 ## Data-flow diagram and trust boundaries
 
@@ -99,7 +99,7 @@ flowchart TB
 
 ## Attacker profiles
 
-1. **Unauthenticated internet visitor.** Can reach the static frontend and `GET /demo` only. No login form exists to brute-force (the admin key is a header value, not a password prompt) — the only way to probe the gated surface is sending arbitrary `x-admin-key` guesses directly against the API, which API Gateway's per-route throttling limits (and, for `GET /demo` specifically, an isolated lower-throughput quota as of 2026-10-13 — see Work-Project-Issues-Log.md).
+1. **Unauthenticated internet visitor.** Can reach the static frontend and `GET /demo` only. No login form exists to brute-force (the admin key is a header value, not a password prompt) — the only way to probe the gated surface is sending arbitrary `x-admin-key` guesses directly against the API, which API Gateway's per-route throttling limits (and, for `GET /demo` specifically, an isolated lower-throughput quota as of 2026-10-13 — per the project's private issues log).
 2. **Someone with a leaked or guessed admin key.** The realistic "worst case" external attacker — gets full access to the admin-gated API (submit reviews, trigger "go deeper," read results). Mitigated by: the key never being transmitted anywhere but this one app, no password-reset/recovery flow to abuse (there's no account to reset), and the architectural boundaries (3)-(5) above still applying regardless of who submitted the request.
 3. **A malicious or adversarial Terraform repository submitted for review.** The threat model's actual primary design target, not a hypothetical — ADR-0027/0038 exist specifically because the content being reviewed is assumed untrusted even when the person submitting it is the legitimate admin (e.g. reviewing a client's or a third party's IaC). Covered by boundaries (2)-(5); prompt-injection regression tests for the reasoning node (`tests/backend/agent/nodes/test_reason.py`, stubbed model) run on every push/PR. The deterministic layer is weaker than that suggests: see the trap-suite gap under "Residual risks".
 4. **A compromised or careless deploy identity** (e.g. the admin's own AWS SSO session). Out of full scope per this document's own boundaries above, but the project's least-privilege `ArchiBriefDeploy` permission set, its runtime permissions boundary (denies removing/swapping the boundary on any runtime role), and the explicit deny statements on the Terraform state bucket all reduce blast radius if this happens.
@@ -111,7 +111,7 @@ flowchart TB
 | T1 | 1 (admin-key authorizer) | Spoofing | Attacker guesses/brute-forces the admin key | 32-char `random_password`-generated secret; no feedback that distinguishes "wrong key" from "route doesn't exist"; per-route throttling | Mitigated. No lockout-after-N-attempts exists (there's no concept of a failed-login counter for a single shared key) — accepted residual risk given the key's length/randomness |
 | T2 | 1 | Information disclosure | Admin key leaked via logs, client storage, or a referrer header | Never put in a URL/query string (checked: `requestHeaders` sends it as a custom header only); kept in `sessionStorage`, not a cookie, so it doesn't ride along on unrelated requests and is gone when the tab closes; a key left in `localStorage` by older builds is moved and deleted on load; "Forget key" clears it immediately | Mitigated for the app's own code paths. Residual risk: script running in the page (an XSS) or anyone at the open tab can read it — same risk class as any single shared credential |
 | T3 | 1 | Denial of service | Public traffic (or a bot) exhausts the API's throttle quota | `GET /demo` isolated to its own lower-rate `route_settings` bucket (2026-10-13) so it can't starve admin-gated routes' quota | Partially mitigated — see T4 |
-| T4 | 1 | Denial of service | A `/demo` traffic spike exhausts account-wide Lambda concurrency, indirectly starving the real pipeline's Lambdas | None currently — `lambda_reserved_concurrency` is `-1` (unreserved) because this account's concurrency ceiling is below AWS's 10-unreserved minimum to even set a reservation | **Open, accepted for now.** Needs either an AWS limit increase or `lambda:GetAccountSettings` access to confirm the real ceiling — tracked in Work-Project-Build-Plan.md |
+| T4 | 1 | Denial of service | A `/demo` traffic spike exhausts account-wide Lambda concurrency, indirectly starving the real pipeline's Lambdas | None currently — `lambda_reserved_concurrency` is `-1` (unreserved) because this account's concurrency ceiling is below AWS's 10-unreserved minimum to even set a reservation | **Open, accepted for now.** Needs either an AWS limit increase or `lambda:GetAccountSettings` access to confirm the real ceiling — tracked in the project's private build plan |
 | T5 | 2 (Terraform ingestion) | Tampering / elevation | Malicious Terraform content attempts to execute code via a crafted archive | Static `python-hcl2` parse only; no `subprocess`/`eval`/`exec` anywhere in the ingestion path (confirmed by direct grep, 2026-10-13 audit) | Mitigated |
 | T6 | 2 | Tampering | Archive content attempts path traversal via a crafted S3 key | S3 keys have no `..`-resolution semantics; `review_id` validated against `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$` before being interpolated into any key | Mitigated |
 | T7 | 3, 4 (Guardrails / reasoning sandbox) | Tampering | Prompt injection via Terraform comments/content, a workload brief, or a clarification note, attempting to override the reviewer's instructions | Guardrails at two points; `SYSTEM_PROMPT` explicitly labels retrieved content as untrusted data (added 2026-10-13); no AWS credentials or tool-calling surface available to a successfully-injected model; every finding independently re-verified downstream regardless | Mitigated, defense-in-depth (ADR-0038's own stated position: structural separation is the real boundary, labeling is a secondary layer) |
@@ -148,7 +148,7 @@ flowchart TB
 
 - As of 2026-10-15: 307 passing backend tests (`pytest`; 4 of them skip when the gitignored corpus data is absent) plus 17 strict-`xfail` trap cases documenting known rule-engine gaps; 29 frontend unit tests (Vitest); 3 Playwright E2E tests against a mocked network. All run in CI on every push/PR.
 - Prompt-injection regression tests for the reasoning node (`tests/backend/agent/nodes/test_reason.py`) run in CI against a stubbed model — they prove the prompt structure and verification path, not real-model behavior. Real-model trap briefs (`backend/agent/trap_eval.py`) are paid and run manually.
-- A real retrieval-quality baseline exists against the live RAG index: 89% Hit Rate@5 (dev set), 86% (held-out set) — see Work-Project-Issues-Log.md, 2026-10-13.
+- A real retrieval-quality baseline exists against the live RAG index: 89% Hit Rate@5 (dev set), 86% (held-out set) — per the project's private issues log, 2026-10-13.
 - The kill switch (T10) and the per-Lambda IAM least-privilege claim (T11) were both verified live against the real deployment, not just by reading code — both 2026-10-13.
 
 ## Residual risks, explicitly accepted (not silently ignored)
@@ -197,7 +197,7 @@ project today.
   output as equally trustworthy.
 - Retrieval quality has a real, measured baseline: 89% Hit Rate@5 (dev
   set), 86% (held-out set), against the live RAG index — not an
-  assumed-good embedding choice (Work-Project-Issues-Log.md,
+  assumed-good embedding choice (private issues log,
   2026-10-13).
 - Prompt-injection regression tests for the reasoning node run on
   every push/PR against a stubbed model
@@ -211,7 +211,7 @@ project today.
 **MANAGE** — responding to and prioritizing identified risks.
 - Every open/residual risk in this document has an explicit priority
   and an explicit reason it's accepted rather than fixed (see
-  "Residual risks"), cross-referenced into Work-Project-Build-Plan.md
+  "Residual risks"), cross-referenced into the private build plan
   so it isn't only visible here.
 - The kill switch exists specifically as a MANAGE-function control:
   a fast, tested way to stop new AI-driven spend during an active
