@@ -12,7 +12,7 @@ output "admin_key_secret_arn" {
 }
 
 output "stage_arn" {
-  description = "aws_apigatewayv2_stage ARN — WAF Web ACLs associate against this, not the API ARN."
+  description = "aws_apigatewayv2_stage ARN. Not a WAF attachment point: AWS WAF cannot be associated with an HTTP API (v2) stage, only REST API stages, so this API has no WAF; abuse limits are stage throttling + the admin authorizer."
   value       = aws_apigatewayv2_stage.default.arn
 }
 
