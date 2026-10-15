@@ -164,6 +164,11 @@ DANGEROUS = [
         ("report_fn", "AmazonDynamoDBFullAccess"),
         "FullAccess via aws_iam_policy_attachment roles list",
     ),
+    (
+        "t17_counted_aurora_public",
+        ("main_inst", "publicly accessible"),
+        "public Aurora instances created with count",
+    ),
 ]
 
 

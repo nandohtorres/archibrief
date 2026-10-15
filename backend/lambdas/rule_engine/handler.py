@@ -318,9 +318,12 @@ def _port_range(from_port: object, to_port: object, protocol: object) -> range |
 
 
 def _exposed_ports(ports: range, trivy_ran: bool) -> set[int]:
-    """Sensitive ports in range; SSH/RDP and all-traffic are Trivy's (AWS-0107)."""
-    if trivy_ran and len(ports) == 65536:
-        return set()
+    """Sensitive ports in range; SSH/RDP are Trivy's (AWS-0107) when it ran.
+
+    All-traffic rules used to be left to Trivy entirely, but its finding
+    only names SSH/RDP, so a database open on every port (FEC demo) read
+    as an admin-port issue. The database ports are reported here.
+    """
     sensitive = SENSITIVE_PORTS - ADMIN_PORTS if trivy_ran else SENSITIVE_PORTS
     return {p for p in sensitive if p in ports}
 
@@ -463,7 +466,13 @@ def rule_rds_encryption(parsed: dict, review_id: str) -> list[Finding]:
 @concern("rds_public")
 def rule_rds_publicly_accessible(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    for key, body in _resources(parsed, "aws_db_instance"):
+    # Aurora's per-instance resource carries the same setting (FEC demo).
+    instances = [
+        (resource_type, key, body)
+        for resource_type in ("aws_db_instance", "aws_rds_cluster_instance")
+        for key, body in _resources(parsed, resource_type)
+    ]
+    for resource_type, key, body in instances:
         if truthy(body.get("publicly_accessible", False), parsed, module_of(body)):
             name = display_name(key)
             findings.append(
@@ -471,7 +480,7 @@ def rule_rds_publicly_accessible(parsed: dict, review_id: str) -> list[Finding]:
                     review_id,
                     FindingCategory.EXPOSURE,
                     f"RDS instance '{name}' is publicly accessible",
-                    f'resource "aws_db_instance" "{name}" has publicly_accessible = true',
+                    f'resource "{resource_type}" "{name}" has publicly_accessible = true',
                     "The database gets a public endpoint and is one security-group mistake "
                     "from the internet.",
                     "Set publicly_accessible = false and reach the database from inside the VPC.",

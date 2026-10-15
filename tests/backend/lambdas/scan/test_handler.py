@@ -116,6 +116,30 @@ def test_results_are_module_scoped_and_unsafe_names_dropped(tmp_path):
     assert [r["resource_key"] for r in results] == ["b/logs", "a/inner"]
 
 
+def test_counted_and_for_each_resources_keep_their_results(tmp_path):
+    # Trivy reports count/for_each instances as name[0] / name["key"].
+    # These were dropped as unsafe names, so e.g. FEC's publicly
+    # accessible Aurora instances (count = 3) produced no finding.
+    files = [_write(tmp_path / "main.tf", "")]
+    report = {
+        "Results": [
+            {
+                "Target": "main.tf",
+                "Misconfigurations": [
+                    _item("AWS-0180", "aws_rds_cluster_instance.prod[0]"),
+                    _item("AWS-0180", "aws_rds_cluster_instance.prod[1]"),
+                    _item("AWS-0090", 'aws_s3_bucket.logs["eu"]'),
+                    _item("AWS-0090", 'aws_s3_bucket.bad"name[0]'),
+                ],
+            }
+        ]
+    }
+
+    results = trusted_results(report, str(tmp_path), files)
+
+    assert [r["resource_key"] for r in results] == ["prod", "prod", "logs"]
+
+
 def test_results_are_capped(tmp_path, monkeypatch):
     monkeypatch.setattr(scan, "MAX_RESULTS", 3)
     files = [_write(tmp_path / "main.tf", "")]

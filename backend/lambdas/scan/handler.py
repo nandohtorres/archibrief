@@ -46,6 +46,9 @@ _DEAD_PROXY = "http://127.0.0.1:9"
 _SOURCE_ATTRIBUTE = re.compile(r'^(\s*source\s*=\s*)"([^"]*)"(.*)$', re.MULTILINE)
 _RESOURCE_TYPE = re.compile(r"^[a-z0-9_]+$")
 _RESOURCE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+# count / for_each instances: name[0] or name["key"]. The findings are
+# about the resource block, so the index is dropped.
+_INSTANCE_INDEX = re.compile(r'\[(?:\d+|"[^"\]]*")\]$')
 
 
 def _log(review_id: str | None, stage: str, **fields: object) -> None:
@@ -151,7 +154,7 @@ def trusted_results(report: dict, scan_dir: str, files: list[str]) -> list[dict]
             if item.get("Status") != "FAIL" or check_id not in TRUSTED_CHECK_IDS:
                 continue
             cause = item.get("CauseMetadata") or {}
-            address = str(cause.get("Resource", ""))
+            address = _INSTANCE_INDEX.sub("", str(cause.get("Resource", "")))
             resource_type, _, name = address.rpartition(".")
             # Module-called resources come back as module.x.type.name; the
             # last two segments identify the resource.

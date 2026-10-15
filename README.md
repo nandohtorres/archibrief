@@ -32,7 +32,7 @@ state-changing route sits behind a single pre-shared admin credential
   deployed, and have produced a real finding set against a real
   submitted Terraform repo. Backend test suite (`pytest`, no AWS
   credentials required — AWS calls go through moto or stubbed
-  adapters): 413 passing, including an adversarial trap suite that
+  adapters): 416 passing, including an adversarial trap suite that
   runs with and without Trivy. 4 of them check the real
   ingested corpus and skip when `backend/corpus/data/` (gitignored) is
   absent.
@@ -100,11 +100,11 @@ customer-managed policies, applied and verified live).
    parser, Trivy and the rule engine. Its first run (2026-10-15) found
    the engine missed all 14 sneaky-but-dangerous configs and flagged 3
    of 4 safe ones; with Trivy plus rebuilt rules (ADR-0048) it now
-   catches 14/14 with no false positives, with and without Trivy. Two
-   more (t15, t16) and two red herrings (f05, f06) were added the same
-   day for the credential-theft chain (IMDSv1 plus a broad compute
-   role); all pass. The
-   suite only proves the patterns it contains. The Scan step is
+   catches 14/14 with no false positives, with and without Trivy. Three
+   more (t15-t17) and two red herrings (f05, f06) were added the same
+   day: the credential-theft chain (IMDSv1 plus a broad compute
+   role) and public Aurora instances created with `count`; all pass.
+   The suite only proves the patterns it contains. The Scan step is
    deployed and was proven in a live end-to-end review on 2026-10-15.
 2. The model-side trap briefs (`backend/agent/trap_eval.py`) and the
    retrieval-evaluation harness call real Bedrock, so they are run
