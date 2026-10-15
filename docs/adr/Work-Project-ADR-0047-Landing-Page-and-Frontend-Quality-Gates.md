@@ -97,6 +97,55 @@ Three landing designs were mocked up as static pages
 - The sample's citation text still says "Illustrative … span". It is
   replaced when the real samples are generated.
 
+## Amendment (2026-10-15, later): the master landing and the site fonts
+
+**Master landing.** Fernando picked elements from all three options. A
+combined mockup, `option-master.html`, was built next to A, B and C,
+which stay in the repo. He approved it ("looks good i love this, lets
+finalize this layout"), and it's now the app's landing (`c30134d`):
+
+- **From A:** the editorial hero. The headline is now "A second opinion
+  on your Terraform, *with the receipts.*"
+- **From C:**
+  - the button pair: "View sample review" scrolls to the samples, and
+    "Review your own Terraform" scrolls to the form;
+  - check marks, centered under the buttons;
+  - the numbered how-it-works walkthrough, using the payments sample.
+    Steps fade in and the line fills as you scroll; this is off for
+    reduced motion.
+  - the "What it checks" list and the "won't claim" box.
+- **From B:** the sample cards with icons.
+- **Form placement:** the submission form moved between the walkthrough
+  and "What it checks", where the story turns into the product.
+- **Copy:** says "Trivy plus our own rules" instead of "16 rule checks".
+- **Unchanged:** submitting is still owner-only.
+- **Glass variant:** `option-master-glass.html` (see-through cards over
+  faint color glows) was tried. Fernando kept the plain master, and the
+  glass file stays for reference.
+- **Planned next, waiting on Fernando's answers:** a fuller "try it"
+  section in that spot, with instant sample, paste or upload, and
+  example architectures for non-technical users.
+
+**Fonts were never loading.** The Google Fonts `@import` in
+`globals.css` separated families with `&amp;`. That is HTML escaping,
+and it's wrong in CSS, so only IBM Plex Mono ever loaded. IBM Plex Sans
+and Source Serif 4 had never appeared on the live site.
+
+- The fonts now come from `next/font`, which is built into Next.js, so
+  there's no new dependency (`675f025`). It self-hosts the fonts at build
+  time, sizes the fallback fonts to match, and makes no runtime request
+  to Google.
+- Source Serif's optical-size axis was dropped to halve its preloaded
+  size.
+- A unit test checks that all three families load this way.
+
+**Lighthouse after the change (3 runs):**
+- performance 93/99/93;
+- accessibility, best practices and SEO 100;
+- layout shift 0.029, down from 0.175 when the fonts first loaded.
+
+The earlier 99/100/100/100 was measured while the fonts weren't loading.
+
 ## Alternatives considered
 
 - **Option B or C as the landing page.** Fernando preferred A's
