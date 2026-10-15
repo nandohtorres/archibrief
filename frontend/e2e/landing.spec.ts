@@ -56,7 +56,7 @@ test.describe("landing page", () => {
 
   test("the sample card opens the sample review", async ({ page }) => {
     await page.goto(FIXTURE_URL);
-    await page.getByRole("button", { name: "Open sample review" }).click();
+    await page.getByRole("button", { name: "View sample review" }).click();
     await expect(page.locator("#report-heading")).toBeVisible();
     // Opened from far down the page, the report still starts at the top.
     await expect(page.locator("#report-heading")).toBeInViewport();

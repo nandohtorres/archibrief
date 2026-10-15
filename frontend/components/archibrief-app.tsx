@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "./app-header";
 import { FailurePanel } from "./state-panel";
 import { ClarifyStep } from "./clarify-step";
-import { LandingIntro } from "./landing-intro";
+import { LandingClosing, LandingIntro } from "./landing-intro";
 import { LiveProgressStep } from "./live-progress-step";
 import { PreflightStep } from "./preflight-step";
 import { ProgressStep } from "./progress-step";
@@ -354,6 +354,7 @@ export function ArchiBriefApp() {
                 onSubmit={handleSubmission}
               />
             </div>
+            <LandingClosing />
           </>
         )}
         {screen === "preflight" && (

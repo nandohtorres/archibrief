@@ -78,9 +78,15 @@ test.describe("phone layout at 390px", () => {
 
   test("main actions are visible and large enough to tap", async ({ page }) => {
     await page.goto(FIXTURE_URL);
+    // The hero's actions are on the first screen; "View sample review" there
+    // scrolls to the sample cards, whose button opens the sample.
+    for (const name of [/View sample review/, "Review your own Terraform"]) {
+      const action = page.locator(".landing-actions").getByRole("link", { name });
+      await expect(action).toBeInViewport();
+      // WCAG 2.2 target size (minimum) is 24x24 CSS px.
+      expect((await action.boundingBox())!.height).toBeGreaterThanOrEqual(24);
+    }
     const sample = page.getByRole("button", { name: "View sample review" }).first();
-    await expect(sample).toBeInViewport();
-    // WCAG 2.2 target size (minimum) is 24x24 CSS px.
     expect((await sample.boundingBox())!.height).toBeGreaterThanOrEqual(24);
     await openReport(page);
     for (const name of ["Export ledger", "New review"]) {
