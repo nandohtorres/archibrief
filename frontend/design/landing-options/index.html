@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArchiBrief landing options</title>
+<style>
+:root { --bg: #f4f7f9; --surface: #ffffff; --border: #c5d0d9; --text: #131c24; --text-muted: #43596c; --accent: #235f7a; color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0d1319; --surface: #141d26; --border: #46596b; --text: #e7edf2; --text-muted: #a8bac9; --accent: #7bc1df; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 1rem/1.55 "IBM Plex Sans", system-ui, "Segoe UI", sans-serif; }
+main { width: min(100% - 2rem, 760px); margin: 0 auto; padding: 3rem 0; }
+h1 { margin: 0 0 .5rem; font-size: 1.6rem; }
+p.intro { margin: 0 0 2rem; color: var(--text-muted); }
+ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 1rem; }
+li a { display: block; padding: 1.1rem 1.25rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); text-decoration: none; }
+li a:hover, li a:focus-visible { border-color: var(--accent); }
+li strong { color: var(--accent); }
+li span { display: block; margin-top: .2rem; color: var(--text-muted); font-size: .92rem; }
+a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+footer { margin-top: 2rem; color: var(--text-muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ArchiBrief landing page: three options</h1>
+  <p class="intro">Static mockups for master-list item #8. Each has a working Auto / Light / Dark toggle and is checked at 1280px and 390px. Pick one; the real implementation comes after.</p>
+  <ul>
+    <li><a href="option-a.html"><strong>Option A · Editorial</strong><span>Big serif headline, one primary button, sample cards below and a single pull-quoted example finding. Quiet and confident.</span></a></li>
+    <li><a href="option-b.html"><strong>Option B · Show the product</strong><span>Pitch beside a real-looking report finding: highlighted Terraform evidence, SEC03-BP02 citation, confidence. Then samples and a "what it checks" grid.</span></a></li>
+    <li><a href="option-c.html"><strong>Option C · Guided flow</strong><span>Numbered walk-through (submit, rules + retrieval, cited report) where each step shows its artifact, ending at the sample cards.</span></a></li>
+  </ul>
+  <footer>Screenshots of every option, viewport, and theme are in <code>screenshots/</code>.</footer>
+</main>
+</body>
+</html>
