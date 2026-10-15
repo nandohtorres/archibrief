@@ -51,8 +51,8 @@ export function AppHeader({
             </span>
           )}
           {apiConfigured && (
-            <label className="admin-key-control" htmlFor="admin-key-input">
-              Admin key
+            <div className="admin-key-control">
+              <label htmlFor="admin-key-input">Admin key</label>
               <input
                 id="admin-key-input"
                 type="password"
@@ -61,7 +61,13 @@ export function AppHeader({
                 value={adminKey}
                 onChange={(event) => onAdminKeyChange(event.target.value)}
               />
-            </label>
+              {/* Kept for this tab only (lib/admin-key.ts); this clears it now. */}
+              {adminKey && (
+                <button type="button" className="button quiet" onClick={() => onAdminKeyChange("")}>
+                  Forget key
+                </button>
+              )}
+            </div>
           )}
           <label className="theme-control" htmlFor="theme-select">
             Theme

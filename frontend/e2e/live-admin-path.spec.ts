@@ -79,4 +79,35 @@ test.describe("admin-gated live critical path (mocked network)", () => {
     await page.getByRole("button", { name: "Go deeper" }).first().click();
     await expect(page.getByText(/deeper finding.*added below/)).toBeVisible();
   });
+
+  test("admin key is tab-scoped, sent with requests, and can be forgotten", async ({ page }) => {
+    // Regression (Codex F18): the key used to persist in localStorage.
+    let sentKey: string | undefined;
+    await page.route("**/mock-api/uploads", async (route) => {
+      sentKey = route.request().headers()["x-admin-key"];
+      await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+    });
+
+    await page.goto(LIVE_URL);
+    await page.getByLabel("Admin key").fill("e2e-admin-key");
+
+    const stored = await page.evaluate(() => ({
+      session: window.sessionStorage.getItem("archibrief-admin-key"),
+      local: window.localStorage.getItem("archibrief-admin-key"),
+    }));
+    expect(stored).toEqual({ session: "e2e-admin-key", local: null });
+
+    await page.reload();
+    await expect(page.getByLabel("Admin key")).toHaveValue("e2e-admin-key");
+
+    await page.getByRole("button", { name: /Detailed \(complex, cross-checked\)/ }).click();
+    await page.getByRole("button", { name: "Submit to deployed API" }).click();
+    await expect.poll(() => sentKey).toBe("e2e-admin-key");
+
+    await page.getByRole("button", { name: "Forget key" }).click();
+    await expect(page.getByLabel("Admin key")).toHaveValue("");
+    expect(
+      await page.evaluate(() => window.sessionStorage.getItem("archibrief-admin-key")),
+    ).toBeNull();
+  });
 });

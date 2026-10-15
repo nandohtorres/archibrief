@@ -17,6 +17,7 @@ import {
   submitReview,
   uploadArchiveToS3,
 } from "@/lib/api";
+import { loadAdminKey, saveAdminKey } from "@/lib/admin-key";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
 import type { PreflightField, ReviewReport, ReviewStatusPointer } from "@/lib/contracts";
 import {
@@ -58,9 +59,8 @@ export function ArchiBriefApp() {
   useEffect(() => {
     const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
     if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
-    // No user accounts (ADR-0044) — the admin key is a single pre-shared
-    // credential, not a session token, so it's fine to persist locally.
-    setAdminKey(window.localStorage.getItem("archibrief-admin-key") ?? "");
+    // Tab-scoped, never localStorage (Codex F18) — see lib/admin-key.ts.
+    setAdminKey(loadAdminKey(window.sessionStorage, window.localStorage));
   }, []);
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export function ArchiBriefApp() {
 
   function handleAdminKeyChange(value: string) {
     setAdminKey(value);
-    window.localStorage.setItem("archibrief-admin-key", value);
+    saveAdminKey(window.sessionStorage, value);
   }
 
   useEffect(() => {
