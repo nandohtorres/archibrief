@@ -63,6 +63,9 @@ export function ArchitectureView({ onOpenFinding }: ArchitectureViewProps) {
           </p>
         </div>
 
+        <p className="diagram-swipe-hint" aria-hidden="true">
+          Swipe sideways to see the whole diagram →
+        </p>
         <div className="architecture-canvas">
           <svg
             className="architecture-svg"

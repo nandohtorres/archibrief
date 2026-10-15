@@ -2,7 +2,7 @@
 // Runs against the fixture build (no network). This is the baseline
 // check, not the full mobile UI pass, which is still to come.
 import { expect, test, type Page } from "@playwright/test";
-import { FIXTURE_URL } from "../playwright.config";
+import { FIXTURE_URL, LIVE_URL } from "../playwright.config";
 import { findContrastFailures } from "./support/contrast";
 
 const PHONE = { width: 390, height: 844 };
@@ -88,6 +88,62 @@ test.describe("phone layout at 390px", () => {
       expect(box!.height, name).toBeGreaterThanOrEqual(24);
       expect(box!.width, name).toBeGreaterThanOrEqual(24);
     }
+  });
+
+  for (const screen of screens) {
+    test(`${screen.name}: every control is at least 24px and inputs don't zoom`, async ({
+      page,
+    }) => {
+      await openInTheme(page, "light");
+      await screen.open(page);
+      const problems = await page.evaluate(() => {
+        const out: string[] = [];
+        const controls = document.querySelectorAll<HTMLElement>(
+          "button, a[href], input, select, textarea, summary, [role='tab']",
+        );
+        for (const el of controls) {
+          const style = getComputedStyle(el);
+          const box = el.getBoundingClientRect();
+          if (box.width === 0 || style.visibility === "hidden") continue;
+          if (el.closest("details:not([open])") && el.tagName !== "SUMMARY") continue;
+          if (el.classList.contains("skip-link")) continue;
+          // WCAG 2.5.8 exempts links inside running text.
+          const inline = el.tagName === "A" && el.closest("p, li, dd") !== null;
+          const label = (el.textContent || el.getAttribute("aria-label") || el.id).trim();
+          if (!inline && (box.height < 24 || box.width < 24))
+            out.push(
+              `small target: ${label.slice(0, 40)} (${Math.round(box.width)}x${Math.round(box.height)})`,
+            );
+          if (
+            ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName) &&
+            parseFloat(style.fontSize) < 16
+          )
+            out.push(`zooms on focus: ${label.slice(0, 40)} (${style.fontSize})`);
+        }
+        return out;
+      });
+      expect(problems).toEqual([]);
+    });
+  }
+
+  test("header stays compact and finding filters aren't cut off", async ({ page }) => {
+    await page.goto(LIVE_URL);
+    const header = await page.locator(".site-header").boundingBox();
+    expect(header!.height).toBeLessThanOrEqual(150);
+
+    await page.goto(FIXTURE_URL);
+    await openReport(page);
+    const bounds = await page.locator(".finding-filters").boundingBox();
+    for (const chip of await page.locator(".finding-filters button").all()) {
+      const box = (await chip.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(bounds!.x + bounds!.width + 1);
+    }
+    const metrics = page.locator(".report-metrics > div");
+    const [first, second] = [
+      await metrics.nth(0).boundingBox(),
+      await metrics.nth(1).boundingBox(),
+    ];
+    expect(Math.abs(first!.y - second!.y), "summary numbers sit two per row").toBeLessThan(2);
   });
 });
 

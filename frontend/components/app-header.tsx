@@ -70,7 +70,7 @@ export function AppHeader({
             </div>
           )}
           <label className="theme-control" htmlFor="theme-select">
-            Theme
+            <span className="theme-label">Theme</span>
             <select
               id="theme-select"
               value={theme}

@@ -2406,3 +2406,81 @@ h4 {
     transition-duration: 0.01ms !important;
   }
 }
+
+.diagram-swipe-hint {
+  display: none;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* Phone pass (master-list #9, 2026-10-15). Kept last so it overrides the
+   general 680px rules above. */
+@media (max-width: 680px) {
+  /* Header: brand and theme share the first row, the admin key gets its
+     own compact row, instead of three stacked full-width rows. */
+  .site-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+
+  .header-controls {
+    display: contents;
+  }
+
+  .theme-control {
+    order: 1;
+    width: auto;
+    margin-left: auto;
+  }
+
+  .brand-lockup {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* The select's own text says the theme; the visible word is dropped to
+     fit one row, but stays available to screen readers. */
+  .theme-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .admin-key-control,
+  .mode-badge {
+    order: 2;
+    width: 100%;
+  }
+
+  /* 16px inputs stop iOS Safari zooming the page on focus. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .report-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .report-metrics > div {
+    padding: var(--space-2);
+  }
+
+  .finding-filters {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .diagram-swipe-hint {
+    display: block;
+  }
+}
