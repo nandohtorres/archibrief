@@ -43,3 +43,16 @@ def test_invoke_sends_payload_and_parses_response():
 
     stubber.assert_no_pending_responses()
     assert result == {"status": "complete", "findings": []}
+
+
+def test_read_timeout_is_applied_and_invocations_are_never_retried():
+    # Regression (Codex F19): botocore's default 60s read timeout and
+    # automatic retries could outlive the API's 30s limit and start a
+    # second paid run for the same request.
+    client = AgentCoreRuntimeClient(
+        agent_runtime_arn="arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/test",
+        read_timeout_seconds=24,
+    )
+    config = client._client.meta.config
+    assert config.read_timeout == 24
+    assert config.retries["total_max_attempts"] == 1

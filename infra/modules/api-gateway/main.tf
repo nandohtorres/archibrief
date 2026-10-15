@@ -276,8 +276,9 @@ resource "aws_apigatewayv2_route" "get_review" {
   authorization_type = "CUSTOM"
 }
 
-# clarify_review needs GetItem+PutItem (reads the pending token, clears
-# it after resuming) plus states:SendTaskSuccess — which AWS requires be
+# clarify_review needs GetItem+UpdateItem (reads the pending token, then
+# claims it with a conditional field-level update before resuming — Codex
+# F20) plus states:SendTaskSuccess — which AWS requires be
 # scoped to resource "*" (the task-token API has no ARN-scoped resource
 # to restrict by; the token itself is the authorization), not to this
 # state machine's own ARN.
@@ -290,7 +291,7 @@ data "aws_iam_policy_document" "clarify_review_data_access" {
   }
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
     resources = [var.reviews_table_arn]
   }
   statement {
@@ -379,13 +380,16 @@ data "aws_iam_policy_document" "deeper_review_data_access" {
     resources = [var.kill_switch_parameter_arn]
   }
   statement {
+    # UpdateItem: the per-finding in-flight claim (Codex F19).
     effect    = "Allow"
-    actions   = ["dynamodb:GetItem"]
+    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
     resources = [var.reviews_table_arn]
   }
   statement {
+    # Query: return an already-stored deeper result instead of paying for
+    # a second run (Codex F19).
     effect    = "Allow"
-    actions   = ["dynamodb:PutItem"]
+    actions   = ["dynamodb:PutItem", "dynamodb:Query"]
     resources = [var.findings_table_arn]
   }
   statement {
@@ -430,8 +434,11 @@ resource "aws_lambda_function" "deeper_review" {
   source_code_hash = fileexists(var.deeper_review_zip_path) ? filebase64sha256(var.deeper_review_zip_path) : null
   # Longer than get_review/clarify_review's default (3s/10s) — this path
   # makes a real synchronous Bedrock-backed AgentCore call (retrieve +
-  # reason), not a single DynamoDB read/write.
-  timeout = 60
+  # reason). Capped under the HTTP API's 30s integration limit (Codex
+  # F19): it was 60s, so the gateway returned 503 at 30s while the Lambda
+  # kept running and paying, and a client retry started a second run. The
+  # handler's AgentCore read timeout (24s) sits under this.
+  timeout = 28
 
   environment {
     variables = {
@@ -464,6 +471,9 @@ resource "aws_apigatewayv2_integration" "deeper_review" {
   integration_type       = "AWS_PROXY"
   integration_uri        = aws_lambda_function.deeper_review.invoke_arn
   payload_format_version = "2.0"
+  # Explicit, and above the Lambda's 28s, so the Lambda's own timeout
+  # response reaches the caller rather than a bare gateway 503 (Codex F19).
+  timeout_milliseconds = 29000
 }
 
 resource "aws_apigatewayv2_route" "post_deeper" {

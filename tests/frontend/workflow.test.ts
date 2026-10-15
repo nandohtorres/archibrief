@@ -77,6 +77,7 @@ describe("failureMessageFor", () => {
     "paused",
     "timed_out",
     "clarification_expired",
+    "clarification_limit",
     "cancelled",
   ])("gives a specific message for %s", (code) => {
     expect(failureMessageFor(code)).not.toBe(failureMessageFor(undefined));

@@ -1,10 +1,10 @@
 # Terraform module: frontend-hosting
 # Phase A of the frontend deploy (Work-Project-Deployment-Roadmap.md):
 # S3 + CloudFront static hosting for frontend/out (Next.js static export,
-# ADR-0016), reachable at CloudFront's default *.cloudfront.net domain.
-# No custom domain / ACM cert / alternate domain names yet — that's
-# Phase B (archibrief.dev, currently on Cloudflare DNS) and deliberately
-# out of scope here.
+# ADR-0016). Reachable at CloudFront's default *.cloudfront.net domain
+# and, since Phase B (2026-10-14), optionally at custom domains via
+# var.aliases + var.certificate_arn (an ACM cert in us-east-1). Both
+# default to off, which keeps the default certificate and domain.
 #
 # The bucket is private; CloudFront reaches it only via Origin Access
 # Control (OAC), not the older OAI or a public bucket policy. This module
@@ -166,10 +166,9 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
-  # var.certificate_arn null keeps the pre-existing default-cert
-  # behavior (no custom domain configured, aliases must then also be
-  # empty — CloudFront itself enforces that pairing, not just a
-  # convention here).
+  # var.certificate_arn null keeps CloudFront's default certificate, and
+  # var.aliases must then be empty — CloudFront itself enforces that
+  # pairing. Set both to serve the custom domain(s).
   viewer_certificate {
     cloudfront_default_certificate = var.certificate_arn == null
     acm_certificate_arn            = var.certificate_arn

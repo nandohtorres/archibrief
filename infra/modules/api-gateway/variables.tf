@@ -26,7 +26,7 @@ variable "certificate_arn" {
 
 variable "frontend_origin" {
   type        = string
-  description = "The frontend's real origin (scheme + host, e.g. https://d1t0c0ivnmhbnn.cloudfront.net) for CORS. Found 2026-10-12: this was hardcoded to the never-set-up https://archibrief.dev placeholder, so the browser's CORS preflight rejected every request from the real CloudFront origin with a generic 'Failed to fetch' — no request ever reached a Lambda."
+  description = "The frontend's real origin (scheme + host, e.g. https://dxxxxxxxxxxxxx.cloudfront.net) for CORS. Found 2026-10-12: this was hardcoded to the never-set-up https://archibrief.dev placeholder, so the browser's CORS preflight rejected every request from the real CloudFront origin with a generic 'Failed to fetch' — no request ever reached a Lambda."
 }
 
 variable "additional_cors_origins" {

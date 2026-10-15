@@ -226,6 +226,22 @@ def handler(
             shutil.rmtree(dest_dir, ignore_errors=True)
 
 
+def _log_stage(review_id: str | None, stage: str, **fields: object) -> None:
+    """One structured JSON log line per ingest stage.
+
+    Written with print(flush=True) on purpose: a hard Lambda timeout kills
+    the process without an exception, and CPython block-buffers stdout
+    when it isn't a tty, so unflushed lines never reach CloudWatch
+    (confirmed 2026-10-12 while chasing an Ingest hang). The last line for
+    a review_id shows which stage it was stuck in. Never logs the brief,
+    file contents or archive paths.
+    """
+    print(
+        json.dumps({"lambda": "ingest", "review_id": review_id, "stage": stage, **fields}),
+        flush=True,
+    )
+
+
 def _ingest(
     event: dict,
     workload_brief: str,
@@ -233,27 +249,17 @@ def _ingest(
     guardrails_client: GuardrailsClient | None,
     s3_client: S3Client | None,
 ) -> dict:
-
-    # Temporary stage-tracing (2026-10-12): this handler had zero logging,
-    # so a hard Lambda timeout (process killed, no exception, no traceback)
-    # gave no way to tell which of resolve/extract/parse/guardrails-check
-    # was actually stuck. flush=True is required, not optional — the first
-    # attempt at this tracing (no flush) produced ZERO log output on a
-    # real timeout, confirming CPython block-buffers stdout when it isn't
-    # a tty, and a hard Lambda timeout kills the process before that
-    # buffer ever gets flushed. print() with flush=True goes to CloudWatch
-    # immediately — remove once the real hang is found and fixed; not
-    # meant as permanent instrumentation.
-    print("ingest: resolving archive path", flush=True)
+    review_id = event.get("review_id")
+    _log_stage(review_id, "resolve_archive")
     os.makedirs(dest_dir, exist_ok=True)
     archive_path = _resolve_archive_path(event, dest_dir, s3_client)
-    print(f"ingest: archive resolved to {archive_path}, extracting", flush=True)
+    _log_stage(review_id, "extract")
     try:
         extracted = extract_archive(archive_path, dest_dir)
-        print(f"ingest: extracted {len(extracted)} file(s), parsing HCL", flush=True)
+        _log_stage(review_id, "parse_hcl", file_count=len(extracted))
         parsed = parse_terraform_files(extracted)
-        print("ingest: HCL parsed", flush=True)
     except IngestRejected as exc:
+        _log_stage(review_id, "rejected", reason=exc.reason)
         return {"status": "rejected", "reason": exc.reason}
 
     # Guardrails runs inline here and again before Reason (ADR-0033) — see
@@ -264,9 +270,9 @@ def _ingest(
     guardrails_decisions: list[dict] = []
     client = _resolve_guardrails_client(event, guardrails_client)
     if client is not None:
-        print("ingest: calling bedrock ApplyGuardrail", flush=True)
+        _log_stage(review_id, "guardrails")
         allowed = client.check(workload_brief, source="INPUT")
-        print(f"ingest: ApplyGuardrail returned allowed={allowed}", flush=True)
+        _log_stage(review_id, "guardrails_done", allowed=allowed)
         guardrails_decisions.append({"stage": "ingest", "allowed": allowed})
         if not allowed:
             return {
@@ -292,7 +298,6 @@ def _ingest(
     # reference travels through Step Functions state: a 50 MiB archive can
     # parse to far more than the 256 KiB state limit (Codex F07), and
     # execution history/logs would otherwise retain the user's Terraform.
-    review_id = event.get("review_id")
     report_bucket = event.get("report_bucket")
     if review_id and report_bucket:
         key = f"parsed/{review_id}.json"

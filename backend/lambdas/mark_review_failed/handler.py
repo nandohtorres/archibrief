@@ -31,6 +31,7 @@ FAILURE_CODES: dict[str, str] = {
     "AgentInvocationTimedOut": "timed_out",
     "States.Timeout": "timed_out",
     "ClarificationTimedOut": "clarification_expired",
+    "ClarificationLimitReached": "clarification_limit",
 }
 
 _TERMINAL_FAILURE_STATUSES = {"FAILED", "TIMED_OUT", "ABORTED"}
