@@ -38,15 +38,19 @@ state-changing route sits behind a single pre-shared admin credential
   indexed in S3 Vectors; a deterministic lexical companion index covers
   exact-identifier lookups (CIS/SEC control IDs, etc.).
 - **Frontend**: Next.js app, statically exported and served from S3 +
-  CloudFront. Real submission flow, live per-stage progress tracking
+  CloudFront. A landing page with a one-click public sample review
+  (`GET /demo`; ADR-0047), a real submission flow, live per-stage progress tracking
   (generic macro labels only — internal pipeline stage names are never
   exposed to the client), a real yes/no + multi-select clarification UI
   for human-in-the-loop pauses, three one-click quick-test presets
   (`detailed`/`medium`/`loose` severity), and a "go deeper" per-finding
-  re-analysis action. 29 frontend unit tests (Vitest) and 3 Playwright
-  E2E tests: the guest/demo fixture path, and the admin-gated submit →
-  report → "go deeper" path plus admin-key handling, both against a
-  mocked network (never real AWS).
+  re-analysis action. 33 frontend unit tests (Vitest) and 29 Playwright
+  E2E tests against a mocked network (never real AWS): the fixture path,
+  the admin-gated submit → report → "go deeper" path and admin-key
+  handling, the landing page and sample review, and phone-width (390px)
+  and WCAG AA contrast checks in light and dark. `npm run lighthouse`
+  scores the public build with Lighthouse CI (accessibility ≥ 95 and
+  best practices ≥ 90 enforced).
 - **Security**: Bedrock Guardrails gates every path into the model
   (ingest, and again before reasoning). The model itself has no AWS
   credentials and no tool-calling surface beyond a schema-validated
