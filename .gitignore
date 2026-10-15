@@ -4,6 +4,7 @@
 *.tfstate.*
 *.tfplan
 *.tfvars
+*.tfvars.json
 !*.tfvars.example
 crash.log
 crash.*.log
@@ -52,7 +53,13 @@ playwright-report/
 test-results/
 
 # Secrets / local config
+# Every .env variant (.env.production, .env.test, ...) except committed examples.
 .env
+.env.*
+!.env.example
+# Local deploy-role policy variants (the split policy set, any *.local.json).
+deploy-role-policies-proposed/
+*.local.json
 *.pem
 *.key
 credentials.json
