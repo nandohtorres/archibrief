@@ -50,6 +50,7 @@ from typing import Any
 import boto3
 
 from backend.shared.clients import DynamoDBClient
+from backend.shared.kill_switch import paid_work_allowed
 
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +102,12 @@ def handler(event: dict, _context: object) -> dict:
     task_token = item.get("clarificationTaskToken")
     if item.get("status") != "needs_clarification" or not task_token:
         return _response(409, {"error": "review is not awaiting clarification"})
+
+    # Resuming sends the review straight into paid reasoning, past the state
+    # machine's own kill-switch check (Codex F08). The token is kept, so the
+    # visitor can resubmit once the switch is off.
+    if not paid_work_allowed():
+        return _response(503, {"error": "Reviews are temporarily paused. Try again later."})
 
     sfn = boto3.client("stepfunctions", region_name=os.environ.get("AWS_REGION", "us-east-1"))
     sfn.send_task_success(

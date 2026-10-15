@@ -91,6 +91,7 @@ def _setup(
     )
     monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
     monkeypatch.setattr(handler_module, "S3Client", _FakeS3Client)
+    monkeypatch.setattr(handler_module, "paid_work_allowed", lambda: True)
     monkeypatch.setattr(
         handler_module, "AgentCoreRuntimeClient", _FakeAgentCoreRuntimeClient
     )
@@ -207,3 +208,29 @@ def test_returns_502_when_agent_produces_no_valid_findings(monkeypatch):
     )
     result = handler(_event("r1", "f1"), None)
     assert result["statusCode"] == 502
+
+
+def test_kill_switch_blocks_deeper_before_any_paid_call(monkeypatch):
+    # Regression (Codex F08): deeper review invoked AgentCore directly,
+    # never passing the state machine's kill-switch check.
+    _setup(
+        monkeypatch,
+        review_item={
+            "reviewId": "r1",
+            "reportS3Key": "reports/r1/evidence-ledger.json",
+        },
+        ledger={
+            "workload_brief": "a 3-tier web app on ECS",
+            "findings": [
+                {"finding_id": "f1", "category": "iam", "finding": "original"}
+            ],
+        },
+        agent_response={"status": "complete", "findings": [_VALID_RAW_FINDING]},
+    )
+    monkeypatch.setattr(handler_module, "paid_work_allowed", lambda: False)
+    _FakeAgentCoreRuntimeClient.calls = []
+
+    result = handler(_event("r1", "f1"), None)
+
+    assert result["statusCode"] == 503
+    assert _FakeAgentCoreRuntimeClient.calls == []

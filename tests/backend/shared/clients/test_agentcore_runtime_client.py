@@ -21,11 +21,17 @@ def test_invoke_sends_payload_and_parses_response():
     streaming_response = StreamingBody(io.BytesIO(response_body), len(response_body))
     stubber.add_response(
         "invoke_agent_runtime",
-        {"response": streaming_response, "statusCode": 200, "contentType": "application/json"},
+        {
+            "response": streaming_response,
+            "statusCode": 200,
+            "contentType": "application/json",
+        },
         {
             "agentRuntimeArn": client.agent_runtime_arn,
             "runtimeSessionId": "archibrief-deeper-session-review-r1-finding-f1",
-            "payload": json.dumps({"mode": "deeper", "review_id": "r1"}).encode("utf-8"),
+            "payload": json.dumps({"mode": "deeper", "review_id": "r1"}).encode(
+                "utf-8"
+            ),
         },
     )
     stubber.activate()

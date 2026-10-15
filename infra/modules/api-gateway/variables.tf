@@ -139,3 +139,12 @@ variable "create_upload_zip_path" {
   type        = string
   description = "Deployment package for POST /uploads's Lambda (backend/lambdas/create_upload) — the direct-upload archive_path design (ADR-0045, drafted 2026-10-12)."
 }
+
+variable "kill_switch_parameter_name" {
+  type        = string
+  description = "SSM parameter holding the ADR-0030 kill switch; deeper/clarify Lambdas refuse paid work when it reads \"true\" or can't be read."
+}
+
+variable "kill_switch_parameter_arn" {
+  type = string
+}

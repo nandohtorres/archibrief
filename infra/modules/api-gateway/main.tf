@@ -283,6 +283,12 @@ resource "aws_apigatewayv2_route" "get_review" {
 # state machine's own ARN.
 data "aws_iam_policy_document" "clarify_review_data_access" {
   statement {
+    # ADR-0030 kill switch, checked before any paid work (Codex F08).
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter"]
+    resources = [var.kill_switch_parameter_arn]
+  }
+  statement {
     effect    = "Allow"
     actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
     resources = [var.reviews_table_arn]
@@ -323,7 +329,8 @@ resource "aws_lambda_function" "clarify_review" {
 
   environment {
     variables = {
-      REVIEWS_TABLE_NAME = var.reviews_table_name
+      REVIEWS_TABLE_NAME         = var.reviews_table_name
+      KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
     }
   }
 
@@ -365,6 +372,12 @@ resource "aws_apigatewayv2_route" "post_clarify" {
 # (AgentCoreRuntimeClient), so this is a plain Lambda proxy integration
 # like get_review/clarify_review above, not a StepFunctions-* subtype.
 data "aws_iam_policy_document" "deeper_review_data_access" {
+  statement {
+    # ADR-0030 kill switch, checked before any paid work (Codex F08).
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter"]
+    resources = [var.kill_switch_parameter_arn]
+  }
   statement {
     effect    = "Allow"
     actions   = ["dynamodb:GetItem"]
@@ -422,9 +435,10 @@ resource "aws_lambda_function" "deeper_review" {
 
   environment {
     variables = {
-      REVIEWS_TABLE_NAME  = var.reviews_table_name
-      FINDINGS_TABLE_NAME = var.findings_table_name
-      REPORTS_BUCKET_NAME = var.reports_bucket_name
+      REVIEWS_TABLE_NAME         = var.reviews_table_name
+      FINDINGS_TABLE_NAME        = var.findings_table_name
+      KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
+      REPORTS_BUCKET_NAME        = var.reports_bucket_name
       # Same placeholder-ARN deferral as modules/step-functions-lambda's
       # InvokeAgent task — AgentCore isn't deployed on every environment
       # yet, and an empty string would still let this Lambda deploy

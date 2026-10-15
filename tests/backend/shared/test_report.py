@@ -32,25 +32,41 @@ def _finding(**overrides) -> Finding:
         evidence="evidence text",
         citation=None,
         confidence=0.5,
-        confidence_inputs=ConfidenceInputs(evidence_directness=0.5, source_agreement=0.5, rule_determinism=0.5),
+        confidence_inputs=ConfidenceInputs(
+            evidence_directness=0.5, source_agreement=0.5, rule_determinism=0.5
+        ),
         risk_impact="low",
         recommendation="do nothing",
         framework_mapping=[],
         depth_level=DepthLevel.LIGHTWEIGHT,
     )
     defaults.update(overrides)
-    if defaults["type"] != FindingType.NOT_OBSERVABLE and defaults.get("citation") is None:
+    if (
+        defaults["type"] != FindingType.NOT_OBSERVABLE
+        and defaults.get("citation") is None
+    ):
         defaults["citation"] = _CITATION
     return Finding(**defaults)
 
 
 def test_compute_presentation_matches_fixture_examples():
-    assert compute_presentation(_finding(type=FindingType.DETERMINISTIC_RULE_RESULT, category=FindingCategory.EXPOSURE)) == {
+    assert compute_presentation(
+        _finding(
+            type=FindingType.DETERMINISTIC_RULE_RESULT,
+            category=FindingCategory.EXPOSURE,
+        )
+    ) == {
         "priority": "high",
         "short_label": "High risk",
     }
-    assert compute_presentation(_finding(type=FindingType.FACT)) == {"priority": "confirmed", "short_label": "Confirmed"}
-    assert compute_presentation(_finding(type=FindingType.ASSUMPTION)) == {"priority": "review", "short_label": "Review"}
+    assert compute_presentation(_finding(type=FindingType.FACT)) == {
+        "priority": "confirmed",
+        "short_label": "Confirmed",
+    }
+    assert compute_presentation(_finding(type=FindingType.ASSUMPTION)) == {
+        "priority": "review",
+        "short_label": "Review",
+    }
     assert compute_presentation(_finding(type=FindingType.NOT_OBSERVABLE)) == {
         "priority": "unknown",
         "short_label": "Not observable",
@@ -58,11 +74,21 @@ def test_compute_presentation_matches_fixture_examples():
 
 
 def test_build_review_report_assembles_full_contract_shape():
-    review_item = {"reviewId": "r1", "status": "complete", "completedAt": "2026-10-01T00:00:00Z"}
+    review_item = {
+        "reviewId": "r1",
+        "status": "complete",
+        "completedAt": "2026-10-01T00:00:00Z",
+    }
     ledger = {
         "workload_brief": "a 3-tier app",
         "baseline_answers": [
-            {"field": "x", "label": "X", "outcome": "answered", "value": "y", "policy_version": "v1"}
+            {
+                "field": "x",
+                "label": "X",
+                "outcome": "answered",
+                "value": "y",
+                "policy_version": "v1",
+            }
         ],
         "findings": [_finding().model_dump(mode="json")],
         "generated_at": "2026-10-01T00:05:00Z",

@@ -37,6 +37,7 @@ from typing import Any
 
 from backend.lambdas.validate.handler import validate_findings
 from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
+from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.report import compute_presentation
 
 
@@ -69,6 +70,11 @@ def handler(event: dict, _context: object) -> dict:
     finding_id = path_params.get("findingId")
     if not review_id or not finding_id:
         return _response(400, {"error": "reviewId and findingId path parameters are required"})
+
+    if not paid_work_allowed():
+        return _response(
+            503, {"error": "Deeper analysis is temporarily unavailable. Try again later."}
+        )
 
     reviews_table = DynamoDBClient(table_name=os.environ["REVIEWS_TABLE_NAME"])
     review_item = reviews_table.get_item({"reviewId": review_id})

@@ -34,9 +34,12 @@ def _event(review_id: str | None, body: dict | None) -> dict:
 def _setup(monkeypatch, items: dict):
     monkeypatch.setenv("REVIEWS_TABLE_NAME", "archibrief-dev-reviews")
     monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
+    monkeypatch.setattr(handler_module, "paid_work_allowed", lambda: True)
     _FakeDynamoDBClient.ITEMS = items
     _FakeSfnClient.calls = []
-    monkeypatch.setattr(handler_module.boto3, "client", lambda *a, **kw: _FakeSfnClient())
+    monkeypatch.setattr(
+        handler_module.boto3, "client", lambda *a, **kw: _FakeSfnClient()
+    )
 
 
 def test_resumes_paused_execution_and_clears_token(monkeypatch):
@@ -58,7 +61,10 @@ def test_resumes_paused_execution_and_clears_token(monkeypatch):
         {
             "taskToken": "token-1",
             "output": json.dumps(
-                {"baseline_answers": {"budget_ceiling": "50000"}, "clarification_note": ""}
+                {
+                    "baseline_answers": {"budget_ceiling": "50000"},
+                    "clarification_note": "",
+                }
             ),
         }
     ]
@@ -93,7 +99,9 @@ def test_appends_additional_notes_as_a_clarification_note(monkeypatch):
     assert result["statusCode"] == 200
     [call] = _FakeSfnClient.calls
     output = json.loads(call["output"])
-    assert output["baseline_answers"] == {"regulatory_data_residency": "Yes — GDPR, HIPAA"}
+    assert output["baseline_answers"] == {
+        "regulatory_data_residency": "Yes — GDPR, HIPAA"
+    }
     assert output["clarification_note"] == (
         "\n\nAdditional context provided during clarification: "
         "Also handles EU customer PII in a second region."
@@ -139,3 +147,21 @@ def test_returns_400_for_invalid_json_body(monkeypatch):
     result = handler({"pathParameters": {"reviewId": "r1"}, "body": "{not json"}, None)
 
     assert result["statusCode"] == 400
+
+
+def test_kill_switch_blocks_resume_and_keeps_token(monkeypatch):
+    # Regression (Codex F08): resuming skipped the kill switch and went
+    # straight into paid reasoning.
+    item = {
+        "reviewId": "r1",
+        "status": "needs_clarification",
+        "clarificationTaskToken": "token-1",
+    }
+    _setup(monkeypatch, {"r1": item})
+    monkeypatch.setattr(handler_module, "paid_work_allowed", lambda: False)
+
+    result = handler(_event("r1", {"answers": {"budget_ceiling": "50000"}}), None)
+
+    assert result["statusCode"] == 503
+    assert _FakeSfnClient.calls == []
+    assert _FakeDynamoDBClient.ITEMS["r1"]["clarificationTaskToken"] == "token-1"
