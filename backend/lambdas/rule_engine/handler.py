@@ -5,6 +5,18 @@ exposure, encryption, availability, recovery, observability, cost — the
 v1 scenario list in Work-Project-Spec.md). Every check produces zero or
 more `Finding` objects of type deterministic-rule-result — never a raw
 dict (Work-Project-Coding-Conventions.md "Typed-finding discipline").
+
+Two sources feed it (ADR-0048):
+- Trivy's results for the checks ArchiBrief trusts, produced by the Scan
+  step and passed in as event["scanner"]. When Trivy ran, it owns those
+  concerns and ArchiBrief's own rule for the same concern steps aside.
+- ArchiBrief's own rules, below, for everything Trivy misses (IAM
+  wildcards in any policy form, database ports open to the internet,
+  public bucket policies, ...) and as the fallback when Trivy didn't run.
+
+Resource names reach finding text only through display_name(), which
+restricts them to identifier characters and truncates them (master-list
+#14): rule findings are part of the reasoning model's input.
 """
 
 from __future__ import annotations
@@ -14,6 +26,12 @@ import re
 import uuid
 from collections.abc import Callable, Iterable
 
+from backend.lambdas.rule_engine.hcl_eval import (
+    is_created,
+    policy_statements,
+    resolve,
+    truthy,
+)
 from backend.shared.clients import S3Client
 from backend.shared.models.finding import (
     ConfidenceInputs,
@@ -21,10 +39,23 @@ from backend.shared.models.finding import (
     FindingCategory,
     FindingType,
 )
+from backend.shared.terraform_scope import display_name, module_of, scoped_key
+from backend.shared.trivy_checks import TRIVY_OWNED_CONCERNS, TRUSTED_CHECKS
 
-RULE_VERSION = "rule_engine@2026-09-08"
+RULE_VERSION = "rule_engine@2026-10-15"
 
+ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}
+_OPEN_CIDRS = {"0.0.0.0/0", "::/0"}
+_PUBLIC_ACCESS_SETTINGS = (
+    "block_public_acls",
+    "block_public_policy",
+    "ignore_public_acls",
+    "restrict_public_buckets",
+)
+# Set by run_rules on its working copy of `parsed` when Trivy's results
+# are in use, so a rule can leave Trivy's part of a concern to Trivy.
+_TRIVY_RAN = "__trivy_ran__"
 
 
 def _finding(
@@ -35,12 +66,14 @@ def _finding(
     risk_impact: str,
     recommendation: str,
     framework_mapping: list[str],
+    rule_version: str = RULE_VERSION,
+    finding_type: FindingType = FindingType.DETERMINISTIC_RULE_RESULT,
 ) -> Finding:
     return Finding(
         finding_id=str(uuid.uuid4()),
         review_id=review_id,
         category=category,
-        type=FindingType.DETERMINISTIC_RULE_RESULT,
+        type=finding_type,
         finding=text,
         evidence=evidence,
         citation=None,
@@ -52,72 +85,48 @@ def _finding(
         recommendation=recommendation,
         framework_mapping=framework_mapping,
         depth_level="lightweight",
-        deterministic_rule_version=RULE_VERSION,
+        deterministic_rule_version=rule_version,
     )
 
 
 def _resources(parsed: dict, resource_type: str) -> Iterable[tuple[str, dict]]:
-    return parsed.get("resources", {}).get(resource_type, {}).items()
+    """Resources of a type that Terraform would actually create (trap f01)."""
+    for key, body in parsed.get("resources", {}).get(resource_type, {}).items():
+        if is_created(body, parsed):
+            yield key, body
 
 
-def _bucket_names_referenced_by(companion_resources: Iterable[tuple[str, dict]]) -> set[str]:
-    """Extract which aws_s3_bucket local names a companion resource's `bucket`
-    attribute points at — handles both `aws_s3_bucket.<name>.id` interpolation
-    references and (less idiomatically) a literal bucket name reused directly.
+def _referenced_key(value: object, body: dict, parsed: dict, resource_type: str) -> str | None:
+    """Which resource of `resource_type` an attribute points at, module-scoped.
+
+    Follows locals and variables first (trap f03), then reads
+    `<type>.<name>` out of the reference.
     """
+    resolved = resolve(value, parsed, module_of(body))
+    if not isinstance(resolved, str):
+        return None
+    match = re.search(rf"{re.escape(resource_type)}\.([A-Za-z0-9_-]+)", resolved)
+    if match:
+        return scoped_key(module_of(body), match.group(1))
+    return None
+
+
+def _bucket_keys_referenced_by(companions: Iterable[tuple[str, dict]], parsed: dict) -> set[str]:
+    """Which buckets companion resources (public access block, encryption,
+    versioning) attach to, by reference or by literal bucket name."""
+    buckets = dict(parsed.get("resources", {}).get("aws_s3_bucket", {}))
+    by_literal_name = {
+        body.get("bucket"): key for key, body in buckets.items() if isinstance(body, dict)
+    }
     referenced: set[str] = set()
-    for _, body in companion_resources:
+    for _, body in companions:
         value = body.get("bucket")
-        if not isinstance(value, str):
-            continue
-        match = re.search(r"aws_s3_bucket\.([A-Za-z0-9_-]+)", value)
-        if match:
-            referenced.add(match.group(1))
-        else:
-            referenced.add(value)
+        key = _referenced_key(value, body, parsed, "aws_s3_bucket")
+        if key:
+            referenced.add(key)
+        elif isinstance(value, str) and value in by_literal_name:
+            referenced.add(by_literal_name[value])
     return referenced
-
-
-def rule_s3_public_access_block(parsed: dict, review_id: str) -> list[Finding]:
-    findings = []
-    buckets = dict(_resources(parsed, "aws_s3_bucket"))
-    blocked = _bucket_names_referenced_by(_resources(parsed, "aws_s3_bucket_public_access_block"))
-    for name in buckets:
-        if name not in blocked:
-            findings.append(
-                _finding(
-                    review_id,
-                    FindingCategory.EXPOSURE,
-                    f"S3 bucket '{name}' has no aws_s3_bucket_public_access_block resource",
-                    f'resource "aws_s3_bucket" "{name}" found with no matching public access block',
-                    "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
-                    "Attach aws_s3_bucket_public_access_block with all four settings enabled.",
-                    ["AWS Well-Architected: Security Pillar"],
-                )
-            )
-    return findings
-
-
-def rule_s3_encryption(parsed: dict, review_id: str) -> list[Finding]:
-    findings = []
-    buckets = dict(_resources(parsed, "aws_s3_bucket"))
-    encrypted = _bucket_names_referenced_by(
-        _resources(parsed, "aws_s3_bucket_server_side_encryption_configuration")
-    )
-    for name in buckets:
-        if name not in encrypted:
-            findings.append(
-                _finding(
-                    review_id,
-                    FindingCategory.ENCRYPTION,
-                    f"S3 bucket '{name}' has no server-side encryption configuration",
-                    f'resource "aws_s3_bucket" "{name}" found with no matching SSE configuration',
-                    "Data at rest is unencrypted, violating baseline data-protection expectations.",
-                    "Attach aws_s3_bucket_server_side_encryption_configuration with SSE-KMS or SSE-S3.",
-                    ["AWS Well-Architected: Security Pillar"],
-                )
-            )
-    return findings
 
 
 def _first_block(value: dict | list[dict] | None) -> dict:
@@ -126,17 +135,105 @@ def _first_block(value: dict | list[dict] | None) -> dict:
     return value or {}
 
 
+# --- Concern ownership ------------------------------------------------------
+
+_RULE_CONCERNS: dict[Callable, str] = {}
+
+
+def concern(name: str) -> Callable[[Callable], Callable]:
+    """Tag a rule with the concern it covers, so Trivy can own it (ADR-0048)."""
+
+    def tag(rule: Callable) -> Callable:
+        _RULE_CONCERNS[rule] = name
+        return rule
+
+    return tag
+
+
+# --- S3 ---------------------------------------------------------------------
+
+
+@concern("s3_public_access")
+def rule_s3_public_access_block(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    access_blocks = list(_resources(parsed, "aws_s3_bucket_public_access_block"))
+    with_block = _bucket_keys_referenced_by(access_blocks, parsed)
+    for key, body in access_blocks:
+        # A block that exists but leaves settings off protects nothing (trap t10).
+        disabled = [
+            setting
+            for setting in _PUBLIC_ACCESS_SETTINGS
+            if truthy(body.get(setting, False), parsed, module_of(body)) is not True
+        ]
+        if not disabled:
+            continue
+        bucket = _referenced_key(body.get("bucket"), body, parsed, "aws_s3_bucket") or key
+        name = display_name(bucket)
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.EXPOSURE,
+                f"Public access to S3 bucket '{name}' is not fully blocked",
+                f'resource "aws_s3_bucket_public_access_block" "{display_name(key)}" leaves '
+                f"{', '.join(disabled)} disabled",
+                "A later ACL or bucket-policy change could expose the bucket's contents to the internet.",
+                "Set block_public_acls, block_public_policy, ignore_public_acls and "
+                "restrict_public_buckets to true.",
+                ["AWS Well-Architected: Security Pillar", "SEC08-BP04"],
+            )
+        )
+    for key, _ in _resources(parsed, "aws_s3_bucket"):
+        if key not in with_block:
+            name = display_name(key)
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.EXPOSURE,
+                    f"S3 bucket '{name}' has no aws_s3_bucket_public_access_block resource",
+                    f'resource "aws_s3_bucket" "{name}" found with no matching public access block',
+                    "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
+                    "Attach aws_s3_bucket_public_access_block with all four settings enabled.",
+                    ["AWS Well-Architected: Security Pillar", "SEC08-BP04"],
+                )
+            )
+    return findings
+
+
+@concern("s3_encryption")
+def rule_s3_encryption(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    encrypted = _bucket_keys_referenced_by(
+        _resources(parsed, "aws_s3_bucket_server_side_encryption_configuration"), parsed
+    )
+    for key, _ in _resources(parsed, "aws_s3_bucket"):
+        if key not in encrypted:
+            name = display_name(key)
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.ENCRYPTION,
+                    f"S3 bucket '{name}' has no server-side encryption configuration",
+                    f'resource "aws_s3_bucket" "{name}" found with no matching SSE configuration',
+                    "Data at rest is unencrypted, violating baseline data-protection expectations.",
+                    "Attach aws_s3_bucket_server_side_encryption_configuration with SSE-KMS or SSE-S3.",
+                    ["AWS Well-Architected: Security Pillar", "SEC08-BP02"],
+                )
+            )
+    return findings
+
+
+@concern("s3_versioning")
 def rule_s3_versioning(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    buckets = dict(_resources(parsed, "aws_s3_bucket"))
     enabled_versioning_resources = [
-        (rname, body)
-        for rname, body in _resources(parsed, "aws_s3_bucket_versioning")
+        (key, body)
+        for key, body in _resources(parsed, "aws_s3_bucket_versioning")
         if _first_block(body.get("versioning_configuration")).get("status") == "Enabled"
     ]
-    versioned = _bucket_names_referenced_by(enabled_versioning_resources)
-    for name in buckets:
-        if name not in versioned:
+    versioned = _bucket_keys_referenced_by(enabled_versioning_resources, parsed)
+    for key, _ in _resources(parsed, "aws_s3_bucket"):
+        if key not in versioned:
+            name = display_name(key)
             findings.append(
                 _finding(
                     review_id,
@@ -145,49 +242,184 @@ def rule_s3_versioning(parsed: dict, review_id: str) -> list[Finding]:
                     f'resource "aws_s3_bucket" "{name}" found with no enabled versioning configuration',
                     "Accidental or malicious object deletion/overwrite cannot be recovered.",
                     'Enable aws_s3_bucket_versioning with status = "Enabled".',
-                    ["AWS Well-Architected: Reliability Pillar"],
+                    ["AWS Well-Architected: Reliability Pillar", "REL09-BP01"],
                 )
             )
     return findings
 
 
-def rule_security_group_open_ingress(parsed: dict, review_id: str) -> list[Finding]:
+def _is_public_principal(principal: object) -> bool:
+    if principal == "*":
+        return True
+    if isinstance(principal, dict):
+        aws = principal.get("AWS")
+        return aws == "*" or (isinstance(aws, list) and "*" in aws)
+    return False
+
+
+@concern("s3_public_policy")
+def rule_s3_bucket_policy_public(parsed: dict, review_id: str) -> list[Finding]:
+    """A bucket policy that allows anyone, whatever the bucket is called (trap t11)."""
     findings = []
-    for name, body in _resources(parsed, "aws_security_group"):
-        for rule in (
-            body.get("ingress", [])
-            if isinstance(body.get("ingress"), list)
-            else [body.get("ingress")]
-        ):
-            if not isinstance(rule, dict):
-                continue
-            cidrs = rule.get("cidr_blocks", [])
-            if "0.0.0.0/0" not in cidrs:
-                continue
-            from_port = rule.get("from_port")
-            to_port = rule.get("to_port")
-            if from_port is None or to_port is None:
-                continue
-            opened_sensitive = {p for p in SENSITIVE_PORTS if from_port <= p <= to_port}
-            if opened_sensitive:
-                findings.append(
-                    _finding(
-                        review_id,
-                        FindingCategory.EXPOSURE,
-                        f"Security group '{name}' allows 0.0.0.0/0 ingress to sensitive port(s) {sorted(opened_sensitive)}",
-                        f'resource "aws_security_group" "{name}" ingress cidr_blocks includes 0.0.0.0/0 for ports {from_port}-{to_port}',
-                        "Sensitive management/database ports are reachable from the entire internet.",
-                        "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
-                        ["AWS Well-Architected: Security Pillar", "CIS Controls v8: 4.4"],
-                    )
-                )
+    for key, body in _resources(parsed, "aws_s3_bucket_policy"):
+        statements = policy_statements(body.get("policy"), parsed, module_of(body)) or []
+        public = [
+            s
+            for s in statements
+            if s.get("Effect", "Allow") == "Allow"
+            and _is_public_principal(s.get("Principal"))
+            and not s.get("Condition")
+        ]
+        if not public:
+            continue
+        bucket_key = _referenced_key(body.get("bucket"), body, parsed, "aws_s3_bucket") or key
+        name = display_name(bucket_key)
+        actions = sorted({str(a) for s in public for a in _as_list(s.get("Action"))})
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.EXPOSURE,
+                f"S3 bucket '{name}' has a bucket policy that allows anyone (Principal \"*\")",
+                f'resource "aws_s3_bucket_policy" "{display_name(key)}" allows Principal "*" '
+                f"with no condition for {', '.join(actions)[:120]}",
+                "Anyone on the internet can perform these actions on the bucket's objects.",
+                "Remove the public statement, or restrict it with a condition (for example a "
+                "CloudFront origin access control or a specific account).",
+                ["AWS Well-Architected: Security Pillar", "SEC08-BP04"],
+            )
+        )
     return findings
 
 
+# --- Network ----------------------------------------------------------------
+
+
+def _as_list(value: object) -> list:
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+def _port_range(from_port: object, to_port: object, protocol: object) -> range | None:
+    if str(protocol) in ("-1", "all"):
+        return range(65536)
+    try:
+        start, end = int(from_port), int(to_port)
+    except (TypeError, ValueError):
+        return None
+    if start == 0 and end == 0 and str(protocol) in ("-1", "all"):
+        return range(65536)
+    return range(start, end + 1)
+
+
+def _exposed_ports(ports: range, trivy_ran: bool) -> set[int]:
+    """Sensitive ports in range; SSH/RDP and all-traffic are Trivy's (AWS-0107)."""
+    if trivy_ran and len(ports) == 65536:
+        return set()
+    sensitive = SENSITIVE_PORTS - ADMIN_PORTS if trivy_ran else SENSITIVE_PORTS
+    return {p for p in sensitive if p in ports}
+
+
+def _open_ingress_rules(parsed: dict) -> Iterable[tuple[str, str, set[str], range]]:
+    """Every internet-open ingress rule, whichever resource type declares it.
+
+    Yields (resource_type, key, open cidrs, ports). Covers inline ingress
+    blocks, aws_security_group_rule and aws_vpc_security_group_ingress_rule
+    (traps t07, t08), and IPv6 (trap t09).
+    """
+    for key, body in _resources(parsed, "aws_security_group"):
+        module = module_of(body)
+        for rule in _as_list(body.get("ingress")):
+            if not isinstance(rule, dict):
+                continue
+            cidrs = {
+                str(c)
+                for c in _as_list(resolve(rule.get("cidr_blocks"), parsed, module))
+                + _as_list(resolve(rule.get("ipv6_cidr_blocks"), parsed, module))
+            } & _OPEN_CIDRS
+            ports = _port_range(rule.get("from_port"), rule.get("to_port"), rule.get("protocol"))
+            if cidrs and ports:
+                yield "aws_security_group", key, cidrs, ports
+
+    for key, body in _resources(parsed, "aws_security_group_rule"):
+        if body.get("type") != "ingress":
+            continue
+        module = module_of(body)
+        cidrs = {
+            str(c)
+            for c in _as_list(resolve(body.get("cidr_blocks"), parsed, module))
+            + _as_list(resolve(body.get("ipv6_cidr_blocks"), parsed, module))
+        } & _OPEN_CIDRS
+        ports = _port_range(body.get("from_port"), body.get("to_port"), body.get("protocol"))
+        if cidrs and ports:
+            yield "aws_security_group_rule", key, cidrs, ports
+
+    for key, body in _resources(parsed, "aws_vpc_security_group_ingress_rule"):
+        module = module_of(body)
+        cidrs = {
+            str(resolve(body.get("cidr_ipv4"), parsed, module)),
+            str(resolve(body.get("cidr_ipv6"), parsed, module)),
+        } & _OPEN_CIDRS
+        ports = _port_range(body.get("from_port"), body.get("to_port"), body.get("ip_protocol"))
+        if cidrs and ports:
+            yield "aws_vpc_security_group_ingress_rule", key, cidrs, ports
+
+
+@concern("sg_open_ingress")
+def rule_security_group_open_ingress(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    trivy_ran = bool(parsed.get(_TRIVY_RAN))
+    for resource_type, key, cidrs, ports in _open_ingress_rules(parsed):
+        exposed = _exposed_ports(ports, trivy_ran)
+        if not exposed:
+            continue
+        name = display_name(key)
+        cidr_text = " and ".join(sorted(cidrs))
+        span = "all ports" if len(ports) == 65536 else f"ports {ports.start}-{ports.stop - 1}"
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.EXPOSURE,
+                f"Security group rule '{name}' allows {cidr_text} ingress to sensitive port(s) "
+                f"{sorted(exposed)}",
+                f'resource "{resource_type}" "{name}" allows {cidr_text} for {span}',
+                "Sensitive management/database ports are reachable from the entire internet.",
+                "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
+                ["AWS Well-Architected: Security Pillar", "SEC05-BP02", "CIS Controls v8: 4.4"],
+            )
+        )
+    return findings
+
+
+@concern("subnet_public_ip")
+def rule_public_subnet_auto_assign_ip(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    for key, body in _resources(parsed, "aws_subnet"):
+        if truthy(body.get("map_public_ip_on_launch", False), parsed, module_of(body)):
+            name = display_name(key)
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.EXPOSURE,
+                    f"Subnet '{name}' auto-assigns public IPs on launch",
+                    f'resource "aws_subnet" "{name}" has map_public_ip_on_launch = true',
+                    "Instances launched into this subnet are publicly reachable by default.",
+                    "Set map_public_ip_on_launch = false for subnets not intended to be public-facing.",
+                    ["AWS Well-Architected: Security Pillar", "SEC05-BP01"],
+                )
+            )
+    return findings
+
+
+# --- Encryption, availability, recovery ------------------------------------
+
+
+@concern("ebs_encryption")
 def rule_ebs_encryption(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    for name, body in _resources(parsed, "aws_ebs_volume"):
-        if not body.get("encrypted", False):
+    for key, body in _resources(parsed, "aws_ebs_volume"):
+        if not truthy(body.get("encrypted", False), parsed, module_of(body)):
+            name = display_name(key)
             findings.append(
                 _finding(
                     review_id,
@@ -196,16 +428,19 @@ def rule_ebs_encryption(parsed: dict, review_id: str) -> list[Finding]:
                     f'resource "aws_ebs_volume" "{name}" has encrypted = false or unset',
                     "Data at rest on the volume is unencrypted.",
                     "Set encrypted = true (and kms_key_id if a CMK is required).",
-                    ["AWS Well-Architected: Security Pillar"],
+                    ["AWS Well-Architected: Security Pillar", "SEC08-BP02"],
                 )
             )
     return findings
 
 
+@concern("rds_encryption")
 def rule_rds_encryption(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    for name, body in _resources(parsed, "aws_db_instance"):
-        if not body.get("storage_encrypted", False):
+    for key, body in _resources(parsed, "aws_db_instance"):
+        # Resolved through variable defaults (trap t13).
+        if not truthy(body.get("storage_encrypted", False), parsed, module_of(body)):
+            name = display_name(key)
             findings.append(
                 _finding(
                     review_id,
@@ -214,16 +449,39 @@ def rule_rds_encryption(parsed: dict, review_id: str) -> list[Finding]:
                     f'resource "aws_db_instance" "{name}" has storage_encrypted = false or unset',
                     "Database storage is unencrypted at rest.",
                     "Set storage_encrypted = true; note this cannot be changed after creation.",
-                    ["AWS Well-Architected: Security Pillar"],
+                    ["AWS Well-Architected: Security Pillar", "SEC08-BP02"],
                 )
             )
     return findings
 
 
+@concern("rds_public")
+def rule_rds_publicly_accessible(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    for key, body in _resources(parsed, "aws_db_instance"):
+        if truthy(body.get("publicly_accessible", False), parsed, module_of(body)):
+            name = display_name(key)
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.EXPOSURE,
+                    f"RDS instance '{name}' is publicly accessible",
+                    f'resource "aws_db_instance" "{name}" has publicly_accessible = true',
+                    "The database gets a public endpoint and is one security-group mistake "
+                    "from the internet.",
+                    "Set publicly_accessible = false and reach the database from inside the VPC.",
+                    ["AWS Well-Architected: Security Pillar", "SEC05-BP01"],
+                )
+            )
+    return findings
+
+
+@concern("rds_multi_az")
 def rule_rds_multi_az(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    for name, body in _resources(parsed, "aws_db_instance"):
-        if not body.get("multi_az", False):
+    for key, body in _resources(parsed, "aws_db_instance"):
+        if not truthy(body.get("multi_az", False), parsed, module_of(body)):
+            name = display_name(key)
             findings.append(
                 _finding(
                     review_id,
@@ -238,33 +496,143 @@ def rule_rds_multi_az(parsed: dict, review_id: str) -> list[Finding]:
     return findings
 
 
-def rule_iam_policy_wildcard_action_resource(parsed: dict, review_id: str) -> list[Finding]:
+@concern("dynamodb_pitr")
+def rule_dynamodb_pitr(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    for name, body in _resources(parsed, "aws_iam_policy"):
-        policy = body.get("policy", "")
-        if (
-            isinstance(policy, str)
-            and '"Action": "*"' in policy.replace(" ", "").replace("'", '"')
-            or (isinstance(policy, str) and '"Action":"*"' in policy.replace(" ", ""))
-        ):
+    for key, body in _resources(parsed, "aws_dynamodb_table"):
+        pitr = _first_block(body.get("point_in_time_recovery"))
+        if not truthy(pitr.get("enabled", False), parsed, module_of(body)):
+            name = display_name(key)
             findings.append(
                 _finding(
                     review_id,
-                    FindingCategory.IAM,
-                    f"IAM policy '{name}' grants wildcard Action \"*\"",
-                    f'resource "aws_iam_policy" "{name}" policy document contains Action: "*"',
-                    "Overly broad permissions violate least privilege and widen blast radius on compromise.",
-                    "Scope the policy to the specific actions the role/function actually needs.",
-                    ["AWS Well-Architected: Security Pillar", "CIS Controls v8: 5.4"],
+                    FindingCategory.RECOVERY,
+                    f"DynamoDB table '{name}' does not have point-in-time recovery enabled",
+                    f'resource "aws_dynamodb_table" "{name}" has no enabled point_in_time_recovery block',
+                    "Accidental writes/deletes cannot be recovered to a prior point in time.",
+                    "Set point_in_time_recovery { enabled = true }.",
+                    ["AWS Well-Architected: Reliability Pillar", "REL09-BP01"],
                 )
             )
     return findings
 
 
+# --- IAM --------------------------------------------------------------------
+
+# Every place a Terraform config can carry an IAM permissions policy.
+_POLICY_ATTRIBUTES = (
+    ("aws_iam_policy", "policy"),
+    ("aws_iam_role_policy", "policy"),
+    ("aws_iam_user_policy", "policy"),
+    ("aws_iam_group_policy", "policy"),
+)
+
+
+def _permission_policies(parsed: dict) -> Iterable[tuple[str, str, list[dict]]]:
+    for resource_type, attribute in _POLICY_ATTRIBUTES:
+        for key, body in _resources(parsed, resource_type):
+            statements = policy_statements(body.get(attribute), parsed, module_of(body))
+            if statements:
+                yield resource_type, key, statements
+    for key, body in _resources(parsed, "aws_iam_role"):
+        for inline in _as_list(body.get("inline_policy")):
+            if isinstance(inline, dict):
+                statements = policy_statements(inline.get("policy"), parsed, module_of(body))
+                if statements:
+                    yield "aws_iam_role", key, statements
+
+
+def _wildcard_grants(statements: list[dict]) -> list[str]:
+    """Actions an Allow statement grants as a wildcard on every resource."""
+    grants: list[str] = []
+    for statement in statements:
+        if statement.get("Effect", "Allow") != "Allow":
+            continue
+        if "*" not in {str(r) for r in _as_list(statement.get("Resource"))}:
+            continue
+        for action in _as_list(statement.get("Action")):
+            action = str(action)
+            if action == "*" or action.endswith(":*"):
+                grants.append(action)
+    return sorted(set(grants))
+
+
+@concern("iam_wildcard")
+def rule_iam_policy_wildcard_action_resource(parsed: dict, review_id: str) -> list[Finding]:
+    """Wildcard grants in any policy form: heredoc, jsonencode(), policy
+    documents, variable defaults, inline role policies (traps t01-t05)."""
+    findings = []
+    for resource_type, key, statements in _permission_policies(parsed):
+        grants = _wildcard_grants(statements)
+        if not grants:
+            continue
+        name = display_name(key)
+        if "*" in grants:
+            text = f"IAM policy '{name}' grants wildcard Action \"*\" on all resources (full admin)"
+        else:
+            text = f"IAM policy '{name}' grants wildcard {', '.join(grants)} on all resources"
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.IAM,
+                text,
+                f'resource "{resource_type}" "{name}" allows {", ".join(grants)} on Resource "*"',
+                "Overly broad permissions violate least privilege and widen blast radius on compromise.",
+                "Scope the policy to the specific actions and resource ARNs the role actually needs.",
+                ["AWS Well-Architected: Security Pillar", "SEC03-BP02", "CIS Controls v8: 5.4"],
+            )
+        )
+    return findings
+
+
+_TRUST_CONDITIONS = ("sts:externalid", "aws:multifactorauthpresent", "aws:principalorgid")
+
+
+@concern("iam_trust")
+def rule_iam_role_no_mfa_condition_on_assume(parsed: dict, review_id: str) -> list[Finding]:
+    """AWS-account principals trusted with no condition. Service and
+    federated trusts are fine (trap f02); an unresolvable policy is not
+    flagged, since the rule can't see what it says."""
+    findings = []
+    for key, body in _resources(parsed, "aws_iam_role"):
+        statements = policy_statements(body.get("assume_role_policy"), parsed, module_of(body))
+        if not statements:
+            continue
+        for statement in statements:
+            principal = statement.get("Principal")
+            if statement.get("Effect", "Allow") != "Allow" or not isinstance(principal, dict):
+                continue
+            if "AWS" not in principal:
+                continue
+            condition_keys = json.dumps(statement.get("Condition", {})).lower()
+            if any(k in condition_keys for k in _TRUST_CONDITIONS):
+                continue
+            name = display_name(key)
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.IAM,
+                    f"IAM role '{name}' assume-role policy has no external-id/federation condition",
+                    f'resource "aws_iam_role" "{name}" trusts an AWS principal with no '
+                    "sts:ExternalId, MFA or organization condition",
+                    "Anyone in the trusted account who can call sts:AssumeRole can use this role.",
+                    "Add an sts:ExternalId, aws:MultiFactorAuthPresent or aws:PrincipalOrgID condition.",
+                    ["AWS Well-Architected: Security Pillar", "SEC03-BP02"],
+                )
+            )
+            break
+    return findings
+
+
+# --- Observability and cost -------------------------------------------------
+
+
+@concern("lambda_concurrency")
 def rule_lambda_reserved_concurrency(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    for name, body in _resources(parsed, "aws_lambda_function"):
+    for key, body in _resources(parsed, "aws_lambda_function"):
         if "reserved_concurrent_executions" not in body:
+            name = display_name(key)
             findings.append(
                 _finding(
                     review_id,
@@ -279,9 +647,9 @@ def rule_lambda_reserved_concurrency(parsed: dict, review_id: str) -> list[Findi
     return findings
 
 
+@concern("cloudtrail_present")
 def rule_cloudtrail_present(parsed: dict, review_id: str) -> list[Finding]:
-    trails = dict(_resources(parsed, "aws_cloudtrail"))
-    if trails:
+    if any(True for _ in _resources(parsed, "aws_cloudtrail")):
         return []
     return [
         _finding(
@@ -296,10 +664,12 @@ def rule_cloudtrail_present(parsed: dict, review_id: str) -> list[Finding]:
     ]
 
 
+@concern("cloudtrail_log_validation")
 def rule_cloudtrail_log_validation(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    for name, body in _resources(parsed, "aws_cloudtrail"):
-        if not body.get("enable_log_file_validation", False):
+    for key, body in _resources(parsed, "aws_cloudtrail"):
+        if not truthy(body.get("enable_log_file_validation", False), parsed, module_of(body)):
+            name = display_name(key)
             findings.append(
                 _finding(
                     review_id,
@@ -314,58 +684,18 @@ def rule_cloudtrail_log_validation(parsed: dict, review_id: str) -> list[Finding
     return findings
 
 
-def rule_dynamodb_pitr(parsed: dict, review_id: str) -> list[Finding]:
-    findings = []
-    for name, body in _resources(parsed, "aws_dynamodb_table"):
-        pitr = _first_block(body.get("point_in_time_recovery"))
-        if not pitr.get("enabled"):
-            findings.append(
-                _finding(
-                    review_id,
-                    FindingCategory.RECOVERY,
-                    f"DynamoDB table '{name}' does not have point-in-time recovery enabled",
-                    f'resource "aws_dynamodb_table" "{name}" has no enabled point_in_time_recovery block',
-                    "Accidental writes/deletes cannot be recovered to a prior point in time.",
-                    "Set point_in_time_recovery { enabled = true }.",
-                    ["AWS Well-Architected: Reliability Pillar"],
-                )
-            )
-    return findings
-
-
-def rule_iam_role_no_mfa_condition_on_assume(parsed: dict, review_id: str) -> list[Finding]:
-    findings = []
-    for name, body in _resources(parsed, "aws_iam_role"):
-        policy = body.get("assume_role_policy", "")
-        if (
-            isinstance(policy, str)
-            and '"sts:ExternalId"' not in policy
-            and "saml" not in policy.lower()
-            and "federated" not in policy.lower()
-            and '"Service"' not in policy.replace(" ", "")
-        ):
-            findings.append(
-                _finding(
-                    review_id,
-                    FindingCategory.IAM,
-                    f"IAM role '{name}' assume-role policy has no external-id/federation condition",
-                    f'resource "aws_iam_role" "{name}" assume_role_policy lacks an sts:ExternalId condition for non-service principals',
-                    "A non-AWS-service trust relationship without a condition widens who can assume this role.",
-                    "Add an sts:ExternalId condition or restrict the principal further.",
-                    ["AWS Well-Architected: Security Pillar"],
-                )
-            )
-    return findings
-
-
+@concern("lambda_secret_env")
 def rule_lambda_no_vpc_for_sensitive_env(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    for name, body in _resources(parsed, "aws_lambda_function"):
+    for key, body in _resources(parsed, "aws_lambda_function"):
         env_vars = _first_block(body.get("environment")).get("variables", {})
+        if not isinstance(env_vars, dict):
+            continue
         has_secret_like_env = any(
-            key.lower().endswith(("_key", "_secret", "_token", "_password")) for key in env_vars
+            k.lower().endswith(("_key", "_secret", "_token", "_password")) for k in env_vars
         )
         if has_secret_like_env and "vpc_config" not in body:
+            name = display_name(key)
             findings.append(
                 _finding(
                     review_id,
@@ -380,8 +710,9 @@ def rule_lambda_no_vpc_for_sensitive_env(parsed: dict, review_id: str) -> list[F
     return findings
 
 
+@concern("apigw_throttling")
 def rule_api_gateway_no_throttling(parsed: dict, review_id: str) -> list[Finding]:
-    stages = dict(_resources(parsed, "aws_api_gateway_stage"))
+    stages = list(_resources(parsed, "aws_api_gateway_stage"))
     settings = list(_resources(parsed, "aws_api_gateway_method_settings"))
     if stages and not settings:
         return [
@@ -398,31 +729,15 @@ def rule_api_gateway_no_throttling(parsed: dict, review_id: str) -> list[Finding
     return []
 
 
-def rule_public_subnet_auto_assign_ip(parsed: dict, review_id: str) -> list[Finding]:
-    findings = []
-    for name, body in _resources(parsed, "aws_subnet"):
-        if body.get("map_public_ip_on_launch", False):
-            findings.append(
-                _finding(
-                    review_id,
-                    FindingCategory.EXPOSURE,
-                    f"Subnet '{name}' auto-assigns public IPs on launch",
-                    f'resource "aws_subnet" "{name}" has map_public_ip_on_launch = true',
-                    "Instances launched into this subnet are publicly reachable by default.",
-                    "Set map_public_ip_on_launch = false for subnets not intended to be public-facing.",
-                    ["AWS Well-Architected: Security Pillar"],
-                )
-            )
-    return findings
-
-
 ALL_RULES: list[Callable[[dict, str], list[Finding]]] = [
     rule_s3_public_access_block,
     rule_s3_encryption,
     rule_s3_versioning,
+    rule_s3_bucket_policy_public,
     rule_security_group_open_ingress,
     rule_ebs_encryption,
     rule_rds_encryption,
+    rule_rds_publicly_accessible,
     rule_rds_multi_az,
     rule_iam_policy_wildcard_action_resource,
     rule_lambda_reserved_concurrency,
@@ -436,10 +751,95 @@ ALL_RULES: list[Callable[[dict, str], list[Finding]]] = [
 ]
 
 
-def run_rules(parsed: dict, review_id: str) -> list[Finding]:
+# --- Trivy results ----------------------------------------------------------
+
+_SAFE_PATH = re.compile(r"[^A-Za-z0-9_./-]")
+
+
+def _safe_file(path: object) -> str:
+    return _SAFE_PATH.sub("", str(path))[:120]
+
+
+def _subject_key(result: dict, parsed: dict) -> str:
+    """The resource a Trivy result is really about. A public access block
+    result is reported against its bucket (trap t10)."""
+    key = result["resource_key"]
+    if result["resource_type"] != "aws_s3_bucket_public_access_block":
+        return key
+    body = parsed.get("resources", {}).get("aws_s3_bucket_public_access_block", {}).get(key)
+    if isinstance(body, dict):
+        return _referenced_key(body.get("bucket"), body, parsed, "aws_s3_bucket") or key
+    return key
+
+
+def scanner_findings(scanner: dict, parsed: dict, review_id: str) -> list[Finding]:
+    """One finding per (concern, resource) from Trivy's trusted results."""
+    version = f"{RULE_VERSION}+trivy@{scanner.get('version', 'unknown')}"
+    grouped: dict[tuple[str, str], list[dict]] = {}
+    for result in scanner.get("results", []):
+        check = TRUSTED_CHECKS.get(result.get("check_id", ""))
+        if check is None:
+            continue
+        grouped.setdefault((check.concern, _subject_key(result, parsed)), []).append(result)
+
+    findings = []
+    for (_, key), results in grouped.items():
+        checks = [TRUSTED_CHECKS[r["check_id"]] for r in results]
+        first = results[0]
+        name = display_name(key)
+        ids = sorted({r["check_id"] for r in results})
+        lines = sorted({r["start_line"] for r in results if r.get("start_line")})
+        location = _safe_file(first.get("file", ""))
+        if lines:
+            location += f" line {lines[0]}" if len(lines) == 1 else f" lines {lines[0]}-{lines[-1]}"
+        details = "; ".join(dict.fromkeys(c.detail for c in checks))
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory(checks[0].category),
+                checks[0].title.format(name=name),
+                f'resource "{first["resource_type"]}" "{display_name(first["resource_key"])}" '
+                f"at {location}: {details} (Trivy {', '.join(ids)})",
+                checks[0].risk,
+                checks[0].recommendation,
+                [*checks[0].framework, *(f"Trivy {i}" for i in ids)],
+                rule_version=version,
+            )
+        )
+    return findings
+
+
+def _scanner_unavailable(review_id: str) -> Finding:
+    return _finding(
+        review_id,
+        FindingCategory.OBSERVABILITY,
+        "The Trivy scanner didn't run for this review; only ArchiBrief's own rules were applied",
+        "The scan step reported the scanner as unavailable",
+        "Issues that only Trivy detects may be missing from this report.",
+        "Re-run the review later for a full scan.",
+        [],
+        finding_type=FindingType.NOT_OBSERVABLE,
+    )
+
+
+def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list[Finding]:
+    """ArchiBrief's rules, plus Trivy's trusted results when the Scan step ran.
+
+    scanner=None means no scan step was involved (unit tests, local runs);
+    every ArchiBrief rule runs. A scanner that reported "unavailable" also
+    falls back to every rule, and the report says so.
+    """
+    trivy_ran = bool(scanner) and scanner.get("status") == "ok"
+    working = {**parsed, _TRIVY_RAN: trivy_ran}
     findings: list[Finding] = []
     for rule in ALL_RULES:
-        findings.extend(rule(parsed, review_id))
+        if trivy_ran and _RULE_CONCERNS.get(rule) in TRIVY_OWNED_CONCERNS:
+            continue
+        findings.extend(rule(working, review_id))
+    if trivy_ran:
+        findings.extend(scanner_findings(scanner, working, review_id))
+    elif scanner is not None:
+        findings.append(_scanner_unavailable(review_id))
     return findings
 
 
@@ -455,7 +855,7 @@ def load_parsed(event: dict) -> dict:
 def handler(event, context):
     parsed = load_parsed(event)
     review_id = event["review_id"]
-    findings = run_rules(parsed, review_id)
+    findings = run_rules(parsed, review_id, scanner=event.get("scanner"))
     return {
         "status": "complete",
         "rule_version": RULE_VERSION,

@@ -16,15 +16,23 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import tarfile
 import tempfile
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import hcl2
 from hcl2.utils import SerializationOptions
 
+from backend.shared.archive import (  # noqa: F401  (re-exported for callers/tests)
+    ALLOWED_SUFFIXES,
+    MAX_ARCHIVE_MEMBERS,
+    MAX_MEMBER_BYTES,
+    MAX_UNCOMPRESSED_BYTES,
+    IngestRejected,
+    extract_archive,
+)
 from backend.shared.clients import GuardrailsClient, S3Client
+from backend.shared.terraform_scope import MODULE_FIELD, scoped_key
 
 # with_comments=False (2026-10-01 fix): hcl2's SerializationOptions
 # defaults with_comments to True, which attaches a `__comments__` key
@@ -42,78 +50,40 @@ from backend.shared.clients import GuardrailsClient, S3Client
 # into application data.
 _SERIALIZATION_OPTIONS = SerializationOptions(strip_string_quotes=True, with_comments=False)
 
-MAX_ARCHIVE_MEMBERS = 500
-MAX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
-MAX_MEMBER_BYTES = 5 * 1024 * 1024
-ALLOWED_SUFFIXES = {".tf", ".tfvars", ".hcl"}
-
-
-class IngestRejected(Exception):
-    def __init__(self, reason: str) -> None:
-        self.reason = reason
-        super().__init__(reason)
-
 
 @dataclass
 class ParsedTerraform:
+    # type -> key -> body. Keys are module-scoped (backend/shared/
+    # terraform_scope.py): bare name in the root module, "<module>/<name>"
+    # in a subdirectory, with the module recorded in the body itself.
     resources: dict[str, dict[str, dict]] = field(default_factory=dict)
     variables: dict[str, dict] = field(default_factory=dict)
     files_parsed: list[str] = field(default_factory=list)
     not_observable: list[str] = field(default_factory=list)
+    # Data sources (e.g. aws_iam_policy_document) and locals, scoped the
+    # same way, so rules can resolve references like
+    # data.aws_iam_policy_document.x.json or local.bucket_id (traps t02,
+    # f03) instead of treating them as opaque strings.
+    data: dict[str, dict[str, dict]] = field(default_factory=dict)
+    locals: dict[str, object] = field(default_factory=dict)
 
 
-def _reject_unsafe_member(member: tarfile.TarInfo) -> None:
-    name = member.name
-    if name.startswith("/") or ".." in PurePosixPath(name).parts:
-        raise IngestRejected(f"path traversal in archive member: {name}")
-    if member.issym() or member.islnk():
-        raise IngestRejected(f"symlink/hardlink not allowed: {name}")
-    if member.isdev():
-        raise IngestRejected(f"device file not allowed: {name}")
-    if member.size > MAX_MEMBER_BYTES:
-        raise IngestRejected(f"archive member too large: {name}")
+def _module_for(path: str, root: str) -> str:
+    relative = os.path.relpath(os.path.dirname(os.path.abspath(path)), root)
+    return "" if relative == "." else PurePosixPath(*Path(relative).parts).as_posix()
 
 
-def extract_archive(archive_path: str, dest_dir: str) -> list[str]:
-    """Extract a submitted Terraform archive, statically, with no code execution.
-
-    Rejects path traversal, symlink escapes, archive bombs, oversized
-    members, and non-text file types outside the allowlist.
-    """
-    extracted: list[str] = []
-    total_uncompressed = 0
-
-    with tarfile.open(archive_path, mode="r:*") as archive:
-        # Iterate rather than getmembers(): limits are enforced as each
-        # header is read, so an archive with a huge member count is
-        # rejected at member 501 instead of after scanning every header.
-        members: list[tarfile.TarInfo] = []
-        for member in archive:
-            members.append(member)
-            if len(members) > MAX_ARCHIVE_MEMBERS:
-                raise IngestRejected("archive contains too many members")
-            _reject_unsafe_member(member)
-            total_uncompressed += max(member.size, 0)
-            if total_uncompressed > MAX_UNCOMPRESSED_BYTES:
-                raise IngestRejected("archive exceeds uncompressed size limit")
-
-        for member in members:
-            if not member.isfile():
-                continue
-            suffix = PurePosixPath(member.name).suffix
-            if suffix not in ALLOWED_SUFFIXES:
-                continue
-            archive.extract(member, path=dest_dir, filter="data")
-            extracted.append(os.path.join(dest_dir, member.name))
-
-    if not extracted:
-        raise IngestRejected("archive contained no .tf/.tfvars/.hcl files")
-    return extracted
+def _scoped_body(body: object, module: str) -> object:
+    if module and isinstance(body, dict):
+        return {**body, MODULE_FIELD: module}
+    return body
 
 
 def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
     """Parse each file statically via hcl2 — no terraform binary involved."""
     parsed = ParsedTerraform()
+    directories = [os.path.dirname(os.path.abspath(p)) for p in file_paths]
+    root = os.path.commonpath(directories) if directories else ""
 
     for path in file_paths:
         with open(path, encoding="utf-8", errors="strict") as fh:
@@ -124,16 +94,31 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
             except Exception as exc:  # hcl2 raises plain Exception/LarkError on bad syntax
                 raise IngestRejected(f"failed to parse {path}: {exc}") from exc
 
+        module = _module_for(path, root)
+
         for resource_block in document.get("resource", []):
             for resource_type, named in resource_block.items():
                 for name, body in named.items():
-                    parsed.resources.setdefault(resource_type, {})[name] = body
+                    key = scoped_key(module, name)
+                    parsed.resources.setdefault(resource_type, {})[key] = _scoped_body(body, module)
                     if _references_remote_module(body):
-                        parsed.not_observable.append(f"{resource_type}.{name}")
+                        parsed.not_observable.append(f"{resource_type}.{key}")
+
+        for data_block in document.get("data", []):
+            for data_type, named in data_block.items():
+                for name, body in named.items():
+                    parsed.data.setdefault(data_type, {})[scoped_key(module, name)] = _scoped_body(
+                        body, module
+                    )
+
+        for locals_block in document.get("locals", []):
+            for name, value in locals_block.items():
+                if name != "__is_block__":
+                    parsed.locals[scoped_key(module, name)] = value
 
         for variable_block in document.get("variable", []):
             for name, body in variable_block.items():
-                parsed.variables[name] = body
+                parsed.variables[scoped_key(module, name)] = body
 
         parsed.files_parsed.append(path)
 
@@ -284,6 +269,8 @@ def _ingest(
     parsed_payload = {
         "resources": parsed.resources,
         "variables": parsed.variables,
+        "data": parsed.data,
+        "locals": parsed.locals,
         # Paths relative to the archive root; the temp dir is deleted after.
         "files_parsed": [os.path.relpath(p, dest_dir) for p in parsed.files_parsed],
         "not_observable": parsed.not_observable,
