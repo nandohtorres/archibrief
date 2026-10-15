@@ -1,6 +1,6 @@
 import type { FindingPriority, ReportFinding } from "./contracts";
 
-export type AppScreen = "submission" | "preflight" | "progress" | "report" | "failure";
+export type AppScreen = "submission" | "preflight" | "progress" | "clarify" | "report" | "failure";
 export type FindingFilter = "all" | FindingPriority;
 export type FindingSort = "priority" | "confidence" | "title";
 

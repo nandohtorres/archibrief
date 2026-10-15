@@ -16,8 +16,8 @@ export function FailurePanel({ message, onRetry, onUseFixture }: FailurePanelPro
       <div className="state-detail">
         <strong>Nothing was silently treated as complete.</strong>
         <span>
-          The current deployed pipeline does not yet have AgentCore or status retrieval. A failed
-          run must remain visibly failed rather than returning a partial report as authoritative.
+          ArchiBrief never returns a partial or simulated report as authoritative — a failed or
+          incomplete run stays visibly failed until real evidence says otherwise.
         </span>
       </div>
       <div className="form-actions centered">

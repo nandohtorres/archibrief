@@ -23,6 +23,7 @@ import { ReportQuestions } from "./report-questions";
 
 interface ReportWorkspaceProps {
   report: ReviewReport;
+  adminKey: string;
   onNewReview: () => void;
 }
 
@@ -30,11 +31,12 @@ const DEFAULT_DETAIL_PANE_WIDTH = 75;
 const MIN_DETAIL_PANE_WIDTH = 45;
 const MAX_DETAIL_PANE_WIDTH = 85;
 
-export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
+export function ReportWorkspace({ report, adminKey, onNewReview }: ReportWorkspaceProps) {
   const [view, setView] = useState<"technical" | "stakeholder">("technical");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FindingFilter>("all");
   const [sort, setSort] = useState<FindingSort>("priority");
+  const [findings, setFindings] = useState<ReportFinding[]>(report.findings);
   const [selectedId, setSelectedId] = useState(report.findings[0]?.record.finding_id ?? "");
   const [status, setStatus] = useState("");
   const [questionSeed, setQuestionSeed] = useState("");
@@ -42,17 +44,13 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const visibleFindings = useMemo(
-    () => filterAndSortFindings(report.findings, query, filter, sort),
-    [report.findings, query, filter, sort],
+    () => filterAndSortFindings(findings, query, filter, sort),
+    [findings, query, filter, sort],
   );
   const selected =
     visibleFindings.find(({ record }) => record.finding_id === selectedId) ?? visibleFindings[0];
-  const highCount = report.findings.filter(
-    ({ presentation }) => presentation.priority === "high",
-  ).length;
-  const assumptionCount = report.findings.filter(
-    ({ record }) => record.type === "assumption",
-  ).length;
+  const highCount = findings.filter(({ presentation }) => presentation.priority === "high").length;
+  const assumptionCount = findings.filter(({ record }) => record.type === "assumption").length;
 
   function selectFinding(findingId: string) {
     setDetailPaneWidth(DEFAULT_DETAIL_PANE_WIDTH);
@@ -135,15 +133,28 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
       return;
     }
     try {
-      await requestDeeperFinding(report.review_id, findingId);
-      setStatus(`A deeper versioned child was requested for ${formatFindingId(findingId)}.`);
+      const result = (await requestDeeperFinding(report.review_id, findingId, adminKey)) as {
+        findings: ReportFinding[];
+      };
+      const newFindings = result.findings ?? [];
+      if (newFindings.length === 0) {
+        setStatus(`The deeper request for ${formatFindingId(findingId)} returned no new findings.`);
+        return;
+      }
+      setFindings((current) => [...current, ...newFindings]);
+      selectFinding(newFindings[0].record.finding_id);
+      setStatus(
+        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} added below ${formatFindingId(findingId)}.`,
+      );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "The deeper-analysis request failed.");
     }
   }
 
   function exportLedger() {
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ ...report, findings }, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -192,7 +203,7 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
         <div className="report-metrics" aria-label="Report summary">
           <Metric
             label="Total findings"
-            value={String(report.findings.length)}
+            value={String(findings.length)}
             detail="Across the complete fixture ledger"
           />
           <Metric
@@ -266,7 +277,7 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
                     aria-pressed={filter === value}
                     onClick={() => setFilter(value)}
                   >
-                    {value === "all" ? `All (${report.findings.length})` : value}
+                    {value === "all" ? `All (${findings.length})` : value}
                   </button>
                 ),
               )}
@@ -406,7 +417,7 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
 
       <div className="report-content">
         <ReportQuestions
-          findings={report.findings}
+          findings={findings}
           selectedFindingId={selectedId}
           questionSeed={questionSeed}
           onQuestionSeedConsumed={() => setQuestionSeed("")}

@@ -3,18 +3,31 @@
 import { useEffect, useState } from "react";
 import { AppHeader } from "./app-header";
 import { FailurePanel } from "./state-panel";
+import { ClarifyStep } from "./clarify-step";
+import { LiveProgressStep } from "./live-progress-step";
 import { PreflightStep } from "./preflight-step";
 import { ProgressStep } from "./progress-step";
 import { ReportWorkspace } from "./report-workspace";
 import { SubmissionStep, type SubmissionValues } from "./submission-step";
-import { getApiBaseUrl, submitReview } from "@/lib/api";
+import {
+  fetchReview,
+  getApiBaseUrl,
+  requestUpload,
+  submitClarification,
+  submitReview,
+  uploadArchiveToS3,
+} from "@/lib/api";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
-import type { PreflightField, ReviewReport } from "@/lib/contracts";
+import type { PreflightField, ReviewReport, ReviewStatusPointer } from "@/lib/contracts";
 import { makeIdempotencyKey, type AppScreen } from "@/lib/workflow";
 
 type ThemeChoice = "system" | "light" | "dark";
 
-const emptySubmission: SubmissionValues = { terraformRepoRef: "", workloadBrief: "" };
+const emptySubmission: SubmissionValues = {
+  terraformRepoRef: "",
+  workloadBrief: "",
+  archiveFile: null,
+};
 
 export function ArchiBriefApp() {
   const [screen, setScreen] = useState<AppScreen>("submission");
@@ -24,6 +37,13 @@ export function ArchiBriefApp() {
   const [submission, setSubmission] = useState(emptySubmission);
   const [preflightFields, setPreflightFields] = useState(fixturePreflightFields);
   const [progressIndex, setProgressIndex] = useState(0);
+  const [progressMode, setProgressMode] = useState<"fixture" | "live">("fixture");
+  const [liveReviewId, setLiveReviewId] = useState<string | null>(null);
+  const [liveCurrentStage, setLiveCurrentStage] = useState<string | null>(null);
+  const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
+  const [clarifyFields, setClarifyFields] = useState<string[]>([]);
+  const [clarifySubmitting, setClarifySubmitting] = useState(false);
+  const [clarifyError, setClarifyError] = useState<string | null>(null);
   const [report, setReport] = useState<ReviewReport>(fixtureReport);
   const [failureMessage, setFailureMessage] = useState(
     "The fixture failure state shows how ArchiBrief responds when a pipeline stage cannot complete.",
@@ -49,14 +69,88 @@ export function ArchiBriefApp() {
   }
 
   useEffect(() => {
-    if (screen !== "progress") return;
+    if (screen !== "progress" || progressMode !== "fixture") return;
     if (progressIndex >= fixtureProgressStages.length) {
       setScreen("report");
       return;
     }
     const timer = window.setTimeout(() => setProgressIndex((current) => current + 1), 650);
     return () => window.clearTimeout(timer);
-  }, [progressIndex, screen]);
+  }, [progressIndex, progressMode, screen]);
+
+  // Real polling of GET /reviews/{reviewId} — added 2026-10-12. Before
+  // this, handleSubmission showed a hardcoded "failure" message after
+  // ANY successful submission (stale from before get_review existed; see
+  // Work-Project-Issues-Log.md). The pipeline's Fail states (kill switch,
+  // Ingest rejection, AgentCore timeout) never update the reviews-table
+  // item, so a genuinely failed run stays "pending" forever server-side —
+  // that's why this has a hard timeout rather than polling indefinitely,
+  // and why the timeout message says "may have failed," not "failed":
+  // this client cannot distinguish a slow run from a dead one.
+  useEffect(() => {
+    if (screen !== "progress" || progressMode !== "live" || !liveReviewId) return;
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 40;
+    const intervalMs = 3000;
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const result = await fetchReview(liveReviewId, adminKey);
+        if (cancelled) return;
+        setLiveCurrentStage((result as ReviewStatusPointer).currentStage ?? null);
+        if (result.status === "complete") {
+          setReport(result as ReviewReport);
+          setScreen("report");
+          return;
+        }
+        // Found 2026-10-12, live-tested: before this, "needs_clarification"
+        // was treated identically to "still pending" — the poll loop just
+        // kept counting toward the same 120s timeout, so a review that was
+        // genuinely paused waiting on the user (Step Functions can wait up
+        // to 7 days at StoreClarificationToken) looked indistinguishable
+        // from a dead one. Exit the poll loop immediately instead and show
+        // the real question(s).
+        if (result.status === "needs_clarification") {
+          const pointer = result as ReviewStatusPointer;
+          setClarifyFields(pointer.needsClarification ?? []);
+          setClarifyError(null);
+          setScreen("clarify");
+          return;
+        }
+        if (attempts >= maxAttempts) {
+          setFailureMessage(
+            `Review ${liveReviewId} has not reached "complete" after ${Math.round(
+              (attempts * intervalMs) / 1000,
+            )}s (last known status: "${result.status}"). The pipeline's failure states don't update this review's record, so this client cannot tell a slow run from a dead one — check the Step Functions console for this execution, or CloudWatch Logs for the Lambdas involved. Nothing was treated as complete.`,
+          );
+          setScreen("failure");
+          return;
+        }
+        window.setTimeout(poll, intervalMs);
+      } catch (error) {
+        if (cancelled) return;
+        setFailureMessage(
+          error instanceof Error
+            ? `Could not retrieve review status: ${error.message}`
+            : "Could not retrieve review status.",
+        );
+        setScreen("failure");
+      }
+    };
+    setLiveElapsedSeconds(0);
+    const elapsedTimer = window.setInterval(
+      () => setLiveElapsedSeconds((seconds) => seconds + 1),
+      1000,
+    );
+    const firstPoll = window.setTimeout(poll, 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(elapsedTimer);
+      window.clearTimeout(firstPoll);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, progressMode, liveReviewId]);
 
   async function handleSubmission(values: SubmissionValues) {
     setSubmission(values);
@@ -66,20 +160,47 @@ export function ArchiBriefApp() {
       return;
     }
 
+    if (!values.archiveFile) {
+      // SubmissionStep's own validation already blocks this in the UI —
+      // guarded again here since handleSubmission is the actual contract
+      // boundary (archive_s3_key is hard-required by the state machine).
+      setFailureMessage("A Terraform archive is required to submit to the deployed API.");
+      setScreen("failure");
+      return;
+    }
+
     setSubmitting(true);
     try {
+      // review_id doubles as the idempotency token server-side (no
+      // separate idempotencyKey field exists — see lib/contracts.ts,
+      // Work-Project-Issues-Log.md 2026-10-01). retrieval_query has no
+      // separate input in this step, so it defaults to the workload
+      // brief text itself, the same fallback deeper_review's handler
+      // uses when no narrower technical query is available.
+      const reviewId = makeIdempotencyKey();
+
+      // ADR-0045 (2026-10-12): the archive goes straight to S3 via a
+      // presigned POST, tied to reviewId before the review itself exists
+      // anywhere server-side — only the resulting key is sent to
+      // POST /reviews, never the file bytes.
+      const upload = await requestUpload({ review_id: reviewId }, adminKey);
+      await uploadArchiveToS3(upload, values.archiveFile);
+
       const response = await submitReview(
         {
-          terraformRepoRef: values.terraformRepoRef,
-          workloadBrief: values.workloadBrief,
-          idempotencyKey: makeIdempotencyKey(),
+          review_id: reviewId,
+          archive_s3_key: upload.archiveKey,
+          terraform_repo_ref: values.terraformRepoRef,
+          workload_brief: values.workloadBrief,
+          retrieval_query: values.workloadBrief,
+          baseline_answers: {},
         },
         adminKey,
       );
-      setFailureMessage(
-        `Review ${response.reviewId} was accepted with status “${response.status}”, but GET /reviews/{reviewId} is not deployed, so this client cannot follow or retrieve the run yet.`,
-      );
-      setScreen("failure");
+      setLiveReviewId(response.reviewId);
+      setLiveCurrentStage(null);
+      setProgressMode("live");
+      setScreen("progress");
     } catch (error) {
       setFailureMessage(
         error instanceof Error
@@ -89,6 +210,31 @@ export function ArchiBriefApp() {
       setScreen("failure");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleClarifySubmit(answers: Record<string, string>, additionalNotes: string) {
+    if (!liveReviewId) return;
+    setClarifySubmitting(true);
+    setClarifyError(null);
+    try {
+      await submitClarification(
+        liveReviewId,
+        { answers, additional_notes: additionalNotes || undefined },
+        adminKey,
+      );
+      // Resuming via SendTaskSuccess happens server-side (clarify_review
+      // Lambda); re-entering "progress" restarts the same live-polling
+      // effect from a fresh attempt count, same as the original submission.
+      setScreen("progress");
+    } catch (error) {
+      setClarifyError(
+        error instanceof Error
+          ? error.message
+          : "Could not submit the clarification answer.",
+      );
+    } finally {
+      setClarifySubmitting(false);
     }
   }
 
@@ -104,11 +250,15 @@ export function ArchiBriefApp() {
       ),
     });
     setProgressIndex(0);
+    setProgressMode("fixture");
     setScreen("progress");
   }
 
   function preview(nextScreen: AppScreen) {
-    if (nextScreen === "progress") setProgressIndex(2);
+    if (nextScreen === "progress") {
+      setProgressMode("fixture");
+      setProgressIndex(2);
+    }
     if (nextScreen === "failure") {
       setFailureMessage(
         "The review stopped before finalization because the AgentCore reasoning runtime is not deployed. The incomplete result was not published as an evidence ledger.",
@@ -144,15 +294,37 @@ export function ArchiBriefApp() {
             onContinue={handlePreflightComplete}
           />
         )}
-        {screen === "progress" && (
+        {screen === "progress" && progressMode === "live" && liveReviewId && (
+          <LiveProgressStep
+            reviewId={liveReviewId}
+            currentStage={liveCurrentStage}
+            elapsedSeconds={liveElapsedSeconds}
+            onCancel={() => setScreen("submission")}
+          />
+        )}
+        {screen === "progress" && progressMode === "fixture" && (
           <ProgressStep
             activeIndex={Math.min(progressIndex, fixtureProgressStages.length - 1)}
             stages={fixtureProgressStages}
             onSkip={() => setScreen("report")}
           />
         )}
+        {screen === "clarify" && liveReviewId && (
+          <ClarifyStep
+            reviewId={liveReviewId}
+            fields={clarifyFields}
+            submitting={clarifySubmitting}
+            error={clarifyError}
+            onSubmit={handleClarifySubmit}
+            onCancel={() => setScreen("submission")}
+          />
+        )}
         {screen === "report" && (
-          <ReportWorkspace report={report} onNewReview={() => setScreen("submission")} />
+          <ReportWorkspace
+            report={report}
+            adminKey={adminKey}
+            onNewReview={() => setScreen("submission")}
+          />
         )}
         {screen === "failure" && (
           <FailurePanel
