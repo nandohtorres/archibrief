@@ -1,0 +1,621 @@
+{
+  "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+  "owner_id": "admin",
+  "status": "complete",
+  "terraform_repo_ref": "github.com/RhinoSecurityLabs/cloudgoat@63c65bd",
+  "created_at": "2026-10-15T22:04:14.163696+00:00",
+  "cost_estimate_tier": "medium",
+  "baseline_answers": [
+    {
+      "field": "regulatory_data_residency",
+      "label": "Regulatory and data residency",
+      "outcome": "answered",
+      "value": "PCI-DSS applies to the cardholder data; US customers only.",
+      "policy_version": "preflight_defaults@2026-09-08"
+    },
+    {
+      "field": "expected_traffic_scale",
+      "label": "Traffic and scale",
+      "outcome": "answered",
+      "value": "moderate, single-region",
+      "policy_version": "preflight_defaults@2026-09-08"
+    },
+    {
+      "field": "availability_criticality",
+      "label": "Availability target",
+      "outcome": "answered",
+      "value": "customer-facing, 99.9% target",
+      "policy_version": "preflight_defaults@2026-09-08"
+    }
+  ],
+  "findings": [
+    {
+      "record": {
+        "finding_id": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "encryption",
+        "type": "deterministic-rule-result",
+        "finding": "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration",
+        "evidence": "resource \"aws_s3_bucket\" \"cg-cardholder-data-bucket\" found with no matching SSE configuration",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "Data at rest is unencrypted, violating baseline data-protection expectations.",
+        "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration with SSE-KMS or SSE-S3.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC08-BP02"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:03:09.327890Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "cb07d6a3-579d-4501-a42c-1b344acbc411",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "observability",
+        "type": "deterministic-rule-result",
+        "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+        "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "API activity in the account would not be recorded for audit/incident response.",
+        "recommendation": "Add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+        "framework_mapping": [
+          "AWS Well-Architected: Operational Excellence Pillar",
+          "CIS Controls v8: 8.5"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:03:09.327994Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "cd120b0c-9d10-438e-ad83-4f61af51567c",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "iam",
+        "type": "deterministic-rule-result",
+        "finding": "IAM role 'cg-banking-WAF-Role' is used by running code and has AmazonS3FullAccess",
+        "evidence": "resource \"aws_iam_role\" \"cg-banking-WAF-Role\" trusts a compute service (EC2, Lambda, ECS tasks or EKS pods) and has AmazonS3FullAccess attached",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "Anyone who gets code running on this compute, or tricks it into a request forgery, gets these permissions across the whole account.",
+        "recommendation": "Replace the managed policy with a customer-managed one that names only the actions and resource ARNs this workload uses.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC03-BP02",
+          "CIS Controls v8: 5.4"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:03:13.735960Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "e0eff08e-bd54-4d2f-bb01-ac17890eb13d",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "exposure",
+        "type": "deterministic-rule-result",
+        "finding": "EC2 instance 'ec2-vulnerable-proxy-server' does not require IMDSv2 tokens",
+        "evidence": "resource \"aws_instance\" \"ec2-vulnerable-proxy-server\" metadata_options.http_tokens is not set",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "IMDSv1 answers plain HTTP GETs, so a request forgery or open proxy on this server can read its role's temporary credentials. Its role 'cg-banking-WAF-Role' has AmazonS3FullAccess, so those credentials reach far beyond this server.",
+        "recommendation": "Set metadata_options { http_tokens = \"required\" } (or require IMDSv2 account-wide with aws_ec2_instance_metadata_defaults).",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC06-BP05"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:03:13.738306Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "e61e6701-93c0-48e9-ba2a-db6097224bdd",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "exposure",
+        "type": "deterministic-rule-result",
+        "finding": "Public access to S3 bucket 'cg-cardholder-data-bucket' is not fully blocked",
+        "evidence": "resource \"aws_s3_bucket\" \"cg-cardholder-data-bucket\" at cloudgoat/scenarios/aws/cloud_breach_s3/terraform/s3.tf line 2: block_public_acls is not enabled; block_public_policy is not enabled; ignore_public_acls is not enabled; restrict_public_buckets is not enabled (Trivy AWS-0086, AWS-0087, AWS-0091, AWS-0093)",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "A later ACL or bucket-policy change could expose the bucket's contents to the internet.",
+        "recommendation": "Attach aws_s3_bucket_public_access_block with block_public_acls, block_public_policy, ignore_public_acls and restrict_public_buckets all set to true.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC08-BP04",
+          "Trivy AWS-0086",
+          "Trivy AWS-0087",
+          "Trivy AWS-0091",
+          "Trivy AWS-0093"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b+trivy@0.76.0",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:03:13.738391Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "e82d002f-ed0d-4a93-bb2e-d5cb5b3514ad",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "recovery",
+        "type": "deterministic-rule-result",
+        "finding": "S3 bucket 'cg-cardholder-data-bucket' does not have versioning enabled",
+        "evidence": "resource \"aws_s3_bucket\" \"cg-cardholder-data-bucket\" at cloudgoat/scenarios/aws/cloud_breach_s3/terraform/s3.tf line 2: versioning is not enabled (Trivy AWS-0090)",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "Accidental or malicious object deletion or overwrite cannot be recovered.",
+        "recommendation": "Enable aws_s3_bucket_versioning with status = \"Enabled\".",
+        "framework_mapping": [
+          "AWS Well-Architected: Reliability Pillar",
+          "REL09-BP01",
+          "Trivy AWS-0090"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b+trivy@0.76.0",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:03:13.738458Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "a5c4e002-aa8f-4088-a26e-3ba59830ba84",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "exposure",
+        "type": "inference",
+        "finding": "No VPC endpoint for S3 is provisioned; cardholder data bucket traffic is routed over the public internet",
+        "evidence": "The cardholder data S3 bucket has no VPC endpoint configured in the Terraform. All S3 traffic from the EC2 proxy therefore traverses the public internet or requires internet-routable paths. AWS PrivateLink / Gateway VPC Endpoints allow S3 traffic to stay on the Amazon backbone without traversing the internet, directly eliminating a potential internet-to-card-data path. The workload brief identifies any path from the internet to card data as the top risk.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-security-pillar",
+          "chunk_id": "waf-security-pillar-0649",
+          "content_hash": "d9fccf74587a71aa0f7ed28de4a9fbee2c253c5f25d1e7efdf1c17c00d530964",
+          "heading_path": "Data protection > Protecting data in transit > SEC09-BP01 Implement secure key and certificate management",
+          "exact_text_span": "With AWS \nPrivateLink, you can access services across accounts with overlapping IP CIDRs without needing an \nInternet Gateway or NAT. You also do not have to con\ufb01gure \ufb01rewall rules, path de\ufb01nitions, or route \ntables. Tra\ufb03c stays on the Amazon backbone and doesn\u2019t traverse the internet, therefore your data \nis protected. You can maintain compliance with industry-speci\ufb01c compliance regulations, such as \nHIPAA and EU/US Privacy Shield.",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.93,
+        "confidence_inputs": {
+          "evidence_directness": 0.9,
+          "source_agreement": 1.0,
+          "rule_determinism": 0.9
+        },
+        "risk_impact": "Without a private S3 endpoint, S3 traffic exits through the internet gateway. If the bucket policy or public-access block is ever misconfigured, cardholder data becomes directly reachable from the internet \u2014 the workload's top-priority risk. Even under normal operation, traffic transits the public AWS network rather than the private backbone.",
+        "recommendation": "Add an aws_vpc_endpoint of type Gateway for S3 and attach it to the route table(s) used by the EC2 instance. Then add a bucket policy condition (aws:SourceVpce) that denies any request not originating from that endpoint, ensuring the bucket is unreachable from the internet even if the proxy is compromised.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC05-BP01",
+          "SEC08-BP04"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0649",
+          "waf-security-pillar-0670",
+          "waf-performance-efficiency-pillar-0199",
+          "waf-reliability-pillar-0378",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0304",
+          "waf-security-pillar-0437",
+          "waf-cost-optimization-pillar-0422"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:04:09.580376Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "d4831d89-2615-442e-bf98-81d30627e116",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "exposure",
+        "type": "inference",
+        "finding": "The internet-facing nginx proxy, combined with overly permissive IAM and IMDSv1, forms a complete SSRF-to-S3 attack chain threatening cardholder data",
+        "evidence": "The EC2 instance 'ec2-vulnerable-proxy-server' has associate_public_ip_address=true and serves as the sole internet-facing component. The instance runs nginx as a reverse proxy, which is a common SSRF vector. The combination of a public-facing proxy, IMDSv1 not disabled, and AmazonS3FullAccess on the attached role creates a complete attack chain from the internet to cardholder data: internet request \u2192 SSRF on proxy \u2192 IMDS credentials \u2192 S3 bucket.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-security-pillar",
+          "chunk_id": "waf-security-pillar-0649",
+          "content_hash": "d9fccf74587a71aa0f7ed28de4a9fbee2c253c5f25d1e7efdf1c17c00d530964",
+          "heading_path": "Data protection > Protecting data in transit > SEC09-BP01 Implement secure key and certificate management",
+          "exact_text_span": "Tra\ufb03c stays on the Amazon backbone and doesn\u2019t traverse the internet, therefore your data \nis protected. You can maintain compliance with industry-speci\ufb01c compliance regulations, such as \nHIPAA and EU/US Privacy Shield.",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.88,
+        "confidence_inputs": {
+          "evidence_directness": 0.8,
+          "source_agreement": 0.95,
+          "rule_determinism": 0.85
+        },
+        "risk_impact": "A successful SSRF against the nginx instance gives an attacker temporary IAM credentials with full S3 access. Those credentials can be used to read, exfiltrate, or delete all cardholder data in the S3 bucket, constituting a direct PCI-DSS breach.",
+        "recommendation": "Treat the proxy as a high-value target: (1) enforce IMDSv2 (http_tokens = required), (2) replace AmazonS3FullAccess with a least-privilege policy scoped to required S3 actions and the specific bucket ARN, (3) add a VPC endpoint with a bucket policy that rejects non-VPC-endpoint requests, and (4) evaluate deploying a WAF in front of the proxy to detect and block SSRF payloads.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC06-BP05",
+          "SEC03-BP02"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Accept IMDSv1 because the proxy is internal",
+            "reason_rejected": "The proxy has a public IP and is internet-facing; an SSRF or open-redirect in nginx would allow an external attacker to reach the IMDS endpoint and steal credentials."
+          }
+        ],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0649",
+          "waf-security-pillar-0670",
+          "waf-performance-efficiency-pillar-0199",
+          "waf-reliability-pillar-0378",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0304",
+          "waf-security-pillar-0437",
+          "waf-cost-optimization-pillar-0422"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:04:09.587237Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "e7983266-071a-48d5-9208-3b7cac99e75a",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "encryption",
+        "type": "inference",
+        "finding": "The EC2 proxy appears to accept only HTTP (port 80); no TLS termination or HTTPS enforcement is configured for cardholder data in transit",
+        "evidence": "The Terraform provisions an EC2 instance with only HTTP and SSH security groups (cg-ec2-http-security-group, cg-ec2-ssh-security-group). No HTTPS listener, TLS certificate, or ALB with HTTPS is configured. The Well-Architected Framework flags the absence of TLS as high risk and specifically recommends enforcing HTTPS for S3 object uploads via bucket policy.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-security-pillar",
+          "chunk_id": "waf-security-pillar-0670",
+          "content_hash": "fe99507220e57c5c46ad85511c617076568843ed9f03c400cb70be90283eb8d1",
+          "heading_path": "Data protection > Protecting data in transit > SEC09-BP02 Enforce encryption in transit",
+          "exact_text_span": "Level of risk exposed if this best practice is not established: High\nImplementation guidance\nAWS services provide HTTPS endpoints using TLS for communication, providing encryption in \ntransit when communicating with the AWS APIs. Insecure HTTP protocols can be audited and \nblocked in a Virtual Private Cloud (VPC) through the use of security groups. HTTP requests can also \nbe automatically redirected to HTTPS in Amazon CloudFront or on an Application Load Balancer. \nYou can use an Amazon Simple Storage Service (Amazon S3) bucket policy to restrict the ability \nto upload objects through HTTP, e\ufb00ectively enforcing the use of HTTPS for object uploads to your \nbucket(s).",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.82,
+        "confidence_inputs": {
+          "evidence_directness": 0.85,
+          "source_agreement": 0.9,
+          "rule_determinism": 0.75
+        },
+        "risk_impact": "Cardholder data transmitted between clients and the proxy, and between the proxy and S3, may be sent in plaintext. This violates PCI-DSS Requirement 4 (protect cardholder data in transit) and exposes card numbers to network eavesdropping or man-in-the-middle attacks.",
+        "recommendation": "Configure nginx to serve HTTPS using a valid TLS 1.2+ certificate (e.g., via ACM with an ALB in front of the proxy). Add a bucket policy condition (aws:SecureTransport = true) to the S3 bucket to deny any HTTP-based S3 API calls. Open port 443 in the security group and close port 80 or redirect it to HTTPS.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC09-BP02"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Use HTTP internally since traffic is within the VPC",
+            "reason_rejected": "PCI-DSS Requirement 4 mandates encryption of cardholder data in transit across all network segments; the Well-Architected Framework likewise flags unencrypted HTTP as high risk."
+          }
+        ],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0649",
+          "waf-security-pillar-0670",
+          "waf-performance-efficiency-pillar-0199",
+          "waf-reliability-pillar-0378",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0304",
+          "waf-security-pillar-0437",
+          "waf-cost-optimization-pillar-0422"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:04:09.610632Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "624a4c66-8f2d-4c22-96af-0702aa6274ac",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "availability",
+        "type": "fact",
+        "finding": "The reverse proxy is a single EC2 instance with no load balancer or Auto Scaling Group; this is a single point of failure that cannot meet the 99.9% availability target",
+        "evidence": "The Terraform creates exactly one EC2 instance ('ec2-vulnerable-proxy-server', t3.micro) as the sole internet-facing reverse proxy. Two public subnets are defined (cg-public-subnet-1, cg-public-subnet-2), suggesting multi-AZ infrastructure is anticipated, but no Auto Scaling Group, load balancer, or second proxy instance is provisioned. A single t3.micro instance cannot meet 99.9% availability; AWS EC2 SLA for a single instance is lower than 99.9%.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/reliability-pillar/wellarchitected-reliability-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-reliability-pillar",
+          "chunk_id": "waf-reliability-pillar-0378",
+          "content_hash": "56db29185b67f03950f1bf37d55a9ae26cb88f7a4b5daf0002b5353015b28fce",
+          "heading_path": "Workload architecture > Design interactions in a distributed system to mitigate or withstand failures > REL05-BP03 Control and limit retry calls",
+          "exact_text_span": "Amazon API Gateway\n\u2022 AWS AppSync\n\u2022 Amazon SQS\n\u2022 Amazon Kinesis\n\u2022 AWS WAF\n\u2022 Virtual Waiting Room on AWS",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.85,
+        "confidence_inputs": {
+          "evidence_directness": 0.7,
+          "source_agreement": 0.9,
+          "rule_determinism": 0.9
+        },
+        "risk_impact": "Any failure of the single EC2 instance \u2014 hardware fault, OS crash, patching reboot, or AZ event \u2014 takes the entire card platform offline. With a 99.9% availability target (~8.7 hours downtime budget per year), even infrequent single-instance failures will breach SLA commitments.",
+        "recommendation": "Place the nginx proxy behind an Application Load Balancer (ALB) spanning both existing public subnets, and manage proxy instances in an Auto Scaling Group with a minimum of 2 instances across the two AZs. This removes the single point of failure and provides automatic replacement of unhealthy instances. Consider migrating the proxy function to AWS-managed services (e.g., ALB + WAF) to reduce operational burden.",
+        "framework_mapping": [
+          "AWS Well-Architected: Reliability Pillar",
+          "REL05-BP03",
+          "REL10-BP01"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Rely on the single proxy instance given moderate traffic",
+            "reason_rejected": "A single EC2 instance is a single point of failure; any planned maintenance, instance failure, or AZ outage would breach the 99.9% availability target (~8.7 hours downtime/year budget)."
+          }
+        ],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0649",
+          "waf-security-pillar-0670",
+          "waf-performance-efficiency-pillar-0199",
+          "waf-reliability-pillar-0378",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0304",
+          "waf-security-pillar-0437",
+          "waf-cost-optimization-pillar-0422"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:04:09.614834Z"
+      },
+      "presentation": {
+        "priority": "confirmed",
+        "short_label": "Confirmed"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "458d3366-73cc-4245-bc41-bb9f75077e80",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "cost",
+        "type": "recommendation",
+        "finding": "S3 data transfer currently routes through the internet gateway, incurring unnecessary data-transfer charges that a free Gateway VPC Endpoint would eliminate",
+        "evidence": "S3 traffic currently routes through the internet gateway. A Gateway VPC Endpoint for S3 has no hourly charges and eliminates data-transfer costs that would otherwise be incurred when traffic traverses the public internet gateway path, while simultaneously improving security posture.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/cost-optimization-pillar/wellarchitected-cost-optimization-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-cost-optimization-pillar",
+          "chunk_id": "waf-cost-optimization-pillar-0422",
+          "content_hash": "844963962364e2246c098d4d170dd57e9b00a8190adb052b0a0b77930afd4d3e",
+          "heading_path": "Cost effective resources > Plan for data transfer > COST08-BP03 Implement services to reduce data transfer costs",
+          "exact_text_span": "VPC Endpoints allow connectivity between AWS services over private networking and can be \nused to reduce public data transfer and NAT gateway costs. Gateway VPC endpoints have no \nhourly charges, and support Amazon S3 and Amazon DynamoDB.",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.78,
+        "confidence_inputs": {
+          "evidence_directness": 0.8,
+          "source_agreement": 0.85,
+          "rule_determinism": 0.7
+        },
+        "risk_impact": "Minor ongoing data-transfer cost inefficiency; secondary to the security risk but worth addressing as the VPC endpoint also closes an internet-routing exposure.",
+        "recommendation": "Add a Gateway VPC Endpoint for S3 (aws_vpc_endpoint, type Gateway). Associate it with the route table(s) used by the EC2 instance. This is both a cost and security improvement: no hourly fee, reduced egress cost, and traffic stays on the AWS backbone.",
+        "framework_mapping": [
+          "AWS Well-Architected: Cost Optimization Pillar",
+          "COST08-BP03"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Use a public S3 endpoint since the bucket has other security controls",
+            "reason_rejected": "Public-access blocks and bucket policies are necessary but not sufficient; a VPC Gateway endpoint with a bucket policy condition (aws:SourceVpce) ensures the bucket is unreachable from the internet regardless of other misconfigurations."
+          }
+        ],
+        "depth_level": "lightweight",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0649",
+          "waf-security-pillar-0670",
+          "waf-performance-efficiency-pillar-0199",
+          "waf-reliability-pillar-0378",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0304",
+          "waf-security-pillar-0437",
+          "waf-cost-optimization-pillar-0422"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:04:09.622596Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "02675180-cc09-4d57-aa33-1ee0e351d591",
+        "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+        "category": "observability",
+        "type": "fact",
+        "finding": "Detailed CloudWatch monitoring is disabled on the internet-facing proxy EC2 instance, reducing visibility into potential security events and performance anomalies",
+        "evidence": "The EC2 instance has monitoring = not set (default: false), meaning detailed CloudWatch monitoring is disabled. For a PCI-DSS workload that is the sole internet-facing entry point, detailed instance-level metrics (1-minute granularity) are important for detecting anomalous traffic patterns that could indicate an active attack or compromise. The root_block_device.encrypted is also not set, meaning the OS volume encryption state depends on account-level defaults.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-security-pillar",
+          "chunk_id": "waf-security-pillar-0670",
+          "content_hash": "fe99507220e57c5c46ad85511c617076568843ed9f03c400cb70be90283eb8d1",
+          "heading_path": "Data protection > Protecting data in transit > SEC09-BP02 Enforce encryption in transit",
+          "exact_text_span": "Insecure HTTP protocols can be audited and \nblocked in a Virtual Private Cloud (VPC) through the use of security groups.",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.75,
+        "confidence_inputs": {
+          "evidence_directness": 0.7,
+          "source_agreement": 0.8,
+          "rule_determinism": 0.75
+        },
+        "risk_impact": "Without detailed monitoring and flow logs, detecting an active intrusion, SSRF exploit, or data exfiltration attempt on the internet-facing proxy is significantly delayed. For a PCI-DSS environment, this reduces the ability to meet breach detection and notification timelines.",
+        "recommendation": "Set monitoring = true on the EC2 instance to enable 1-minute metric granularity. Additionally, enable VPC Flow Logs on the VPC (aws_flow_log) to capture network-level traffic records, which are critical for incident response in a PCI-DSS environment. Verify that the root block device is encrypted by setting root_block_device { encrypted = true }.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC10-BP01",
+          "AWS Well-Architected: Operational Excellence Pillar"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0649",
+          "waf-security-pillar-0670",
+          "waf-performance-efficiency-pillar-0199",
+          "waf-reliability-pillar-0378",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0304",
+          "waf-security-pillar-0437",
+          "waf-cost-optimization-pillar-0422"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T22:04:09.626662Z"
+      },
+      "presentation": {
+        "priority": "confirmed",
+        "short_label": "Confirmed"
+      }
+    }
+  ]
+}
