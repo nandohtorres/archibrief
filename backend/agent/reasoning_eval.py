@@ -189,6 +189,8 @@ class ReasoningEvalBrief(BaseModel):
     workload_brief: str
     retrieval_query: str
     rule_findings: list[dict] = Field(default_factory=list)
+    # RuleEngine's resource summary as Reason receives it (ADR-0049).
+    terraform_resources: dict | None = None
     expected_findings: list[ExpectedFinding]
     notes: str | None = None
 

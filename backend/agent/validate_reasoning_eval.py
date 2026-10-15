@@ -100,6 +100,7 @@ def _run_brief(
         rule_findings=brief.rule_findings,
         retrieved_chunks=retrieved_chunks,
         max_tokens=_MAX_TOKENS,
+        terraform_resources=brief.terraform_resources,
     )
 
     try:

@@ -42,8 +42,9 @@ from backend.shared.models.finding import (
 # forcing + chunk_id/exact_quote instead of an asked-for Citation object),
 # so a finding persisted under the old free-text-citation prompt is not
 # reproducible under this prompt_version — see ADR-0039.
-# Bumped again 2026-10-15 (#15b): terraform_resources added to the input.
-PROMPT_VERSION = "reason_prompt@2026-10-15b"
+# Bumped again 2026-10-15 (#15b): terraform_resources added to the input,
+# then provider defaults stated for "not set" settings (15c).
+PROMPT_VERSION = "reason_prompt@2026-10-15d"
 
 _TOOL_NAME = "emit_findings"
 
@@ -90,10 +91,14 @@ results — never answer in plain text. You must:
   and, for common types, the settings that matter, extracted by
   application code. Treat it as the facts about the configuration. Never
   claim a listed setting is absent, unknown or "likely" anything other
-  than its listed value. "not set" means the setting is left at the
-  provider default; "unknown" means it couldn't be determined statically.
-  For a setting that isn't listed, don't guess what it is: use
-  "not-observable" or phrase it as a recommendation to check.
+  than its listed value. "not set (default: X)" means the setting is left
+  out and the provider default X applies; plain "not set" means it's left
+  out and its default depends on something outside the code (account
+  settings, AMI, subnet), so never state what that default is. "unknown"
+  means it couldn't be determined statically.
+  For a setting that isn't listed, don't guess what it is or call it
+  missing: it wasn't checked, and may well be set in the code. Use
+  "not-observable" or phrase it as a recommendation to verify.
 - Never label a design "compliant" — describe framework alignment, not
   certification.
 - Populate every field in the schema, even in lightweight mode.
