@@ -396,9 +396,21 @@ class AgentCoreRuntimeClient:
 
     agent_runtime_arn: str
     region_name: str = "us-east-1"
+    # None = botocore's default. Callers behind a synchronous API set this
+    # below their gateway's timeout (Codex F19).
+    read_timeout_seconds: int | None = None
 
     def __post_init__(self) -> None:
-        self._client = boto3.client("bedrock-agentcore", region_name=self.region_name)
+        # Never auto-retry: a retried invocation after a read timeout would
+        # start a second paid reasoning run for the same request.
+        # botocore's "max_attempts" counts retries only; "total_max_attempts"
+        # includes the first call, so 1 means exactly one attempt.
+        config_kwargs: dict[str, Any] = {"retries": {"total_max_attempts": 1, "mode": "standard"}}
+        if self.read_timeout_seconds is not None:
+            config_kwargs["read_timeout"] = self.read_timeout_seconds
+        self._client = boto3.client(
+            "bedrock-agentcore", region_name=self.region_name, config=Config(**config_kwargs)
+        )
 
     def invoke(self, payload: dict[str, Any], runtime_session_id: str) -> dict[str, Any]:
         response = self._client.invoke_agent_runtime(
