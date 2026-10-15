@@ -54,7 +54,10 @@ module "s3" {
   source          = "../../modules/s3"
   bucket_name     = "${var.name_prefix}-${var.environment}-source-of-truth"
   frontend_origin = "https://${module.frontend_hosting.cloudfront_domain_name}"
-  tags            = var.tags
+  # Same list as module.api_gateway: the browser calls the API, then POSTs
+  # the archive straight to this bucket from the same page origin.
+  additional_cors_origins = ["https://${var.domain}", "https://www.${var.domain}"]
+  tags                    = var.tags
 }
 
 module "s3_vectors" {

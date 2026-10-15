@@ -46,7 +46,7 @@ resource "aws_s3_bucket_cors_configuration" "source_of_truth" {
 
   cors_rule {
     allowed_methods = ["POST"]
-    allowed_origins = [var.frontend_origin]
+    allowed_origins = concat([var.frontend_origin], var.additional_cors_origins)
     allowed_headers = ["*"]
     max_age_seconds = 3000
   }
