@@ -132,13 +132,33 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/rule_engine/__init__.py",
             "backend/lambdas/rule_engine/handler.py",
+            "backend/lambdas/rule_engine/hcl_eval.py",
             "backend/shared/__init__.py",
             "backend/shared/clients/__init__.py",
             "backend/shared/models/__init__.py",
             "backend/shared/models/finding.py",
+            "backend/shared/terraform_scope.py",
+            "backend/shared/trivy_checks.py",
         ],
-        # backend.shared.models.finding -> pydantic.
-        "packages": ["pydantic>=2.0"],
+        # backend.shared.models.finding -> pydantic; hcl_eval decodes
+        # jsonencode() expressions with python-hcl2 (ADR-0048).
+        "packages": ["pydantic>=2.0", "python-hcl2>=6.0"],
+    },
+    # Runs the Trivy binary from the trivy layer (scripts/build_trivy_layer.py,
+    # ADR-0048). Standard library + boto3 (in the Lambda runtime) only.
+    "scan": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/scan/__init__.py",
+            "backend/lambdas/scan/handler.py",
+            "backend/shared/__init__.py",
+            "backend/shared/archive.py",
+            "backend/shared/clients/__init__.py",
+            "backend/shared/terraform_scope.py",
+            "backend/shared/trivy_checks.py",
+        ],
+        "packages": [],
     },
     "audit": {
         "sources": [
@@ -175,7 +195,9 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/ingest/__init__.py",
             "backend/lambdas/ingest/handler.py",
             "backend/shared/__init__.py",
+            "backend/shared/archive.py",
             "backend/shared/clients/__init__.py",
+            "backend/shared/terraform_scope.py",
         ],
         # Static HCL parsing (ADR-0027) — never a terraform binary.
         "packages": ["python-hcl2>=6.0"],

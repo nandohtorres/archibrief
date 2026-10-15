@@ -1,0 +1,17 @@
+# Trivy findings on ArchiBrief's own infra/ that are accepted on purpose.
+# CI fails on any other HIGH/CRITICAL finding (ADR-0048). Each entry says
+# why; remove it when the reason stops being true.
+
+# S3 buckets use SSE-S3 (AES256), not a customer-managed KMS key. The data
+# is review artifacts and a static site; a CMK adds per-request KMS cost and
+# key management for no change in who can read the objects.
+AWS-0132
+
+# The budget-alert SNS topic (modules/cost-controls) is unencrypted. AWS
+# Budgets can't publish to a topic encrypted with the AWS-managed aws/sns
+# key, and the topic only carries budget threshold alerts.
+AWS-0095
+
+# No AWS WAF on the CloudFront distribution yet. Planned with the public
+# submission quotas (master list Phase 3, item 17, ADR-0046).
+AWS-0011

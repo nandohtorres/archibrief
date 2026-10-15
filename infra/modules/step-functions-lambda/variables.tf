@@ -97,3 +97,23 @@ variable "max_clarification_rounds" {
   default     = 2
   description = "How many times one review may pause for clarification before it fails with ClarificationLimitReached."
 }
+
+# ADR-0048: Trivy scan step. Defaults point at the build outputs, so the
+# environment's terraform.tfvars doesn't need new entries.
+variable "scan_zip_path" {
+  type        = string
+  default     = "../../../backend/lambdas/scan/build/scan.zip"
+  description = "Scan Lambda package (python scripts/package_lambdas.py scan)."
+}
+
+variable "trivy_layer_zip_path" {
+  type        = string
+  default     = "../../../backend/build/trivy-layer.zip"
+  description = "Trivy layer zip (python scripts/build_trivy_layer.py)."
+}
+
+variable "trivy_version" {
+  type        = string
+  default     = "0.76.0"
+  description = "Must match TRIVY_VERSION in scripts/build_trivy_layer.py."
+}

@@ -20,6 +20,11 @@ locals {
       # Table name is the last segment of arn:aws:dynamodb:<region>:<acct>:table/<name>.
       AUDIT_TABLE_NAME = element(split("/", var.audit_table_arn), 1)
     }
+    # The Trivy layer mounts the binary at /opt/bin/trivy (ADR-0048).
+    scan = {
+      TRIVY_PATH    = "/opt/bin/trivy"
+      TRIVY_VERSION = var.trivy_version
+    }
   }
 
   # `timeout` added 2026-10-12, live-tested: none of these Lambdas ever
@@ -66,6 +71,16 @@ locals {
       zip         = var.lambda_zip_paths.store_clarification_token
       timeout     = 10
       memory_size = 256
+    }
+    # Runs Trivy on the submitted Terraform (ADR-0048). Its own Lambda so
+    # the third-party binary runs with read access to uploads/ and nothing
+    # else. Trivy's own timeout is 60s; memory buys CPU for its HCL
+    # evaluation.
+    scan = {
+      handler     = "backend.lambdas.scan.handler.handler"
+      zip         = var.scan_zip_path
+      timeout     = 90
+      memory_size = 2048
     }
   }
 }
@@ -237,6 +252,73 @@ resource "aws_iam_role_policy" "ingest_s3_download" {
   policy = data.aws_iam_policy_document.ingest_s3_download.json
 }
 
+# Scan (ADR-0048) reads the submitted archive and nothing else: no
+# parsed/ or reports/, no tables, no Bedrock. The Trivy process itself
+# gets none of these credentials (backend/lambdas/scan/handler.py).
+data "aws_iam_policy_document" "scan_s3_read" {
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.reports_bucket_arn}/uploads/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "scan_s3_read" {
+  name   = "${var.name_prefix}-scan-s3-read"
+  role   = aws_iam_role.lambda["scan"].id
+  policy = data.aws_iam_policy_document.scan_s3_read.json
+}
+
+# The Trivy layer zip is about 51 MB, over Lambda's 50 MB direct-upload
+# limit, so it is published from S3. Private, encrypted, versioned bucket
+# for build artifacts only.
+resource "aws_s3_bucket" "artifacts" {
+  bucket = "${var.name_prefix}-artifacts"
+  tags   = var.tags
+}
+
+resource "aws_s3_bucket_public_access_block" "artifacts" {
+  bucket                  = aws_s3_bucket.artifacts.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_object" "trivy_layer" {
+  bucket = aws_s3_bucket.artifacts.id
+  key    = "layers/trivy-${var.trivy_version}.zip"
+  source = var.trivy_layer_zip_path
+  etag   = fileexists(var.trivy_layer_zip_path) ? filemd5(var.trivy_layer_zip_path) : null
+
+  depends_on = [aws_s3_bucket_versioning.artifacts]
+}
+
+resource "aws_lambda_layer_version" "trivy" {
+  layer_name          = "${var.name_prefix}-trivy"
+  description         = "Trivy ${var.trivy_version} at /opt/bin/trivy (scripts/build_trivy_layer.py)"
+  s3_bucket           = aws_s3_object.trivy_layer.bucket
+  s3_key              = aws_s3_object.trivy_layer.key
+  s3_object_version   = aws_s3_object.trivy_layer.version_id
+  compatible_runtimes = ["python3.12"]
+}
+
 resource "aws_lambda_function" "this" {
   for_each         = local.lambda_specs
   function_name    = "${var.name_prefix}-${each.key}"
@@ -247,6 +329,7 @@ resource "aws_lambda_function" "this" {
   source_code_hash = fileexists(each.value.zip) ? filebase64sha256(each.value.zip) : null
   timeout          = each.value.timeout
   memory_size      = each.value.memory_size
+  layers           = each.key == "scan" ? [aws_lambda_layer_version.trivy.arn] : []
 
   reserved_concurrent_executions = var.lambda_reserved_concurrency
 
@@ -601,7 +684,36 @@ resource "aws_sfn_state_machine" "review" {
             Next         = "IngestBlocked"
           }
         ]
-        Default = "RecordStageRuleEngine"
+        Default = "Scan"
+      }
+      # Trivy over the submitted Terraform (ADR-0048). Never fails the
+      # review: the Lambda reports problems as status "unavailable", and
+      # the Catch covers the Lambda itself failing (timeout, throttling).
+      # Either way RuleEngine falls back to ArchiBrief's own rules and
+      # the report says the scanner didn't run.
+      Scan = {
+        Type     = "Task"
+        Resource = aws_lambda_function.this["scan"].arn
+        Parameters = {
+          "review_id.$"      = "$.review_id"
+          "archive_s3_key.$" = "$.archive_s3_key"
+          "report_bucket"    = var.reports_bucket_name
+        }
+        ResultPath = "$.scanResult"
+        Catch = [
+          {
+            ErrorEquals = ["States.ALL"]
+            ResultPath  = "$.scanError"
+            Next        = "ScanUnavailable"
+          }
+        ]
+        Next = "RecordStageRuleEngine"
+      }
+      ScanUnavailable = {
+        Type       = "Pass"
+        Result     = { status = "unavailable", tool = "trivy", reason = "scan_step_failed" }
+        ResultPath = "$.scanResult"
+        Next       = "RecordStageRuleEngine"
       }
       RecordStageRuleEngine = {
         Type     = "Task"
@@ -639,6 +751,7 @@ resource "aws_sfn_state_machine" "review" {
           "review_id.$"     = "$.review_id"
           "parsed_s3_key.$" = "$.ingestResult.parsed_s3_key"
           "report_bucket"   = var.reports_bucket_name
+          "scanner.$"       = "$.scanResult"
         }
         ResultPath = "$.ruleEngineResult"
         Next       = "InitEffectiveInput"

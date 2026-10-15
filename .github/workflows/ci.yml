@@ -23,6 +23,22 @@ jobs:
       # pythonpath = [".."] pytest setting), so CI installs dependencies
       # directly rather than `pip install -e backend`.
       - run: pip install pydantic boto3 langgraph python-hcl2 ruff pytest pytest-cov "moto[dynamodb,s3]"
+      # Trivy (ADR-0048), the same pinned, checksum-verified release the
+      # Lambda layer ships (scripts/build_trivy_layer.py; a test keeps the
+      # two in sync). TRIVY_PATH makes the trap suite run its Trivy mode.
+      - name: Install Trivy
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/trivy.tgz"             https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_Linux-64bit.tar.gz
+          echo "e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7  $RUNNER_TEMP/trivy.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/trivy.tgz" -C "$RUNNER_TEMP" trivy
+          echo "TRIVY_PATH=$RUNNER_TEMP/trivy" >> "$GITHUB_ENV"
+      # ArchiBrief's own infrastructure: fail on any HIGH/CRITICAL finding
+      # not accepted, with a reason, in .trivyignore.
+      - name: Trivy scan of infra/
+        run: >
+          "$TRIVY_PATH" config --skip-check-update --skip-version-check
+          --disable-telemetry --severity HIGH,CRITICAL --ignorefile .trivyignore
+          --exit-code 1 infra
       - run: ruff format --check backend
       - run: ruff check backend
       - run: pytest --cov=backend --cov-report=term-missing
