@@ -15,9 +15,30 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 import boto3
+from botocore.config import Config
+
+
+def _dynamodb_safe(value: Any) -> Any:
+    """boto3's DynamoDB resource layer (Table.put_item) rejects a native
+    Python float outright (`TypeError: Float types are not supported`) —
+    found 2026-10-01 writing deeper_review.handler, the first call site in
+    this codebase to ever put_item a Finding dict (every prior put_item
+    call — Reviews pointer items, AuditLog records — happened to have no
+    float fields, so this never surfaced before). DynamoDB's own Number
+    type is exact/arbitrary-precision, which boto3 models as Decimal, not
+    float — `Decimal(str(value))` avoids float's own binary-representation
+    imprecision (`Decimal(0.1) != Decimal("0.1")`)."""
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {k: _dynamodb_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_dynamodb_safe(v) for v in value]
+    return value
 
 
 @dataclass
@@ -30,7 +51,7 @@ class DynamoDBClient:
         self._table = self._resource.Table(self.table_name)
 
     def put_item(self, item: dict[str, Any]) -> None:
-        self._table.put_item(Item=item)
+        self._table.put_item(Item=_dynamodb_safe(item))
 
     def get_item(self, key: dict[str, Any]) -> dict[str, Any] | None:
         response = self._table.get_item(Key=key)
@@ -47,7 +68,20 @@ class S3Client:
     region_name: str = "us-east-1"
 
     def __post_init__(self) -> None:
-        self._client = boto3.client("s3", region_name=self.region_name)
+        # Explicit SigV4 — found 2026-10-12 live-testing ADR-0045's upload
+        # flow: without it, boto3 generated a presigned POST against the
+        # legacy global s3.amazonaws.com endpoint, which S3 rejected with
+        # "Requests specifying Server Side Encryption with AWS KMS managed
+        # keys require AWS Signature Version 4" (this bucket's default
+        # encryption is aws:kms — infra/modules/s3/main.tf). SigV4 is
+        # required unconditionally for any presigned request against a
+        # KMS-encrypted bucket, so this isn't optional even though boto3
+        # doesn't default to it here.
+        self._client = boto3.client(
+            "s3",
+            region_name=self.region_name,
+            config=Config(signature_version="s3v4"),
+        )
 
     def put_object(self, key: str, body: bytes, content_type: str = "application/json") -> None:
         self._client.put_object(Bucket=self.bucket, Key=key, Body=body, ContentType=content_type)
@@ -55,6 +89,34 @@ class S3Client:
     def get_object(self, key: str) -> bytes:
         response = self._client.get_object(Bucket=self.bucket, Key=key)
         return response["Body"].read()
+
+    def generate_presigned_post(
+        self,
+        key: str,
+        max_bytes: int,
+        expires_in: int = 900,
+        content_type: str = "application/x-tar",
+    ) -> dict[str, Any]:
+        """Used by create_upload.handler (2026-10-12, archive_path/upload
+        design) — a presigned POST, not a bare presigned PUT, specifically
+        because a POST's `Conditions` let S3 itself enforce a byte-size
+        ceiling (`content-length-range`) and content type before accepting
+        the object, instead of trusting the client to send a reasonably
+        sized file. Matches this project's established pattern of bounding
+        untrusted input at the earliest possible point (extract_archive's
+        own member-count/path-traversal/symlink checks, the 400 KB
+        DynamoDB item cap) rather than relying on a later stage to reject
+        an oversized upload after it's already landed in S3."""
+        return self._client.generate_presigned_post(
+            Bucket=self.bucket,
+            Key=key,
+            Fields={"Content-Type": content_type},
+            Conditions=[
+                {"Content-Type": content_type},
+                ["content-length-range", 0, max_bytes],
+            ],
+            ExpiresIn=expires_in,
+        )
 
 
 @dataclass
@@ -307,3 +369,35 @@ class GuardrailsClient:
             content=[{"text": {"text": text}}],
         )
         return response["action"] == "NONE"
+
+
+@dataclass
+class AgentCoreRuntimeClient:
+    """Invokes a deployed Bedrock AgentCore Runtime directly over boto3 —
+    used by deeper_review.handler (2026-10-01) for the "go deeper" path,
+    which bypasses Step Functions entirely (ADR-0023/ADR-0039: a scoped
+    per-finding re-run, not a full pipeline execution). The outer review
+    pipeline instead goes through Step Functions' own SDK integration
+    (`arn:aws:states:::aws-sdk:bedrockagentcore:invokeAgentRuntime`,
+    infra/modules/step-functions-lambda) — this wrapper is for callers
+    that need the same operation from a Lambda, not from ASL.
+
+    boto3's `bedrock-agentcore` client and its `invoke_agent_runtime`
+    operation were confirmed to exist against the installed botocore
+    service model 2026-10-01 (not guessed): required params
+    `agentRuntimeArn` (string) and `payload` (blob); the response's
+    `response` field is a blob (a `StreamingBody`, read once)."""
+
+    agent_runtime_arn: str
+    region_name: str = "us-east-1"
+
+    def __post_init__(self) -> None:
+        self._client = boto3.client("bedrock-agentcore", region_name=self.region_name)
+
+    def invoke(self, payload: dict[str, Any], runtime_session_id: str) -> dict[str, Any]:
+        response = self._client.invoke_agent_runtime(
+            agentRuntimeArn=self.agent_runtime_arn,
+            runtimeSessionId=runtime_session_id,
+            payload=json.dumps(payload).encode("utf-8"),
+        )
+        return json.loads(response["response"].read())

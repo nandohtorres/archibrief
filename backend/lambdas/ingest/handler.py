@@ -21,9 +21,23 @@ from pathlib import PurePosixPath
 import hcl2
 from hcl2.utils import SerializationOptions
 
-from backend.shared.clients import GuardrailsClient
+from backend.shared.clients import GuardrailsClient, S3Client
 
-_SERIALIZATION_OPTIONS = SerializationOptions(strip_string_quotes=True)
+# with_comments=False (2026-10-01 fix): hcl2's SerializationOptions
+# defaults with_comments to True, which attaches a `__comments__` key
+# (containing the comment's raw text) onto any block with an adjacent
+# `//`/`/* */` comment — found while writing the ADR-0038 adversarial
+# regression suite's "instructions hidden in Terraform comments" test,
+# which failed against the real parser: a `//` comment survived verbatim
+# into parse_terraform_files' output (stored under the resource's body
+# dict, same place RuleEngine/downstream code reads real attributes from)
+# even though a `#` comment did not. `#` comments are a different lexer
+# token hcl2 drops outright regardless of this option; only `//`/`/* */`
+# were ever actually at risk. This option doesn't change what Terraform
+# *data* gets parsed — comments were never part of the semantic HCL model
+# — it only stops hcl2's own debug/tooling metadata from being carried
+# into application data.
+_SERIALIZATION_OPTIONS = SerializationOptions(strip_string_quotes=True, with_comments=False)
 
 MAX_ARCHIVE_MEMBERS = 500
 MAX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
@@ -152,15 +166,70 @@ def _resolve_guardrails_client(
     return None
 
 
-def handler(event, context, guardrails_client: GuardrailsClient | None = None):
-    archive_path = event["archive_path"]
+def _resolve_archive_path(event: dict, dest_dir: str, s3_client: S3Client | None = None) -> str:
+    """Resolves the local filesystem path extract_archive() needs.
+
+    Added 2026-10-12 (ADR-0045, direct-upload archive_path design) — the
+    real submission path now sends `archive_s3_key`, the key the client
+    already uploaded its tarball to via create_upload's presigned POST,
+    not a local path (no client could ever supply a path meaningful
+    inside this Lambda's own ephemeral filesystem, which is what the
+    pre-existing `archive_path` field alone would have required). Downloads
+    the object once to `dest_dir` and returns that local path so
+    extract_archive()'s existing, already-tested
+    path-traversal/symlink/member-count checks run completely unchanged
+    on the downloaded file.
+
+    `archive_path` support is kept for direct/lower-level invocations
+    (tests, and any future caller that already has a local file) — not
+    deprecated, just no longer the only way in.
+    """
+    archive_path = event.get("archive_path")
+    if archive_path:
+        return archive_path
+
+    archive_s3_key = event.get("archive_s3_key")
+    if not archive_s3_key:
+        raise KeyError("event must supply either archive_path or archive_s3_key")
+
+    report_bucket = event["report_bucket"]
+    client = s3_client or S3Client(bucket=report_bucket)
+    archive_bytes = client.get_object(archive_s3_key)
+
+    local_path = os.path.join(dest_dir, "archive.tar")
+    with open(local_path, "wb") as f:
+        f.write(archive_bytes)
+    return local_path
+
+
+def handler(
+    event,
+    context,
+    guardrails_client: GuardrailsClient | None = None,
+    s3_client: S3Client | None = None,
+):
     workload_brief = event["workload_brief"]
     dest_dir = event.get("dest_dir", "/tmp/archibrief-ingest")
 
+    # Temporary stage-tracing (2026-10-12): this handler had zero logging,
+    # so a hard Lambda timeout (process killed, no exception, no traceback)
+    # gave no way to tell which of resolve/extract/parse/guardrails-check
+    # was actually stuck. flush=True is required, not optional — the first
+    # attempt at this tracing (no flush) produced ZERO log output on a
+    # real timeout, confirming CPython block-buffers stdout when it isn't
+    # a tty, and a hard Lambda timeout kills the process before that
+    # buffer ever gets flushed. print() with flush=True goes to CloudWatch
+    # immediately — remove once the real hang is found and fixed; not
+    # meant as permanent instrumentation.
+    print("ingest: resolving archive path", flush=True)
     os.makedirs(dest_dir, exist_ok=True)
+    archive_path = _resolve_archive_path(event, dest_dir, s3_client)
+    print(f"ingest: archive resolved to {archive_path}, extracting", flush=True)
     try:
         extracted = extract_archive(archive_path, dest_dir)
+        print(f"ingest: extracted {len(extracted)} file(s), parsing HCL", flush=True)
         parsed = parse_terraform_files(extracted)
+        print("ingest: HCL parsed", flush=True)
     except IngestRejected as exc:
         return {"status": "rejected", "reason": exc.reason}
 
@@ -172,7 +241,9 @@ def handler(event, context, guardrails_client: GuardrailsClient | None = None):
     guardrails_decisions: list[dict] = []
     client = _resolve_guardrails_client(event, guardrails_client)
     if client is not None:
+        print("ingest: calling bedrock ApplyGuardrail", flush=True)
         allowed = client.check(workload_brief, source="INPUT")
+        print(f"ingest: ApplyGuardrail returned allowed={allowed}", flush=True)
         guardrails_decisions.append({"stage": "ingest", "allowed": allowed})
         if not allowed:
             return {

@@ -1,0 +1,206 @@
+import backend.lambdas.finalize.handler as handler_module
+from backend.lambdas.finalize.handler import (
+    assemble_baseline_answers,
+    assemble_evidence_ledger,
+    compute_cost_estimate_tier,
+    handler,
+)
+from backend.shared.models.finding import ConfidenceInputs, DepthLevel, Finding, FindingCategory, FindingType
+
+
+class _FakeDynamoDBClient:
+    def __init__(self, table_name: str):
+        self.table_name = table_name
+
+    def get_item(self, key: dict) -> dict | None:
+        return _FakeDynamoDBClient.ITEMS.get(key["reviewId"])
+
+    def put_item(self, item: dict) -> None:
+        _FakeDynamoDBClient.ITEMS[item["reviewId"]] = item
+
+    ITEMS: dict = {}
+
+
+def _finding(**overrides) -> Finding:
+    defaults = dict(
+        finding_id="f1",
+        review_id="r1",
+        category=FindingCategory.IAM,
+        type=FindingType.NOT_OBSERVABLE,
+        finding="finding text",
+        evidence="evidence text",
+        citation=None,
+        confidence=0.5,
+        confidence_inputs=ConfidenceInputs(evidence_directness=0.5, source_agreement=0.5, rule_determinism=0.5),
+        risk_impact="low",
+        recommendation="do nothing",
+        framework_mapping=[],
+        depth_level=DepthLevel.LIGHTWEIGHT,
+    )
+    defaults.update(overrides)
+    return Finding(**defaults)
+
+
+def test_assemble_evidence_ledger_includes_workload_brief():
+    ledger = assemble_evidence_ledger("r1", [_finding()], workload_brief="a 3-tier web app on ECS")
+    assert ledger["workload_brief"] == "a 3-tier web app on ECS"
+
+
+def test_assemble_evidence_ledger_defaults_workload_brief_to_none():
+    ledger = assemble_evidence_ledger("r1", [_finding()])
+    assert ledger["workload_brief"] is None
+
+
+def test_handler_passes_workload_brief_through_to_ledger():
+    event = {
+        "review_id": "r1",
+        "findings": [_finding().model_dump(mode="json")],
+        "workload_brief": "a 3-tier web app on ECS",
+    }
+    result = handler(event, None)
+    assert result["status"] == "complete"
+
+
+def test_handler_merges_pointer_item_instead_of_replacing_it(monkeypatch):
+    # DynamoDB's PutItem replaces the whole item, unlike UpdateItem — a
+    # pointer_item built from scratch here would wipe out whatever
+    # IdempotencyGate already wrote earlier in the same execution
+    # (terraformRepoRef, idempotencyKey, createdAt). Pin the fetch-and-merge
+    # fix down explicitly (found 2026-10-01, see Work-Project-Issues-Log.md).
+    monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
+    _FakeDynamoDBClient.ITEMS = {
+        "r1": {
+            "reviewId": "r1",
+            "idempotencyKey": "r1",
+            "status": "pending",
+            "createdAt": "2026-10-01T00:00:00Z",
+            "terraformRepoRef": "github.com/example/infra",
+        }
+    }
+
+    event = {
+        "review_id": "r1",
+        "findings": [_finding().model_dump(mode="json")],
+        "reviews_table_name": "archibrief-dev-reviews",
+    }
+    result = handler(event, None)
+
+    assert result["status"] == "complete"
+    stored = _FakeDynamoDBClient.ITEMS["r1"]
+    assert stored["status"] == "complete"
+    assert stored["terraformRepoRef"] == "github.com/example/infra"
+    assert stored["idempotencyKey"] == "r1"
+    assert stored["createdAt"] == "2026-10-01T00:00:00Z"
+    assert "reportS3Key" in stored
+
+
+def test_handler_creates_pointer_item_when_none_exists_yet(monkeypatch):
+    monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
+    _FakeDynamoDBClient.ITEMS = {}
+
+    event = {
+        "review_id": "r2",
+        "findings": [_finding().model_dump(mode="json")],
+        "reviews_table_name": "archibrief-dev-reviews",
+    }
+    result = handler(event, None)
+
+    assert result["status"] == "complete"
+    assert _FakeDynamoDBClient.ITEMS["r2"]["reviewId"] == "r2"
+    assert _FakeDynamoDBClient.ITEMS["r2"]["status"] == "complete"
+
+
+def test_compute_cost_estimate_tier_low_for_a_handful_of_resources():
+    resources = {"aws_s3_bucket": {"a": {}, "b": {}}}
+    assert compute_cost_estimate_tier(resources) == "low"
+
+
+def test_compute_cost_estimate_tier_medium_for_dozens_of_resources():
+    resources = {"aws_lambda_function": {f"fn{i}": {} for i in range(10)}}
+    assert compute_cost_estimate_tier(resources) == "medium"
+
+
+def test_compute_cost_estimate_tier_high_for_many_resources():
+    resources = {"aws_lambda_function": {f"fn{i}": {} for i in range(25)}}
+    assert compute_cost_estimate_tier(resources) == "high"
+
+
+def test_compute_cost_estimate_tier_counts_across_every_resource_type():
+    # 3 + 3 = 6 total resource instances, summed across both types —
+    # over the low-tier threshold even though each individual type's
+    # count alone would stay under it.
+    resources = {
+        "aws_s3_bucket": {f"b{i}": {} for i in range(3)},
+        "aws_lambda_function": {f"fn{i}": {} for i in range(3)},
+    }
+    assert compute_cost_estimate_tier(resources) == "medium"
+
+
+def test_compute_cost_estimate_tier_defaults_low_for_no_resources():
+    assert compute_cost_estimate_tier(None) == "low"
+    assert compute_cost_estimate_tier({}) == "low"
+
+
+def test_handler_persists_computed_cost_estimate_tier(monkeypatch):
+    monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
+    _FakeDynamoDBClient.ITEMS = {}
+
+    event = {
+        "review_id": "r3",
+        "findings": [_finding().model_dump(mode="json")],
+        "reviews_table_name": "archibrief-dev-reviews",
+        "resources": {"aws_lambda_function": {f"fn{i}": {} for i in range(25)}},
+    }
+    handler(event, None)
+
+    assert _FakeDynamoDBClient.ITEMS["r3"]["costEstimateTier"] == "high"
+
+
+def test_assemble_baseline_answers_maps_preflight_field_state_to_contract_shape():
+    preflight_fields = {
+        "expected_traffic_scale": {"outcome": "assumption", "value": "low-to-moderate", "is_assumption": True},
+        "regulatory_data_residency": {"outcome": "answered", "value": "EU only", "is_assumption": False},
+    }
+
+    answers = assemble_baseline_answers(preflight_fields, "preflight_defaults@2026-09-08")
+
+    by_field = {a["field"]: a for a in answers}
+    assert by_field["expected_traffic_scale"]["label"] == "Traffic and scale"
+    assert by_field["expected_traffic_scale"]["outcome"] == "assumption"
+    assert by_field["expected_traffic_scale"]["value"] == "low-to-moderate"
+    assert by_field["expected_traffic_scale"]["policy_version"] == "preflight_defaults@2026-09-08"
+    assert by_field["regulatory_data_residency"]["outcome"] == "answered"
+
+
+def test_assemble_baseline_answers_maps_unknown_and_paused_to_not_observable():
+    preflight_fields = {
+        "a": {"outcome": "unknown", "value": None, "is_assumption": False},
+        "b": {"outcome": "paused", "value": None, "is_assumption": False},
+    }
+
+    answers = assemble_baseline_answers(preflight_fields, None)
+
+    outcomes = {a["field"]: a["outcome"] for a in answers}
+    assert outcomes == {"a": "not-observable", "b": "not-observable"}
+
+
+def test_assemble_evidence_ledger_includes_baseline_answers():
+    ledger = assemble_evidence_ledger(
+        "r1",
+        [_finding()],
+        baseline_answers=[{"field": "x", "label": "X", "outcome": "answered", "value": "y", "policy_version": "v1"}],
+    )
+    assert ledger["baseline_answers"][0]["field"] == "x"
+
+
+def test_handler_persists_baseline_answers_from_preflight_fields():
+    event = {
+        "review_id": "r1",
+        "findings": [_finding().model_dump(mode="json")],
+        "preflight_fields": {
+            "expected_traffic_scale": {"outcome": "assumption", "value": "low", "is_assumption": True}
+        },
+        "defaults_version": "preflight_defaults@2026-09-08",
+    }
+    result = handler(event, None)
+    assert result["status"] == "complete"
