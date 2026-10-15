@@ -169,9 +169,24 @@ data "aws_iam_policy_document" "agentcore_execution" {
     resources = ["${aws_s3_bucket.artifact.arn}/*"]
   }
 
-  # Log-delivery/resource-policy actions don't support resource-level
-  # scoping in IAM — same caveat as modules/iam's AllowLogging statement
-  # and modules/step-functions-lambda's state_machine_invoke document.
+  # Audited 2026-10-13 (pre-launch per-Lambda IAM sweep): unlike
+  # modules/iam's AllowLogging statement and modules/step-functions-
+  # lambda's state_machine_invoke document (log-delivery/resource-policy
+  # actions, genuinely unscopable in IAM), CreateLogGroup/CreateLogStream/
+  # PutLogEvents normally CAN be scoped to a specific log-group ARN. Not
+  # done here because of a real chicken-and-egg problem, not an IAM API
+  # limitation: AgentCore Runtime's log group name embeds
+  # `agent_runtime_id`, an AWS-generated value with a random suffix
+  # (confirmed live against the real deployed runtime: a log group of
+  # the form "/aws/bedrock-agentcore/runtimes/<name>-<random-suffix>-
+  # DEFAULT" — the real suffix is deliberately not reproduced here per
+  # ADR-0015's no-real-account-identifiers-in-committed-code policy)
+  # that doesn't exist until
+  # aws_bedrockagentcore_agent_runtime.review is created — but that
+  # resource needs this execution role's ARN to be created in the first
+  # place. Scoping this statement to the real log group would require a
+  # circular dependency. DescribeLogGroups genuinely has no resource-level
+  # scoping in IAM regardless.
   statement {
     sid    = "Logging"
     effect = "Allow"
@@ -204,7 +219,7 @@ resource "aws_iam_role_policy" "agentcore_execution" {
 # here) is still the authoritative check.
 resource "aws_bedrockagentcore_agent_runtime" "review" {
   agent_runtime_name = replace(var.name_prefix, "-", "_")
-  role_arn            = aws_iam_role.agentcore_execution.arn
+  role_arn           = aws_iam_role.agentcore_execution.arn
 
   agent_runtime_artifact {
     code_configuration {
@@ -228,13 +243,33 @@ resource "aws_bedrockagentcore_agent_runtime" "review" {
   # project already (see Work-Project-Issues-Log.md, 2026-09-16) — that
   # failure mode is exactly what wiring this in for real prevents.
   environment_variables = {
-    ARCHIBRIEF_GUARDRAIL_ID          = var.guardrail_id
-    ARCHIBRIEF_GUARDRAIL_VERSION     = var.guardrail_version
-    ARCHIBRIEF_VECTOR_BUCKET         = var.vector_bucket_name
-    ARCHIBRIEF_VECTOR_INDEX          = var.vector_index_name
-    ARCHIBRIEF_REASONING_MODEL_ID    = var.reasoning_model_id
-    ARCHIBRIEF_REASONING_MAX_TOKENS  = tostring(var.reasoning_max_tokens)
-    AWS_REGION                       = data.aws_region.current.name
+    ARCHIBRIEF_GUARDRAIL_ID         = var.guardrail_id
+    ARCHIBRIEF_GUARDRAIL_VERSION    = var.guardrail_version
+    ARCHIBRIEF_VECTOR_BUCKET        = var.vector_bucket_name
+    ARCHIBRIEF_VECTOR_INDEX         = var.vector_index_name
+    ARCHIBRIEF_REASONING_MODEL_ID   = var.reasoning_model_id
+    ARCHIBRIEF_REASONING_MAX_TOKENS = tostring(var.reasoning_max_tokens)
+    AWS_REGION                      = data.aws_region.current.name
+    # Found 2026-10-13, live-tested: AgentCore Runtime caches the ZIP it
+    # read from S3 at creation and does NOT re-check that S3 key for new
+    # content — re-uploading to the same key (aws_s3_object.runtime_code,
+    # which Terraform correctly detects via source_hash and re-uploads)
+    # is silently a no-op from AgentCore's perspective, because nothing
+    # about this resource's own agent_runtime_artifact.code_configuration
+    # block changed. Confirmed directly: a real execution's Finalize step
+    # failed on a field (defaults_version) added to runtime_entrypoint.py
+    # on 2026-10-01, nearly two weeks after this module's own
+    # build_runtime_package.py was last run — the deployed runtime was
+    # running stale code despite several terraform applies in between,
+    # each of which re-uploaded the (until-now still-stale) zip with no
+    # actual effect. Independently confirmed as a known AgentCore
+    # behavior, not specific to this project — see
+    # https://dev.to/aws-builders/terraform-your-aws-agentcore-11kl's
+    # "_CODE_VERSION" pattern. Tying an env var to the same content hash
+    # already used for the S3 object's own source_hash forces Terraform
+    # to see a real diff on THIS resource whenever the code actually
+    # changes, which is what makes AgentCore refetch it.
+    ARCHIBRIEF_CODE_VERSION = aws_s3_object.runtime_code.source_hash
   }
 
   # No VPC requirement identified for this workload (it only calls

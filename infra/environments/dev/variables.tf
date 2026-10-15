@@ -39,17 +39,43 @@ variable "github_repo" {
 
 variable "lambda_zip_paths" {
   type = object({
-    ingest      = string
-    rule_engine = string
-    validate    = string
-    audit       = string
-    finalize    = string
+    ingest                    = string
+    rule_engine               = string
+    validate                  = string
+    audit                     = string
+    finalize                  = string
+    store_clarification_token = string
   })
 }
 
 variable "admin_authorizer_zip_path" {
   type        = string
   description = "Deployment package for the pre-shared admin-credential Lambda authorizer (ADR-0044)."
+}
+
+variable "get_review_zip_path" {
+  type        = string
+  description = "Deployment package for GET /reviews/{reviewId}'s Lambda (backend/lambdas/get_review)."
+}
+
+variable "clarify_review_zip_path" {
+  type        = string
+  description = "Deployment package for POST /reviews/{reviewId}/clarify's Lambda (backend/lambdas/clarify_review)."
+}
+
+variable "deeper_review_zip_path" {
+  type        = string
+  description = "Deployment package for POST /reviews/{reviewId}/findings/{findingId}/deeper's Lambda (backend/lambdas/deeper_review)."
+}
+
+variable "get_demo_zip_path" {
+  type        = string
+  description = "Deployment package for GET /demo's Lambda (backend/lambdas/get_demo)."
+}
+
+variable "create_upload_zip_path" {
+  type        = string
+  description = "Deployment package for POST /uploads's Lambda (backend/lambdas/create_upload) — ADR-0045, drafted 2026-10-12."
 }
 
 variable "agentcore_runtime_zip_path" {

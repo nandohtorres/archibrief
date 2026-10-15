@@ -12,7 +12,7 @@
 # GET /demo (guest/demo, static precomputed report) is intentionally
 # public and unauthenticated; it never touches this gated integration.
 #
-# GET /reviews/{reviewId}, POST /clarify, and the "go deeper" endpoint
+# GET /reviews/{reviewId}, POST /reviews/{reviewId}/clarify, and the "go deeper" endpoint
 # need a DynamoDB/Step-Functions-task-token direct integration whose
 # exact request/response mapping is an implementation detail to verify
 # against the live API Gateway v2 AWS_PROXY subtype support at build
@@ -24,7 +24,14 @@ resource "aws_apigatewayv2_api" "main" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = ["https://archibrief.dev"]
+    # Both the raw CloudFront origin and the custom domain(s) are
+    # allowed - found 2026-10-14 while wiring the custom domain that
+    # only the CloudFront origin was ever allowed here, which would
+    # have broken every request the moment anyone actually visited
+    # archibrief.dev once it resolved (same class of bug as the
+    # 2026-10-12 CORS break this variable's own description documents,
+    # just the next domain in line to cause it).
+    allow_origins = concat([var.frontend_origin], var.additional_cors_origins)
     allow_methods = ["GET", "POST", "OPTIONS"]
     allow_headers = ["authorization", "content-type", "x-admin-key"]
   }
@@ -163,7 +170,7 @@ resource "aws_apigatewayv2_integration" "start_review" {
 }
 
 # Only POST /reviews is wired for now. GET /reviews/{reviewId},
-# POST /clarify, POST /deeper, and GET /demo were previously wired to
+# POST /reviews/{reviewId}/clarify, POST /deeper, and GET /demo were previously wired to
 # this same StartExecution integration before their real logic existed
 # (GET /demo unauthenticated) — found in a 2026-09-09 audit sweep: this
 # would have let any internet caller trigger a real, billed Step
@@ -184,6 +191,428 @@ resource "aws_apigatewayv2_route" "post_reviews" {
   authorization_type = "CUSTOM"
 }
 
+# GET /reviews/{reviewId} and POST /reviews/{reviewId}/clarify (2026-10-01): both need real
+# compute (a DynamoDB read; a DynamoDB read + states:SendTaskSuccess),
+# which API Gateway v2's native AWS_PROXY quick-create integration
+# subtypes don't support for either DynamoDB or Step Functions task-token
+# resume — see backend/lambdas/get_review/handler.py's module docstring
+# for the specific subtype-support gap this confirmed. Both are plain
+# Lambda proxy integrations instead, same shape as admin_authorizer
+# above, payload format v2.0 (API Gateway v2's native request/response
+# shape, not the v1.0 format the StartExecution integration above uses).
+data "aws_iam_policy_document" "review_reader_data_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem"]
+    resources = [var.reviews_table_arn]
+  }
+  # Added 2026-10-01 — get_review now reads the S3 evidence ledger to
+  # assemble the real ReviewReport contract shape (backend.shared.report)
+  # once a review is complete, not just the DynamoDB pointer item.
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.reports_bucket_arn}/*"]
+  }
+}
+
+resource "aws_iam_role" "get_review" {
+  name                 = "${var.name_prefix}-get-review"
+  assume_role_policy   = data.aws_iam_policy_document.admin_authorizer_trust.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "get_review_basic_logs" {
+  role       = aws_iam_role.get_review.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "get_review_data_access" {
+  name   = "${var.name_prefix}-get-review-data-access"
+  role   = aws_iam_role.get_review.id
+  policy = data.aws_iam_policy_document.review_reader_data_access.json
+}
+
+resource "aws_lambda_function" "get_review" {
+  function_name    = "${var.name_prefix}-get-review"
+  role             = aws_iam_role.get_review.arn
+  handler          = "backend.lambdas.get_review.handler.handler"
+  runtime          = "python3.12"
+  filename         = var.get_review_zip_path
+  source_code_hash = fileexists(var.get_review_zip_path) ? filebase64sha256(var.get_review_zip_path) : null
+  timeout          = 3
+
+  environment {
+    variables = {
+      REVIEWS_TABLE_NAME  = var.reviews_table_name
+      REPORTS_BUCKET_NAME = var.reports_bucket_name
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_lambda_permission" "apigw_invoke_get_review" {
+  statement_id  = "AllowAPIGatewayInvokeGetReview"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_review.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "get_review" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.get_review.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "get_review" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /reviews/{reviewId}"
+  target             = "integrations/${aws_apigatewayv2_integration.get_review.id}"
+  authorizer_id      = aws_apigatewayv2_authorizer.admin_gate.id
+  authorization_type = "CUSTOM"
+}
+
+# clarify_review needs GetItem+PutItem (reads the pending token, clears
+# it after resuming) plus states:SendTaskSuccess — which AWS requires be
+# scoped to resource "*" (the task-token API has no ARN-scoped resource
+# to restrict by; the token itself is the authorization), not to this
+# state machine's own ARN.
+data "aws_iam_policy_document" "clarify_review_data_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+    resources = [var.reviews_table_arn]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["states:SendTaskSuccess", "states:SendTaskFailure"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role" "clarify_review" {
+  name                 = "${var.name_prefix}-clarify-review"
+  assume_role_policy   = data.aws_iam_policy_document.admin_authorizer_trust.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "clarify_review_basic_logs" {
+  role       = aws_iam_role.clarify_review.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "clarify_review_data_access" {
+  name   = "${var.name_prefix}-clarify-review-data-access"
+  role   = aws_iam_role.clarify_review.id
+  policy = data.aws_iam_policy_document.clarify_review_data_access.json
+}
+
+resource "aws_lambda_function" "clarify_review" {
+  function_name    = "${var.name_prefix}-clarify-review"
+  role             = aws_iam_role.clarify_review.arn
+  handler          = "backend.lambdas.clarify_review.handler.handler"
+  runtime          = "python3.12"
+  filename         = var.clarify_review_zip_path
+  source_code_hash = fileexists(var.clarify_review_zip_path) ? filebase64sha256(var.clarify_review_zip_path) : null
+  timeout          = 10
+
+  environment {
+    variables = {
+      REVIEWS_TABLE_NAME = var.reviews_table_name
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_lambda_permission" "apigw_invoke_clarify_review" {
+  statement_id  = "AllowAPIGatewayInvokeClarifyReview"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.clarify_review.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "clarify_review" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.clarify_review.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "post_clarify" {
+  api_id = aws_apigatewayv2_api.main.id
+  # Corrected 2026-10-01 — first built as a flat "POST /clarify" against
+  # an undocumented contract invented for this Lambda, before checking
+  # Work-Project-System-Design.md's "API contracts" section or the
+  # frontend's existing lib/api.ts, both of which already specify
+  # reviewId in the path, not the body.
+  route_key          = "POST /reviews/{reviewId}/clarify"
+  target             = "integrations/${aws_apigatewayv2_integration.clarify_review.id}"
+  authorizer_id      = aws_apigatewayv2_authorizer.admin_gate.id
+  authorization_type = "CUSTOM"
+}
+
+# POST /reviews/{reviewId}/findings/{findingId}/deeper (2026-10-01) — a
+# scoped per-finding re-run, never the full pipeline (ADR-0023/ADR-0039).
+# Deliberately NOT a Step Functions integration: deeper_review.handler
+# calls the deployed AgentCore Runtime directly over boto3
+# (AgentCoreRuntimeClient), so this is a plain Lambda proxy integration
+# like get_review/clarify_review above, not a StepFunctions-* subtype.
+data "aws_iam_policy_document" "deeper_review_data_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem"]
+    resources = [var.reviews_table_arn]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:PutItem"]
+    resources = [var.findings_table_arn]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.reports_bucket_arn}/*"]
+  }
+  dynamic "statement" {
+    for_each = var.agentcore_runtime_arn == null ? [] : [1]
+    content {
+      effect    = "Allow"
+      actions   = ["bedrock-agentcore:InvokeAgentRuntime"]
+      resources = [var.agentcore_runtime_arn]
+    }
+  }
+}
+
+resource "aws_iam_role" "deeper_review" {
+  name                 = "${var.name_prefix}-deeper-review"
+  assume_role_policy   = data.aws_iam_policy_document.admin_authorizer_trust.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "deeper_review_basic_logs" {
+  role       = aws_iam_role.deeper_review.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "deeper_review_data_access" {
+  name   = "${var.name_prefix}-deeper-review-data-access"
+  role   = aws_iam_role.deeper_review.id
+  policy = data.aws_iam_policy_document.deeper_review_data_access.json
+}
+
+resource "aws_lambda_function" "deeper_review" {
+  function_name    = "${var.name_prefix}-deeper-review"
+  role             = aws_iam_role.deeper_review.arn
+  handler          = "backend.lambdas.deeper_review.handler.handler"
+  runtime          = "python3.12"
+  filename         = var.deeper_review_zip_path
+  source_code_hash = fileexists(var.deeper_review_zip_path) ? filebase64sha256(var.deeper_review_zip_path) : null
+  # Longer than get_review/clarify_review's default (3s/10s) — this path
+  # makes a real synchronous Bedrock-backed AgentCore call (retrieve +
+  # reason), not a single DynamoDB read/write.
+  timeout = 60
+
+  environment {
+    variables = {
+      REVIEWS_TABLE_NAME  = var.reviews_table_name
+      FINDINGS_TABLE_NAME = var.findings_table_name
+      REPORTS_BUCKET_NAME = var.reports_bucket_name
+      # Same placeholder-ARN deferral as modules/step-functions-lambda's
+      # InvokeAgent task — AgentCore isn't deployed on every environment
+      # yet, and an empty string would still let this Lambda deploy
+      # (it only fails at actual invocation time, same documented
+      # tradeoff as the state machine's own InvokeAgent task).
+      AGENTCORE_RUNTIME_ARN = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_lambda_permission" "apigw_invoke_deeper_review" {
+  statement_id  = "AllowAPIGatewayInvokeDeeperReview"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.deeper_review.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "deeper_review" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.deeper_review.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "post_deeper" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /reviews/{reviewId}/findings/{findingId}/deeper"
+  target             = "integrations/${aws_apigatewayv2_integration.deeper_review.id}"
+  authorizer_id      = aws_apigatewayv2_authorizer.admin_gate.id
+  authorization_type = "CUSTOM"
+}
+
+# GET /demo (2026-10-01) — the one deliberately PUBLIC, UNAUTHENTICATED
+# route (ADR-0029, ADR-0044): no authorizer_id/authorization_type at all,
+# unlike every other route above. Serves a precomputed/cached reference
+# report (backend/lambdas/get_demo) — never touches DynamoDB, S3, Step
+# Functions, or AgentCore, so there is no real pipeline cost or app-level
+# rate-limit concern here, only normal static-content-serving exposure
+# (ADR-0029's own reasoning for why this is safe to leave ungated).
+resource "aws_iam_role" "get_demo" {
+  name                 = "${var.name_prefix}-get-demo"
+  assume_role_policy   = data.aws_iam_policy_document.admin_authorizer_trust.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "get_demo_basic_logs" {
+  role       = aws_iam_role.get_demo.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_lambda_function" "get_demo" {
+  function_name    = "${var.name_prefix}-get-demo"
+  role             = aws_iam_role.get_demo.arn
+  handler          = "backend.lambdas.get_demo.handler.handler"
+  runtime          = "python3.12"
+  filename         = var.get_demo_zip_path
+  source_code_hash = fileexists(var.get_demo_zip_path) ? filebase64sha256(var.get_demo_zip_path) : null
+  timeout          = 3
+
+  tags = var.tags
+}
+
+resource "aws_lambda_permission" "apigw_invoke_get_demo" {
+  statement_id  = "AllowAPIGatewayInvokeGetDemo"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_demo.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "get_demo" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.get_demo.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "get_demo" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /demo"
+  target    = "integrations/${aws_apigatewayv2_integration.get_demo.id}"
+  # Deliberately no authorizer_id/authorization_type — see comment above.
+}
+
+# POST /uploads (2026-10-12, ADR-0045) — the first half of the
+# direct-upload archive_path design: issues a presigned POST so the
+# client uploads its own Terraform archive straight to S3, never
+# routing the file bytes through this Lambda or API Gateway itself.
+# Admin-gated like every other non-demo route — a presigned POST is
+# still real, if small, AWS-facing work (an S3 PutObject will land
+# against this account's bucket), not something to leave open to the
+# internet the way GET /demo correctly is.
+data "aws_iam_policy_document" "create_upload_data_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:PutObject"]
+    resources = ["${var.reports_bucket_arn}/uploads/*"]
+  }
+}
+
+resource "aws_iam_role" "create_upload" {
+  name                 = "${var.name_prefix}-create-upload"
+  assume_role_policy   = data.aws_iam_policy_document.admin_authorizer_trust.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "create_upload_basic_logs" {
+  role       = aws_iam_role.create_upload.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "create_upload_data_access" {
+  name   = "${var.name_prefix}-create-upload-data-access"
+  role   = aws_iam_role.create_upload.id
+  policy = data.aws_iam_policy_document.create_upload_data_access.json
+}
+
+resource "aws_lambda_function" "create_upload" {
+  function_name    = "${var.name_prefix}-create-upload"
+  role             = aws_iam_role.create_upload.arn
+  handler          = "backend.lambdas.create_upload.handler.handler"
+  runtime          = "python3.12"
+  filename         = var.create_upload_zip_path
+  source_code_hash = fileexists(var.create_upload_zip_path) ? filebase64sha256(var.create_upload_zip_path) : null
+  timeout          = 5
+
+  environment {
+    variables = {
+      REPORTS_BUCKET_NAME = var.reports_bucket_name
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_lambda_permission" "apigw_invoke_create_upload" {
+  statement_id  = "AllowAPIGatewayInvokeCreateUpload"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.create_upload.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "create_upload" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.create_upload.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "post_uploads" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /uploads"
+  target             = "integrations/${aws_apigatewayv2_integration.create_upload.id}"
+  authorizer_id      = aws_apigatewayv2_authorizer.admin_gate.id
+  authorization_type = "CUSTOM"
+}
+
+# Phase B (2026-10-14): regional custom domain for this API. Created
+# only when a validated cert is supplied — see var.certificate_arn's
+# description. Regional (not edge-optimized) since this API already
+# lives entirely in one region and gains nothing from an extra
+# CloudFront hop in front of it.
+resource "aws_apigatewayv2_domain_name" "api" {
+  count       = var.certificate_arn == null ? 0 : 1
+  domain_name = var.domain_name
+
+  domain_name_configuration {
+    certificate_arn = var.certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+
+  tags = var.tags
+}
+
+resource "aws_apigatewayv2_api_mapping" "api" {
+  count       = var.certificate_arn == null ? 0 : 1
+  api_id      = aws_apigatewayv2_api.main.id
+  domain_name = aws_apigatewayv2_domain_name.api[0].id
+  stage       = aws_apigatewayv2_stage.default.id
+}
+
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.main.id
   name        = "$default"
@@ -192,6 +621,15 @@ resource "aws_apigatewayv2_stage" "default" {
   default_route_settings {
     throttling_burst_limit = var.throttling_burst_limit
     throttling_rate_limit  = var.throttling_rate_limit
+  }
+
+  # GET /demo gets its own, lower quota — see demo_throttling_*'s
+  # comment in variables.tf. Without this override it shared the
+  # default_route_settings bucket above with every admin-gated route.
+  route_settings {
+    route_key              = aws_apigatewayv2_route.get_demo.route_key
+    throttling_burst_limit = var.demo_throttling_burst_limit
+    throttling_rate_limit  = var.demo_throttling_rate_limit
   }
 
   tags = var.tags

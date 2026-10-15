@@ -20,11 +20,11 @@
         "s3:DeleteObject",
         "s3:ListBucket",
         "s3:PutBucketTagging",
-        "s3:GetBucketTagging",
         "s3:PutObjectTagging",
         "s3:GetObjectTagging",
         "s3:PutBucketPolicy",
-        "s3:DeleteBucketPolicy"
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketCORS"
       ],
       "Resource": [
         "arn:aws:s3:::archibrief-*",
@@ -62,16 +62,11 @@
       "Resource": "arn:aws:s3vectors:us-east-1:123456789012:bucket/archibrief-*/index/*"
     },
     {
-      "Sid": "BedrockEmbedInvoke",
-      "Effect": "Allow",
-      "Action": "bedrock:InvokeModel",
-      "Resource": "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0"
-    },
-    {
       "Sid": "BedrockReasoningInvoke",
       "Effect": "Allow",
       "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
       "Resource": [
+        "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0",
         "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-5",
         "arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-sonnet-5",
         "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
@@ -170,7 +165,10 @@
         "logs:DeleteLogGroup",
         "logs:PutRetentionPolicy",
         "logs:TagResource",
-        "logs:ListTagsForResource"
+        "logs:ListTagsForResource",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents"
       ],
       "Resource": [
         "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/archibrief-dev-*",
@@ -193,9 +191,15 @@
         "states:DescribeStateMachine",
         "states:TagResource",
         "states:ListStateMachineVersions",
-        "states:ListTagsForResource"
+        "states:ListTagsForResource",
+        "states:ListExecutions",
+        "states:DescribeExecution",
+        "states:GetExecutionHistory"
       ],
-      "Resource": "arn:aws:states:us-east-1:123456789012:stateMachine:archibrief-dev-*"
+      "Resource": [
+        "arn:aws:states:us-east-1:123456789012:stateMachine:archibrief-dev-*",
+        "arn:aws:states:us-east-1:123456789012:execution:archibrief-dev-*:*"
+      ]
     },
     {
       "Sid": "StepFunctionsValidateDefinition",

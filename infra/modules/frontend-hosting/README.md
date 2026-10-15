@@ -1,8 +1,13 @@
 # frontend-hosting
 
 Phase A static hosting for `frontend/out` (S3 + CloudFront via OAC, default
-`*.cloudfront.net` domain). Phase B (custom domain) is a separate, later
-step — not built here.
+`*.cloudfront.net` domain). Phase B (custom domain support — `aliases`/
+`certificate_arn`) is built into this module too now (2026-10-14), but the
+cert/DNS side of it lives in `infra/environments/dev/` (the ACM
+certificate and its DNS validation are cross-cutting — shared with the
+api-gateway module's own custom domain — not something a single-purpose
+module like this one should own). See that environment's own README for
+the actual apply sequence.
 
 This module only provisions infrastructure. After `terraform apply`,
 upload the static export manually:

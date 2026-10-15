@@ -5,11 +5,12 @@ variable "name_prefix" {
 
 variable "lambda_zip_paths" {
   type = object({
-    ingest      = string
-    rule_engine = string
-    validate    = string
-    audit       = string
-    finalize    = string
+    ingest                     = string
+    rule_engine                = string
+    validate                   = string
+    audit                      = string
+    finalize                   = string
+    store_clarification_token  = string
   })
   description = "Path to each Lambda's deployment package — TODO(account-setup): real build artifacts don't exist until a packaging step runs in CI."
 }
