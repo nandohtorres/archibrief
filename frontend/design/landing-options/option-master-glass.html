@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArchiBrief · Landing master, glass variant</title>
+<!-- Glass variant of option-master.html (2026-10-15): same layout and copy,
+     plus option C's floating, see-through feel (Fernando: "text just floating
+     over a slightly opaque or glass material"). All changes are in the
+     "Glass variant" block at the end of the styles.
+     Design mockup only. Combines Fernando's picks (2026-10-15):
+     A: editorial hero + headline, quick jump to the sample.
+     B: clean sticky header, sample review cards, overall clean look.
+     C: grayscale mix of text sizes, check marks, the numbered how-it-works
+        walkthrough (circles, connecting line, step visuals).
+     Tokens copied from frontend/app/globals.css. Content uses the real
+     payments sample (GET /demo), not the streaming one in A/B/C. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,500;1,8..60,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f7f9; --surface: #ffffff; --surface-2: #eaeff3; --surface-3: #dce5eb;
+  --border: #c5d0d9; --text: #131c24; --text-muted: #43596c; --text-faint: #566b7d;
+  --focus: #005ea8; --accent: #235f7a; --accent-ink: #ffffff; --accent-tint: #e1edf2;
+  --critical: #a52f24; --critical-bg: #fbeae8; --warning: #7f500f; --warning-bg: #faf1e2;
+  --success: #1f6d51; --success-bg: #e6f4ef; --unknown: #5c4d73; --unknown-bg: #f0ebf6;
+  --shadow: 0 1px 2px rgb(19 28 36 / .06), 0 12px 32px -12px rgb(19 28 36 / .18);
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --font-serif: "Source Serif 4", Georgia, serif;
+  --radius-s: 4px; --radius-m: 8px; --radius-l: 14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1319; --surface: #141d26; --surface-2: #1a2530; --surface-3: #23313e;
+    --border: #46596b; --text: #e7edf2; --text-muted: #a8bac9; --text-faint: #879aac;
+    --focus: #8bd5ff; --accent: #7bc1df; --accent-ink: #06222c; --accent-tint: #16323e;
+    --critical: #ee887b; --critical-bg: #2c1815; --warning: #e2ae61; --warning-bg: #2b2013;
+    --success: #77d2ae; --success-bg: #102820; --unknown: #c4a8e2; --unknown-bg: #261c32;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 16px 40px -16px rgb(0 0 0 / .7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1319; --surface: #141d26; --surface-2: #1a2530; --surface-3: #23313e;
+  --border: #46596b; --text: #e7edf2; --text-muted: #a8bac9; --text-faint: #879aac;
+  --focus: #8bd5ff; --accent: #7bc1df; --accent-ink: #06222c; --accent-tint: #16323e;
+  --critical: #ee887b; --critical-bg: #2c1815; --warning: #e2ae61; --warning-bg: #2b2013;
+  --success: #77d2ae; --success-bg: #102820; --unknown: #c4a8e2; --unknown-bg: #261c32;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 16px 40px -16px rgb(0 0 0 / .7);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 1rem/1.6 var(--font-body); }
+h1, h2, h3, h4, p { margin-top: 0; }
+h1, h2, h3 { text-wrap: balance; }
+a { color: var(--accent); text-underline-offset: .18em; }
+:where(a, button):focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.skip-link { position: fixed; z-index: 10; top: .5rem; left: .5rem; transform: translateY(-160%);
+  padding: .5rem 1rem; border-radius: var(--radius-s); background: var(--text); color: var(--bg); }
+.skip-link:focus { transform: none; }
+.wrap { width: min(100% - 2rem, 1080px); margin: 0 auto; }
+.mono { font-family: var(--font-mono); }
+/* C's grayscale type ladder: small mono labels in faint gray */
+.label { display: block; color: var(--text-faint); font: 700 .7rem/1.4 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+
+/* Header — B: sticky, blurred, brand with a subtitle */
+.site-header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+.site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 0; }
+.brand { display: flex; align-items: center; gap: .6rem; color: var(--text); text-decoration: none; }
+.brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px;
+  background: var(--accent); color: var(--accent-ink); font: 700 1.05rem/1 var(--font-mono); }
+.brand > span:last-child { display: grid; }
+.brand strong { font: 700 1rem/1.3 var(--font-mono); }
+.brand small { color: var(--text-muted); font-size: .74rem; }
+.header-right { display: flex; align-items: center; gap: 1.25rem; }
+.header-nav { display: flex; gap: 1.25rem; font-size: .88rem; font-weight: 600; }
+.header-nav a { color: var(--text-muted); text-decoration: none; }
+.header-nav a:hover { color: var(--text); text-decoration: underline; }
+.theme-toggle { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+.theme-toggle button { min-height: 32px; padding: 0 .7rem; border: 0; border-radius: 999px; background: transparent;
+  color: var(--text-muted); font: 600 .75rem/1 var(--font-mono); cursor: pointer; }
+.theme-toggle button[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent); }
+
+/* Hero — A: editorial serif headline */
+.hero { padding: clamp(3rem, 9vw, 6.5rem) 0 clamp(2.5rem, 6vw, 4rem); }
+.kicker { display: block; margin-bottom: 1.25rem; color: var(--accent);
+  font: 700 .74rem/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.hero h1 { max-width: 16ch; margin-bottom: 1.5rem; font: 600 clamp(2.3rem, 7.2vw, 4.6rem)/1.04 var(--font-serif); letter-spacing: -.015em; }
+.hero h1 em { font-style: italic; font-weight: 500; color: var(--accent); }
+.hero .lede { max-width: 58ch; margin-bottom: 2rem; color: var(--text-muted); font-size: clamp(1.05rem, 2.4vw, 1.2rem); }
+.actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 48px;
+  padding: .7rem 1.35rem; border-radius: var(--radius-m); font-weight: 700; text-decoration: none; }
+.button.primary { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+/* C's button pair: solid primary, quiet bordered secondary */
+.button.secondary { border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.button:hover { filter: brightness(1.06); }
+/* C: check-mark badges */
+/* Buttons and check marks as one block; the check marks center under the
+   buttons and wrap to the buttons' width (width: 0 + min-width: 100%). */
+.cta { display: inline-flex; flex-direction: column; }
+.badges { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem 1.5rem; width: 0; min-width: 100%;
+  margin: 1.5rem 0 0; padding: 0; list-style: none; color: var(--text-muted); font-size: .88rem; text-align: center; }
+.badges li::before { content: "✓"; margin-right: .45rem; color: var(--success); font-weight: 700; }
+
+/* Sections */
+section { padding: clamp(2.75rem, 6vw, 4.75rem) 0; }
+/* Land below the sticky header when jumped to. */
+section[id] { scroll-margin-top: 72px; }
+section.alt { background: var(--surface); border-block: 1px solid var(--border); }
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 2rem; margin-bottom: 2rem; }
+.section-head h2 { margin: 0; font: 600 clamp(1.6rem, 4vw, 2.2rem)/1.15 var(--font-serif); }
+.section-head p { max-width: 46ch; margin: 0; color: var(--text-muted); font-size: .95rem; }
+
+/* Samples — B: icon cards, ready card tinted */
+.samples { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 1rem; }
+.sample { display: grid; grid-template-rows: auto auto 1fr auto auto; gap: .6rem; padding: 1.25rem; border: 1px solid var(--border);
+  border-radius: var(--radius-l); background: var(--bg); }
+.sample.ready { border-color: var(--accent); background: var(--accent-tint); }
+.sample-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.sample-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--accent); }
+.tags { display: flex; flex-wrap: wrap; gap: .35rem; }
+.tag { display: inline-flex; padding: .12rem .5rem; border-radius: 999px; font: 600 .68rem/1.5 var(--font-mono); }
+.tag.hypo { background: var(--unknown-bg); color: var(--unknown); }
+.tag.ready { background: var(--success-bg); color: var(--success); }
+.tag.soon { background: var(--surface-2); color: var(--text-muted); }
+.sample h3 { margin: 0; font-size: 1.1rem; }
+.sample p { margin: 0; color: var(--text-muted); font-size: .9rem; }
+.sample .stack { color: var(--text-faint); font: 500 .74rem/1.6 var(--font-mono); }
+.sample .row { padding-top: .4rem; }
+.sample a { font-weight: 700; font-size: .92rem; }
+.sample .soon-text { color: var(--text-faint); font-size: .85rem; font-weight: 600; }
+.fine { margin: 1rem 0 0; color: var(--text-faint); font-size: .8rem; }
+
+/* How it works — C: numbered circles on a line, each step with its visual.
+   The line fills in as you scroll (only when motion is allowed). */
+.flow-head { margin-bottom: 2.5rem; text-align: center; }
+.flow-head .label { color: var(--accent); margin-bottom: .4rem; }
+.flow-head h2 { margin: 0 0 .5rem; font: 600 clamp(1.6rem, 4vw, 2.2rem)/1.15 var(--font-serif); }
+.flow-head p { max-width: 50ch; margin: 0 auto; color: var(--text-muted); }
+.flow { position: relative; }
+.flow ol { margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.flow::before, .flow .progress { content: ""; position: absolute; top: 1.25rem; bottom: 3rem; left: 1.25rem; width: 2px; background: var(--border); }
+.flow .progress { background: var(--accent); bottom: auto; height: 0; transition: height .25s linear; }
+.step { position: relative; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 1.25rem 2.5rem;
+  padding: 0 0 3rem 4rem; counter-increment: step; }
+.step::before { content: counter(step); position: absolute; z-index: 1; top: 0; left: 0; display: grid; place-items: center; width: 2.5rem; height: 2.5rem;
+  border: 2px solid var(--accent); border-radius: 50%; background: var(--bg); color: var(--accent); font: 700 .95rem/1 var(--font-mono);
+  transition: background .3s, color .3s; }
+.step.is-on::before, .step:last-child::before { background: var(--accent); color: var(--accent-ink); }
+.step:last-child { padding-bottom: 0; }
+.step h3 { margin: .35rem 0 .5rem; font: 600 1.35rem/1.25 var(--font-body); }
+.step p { margin: 0 0 .6rem; color: var(--text-muted); font-size: .95rem; }
+.step .note { color: var(--text-faint); font-size: .84rem; }
+.artifact { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.artifact-head { display: flex; justify-content: space-between; gap: .5rem; padding: .55rem .9rem; border-bottom: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-muted); font: 600 .7rem/1.4 var(--font-mono); letter-spacing: .03em; }
+.artifact-body { padding: .9rem; }
+.tree { margin: 0; padding: 0; list-style: none; font: 400 .8rem/1.75 var(--font-mono); }
+.tree li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree .dir { color: var(--text); font-weight: 600; }
+.tree .indent { padding-left: 1.4em; color: var(--text-muted); }
+.brief { margin: .75rem 0 0; padding: .7rem .8rem; border-left: 3px solid var(--accent); border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  background: var(--accent-tint); color: var(--text); font-size: .85rem; }
+.brief .label { color: var(--accent); margin-bottom: .15rem; }
+.rules { margin: 0; padding: 0; list-style: none; display: grid; gap: .45rem; font: 400 .78rem/1.45 var(--font-mono); }
+.rules li { display: grid; grid-template-columns: 4.6rem 1fr; gap: .6rem; align-items: start; }
+.status { display: inline-block; padding: .05rem .4rem; border-radius: var(--radius-s); font-weight: 700; font-size: .68rem; text-align: center; }
+.status.fail { background: var(--critical-bg); color: var(--critical); }
+.status.pass { background: var(--success-bg); color: var(--success); }
+.status.gap { background: var(--unknown-bg); color: var(--unknown); }
+.rules span:last-child { overflow-wrap: anywhere; color: var(--text); }
+.retrieved { margin: .8rem 0 0; padding-top: .75rem; border-top: 1px dashed var(--border); color: var(--text-muted); font-size: .8rem; }
+.retrieved code { color: var(--accent); font: 600 .78rem var(--font-mono); }
+.mini-finding { display: grid; gap: .55rem; }
+.pill { justify-self: start; display: inline-flex; align-items: center; padding: .15rem .55rem; border-radius: 999px; background: var(--critical-bg); color: var(--critical); font: 700 .7rem/1.4 var(--font-body); }
+.pill::before { width: .4rem; height: .4rem; margin-right: .35rem; border-radius: 50%; background: currentColor; content: ""; }
+.mini-finding h4 { margin: 0; font-size: 1rem; line-height: 1.35; }
+.mini-finding h4 code { font: 600 .9em var(--font-mono); }
+.mini-finding dl { display: grid; gap: .5rem; margin: 0; }
+.mini-finding dt { color: var(--text-faint); font: 700 .64rem/1.4 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.mini-finding dd { margin: .1rem 0 0; font-size: .85rem; overflow-wrap: anywhere; }
+.chip { display: inline-flex; align-items: center; padding: .15rem .5rem; border: 1px solid var(--accent); border-radius: var(--radius-s); color: var(--accent); font: 600 .74rem/1.4 var(--font-mono); }
+/* Steps slide in once, as they scroll into view (JS adds .reveal-ready). */
+.reveal-ready .step { opacity: 0; transform: translateY(18px); transition: opacity .5s ease, transform .5s ease; }
+.reveal-ready .step.is-on { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal-ready .step { opacity: 1; transform: none; transition: none; }
+  .flow .progress { display: none; }
+}
+
+/* What it checks + limits — C: grayscale list with small mono sublines */
+.band-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 2.5rem 3.5rem; }
+.band-grid h2 { margin-bottom: 1rem; font: 600 1.6rem/1.2 var(--font-serif); }
+.check-list { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .25rem 1.5rem; }
+.check-list li { display: grid; grid-template-columns: 1.25rem 1fr; padding: .6rem 0; border-bottom: 1px solid var(--border); font-size: .95rem; }
+.check-list li::before { content: "✓"; color: var(--success); font-weight: 700; }
+.check-list li span { grid-column: 2; display: block; color: var(--text-faint); font: 500 .74rem/1.5 var(--font-mono); }
+.check-source { margin: 1rem 0 0; color: var(--text-faint); font-size: .82rem; }
+.trust-box { padding: 1.25rem 1.35rem; border-left: 4px solid var(--unknown); border-radius: var(--radius-s); background: var(--unknown-bg); }
+.trust-box h2 { font-size: 1.3rem; }
+.trust-box p { margin: 0 0 .75rem; color: var(--text-muted); font-size: .92rem; }
+.trust-box p:last-child { margin: 0; }
+.trust-box strong { color: var(--text); }
+
+/* Submit — stands in for the real form, owner-only for now (ADR-0047) */
+.own { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem 2rem;
+  padding: 1.5rem; border: 1px dashed var(--border); border-radius: var(--radius-l); background: var(--surface); }
+.own h2 { margin: 0 0 .35rem; font: 600 1.4rem/1.2 var(--font-serif); }
+.own p { margin: 0; max-width: 56ch; color: var(--text-muted); font-size: .92rem; }
+
+footer { padding: 2rem 0 3rem; border-top: 1px solid var(--border); color: var(--text-faint); font-size: .84rem; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem 2rem; }
+footer p { margin: 0; max-width: 60ch; }
+footer a { color: var(--text-muted); }
+
+@media (max-width: 860px) {
+  .step { grid-template-columns: 1fr; }
+  .band-grid { grid-template-columns: 1fr; }
+  .header-nav { display: none; }
+}
+@media (max-width: 560px) {
+  .brand small { display: none; }
+  .theme-toggle button { padding: 0 .55rem; }
+  .actions .button { flex: 1 1 100%; }
+  .cta { display: flex; }
+  .flow::before, .flow .progress { left: 1rem; top: 1rem; }
+  .step { padding-left: 3rem; }
+  .step::before { width: 2rem; height: 2rem; font-size: .82rem; }
+  .check-list { grid-template-columns: 1fr; }
+}
+
+/* ===== Glass variant: C's floating, see-through feel =====
+   1. One continuous background with a few very faint color glows, instead
+      of solid section bands and dividers, so the page flows.
+   2. Cards are semi-transparent with a soft blur, so the glows show
+      through faintly and the text seems to float.
+   3. Softer borders and shadows. */
+:root { --glass: color-mix(in srgb, var(--surface) 58%, transparent);
+  --glass-strong: color-mix(in srgb, var(--surface) 74%, transparent);
+  --glass-border: color-mix(in srgb, var(--border) 55%, transparent);
+  --glow-1: color-mix(in srgb, var(--accent) 14%, transparent);
+  --glow-2: color-mix(in srgb, var(--unknown) 10%, transparent);
+  --glow-3: color-mix(in srgb, var(--success) 9%, transparent);
+  --soft-shadow: 0 1px 1px rgb(19 28 36 / .03), 0 18px 40px -24px rgb(19 28 36 / .22); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --glass: color-mix(in srgb, var(--surface) 50%, transparent);
+    --glass-strong: color-mix(in srgb, var(--surface) 68%, transparent);
+    --glow-1: color-mix(in srgb, var(--accent) 12%, transparent);
+    --glow-2: color-mix(in srgb, var(--unknown) 9%, transparent);
+    --glow-3: color-mix(in srgb, var(--success) 7%, transparent);
+    --soft-shadow: 0 1px 1px rgb(0 0 0 / .3), 0 20px 44px -26px rgb(0 0 0 / .8); }
+}
+:root[data-theme="dark"] { --glass: color-mix(in srgb, var(--surface) 50%, transparent);
+  --glass-strong: color-mix(in srgb, var(--surface) 68%, transparent);
+  --glow-1: color-mix(in srgb, var(--accent) 12%, transparent);
+  --glow-2: color-mix(in srgb, var(--unknown) 9%, transparent);
+  --glow-3: color-mix(in srgb, var(--success) 7%, transparent);
+  --soft-shadow: 0 1px 1px rgb(0 0 0 / .3), 0 20px 44px -26px rgb(0 0 0 / .8); }
+body { background:
+    radial-gradient(42rem 30rem at 85% 6%, var(--glow-1), transparent 70%),
+    radial-gradient(36rem 28rem at 8% 38%, var(--glow-2), transparent 70%),
+    radial-gradient(40rem 30rem at 92% 70%, var(--glow-3), transparent 70%),
+    radial-gradient(34rem 26rem at 12% 96%, var(--glow-1), transparent 70%),
+    var(--bg); }
+.site-header { background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom-color: var(--glass-border); }
+section.alt { background: transparent; border-block: 0; }
+.sample, .artifact, .trust-box, .own, .theme-toggle, .sample-icon, .button.secondary {
+  background: var(--glass); backdrop-filter: blur(12px) saturate(1.15); -webkit-backdrop-filter: blur(12px) saturate(1.15); }
+.sample, .artifact, .own { border-color: var(--glass-border); box-shadow: var(--soft-shadow); }
+.sample.ready { background: color-mix(in srgb, var(--accent-tint) 70%, transparent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.artifact-head { background: color-mix(in srgb, var(--surface-2) 55%, transparent); border-bottom-color: var(--glass-border); }
+.brief { background: color-mix(in srgb, var(--accent-tint) 70%, transparent); }
+.trust-box { background: color-mix(in srgb, var(--unknown-bg) 62%, transparent); }
+.own { border-style: solid; }
+.check-list li { border-bottom-color: var(--glass-border); }
+.retrieved { border-top-color: var(--glass-border); }
+.step::before { background: var(--glass-strong); backdrop-filter: blur(8px); }
+.flow::before { background: var(--glass-border); }
+footer { border-top-color: var(--glass-border); }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#" aria-label="ArchiBrief home">
+      <span class="brand-mark" aria-hidden="true">A</span>
+      <span><strong>ArchiBrief</strong><small>Architecture review with receipts</small></span>
+    </a>
+    <div class="header-right">
+      <nav class="header-nav" aria-label="Primary">
+        <a href="#samples">Samples</a>
+        <a href="#how">How it works</a>
+        <a href="#limits">Limits</a>
+      </nav>
+      <div class="theme-toggle" role="group" aria-label="Color theme">
+        <button type="button" data-theme-choice="system" aria-pressed="true">Auto</button>
+        <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <!-- A: editorial hero -->
+  <div class="wrap hero">
+    <span class="kicker">AWS Terraform · architecture review</span>
+    <h1>A second opinion on your Terraform, <em>with the receipts.</em></h1>
+    <p class="lede">
+      ArchiBrief reads your Terraform and a short brief about the workload, then writes a review where
+      every finding points to the resource it's about and the AWS guidance behind it. If it can't support
+      a claim, it says so instead of guessing.
+    </p>
+    <div class="cta">
+    <div class="actions">
+      <a class="button primary" href="#samples">View sample review <span aria-hidden="true">→</span></a>
+      <a class="button secondary" href="#submit">Review your own Terraform</a>
+    </div>
+    <!-- C: check marks -->
+    <ul class="badges">
+      <li>Static analysis only</li>
+      <li>Never touches your AWS account</li>
+      <li>Every finding cites its source</li>
+    </ul>
+    </div>
+  </div>
+
+  <!-- B: sample review cards -->
+  <section class="alt" id="samples" aria-labelledby="samples-heading">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="samples-heading">Sample reviews</h2>
+        <p>Complete reports on made-up architectures modeled on services you already know. Open one to see a real review.</p>
+      </div>
+      <div class="samples">
+        <article class="sample ready">
+          <div class="sample-top">
+            <span class="sample-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><rect x="2.5" y="5" width="15" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M2.5 8.5h15" stroke="currentColor" stroke-width="1.7"/></svg></span>
+            <div class="tags"><span class="tag hypo">Hypothetical</span><span class="tag ready">Ready</span></div>
+          </div>
+          <h3>Payments API</h3>
+          <p>A customer-facing payments service: an audit-log bucket, a Lambda with an over-broad role, and a single-AZ database.</p>
+          <span class="stack">S3 · Lambda · IAM · RDS · KMS</span>
+          <div class="row"><a href="#sample-review">View sample review <span aria-hidden="true">→</span></a></div>
+        </article>
+        <article class="sample">
+          <div class="sample-top">
+            <span class="sample-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="4" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8.5 7.5v5l4-2.5z" fill="currentColor"/></svg></span>
+            <div class="tags"><span class="tag hypo">Hypothetical</span><span class="tag soon">Coming soon</span></div>
+          </div>
+          <h3>Video streaming platform</h3>
+          <p>Netflix-style: CDN-fronted media origins, a transcoding pipeline, and per-viewer watch history.</p>
+          <span class="stack">CloudFront · S3 · Lambda · MediaConvert · DynamoDB</span>
+          <div class="row"><span class="soon-text">Coming soon</span></div>
+        </article>
+        <article class="sample">
+          <div class="sample-top">
+            <span class="sample-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M3 4h2l2 9h8l2-6H6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><circle cx="8" cy="16" r="1.3" fill="currentColor"/><circle cx="14" cy="16" r="1.3" fill="currentColor"/></svg></span>
+            <div class="tags"><span class="tag hypo">Hypothetical</span><span class="tag soon">Coming soon</span></div>
+          </div>
+          <h3>Online marketplace</h3>
+          <p>eBay-style: listings and search, bidding, and a payments boundary with audit retention.</p>
+          <span class="stack">ALB · ECS · RDS · OpenSearch · SQS</span>
+          <div class="row"><span class="soon-text">Coming soon</span></div>
+        </article>
+      </div>
+      <p class="fine">Sample architectures are invented for this site. Not affiliated with, or based on the real systems of, Netflix or eBay.</p>
+    </div>
+  </section>
+
+  <!-- C: guided walkthrough -->
+  <section id="how" aria-labelledby="how-heading">
+    <div class="wrap">
+      <div class="flow-head">
+        <span class="label">How it works</span>
+        <h2 id="how-heading">From Terraform to a review you can check</h2>
+        <p>The same steps run for every review, including the payments sample above.</p>
+      </div>
+      <div class="flow">
+        <span class="progress" aria-hidden="true"></span>
+        <ol>
+        <li class="step">
+          <div>
+            <h3>You submit Terraform and a brief</h3>
+            <p>A Terraform archive plus a few sentences about the workload: traffic, how available it must be, any data rules.</p>
+            <p class="note">The brief matters. "Customer-facing, can't go down" turns a single-AZ database from a footnote into a finding.</p>
+          </div>
+          <div class="artifact" aria-label="Example submission">
+            <div class="artifact-head"><span>payments-api.tar</span><span>input</span></div>
+            <div class="artifact-body">
+              <ul class="tree">
+                <li class="dir">main.tf</li>
+                <li class="dir">modules/</li>
+                <li class="indent">audit/s3.tf</li>
+                <li class="indent">api/lambda.tf</li>
+                <li class="indent">api/iam.tf</li>
+                <li class="indent">data/rds.tf</li>
+              </ul>
+              <p class="brief"><span class="label">Workload brief</span>Customer-facing payments API. Audit logs must be kept and never public. Moderate traffic, business-critical.</p>
+            </div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Checks run, guidance is retrieved</h3>
+            <p>A trusted open-source scanner (Trivy) and ArchiBrief's own rules check the Terraform. Then the matching passages are pulled from AWS Well-Architected and security best-practice docs.</p>
+            <p class="note">Anything outside the submitted code is marked as a gap, never assumed.</p>
+          </div>
+          <div class="artifact" aria-label="Example check results">
+            <div class="artifact-head"><span>checks</span><span>deterministic</span></div>
+            <div class="artifact-body">
+              <ul class="rules">
+                <li><span class="status fail">FAIL</span><span>Lambda execution role grants s3:* on *</span></li>
+                <li><span class="status fail">FAIL</span><span>Audit-log bucket has no public-access block</span></li>
+                <li><span class="status pass">PASS</span><span>RDS storage encryption is declared</span></li>
+                <li><span class="status gap">GAP</span><span>No CloudTrail in the code; may exist at org level</span></li>
+              </ul>
+              <p class="retrieved">Retrieved: <code>SEC03-BP02</code> · <code>SEC08-BP02</code> · <code>REL10-BP01</code></p>
+            </div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>You get a review with receipts</h3>
+            <p>A model weighs every result against your brief. Each citation is checked word for word against the AWS text before anything is published.</p>
+            <p class="note">Each finding: what it's about, the guidance it relies on, how sure it is, and what to change.</p>
+          </div>
+          <div class="artifact" aria-label="Example report finding">
+            <div class="artifact-head"><span>report · finding</span><span>output</span></div>
+            <div class="artifact-body mini-finding">
+              <span class="pill">High risk</span>
+              <h4>Lambda execution role grants <code>s3:*</code> on <code>*</code></h4>
+              <dl>
+                <div><dt>Evidence</dt><dd class="mono">The inline policy contains Action s3:* and Resource *</dd></div>
+                <div><dt>Cites</dt><dd><span class="chip">SEC03-BP02</span> Grant least privilege access</dd></div>
+                <div><dt>Recommendation</dt><dd>Scope the role to the specific S3 actions the function uses, on the audit bucket only.</dd></div>
+              </dl>
+            </div>
+          </div>
+        </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- C: what it checks + limits -->
+  <section class="alt" id="limits" aria-labelledby="checks-heading">
+    <div class="wrap band-grid">
+      <div>
+        <h2 id="checks-heading">What it checks</h2>
+        <ul class="check-list">
+          <li>Public exposure<span>S3 public access, open security groups</span></li>
+          <li>Identity &amp; access<span>wildcard IAM, unconditioned trust</span></li>
+          <li>Encryption at rest<span>S3, EBS, RDS storage</span></li>
+          <li>Recoverability<span>backups, versioning, point-in-time recovery</span></li>
+          <li>Availability<span>single-AZ databases vs. your needs</span></li>
+          <li>Audit trail<span>CloudTrail and log validation</span></li>
+        </ul>
+        <p class="check-source">Checked by Trivy's trusted rules plus ArchiBrief's own, then weighed against your brief.</p>
+      </div>
+      <aside class="trust-box" aria-labelledby="trust-heading">
+        <h2 id="trust-heading">What ArchiBrief won't claim</h2>
+        <p><strong>It never touches your AWS account.</strong> It reads only the files you submit. No credentials, no calls into your environment.</p>
+        <p><strong>It can't see what you didn't submit.</strong> Org-level controls and unsubmitted modules show up as gaps, not passes or failures.</p>
+        <p><strong>It's not a compliance audit.</strong> It's a cited second opinion to help you decide what to fix first.</p>
+      </aside>
+    </div>
+  </section>
+
+  <!-- Where the real form goes (owner-only submitting for now) -->
+  <section id="submit" aria-labelledby="submit-heading">
+    <div class="wrap">
+      <div class="own">
+        <div>
+          <h2 id="submit-heading">Review your own Terraform</h2>
+          <p>The full submission form lives here. For now, submitting is limited to the site owner while public reviews are being finished. Everyone can open the sample.</p>
+        </div>
+        <a class="button secondary" href="#samples">Open the sample instead</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>ArchiBrief is an independent project. Not affiliated with or endorsed by Amazon Web Services.</p>
+    <p><a href="#">Source on GitHub</a> · <a href="#">Methodology</a> · <a href="#">Privacy</a></p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement, KEY = "archibrief-theme";
+  function apply(choice) {
+    root.dataset.theme = choice;
+    document.querySelectorAll("[data-theme-choice]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.themeChoice === choice));
+    });
+    try { localStorage.setItem(KEY, choice); } catch (e) {}
+  }
+  var stored = "system";
+  try { stored = localStorage.getItem(KEY) || "system"; } catch (e) {}
+  apply(stored);
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-theme-choice]");
+    if (b) apply(b.dataset.themeChoice);
+  });
+
+  // Walkthrough: steps fade in and the line fills as you scroll.
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var flow = document.querySelector(".flow");
+  var steps = Array.prototype.slice.call(document.querySelectorAll(".step"));
+  if (!flow || reduce || !("IntersectionObserver" in window)) {
+    steps.forEach(function (s) { s.classList.add("is-on"); });
+    return;
+  }
+  flow.classList.add("reveal-ready");
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (en.isIntersecting) { en.target.classList.add("is-on"); io.unobserve(en.target); }
+    });
+  }, { rootMargin: "0px 0px -20% 0px" });
+  steps.forEach(function (s) { io.observe(s); });
+  var bar = flow.querySelector(".progress");
+  function fill() {
+    var r = flow.getBoundingClientRect();
+    var seen = Math.min(Math.max(window.innerHeight * 0.6 - r.top, 0), r.height - 48);
+    bar.style.height = Math.max(seen, 0) + "px";
+  }
+  window.addEventListener("scroll", fill, { passive: true });
+  window.addEventListener("resize", fill);
+  fill();
+})();
+</script>
+</body>
+</html>
