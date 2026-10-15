@@ -305,7 +305,10 @@ resource "aws_s3_object" "trivy_layer" {
   bucket = aws_s3_bucket.artifacts.id
   key    = "layers/trivy-${var.trivy_version}.zip"
   source = var.trivy_layer_zip_path
-  etag   = fileexists(var.trivy_layer_zip_path) ? filemd5(var.trivy_layer_zip_path) : null
+  # source_hash, not etag: a ~51 MB file is uploaded in parts, and S3's
+  # etag for a multipart upload is never the file's MD5, so an etag check
+  # would re-upload the zip on every apply.
+  source_hash = fileexists(var.trivy_layer_zip_path) ? filemd5(var.trivy_layer_zip_path) : null
 
   depends_on = [aws_s3_bucket_versioning.artifacts]
 }
@@ -315,8 +318,14 @@ resource "aws_lambda_layer_version" "trivy" {
   description         = "Trivy ${var.trivy_version} at /opt/bin/trivy (scripts/build_trivy_layer.py)"
   s3_bucket           = aws_s3_object.trivy_layer.bucket
   s3_key              = aws_s3_object.trivy_layer.key
-  s3_object_version   = aws_s3_object.trivy_layer.version_id
   compatible_runtimes = ["python3.12"]
+
+  # No s3_object_version on purpose: reading a specific object version
+  # needs s3:GetObjectVersion, which the deploy role doesn't have, and it
+  # adds nothing. Lambda copies the zip when it publishes, so a published
+  # layer version never changes. The hash publishes a new layer version
+  # whenever the local zip changes, after the upload above.
+  source_code_hash = fileexists(var.trivy_layer_zip_path) ? filebase64sha256(var.trivy_layer_zip_path) : null
 }
 
 resource "aws_lambda_function" "this" {
