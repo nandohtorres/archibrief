@@ -89,13 +89,13 @@ a { color: var(--accent); text-underline-offset: .18em; }
 .hero h1 { max-width: 16ch; margin-bottom: 1.5rem; font: 600 clamp(2.3rem, 7.2vw, 4.6rem)/1.04 var(--font-serif); letter-spacing: -.015em; }
 .hero h1 em { font-style: italic; font-weight: 500; color: var(--accent); }
 .hero .lede { max-width: 58ch; margin-bottom: 2rem; color: var(--text-muted); font-size: clamp(1.05rem, 2.4vw, 1.2rem); }
-.actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.5rem; }
+.actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 .button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 48px;
   padding: .7rem 1.35rem; border-radius: var(--radius-m); font-weight: 700; text-decoration: none; }
 .button.primary { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
-.button.secondary { border: 1px solid var(--accent); background: transparent; color: var(--accent); }
-.button:hover { filter: brightness(1.08); }
-.text-link { font-weight: 600; }
+/* C's button pair: solid primary, quiet bordered secondary */
+.button.secondary { border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.button:hover { filter: brightness(1.06); }
 /* C: check-mark badges */
 .badges { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin: 1.75rem 0 0; padding: 0; list-style: none;
   color: var(--text-muted); font-size: .88rem; }
@@ -222,7 +222,6 @@ footer a { color: var(--text-muted); }
   .brand small { display: none; }
   .theme-toggle button { padding: 0 .55rem; }
   .actions .button { flex: 1 1 100%; }
-  .actions .text-link { width: 100%; text-align: center; }
   .flow::before, .flow .progress { left: 1rem; top: 1rem; }
   .step { padding-left: 3rem; }
   .step::before { width: 2rem; height: 2rem; font-size: .82rem; }
@@ -264,8 +263,8 @@ footer a { color: var(--text-muted); }
       a claim, it says so instead of guessing.
     </p>
     <div class="actions">
-      <a class="button primary" href="#samples">See a sample review <span aria-hidden="true">↓</span></a>
-      <a class="text-link" href="#submit">Review your own Terraform</a>
+      <a class="button primary" href="#samples">View sample review <span aria-hidden="true">→</span></a>
+      <a class="button secondary" href="#submit">Review your own Terraform</a>
     </div>
     <!-- C: check marks -->
     <ul class="badges">
