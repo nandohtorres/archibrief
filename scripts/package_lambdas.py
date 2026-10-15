@@ -193,8 +193,36 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/kill_switch.py",
             "backend/shared/models/__init__.py",
             "backend/shared/models/finding.py",
+            # compute_presentation for the {record, presentation} response.
+            "backend/shared/report.py",
         ],
         # validate.handler imports pydantic directly for ValidationError.
+        "packages": ["pydantic>=2.0"],
+    },
+    # admin_authorizer and validate were deployed from zips built outside
+    # this script (Codex F23); listed here so every Lambda builds the same
+    # way. tests/backend/test_package_lambdas.py keeps these lists honest.
+    "admin_authorizer": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/admin_authorizer/__init__.py",
+            "backend/lambdas/admin_authorizer/handler.py",
+        ],
+        # Standard library only (hmac, os).
+        "packages": [],
+    },
+    "validate": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/validate/__init__.py",
+            "backend/lambdas/validate/handler.py",
+            "backend/shared/__init__.py",
+            "backend/shared/models/__init__.py",
+            "backend/shared/models/finding.py",
+        ],
+        # Imports pydantic directly for ValidationError.
         "packages": ["pydantic>=2.0"],
     },
 }
