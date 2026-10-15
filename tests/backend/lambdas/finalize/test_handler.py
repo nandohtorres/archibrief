@@ -5,7 +5,13 @@ from backend.lambdas.finalize.handler import (
     compute_cost_estimate_tier,
     handler,
 )
-from backend.shared.models.finding import ConfidenceInputs, DepthLevel, Finding, FindingCategory, FindingType
+from backend.shared.models.finding import (
+    ConfidenceInputs,
+    DepthLevel,
+    Finding,
+    FindingCategory,
+    FindingType,
+)
 
 
 class _FakeDynamoDBClient:
@@ -31,7 +37,9 @@ def _finding(**overrides) -> Finding:
         evidence="evidence text",
         citation=None,
         confidence=0.5,
-        confidence_inputs=ConfidenceInputs(evidence_directness=0.5, source_agreement=0.5, rule_determinism=0.5),
+        confidence_inputs=ConfidenceInputs(
+            evidence_directness=0.5, source_agreement=0.5, rule_determinism=0.5
+        ),
         risk_impact="low",
         recommendation="do nothing",
         framework_mapping=[],
@@ -42,7 +50,9 @@ def _finding(**overrides) -> Finding:
 
 
 def test_assemble_evidence_ledger_includes_workload_brief():
-    ledger = assemble_evidence_ledger("r1", [_finding()], workload_brief="a 3-tier web app on ECS")
+    ledger = assemble_evidence_ledger(
+        "r1", [_finding()], workload_brief="a 3-tier web app on ECS"
+    )
     assert ledger["workload_brief"] == "a 3-tier web app on ECS"
 
 
@@ -158,17 +168,30 @@ def test_handler_persists_computed_cost_estimate_tier(monkeypatch):
 
 def test_assemble_baseline_answers_maps_preflight_field_state_to_contract_shape():
     preflight_fields = {
-        "expected_traffic_scale": {"outcome": "assumption", "value": "low-to-moderate", "is_assumption": True},
-        "regulatory_data_residency": {"outcome": "answered", "value": "EU only", "is_assumption": False},
+        "expected_traffic_scale": {
+            "outcome": "assumption",
+            "value": "low-to-moderate",
+            "is_assumption": True,
+        },
+        "regulatory_data_residency": {
+            "outcome": "answered",
+            "value": "EU only",
+            "is_assumption": False,
+        },
     }
 
-    answers = assemble_baseline_answers(preflight_fields, "preflight_defaults@2026-09-08")
+    answers = assemble_baseline_answers(
+        preflight_fields, "preflight_defaults@2026-09-08"
+    )
 
     by_field = {a["field"]: a for a in answers}
     assert by_field["expected_traffic_scale"]["label"] == "Traffic and scale"
     assert by_field["expected_traffic_scale"]["outcome"] == "assumption"
     assert by_field["expected_traffic_scale"]["value"] == "low-to-moderate"
-    assert by_field["expected_traffic_scale"]["policy_version"] == "preflight_defaults@2026-09-08"
+    assert (
+        by_field["expected_traffic_scale"]["policy_version"]
+        == "preflight_defaults@2026-09-08"
+    )
     assert by_field["regulatory_data_residency"]["outcome"] == "answered"
 
 
@@ -188,7 +211,15 @@ def test_assemble_evidence_ledger_includes_baseline_answers():
     ledger = assemble_evidence_ledger(
         "r1",
         [_finding()],
-        baseline_answers=[{"field": "x", "label": "X", "outcome": "answered", "value": "y", "policy_version": "v1"}],
+        baseline_answers=[
+            {
+                "field": "x",
+                "label": "X",
+                "outcome": "answered",
+                "value": "y",
+                "policy_version": "v1",
+            }
+        ],
     )
     assert ledger["baseline_answers"][0]["field"] == "x"
 
@@ -198,9 +229,19 @@ def test_handler_persists_baseline_answers_from_preflight_fields():
         "review_id": "r1",
         "findings": [_finding().model_dump(mode="json")],
         "preflight_fields": {
-            "expected_traffic_scale": {"outcome": "assumption", "value": "low", "is_assumption": True}
+            "expected_traffic_scale": {
+                "outcome": "assumption",
+                "value": "low",
+                "is_assumption": True,
+            }
         },
         "defaults_version": "preflight_defaults@2026-09-08",
     }
     result = handler(event, None)
     assert result["status"] == "complete"
+
+
+def test_cost_tier_uses_resource_count_when_resources_are_not_in_state():
+    assert compute_cost_estimate_tier(None, resource_count=3) == "low"
+    assert compute_cost_estimate_tier(None, resource_count=12) == "medium"
+    assert compute_cost_estimate_tier(None, resource_count=40) == "high"

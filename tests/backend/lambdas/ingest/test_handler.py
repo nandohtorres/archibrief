@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import tarfile
 import tempfile
@@ -312,3 +313,36 @@ def test_handler_removes_its_temp_dir_after_rejection(tmp_path, monkeypatch):
 
     assert result["status"] == "rejected"
     assert _ingest_dirs(tmp_path) == []
+
+
+class _RecordingS3:
+    def __init__(self):
+        self.objects: dict[str, bytes] = {}
+
+    def put_object(
+        self, key: str, body: bytes, content_type: str = "application/json"
+    ) -> None:
+        self.objects[key] = body
+
+
+def test_deployed_path_stores_parsed_terraform_in_s3_and_returns_a_reference(tmp_path):
+    # Regression (Codex F07): the full parsed tree went into Step Functions
+    # state, which caps at 256 KiB, and into execution history.
+    archive_path = str(tmp_path / "good.tar")
+    _make_archive(archive_path, {"main.tf": b'resource "aws_s3_bucket" "x" {}'})
+    s3 = _RecordingS3()
+    event = {
+        **_event_for(archive_path),
+        "review_id": "r-123",
+        "report_bucket": "bucket",
+    }
+
+    result = handler(event, None, s3_client=s3)
+
+    assert result["status"] == "parsed"
+    assert result["parsed_s3_key"] == "parsed/r-123.json"
+    assert result["resource_count"] == 1
+    assert "resources" not in result and "variables" not in result
+    stored = json.loads(s3.objects["parsed/r-123.json"])
+    assert "aws_s3_bucket" in stored["resources"]
+    assert stored["files_parsed"] == ["main.tf"]

@@ -59,7 +59,11 @@ def test_rds_unencrypted_flagged():
 
 
 def test_rds_encrypted_not_flagged():
-    parsed = {"resources": {"aws_db_instance": {"db": {"storage_encrypted": True, "multi_az": True}}}}
+    parsed = {
+        "resources": {
+            "aws_db_instance": {"db": {"storage_encrypted": True, "multi_az": True}}
+        }
+    }
     findings = run_rules(parsed, "review-1")
     assert not any("storage_encrypted" in f.finding for f in findings)
 
@@ -130,3 +134,31 @@ def test_all_findings_are_deterministic_rule_result_type():
     findings = run_rules(parsed, "review-1")
     assert all(f.type.value == "deterministic-rule-result" for f in findings)
     assert all(f.deterministic_rule_version for f in findings)
+
+
+def test_handler_loads_parsed_terraform_from_s3_reference(monkeypatch):
+    import json
+
+    import backend.lambdas.rule_engine.handler as handler_module
+
+    parsed = {"resources": {"aws_s3_bucket": {"data": {"bucket": "b"}}}}
+
+    class _FakeS3:
+        def __init__(self, bucket: str):
+            assert bucket == "reports"
+
+        def get_object(self, key: str) -> bytes:
+            assert key == "parsed/r1.json"
+            return json.dumps(parsed).encode()
+
+    monkeypatch.setattr(handler_module, "S3Client", _FakeS3)
+    result = handler_module.handler(
+        {
+            "review_id": "r1",
+            "parsed_s3_key": "parsed/r1.json",
+            "report_bucket": "reports",
+        },
+        None,
+    )
+
+    assert any("public_access_block" in f["finding"] for f in result["findings"])

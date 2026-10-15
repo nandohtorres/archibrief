@@ -18,7 +18,11 @@ class _FakeDynamoDBClient:
 def test_stores_token_and_pending_fields_on_existing_item(monkeypatch):
     monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
     _FakeDynamoDBClient.ITEMS = {
-        "r1": {"reviewId": "r1", "status": "pending", "createdAt": "2026-09-17T00:00:00Z"}
+        "r1": {
+            "reviewId": "r1",
+            "status": "pending",
+            "createdAt": "2026-09-17T00:00:00Z",
+        }
     }
 
     result = handler(

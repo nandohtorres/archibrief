@@ -8,7 +8,9 @@ def _event(admin_key: str | None) -> dict:
 
 def test_allows_matching_key(monkeypatch):
     monkeypatch.setenv("ADMIN_KEY", "correct-horse-battery-staple")
-    assert handler(_event("correct-horse-battery-staple"), None) == {"isAuthorized": True}
+    assert handler(_event("correct-horse-battery-staple"), None) == {
+        "isAuthorized": True
+    }
 
 
 def test_denies_wrong_key(monkeypatch):

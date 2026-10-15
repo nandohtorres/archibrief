@@ -68,7 +68,13 @@ def test_returns_full_review_report_for_complete_review(monkeypatch):
     ledger = {
         "workload_brief": "a 3-tier app",
         "baseline_answers": [
-            {"field": "x", "label": "X", "outcome": "answered", "value": "y", "policy_version": "v1"}
+            {
+                "field": "x",
+                "label": "X",
+                "outcome": "answered",
+                "value": "y",
+                "policy_version": "v1",
+            }
         ],
         "findings": [
             {

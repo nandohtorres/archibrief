@@ -9,10 +9,12 @@ dict (Work-Project-Coding-Conventions.md "Typed-finding discipline").
 
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from collections.abc import Callable, Iterable
 
+from backend.shared.clients import S3Client
 from backend.shared.models.finding import (
     ConfidenceInputs,
     Finding,
@@ -441,8 +443,17 @@ def run_rules(parsed: dict, review_id: str) -> list[Finding]:
     return findings
 
 
+def load_parsed(event: dict) -> dict:
+    """Parsed Terraform comes inline (tests/local) or, in the deployed
+    workflow, as an S3 reference written by Ingest (Codex F07)."""
+    if "parsed_s3_key" in event:
+        body = S3Client(bucket=event["report_bucket"]).get_object(event["parsed_s3_key"])
+        return json.loads(body)
+    return event["parsed"]
+
+
 def handler(event, context):
-    parsed = event["parsed"]
+    parsed = load_parsed(event)
     review_id = event["review_id"]
     findings = run_rules(parsed, review_id)
     return {

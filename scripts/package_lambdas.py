@@ -126,6 +126,31 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
         # report.py -> backend.shared.models.finding -> pydantic.
         "packages": ["pydantic>=2.0"],
     },
+    "rule_engine": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/rule_engine/__init__.py",
+            "backend/lambdas/rule_engine/handler.py",
+            "backend/shared/__init__.py",
+            "backend/shared/clients/__init__.py",
+            "backend/shared/models/__init__.py",
+            "backend/shared/models/finding.py",
+        ],
+        # backend.shared.models.finding -> pydantic.
+        "packages": ["pydantic>=2.0"],
+    },
+    "audit": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/audit/__init__.py",
+            "backend/lambdas/audit/handler.py",
+            "backend/shared/__init__.py",
+            "backend/shared/clients/__init__.py",
+        ],
+        "packages": [],
+    },
     "finalize": {
         "sources": [
             "backend/__init__.py",

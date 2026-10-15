@@ -72,8 +72,11 @@ _COST_TIER_LOW_MAX = 5
 _COST_TIER_MEDIUM_MAX = 20
 
 
-def compute_cost_estimate_tier(resources: dict[str, dict[str, dict]] | None) -> str:
-    resource_count = sum(len(names) for names in (resources or {}).values())
+def compute_cost_estimate_tier(
+    resources: dict[str, dict[str, dict]] | None, resource_count: int | None = None
+) -> str:
+    if resource_count is None:
+        resource_count = sum(len(names) for names in (resources or {}).values())
     if resource_count <= _COST_TIER_LOW_MAX:
         return "low"
     if resource_count <= _COST_TIER_MEDIUM_MAX:
@@ -150,7 +153,9 @@ def handler(event, context):
         "reportS3Key": payload_key,
         "findingCount": ledger["finding_count"],
         "completedAt": ledger["generated_at"],
-        "costEstimateTier": compute_cost_estimate_tier(event.get("resources")),
+        "costEstimateTier": compute_cost_estimate_tier(
+            event.get("resources"), event.get("resource_count")
+        ),
     }
     if len(json.dumps(pointer_item).encode("utf-8")) > MAX_DYNAMODB_ITEM_BYTES:
         raise ValueError("review pointer item exceeds DynamoDB 400 KB item cap")

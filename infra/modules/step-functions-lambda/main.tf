@@ -95,8 +95,8 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# RuleEngine/Validate are pure compute on their event payload — no
-# direct DynamoDB/S3/Bedrock access needed beyond CloudWatch Logs.
+# Validate is pure compute on its event payload. RuleEngine only reads
+# the parsed Terraform Ingest stored under parsed/ (see below).
 data "aws_iam_policy_document" "audit_finalize_data_access" {
   statement {
     effect    = "Allow"
@@ -174,6 +174,26 @@ data "aws_iam_policy_document" "ingest_s3_download" {
     actions   = ["s3:GetObject"]
     resources = ["${var.reports_bucket_arn}/uploads/*"]
   }
+  # Parsed Terraform handed to RuleEngine by reference (Codex F07).
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:PutObject"]
+    resources = ["${var.reports_bucket_arn}/parsed/*"]
+  }
+}
+
+data "aws_iam_policy_document" "rule_engine_parsed_read" {
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.reports_bucket_arn}/parsed/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "rule_engine_parsed_read" {
+  name   = "${var.name_prefix}-rule-engine-parsed-read"
+  role   = aws_iam_role.lambda["rule_engine"].id
+  policy = data.aws_iam_policy_document.rule_engine_parsed_read.json
 }
 
 resource "aws_iam_role_policy" "ingest_s3_download" {
@@ -515,6 +535,9 @@ resource "aws_sfn_state_machine" "review" {
           "archive_s3_key.$" = "$.archive_s3_key"
           "workload_brief.$" = "$.workload_brief"
           "report_bucket"    = var.reports_bucket_name
+          # Ingest writes the parsed tree to parsed/<review_id>.json and
+          # returns only a reference (Codex F07: state caps at 256 KiB).
+          "review_id.$" = "$.review_id"
         }
         ResultPath = "$.ingestResult"
         Next       = "IngestResponseGate"
@@ -571,19 +594,16 @@ resource "aws_sfn_state_machine" "review" {
         Error = "IngestBlocked"
         Cause = "Ingest's inline Guardrails check (ADR-0033) blocked the workload brief before any paid reasoning work started."
       }
-      # RuleEngine's handler reads event["parsed"] and event["review_id"]
-      # directly (backend/lambdas/rule_engine/handler.py) — neither name
-      # exists at top level once Ingest's output moved to $.ingestResult
-      # above. Parameters rebuilds RuleEngine's input explicitly: the
-      # whole $.ingestResult dict already has the "resources"/"variables"
-      # shape rule_engine.py's _resources() helper expects under the key
-      # "parsed", so it's aliased wholesale rather than field-by-field.
+      # RuleEngine loads the parsed Terraform from the S3 reference Ingest
+      # returned (backend/lambdas/rule_engine/handler.py's load_parsed), so
+      # the full tree never travels through workflow state.
       RuleEngine = {
         Type     = "Task"
         Resource = aws_lambda_function.this["rule_engine"].arn
         Parameters = {
-          "review_id.$" = "$.review_id"
-          "parsed.$"    = "$.ingestResult"
+          "review_id.$"     = "$.review_id"
+          "parsed_s3_key.$" = "$.ingestResult.parsed_s3_key"
+          "report_bucket"   = var.reports_bucket_name
         }
         ResultPath = "$.ruleEngineResult"
         Next       = "PrepareAgentInput"
@@ -977,13 +997,10 @@ resource "aws_sfn_state_machine" "review" {
           "workload_brief.$"   = "$.workload_brief"
           "preflight_fields.$" = "$.agentParsed.parsed.preflight_fields"
           "defaults_version.$" = "$.agentParsed.parsed.defaults_version"
-          # Added 2026-10-12 for a first-pass cost_estimate_tier heuristic
-          # (backend/lambdas/finalize/handler.py's compute_cost_estimate_tier)
-          # — safe to reference unconditionally: IngestResponseGate already
-          # routes a "rejected"/"blocked" Ingest result to a Fail state
-          # before RuleEngine/Finalize ever run, so $.ingestResult.resources
-          # is guaranteed present by the time this Task executes.
-          "resources.$"        = "$.ingestResult.resources"
+          # Feeds compute_cost_estimate_tier. Always present here:
+          # IngestResponseGate routes rejected/blocked results to a Fail
+          # state before Finalize can run.
+          "resource_count.$"   = "$.ingestResult.resource_count"
           "report_bucket"      = var.reports_bucket_name
           "reviews_table_name" = var.reviews_table_name
         }

@@ -12,21 +12,29 @@ def _event(body: dict | None) -> dict:
 
 @mock_aws
 def test_handler_returns_presigned_upload_for_a_valid_review_id(monkeypatch):
-    boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="archibrief-dev-reports")
+    boto3.client("s3", region_name="us-east-1").create_bucket(
+        Bucket="archibrief-dev-reports"
+    )
     monkeypatch.setenv("REPORTS_BUCKET_NAME", "archibrief-dev-reports")
 
-    result = handler(_event({"review_id": "9f8e7d6c-1234-4abc-9def-0123456789ab"}), None)
+    result = handler(
+        _event({"review_id": "9f8e7d6c-1234-4abc-9def-0123456789ab"}), None
+    )
 
     assert result["statusCode"] == 200
     body = json.loads(result["body"])
-    assert body["archiveKey"] == "uploads/9f8e7d6c-1234-4abc-9def-0123456789ab/archive.tar"
+    assert (
+        body["archiveKey"] == "uploads/9f8e7d6c-1234-4abc-9def-0123456789ab/archive.tar"
+    )
     assert "uploadUrl" in body
     assert body["uploadFields"]["key"] == body["archiveKey"]
 
 
 @mock_aws
 def test_handler_accepts_the_non_uuid_fallback_review_id_format(monkeypatch):
-    boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="archibrief-dev-reports")
+    boto3.client("s3", region_name="us-east-1").create_bucket(
+        Bucket="archibrief-dev-reports"
+    )
     monkeypatch.setenv("REPORTS_BUCKET_NAME", "archibrief-dev-reports")
 
     result = handler(_event({"review_id": "review-1760123456789-a1b2c3"}), None)

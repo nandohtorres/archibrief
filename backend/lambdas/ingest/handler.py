@@ -13,6 +13,7 @@ anything Terraform-side.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import tarfile
@@ -274,12 +275,28 @@ def _ingest(
                 "guardrails_decisions": guardrails_decisions,
             }
 
-    return {
-        "status": "parsed",
+    parsed_payload = {
         "resources": parsed.resources,
         "variables": parsed.variables,
-        "files_parsed": parsed.files_parsed,
+        # Paths relative to the archive root; the temp dir is deleted after.
+        "files_parsed": [os.path.relpath(p, dest_dir) for p in parsed.files_parsed],
         "not_observable": parsed.not_observable,
-        "workload_brief": workload_brief,
+    }
+    result = {
+        "status": "parsed",
+        "resource_count": sum(len(names) for names in parsed.resources.values()),
         "guardrails_decisions": guardrails_decisions,
     }
+
+    # In the deployed workflow the parsed tree goes to S3 and only a
+    # reference travels through Step Functions state: a 50 MiB archive can
+    # parse to far more than the 256 KiB state limit (Codex F07), and
+    # execution history/logs would otherwise retain the user's Terraform.
+    review_id = event.get("review_id")
+    report_bucket = event.get("report_bucket")
+    if review_id and report_bucket:
+        key = f"parsed/{review_id}.json"
+        client = s3_client or S3Client(bucket=report_bucket)
+        client.put_object(key=key, body=json.dumps(parsed_payload).encode("utf-8"))
+        return {**result, "parsed_s3_key": key}
+    return {**result, **parsed_payload, "workload_brief": workload_brief}
