@@ -97,24 +97,59 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_logs" {
 
 # Validate is pure compute on its event payload. RuleEngine only reads
 # the parsed Terraform Ingest stored under parsed/ (see below).
-data "aws_iam_policy_document" "audit_finalize_data_access" {
+#
+# Audit and Finalize used to share one policy (reviews + audit tables,
+# PutObject on the whole reports bucket). Split per Lambda to what each
+# handler actually calls (Codex F16):
+# - Audit: one PutItem on the audit table. Nothing else.
+# - Finalize: GetItem (fetch-and-merge) + PutItem on the reviews table,
+#   and PutObject only under reports/, where the evidence ledger lives
+#   (backend/lambdas/finalize/handler.py). Not the audit table, and not
+#   uploads/ or parsed/ in the same bucket.
+data "aws_iam_policy_document" "audit_data_access" {
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:PutItem", "dynamodb:GetItem"]
-    resources = [var.reviews_table_arn, var.audit_table_arn]
+    actions   = ["dynamodb:PutItem"]
+    resources = [var.audit_table_arn]
+  }
+}
+
+data "aws_iam_policy_document" "finalize_data_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+    resources = [var.reviews_table_arn]
   }
   statement {
     effect    = "Allow"
     actions   = ["s3:PutObject"]
-    resources = ["${var.reports_bucket_arn}/*"]
+    resources = ["${var.reports_bucket_arn}/reports/*"]
   }
 }
 
-resource "aws_iam_role_policy" "audit_finalize_data_access" {
-  for_each = toset(["audit", "finalize"])
-  name     = "${var.name_prefix}-${each.key}-data-access"
-  role     = aws_iam_role.lambda[each.key].id
-  policy   = data.aws_iam_policy_document.audit_finalize_data_access.json
+resource "aws_iam_role_policy" "audit_data_access" {
+  name   = "${var.name_prefix}-audit-data-access"
+  role   = aws_iam_role.lambda["audit"].id
+  policy = data.aws_iam_policy_document.audit_data_access.json
+}
+
+resource "aws_iam_role_policy" "finalize_data_access" {
+  name   = "${var.name_prefix}-finalize-data-access"
+  role   = aws_iam_role.lambda["finalize"].id
+  policy = data.aws_iam_policy_document.finalize_data_access.json
+}
+
+# Same inline policy names as before, so move rather than destroy+create:
+# with separate addresses Terraform could create the new policy and then
+# delete the old one of the same name, leaving the role with none.
+moved {
+  from = aws_iam_role_policy.audit_finalize_data_access["audit"]
+  to   = aws_iam_role_policy.audit_data_access
+}
+
+moved {
+  from = aws_iam_role_policy.audit_finalize_data_access["finalize"]
+  to   = aws_iam_role_policy.finalize_data_access
 }
 
 # store_clarification_token only ever reads/writes the one review item it
@@ -270,8 +305,8 @@ data "aws_iam_policy_document" "state_machine_invoke" {
   # conditional PutItem, called directly by the state machine's own SDK
   # integration (not by any Lambda), so this permission belongs on the
   # state machine's role, not the Finalize Lambda's own
-  # audit_finalize_data_access statement (which already covers Finalize's
-  # separate, later PutItem call).
+  # finalize_data_access policy (which covers Finalize's separate, later
+  # PutItem call).
   #
   # dynamodb:UpdateItem added 2026-10-13 for the new RecordStage* states
   # (below) — a direct SDK UpdateItem call before each real pipeline
