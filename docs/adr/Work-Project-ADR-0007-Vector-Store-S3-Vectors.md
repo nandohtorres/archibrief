@@ -10,7 +10,7 @@ status: accepted
 # ADR 0007: Vector Store — AWS S3 Vectors
 
 **Status:** Accepted (2026-09-02) — **amended by
-[[Work-Project-ADR-0042-Minor-Amendments-Batch]]** (2026-09-03): S3
+[ADR-0042](Work-Project-ADR-0042-Minor-Amendments-Batch.md)** (2026-09-03): S3
 Vectors choice stands; clarifies ordinary S3 is the immutable source of
 truth and S3 Vectors is a rebuildable index on top, not the source of
 truth itself.
@@ -39,5 +39,5 @@ compute decision (ADR-0005).
 
 ## Full reasoning
 
-See [[Work-Project]] §"W1-W4 stack research findings" and
-[[Research-Work-Vector-Store]].
+See the project decision log §"W1-W4 stack research findings" and
+Research Work Vector Store.

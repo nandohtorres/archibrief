@@ -38,7 +38,7 @@ not a massaged one.
   storage) and **marginal cost per review** (guest/standard/deep,
   including retries, classifier/guardrail calls, embeddings/retrieval,
   reasoning tokens, AgentCore Runtime, observability).
-- [[Work-Project-Cost-Log]] reports the **real, actual measured cost**,
+- the cost log reports the **real, actual measured cost**,
   whatever it turns out to be — never adjusted after the fact for
   narrative/optics purposes. Tighten the *target* over time if real
   measurements support it (per ADR-0024's original reasoning), but the
@@ -55,6 +55,6 @@ not a massaged one.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0024" and conversation
+See an independent design review §"ADR-0024" and conversation
 2026-09-03 (the budget-honesty discussion, resolved directly with
 Fernando).

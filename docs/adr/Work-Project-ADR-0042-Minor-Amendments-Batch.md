@@ -12,7 +12,7 @@ status: accepted
 **Status:** Accepted (2026-09-03) — **extends** the listed ADRs; none of
 the underlying decisions reverse
 
-Small, additive corrections from [[Work-Project-ADR-Review-Codex]] that
+Small, additive corrections from an independent design review that
 add detail without changing any core decision. Batched into one file
 since none is substantial enough alone to warrant its own ADR.
 
@@ -44,7 +44,7 @@ since none is substantial enough alone to warrant its own ADR.
 - **ADR-0009 (Python):** use a supported Lambda/AgentCore runtime, strict
   type checking, a formatter/linter, and one schema definition for the
   typed evidence ledger (already reflected in
-  [[Work-Project-Coding-Conventions]]'s pydantic-model requirement).
+  the coding conventions's pydantic-model requirement).
 - **ADR-0015 (secrets/public repo):** broaden the denylist to
   `*.tfstate*`, saved plan files, `.terraform/`, crash logs, local
   overrides, backend configuration, and uploaded test repositories.
@@ -72,5 +72,5 @@ since none is substantial enough alone to warrant its own ADR.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]], respective sections per ADR
+See an independent design review, respective sections per ADR
 number above.

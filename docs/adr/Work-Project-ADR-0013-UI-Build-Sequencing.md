@@ -10,7 +10,7 @@ status: accepted
 # ADR 0013: UI Build Sequencing
 
 **Status:** Accepted (2026-09-02) — **milestone framing superseded by
-[[Work-Project-ADR-0032-UI-Vertical-Slice-Milestones]]** (2026-09-03):
+[ADR-0032](Work-Project-ADR-0032-UI-Vertical-Slice-Milestones.md)** (2026-09-03):
 the early/parallel UI-build intent stands, but the "~60-70% visual
 polish" percentage was replaced with concrete, checkable vertical-slice
 milestones.
@@ -38,8 +38,8 @@ by the 5-phase roadmap.
 ## Consequences
 
 - Frontend/backend phases run closer to parallel, not strictly
-  sequential, in [[Work-Project-Build-Plan]] once that's filled in.
+  sequential, in the build plan once that's filled in.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Q5 and Q7 resolved."
+See the project decision log §"Q5 and Q7 resolved."

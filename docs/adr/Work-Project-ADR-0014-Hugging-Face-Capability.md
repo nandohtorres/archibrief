@@ -10,7 +10,7 @@ status: accepted
 # ADR 0014: Hugging Face Capability, No Self-Training
 
 **Status:** Accepted (2026-09-02) — **implementation path superseded by
-[[Work-Project-ADR-0033-Hugging-Face-Path-Corrected]]** (2026-09-03): the
+[ADR-0033](Work-Project-ADR-0033-Hugging-Face-Path-Corrected.md)** (2026-09-03): the
 resume-signal goal stands, but the proposed Custom Model Import path for
 Llama Prompt Guard 2 was factually broken (unsupported architecture).
 
@@ -44,5 +44,5 @@ pass.
 
 ## Full reasoning
 
-See [[Work-Project]] §"W1-W4 stack research findings" (Hugging Face
+See the project decision log §"W1-W4 stack research findings" (Hugging Face
 capability subsection).

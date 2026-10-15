@@ -10,7 +10,7 @@ status: accepted
 # ADR 0019: Embedding Model — Titan V2
 
 **Status:** Accepted (2026-09-03) — **framing superseded by
-[[Work-Project-ADR-0035-Titan-Baseline-Not-Cost-Locked]]** (2026-09-03):
+[ADR-0035](Work-Project-ADR-0035-Titan-Baseline-Not-Cost-Locked.md)** (2026-09-03):
 Titan stays the working choice, but as a baseline pending evaluation, not
 a cost-justified final answer; the reversibility claim was also
 corrected.

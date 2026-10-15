@@ -47,5 +47,5 @@ this path. ADR-0014's proposed implementation was factually broken.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0014" and the direct AWS/
+See an independent design review §"ADR-0014" and the direct AWS/
 Hugging Face documentation verification performed 2026-09-03.

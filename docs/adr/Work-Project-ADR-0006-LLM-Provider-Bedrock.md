@@ -10,7 +10,7 @@ status: accepted
 # ADR 0006: LLM Provider — Bedrock-Primary
 
 **Status:** Accepted (2026-09-02) — **amended by
-[[Work-Project-ADR-0042-Minor-Amendments-Batch]]** (2026-09-03):
+[ADR-0042](Work-Project-ADR-0042-Minor-Amendments-Batch.md)** (2026-09-03):
 Bedrock-primary choice stands; narrows the "same model weights/outputs"
 claim to a defined domain contract, and adds pinning the deployed model
 ID with every report.
@@ -39,5 +39,5 @@ staying architecturally flexible.
 
 ## Full reasoning
 
-See [[Work-Project]] §"W1-W4 stack research findings" and
-[[Research-Work-LLM-Provider]].
+See the project decision log §"W1-W4 stack research findings" and
+Research Work LLM Provider.

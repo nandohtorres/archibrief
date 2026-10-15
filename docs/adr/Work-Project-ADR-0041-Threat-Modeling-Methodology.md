@@ -10,7 +10,7 @@ status: accepted
 # ADR 0041: Threat-Modeling Methodology — STRIDE Primary, OWASP LLM Top 10 Overlay
 
 **Status:** Accepted (2026-09-03) — resolves the remaining open half of
-**W5** ([[Research]])
+**W5** (Research)
 
 ## Context
 
@@ -46,11 +46,11 @@ decisions, and a change log.
 
 ## Consequences
 
-- Closes W5 in [[Research]] — update its status.
+- Closes W5 in Research — update its status.
 - The resulting threat-model document becomes a real portfolio artifact
-  per the original "Deliverables" list in [[Work-Project]].
+  per the original "Deliverables" list in the project decision log.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"Broader threat-modeling
+See an independent design review §"Broader threat-modeling
 methodology."

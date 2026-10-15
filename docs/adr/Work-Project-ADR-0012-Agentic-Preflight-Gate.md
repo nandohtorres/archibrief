@@ -10,7 +10,7 @@ status: accepted
 # ADR 0012: Agentic Complexity — Baseline Pre-Flight Gate
 
 **Status:** Accepted (2026-09-02) — **missing-data default superseded by
-[[Work-Project-ADR-0031-Per-Field-Missing-Data-Policy]]** (2026-09-03):
+[ADR-0031](Work-Project-ADR-0031-Per-Field-Missing-Data-Policy.md)** (2026-09-03):
 the pre-flight gate itself stands, but the blanket "assume the negative"
 rule was replaced with a per-field policy.
 
@@ -39,4 +39,4 @@ open-ended multi-turn chat/refinement loop after the report is generated.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Q5 and Q7 resolved."
+See the project decision log §"Q5 and Q7 resolved."

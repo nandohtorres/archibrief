@@ -59,5 +59,5 @@ This is one control set inside the broader OWASP LLM Top 10 threat model
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0022" and the direct AWS
+See an independent design review §"ADR-0022" and the direct AWS
 Bedrock Guardrails documentation verification.

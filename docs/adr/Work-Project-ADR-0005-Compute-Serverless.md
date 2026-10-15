@@ -10,7 +10,7 @@ status: accepted
 # ADR 0005: Compute — Serverless
 
 **Status:** Accepted (2026-09-02) — **extended by
-[[Work-Project-ADR-0028-Orchestration-Ownership-Boundary]]**
+[ADR-0028](Work-Project-ADR-0028-Orchestration-Ownership-Boundary.md)**
 (2026-09-03): the serverless choice stands; ADR-0028 adds the explicit
 ownership boundary between Step Functions, Lambda, and AgentCore/
 LangGraph.
@@ -47,5 +47,5 @@ shallowly for signal alone.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Open questions" (compute) for the full Kubernetes
+See the project decision log §"Open questions" (compute) for the full Kubernetes
 discussion and cost figures.

@@ -11,7 +11,7 @@ status: accepted
 
 **Status:** Accepted (2026-09-03) — **supersedes** ADR-0021's proposal to
 grant `admin` to recruiters. **Amended by
-[[Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential]]**
+[ADR-0044](Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential.md)**
 (2026-09-11): the admin-Fernando-only *principle* carries forward
 unchanged, but the mechanism changes from a Cognito RBAC role to a single
 pre-shared credential (there are no user accounts to have roles at all).
@@ -43,7 +43,7 @@ discussion — not a dire/urgent decision, can be implemented later.
 
 ## Consequences
 
-- Updates ADR-0021/[[Work-Project-System-Design]]'s RBAC section — two
+- Updates ADR-0021/the system design notes's RBAC section — two
   tiers (standard/admin) becomes three (standard/reviewer/admin) once the
   reviewer role is built, admin narrowed to Fernando-only immediately.
 - No urgency to build the reviewer role before other v1 work — explicitly
@@ -51,5 +51,5 @@ discussion — not a dire/urgent decision, can be implemented later.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0021" and conversation
+See an independent design review §"ADR-0021" and conversation
 2026-09-03 confirming this with Fernando directly.

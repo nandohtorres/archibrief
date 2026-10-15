@@ -13,7 +13,7 @@ status: accepted
 
 ## Context
 
-Codex's independent review ([[Work-Project-ADR-Review-Codex]]) identified
+Codex's independent review (an independent design review) identified
 a real gap: nothing in the original design prohibited executing
 user-submitted Terraform (`terraform init`/`plan`/`apply`, provisioners,
 external data sources), which would cross a real software-supply-chain
@@ -45,4 +45,4 @@ current chunk text (which breaks once AWS edits the source page).
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0002."
+See an independent design review §"ADR-0002."

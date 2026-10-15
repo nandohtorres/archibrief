@@ -10,14 +10,14 @@ status: accepted
 # ADR 0044: No User Accounts — Single Admin Pre-Shared Credential; Guest Mode Fully Static
 
 **Status:** Accepted (2026-09-11) — **supersedes
-[[Work-Project-ADR-0010-Auth-And-Demo-Access]],
-[[Work-Project-ADR-0018-Auth-Provider-Cognito]],
-[[Work-Project-ADR-0029-Cognito-OTP-And-Guest-Caching]] (auth-method
+[ADR-0010](Work-Project-ADR-0010-Auth-And-Demo-Access.md),
+[ADR-0018](Work-Project-ADR-0018-Auth-Provider-Cognito.md),
+[ADR-0029](Work-Project-ADR-0029-Cognito-OTP-And-Guest-Caching.md) (auth-method
 portion; guest-caching *principle* carries forward, restated below),
-[[Work-Project-ADR-0043-Auth-Method-Simplified-Password-Plus-Email-Code]],
+[ADR-0043](Work-Project-ADR-0043-Auth-Method-Simplified-Password-Plus-Email-Code.md),
 and the `reviewer`/`admin` RBAC tiering in
-[[Work-Project-ADR-0021-IAM-Model-And-App-RBAC]] /
-[[Work-Project-ADR-0037-Admin-Fernando-Only]]**.
+[ADR-0021](Work-Project-ADR-0021-IAM-Model-And-App-RBAC.md) /
+[ADR-0037](Work-Project-ADR-0037-Admin-Fernando-Only.md)**.
 
 ## Context
 
@@ -28,7 +28,7 @@ today. A real user-accounts system (Cognito user pool, MFA, SES-backed
 email, signup/login UI, per-user RBAC tiers) was consuming real build
 time and carrying a real external dependency (SES domain verification +
 AWS production-access approval, both with unbounded wait time — see
-[[project_archibrief_ses_deferred]]) without adding proportional value to
+project archibrief ses deferred) without adding proportional value to
 the actual goal: getting a working, honest system in front of recruiters
 and hiring managers quickly. The skills a login system would showcase
 (AWS-native identity, IAM depth) are already demonstrated elsewhere in
@@ -72,7 +72,7 @@ whether visitors have accounts.
   that through the admin-gated path handed to them directly by Fernando
   (or a recorded demo video, already planned) — not a self-service role.
 - **Abuse/cost protection is reframed, not dropped**, per
-  [[Work-Project-ADR-0030-Rate-Limiting-Reframed]]: defense-in-depth
+  [ADR-0030](Work-Project-ADR-0030-Rate-Limiting-Reframed.md): defense-in-depth
   moves to protecting the one gated endpoint (API Gateway usage
   plan/throttling, an AWS WAF rate-based rule, Lambda reserved
   concurrency, and — the real backstop — a hard AWS Budget alarm wired to
@@ -84,14 +84,14 @@ whether visitors have accounts.
 ## Consequences
 
 - **Removes the SES dependency entirely** — closes out
-  [[project_archibrief_ses_deferred]]'s TODO as moot, not just deferred;
+  project archibrief ses deferred's TODO as moot, not just deferred;
   there is no email-based MFA to re-enable because there is no login.
 - **Infra:** `infra/modules/auth/` (Cognito user pool/client/domain) is
   removed from the Terraform root module; the API Gateway authorizer
   changes from Cognito JWT to a single pre-shared-secret check. This is
   a real infra change against already-applied resources — Fernando runs
   `terraform plan`/`apply` (and the Cognito resource destroy) himself,
-  per [[feedback_no_terraform_execution]].
+  per feedback no terraform execution.
 - **Backend:** the `Users` DynamoDB table and any per-user ownership
   checks are dropped; `GuestSessions` (if kept) becomes purely a
   rate-limiting/session-scoping construct for the gated admin path, not
@@ -108,14 +108,14 @@ whether visitors have accounts.
   boundary: one shared operator secret rather than per-user identity —
   this should be stated explicitly as a deliberate, right-sized decision
   for a single-operator demo, not an oversight, per
-  [[feedback_challenge_dont_blindly_agree]]'s spirit of documenting real
+  feedback challenge dont blindly agree's spirit of documenting real
   tradeoffs honestly.
-- Updates required in [[Work-Project-Spec]] (v1 scope, application
-  authorization section), [[Work-Project-System-Design]] (architecture
+- Updates required in the project spec (v1 scope, application
+  authorization section), the system design notes (architecture
   diagram, RBAC section, DynamoDB Users table, API auth routes),
-  [[Work-Project-Build-Plan]] (Phase 1 Terraform module list, Phase 6 —
+  the build plan (Phase 1 Terraform module list, Phase 6 —
   effectively replaced by a much smaller "admin gate" step), and
-  [[Work-Project-Deployment-Roadmap]] (Cognito line, SES TODO removed).
+  the deployment roadmap (Cognito line, SES TODO removed).
 
 ## Full reasoning
 

@@ -10,7 +10,7 @@ status: accepted
 # ADR 0003: Framework Mapping Hierarchy
 
 **Status:** Accepted (2026-09-02) — **amended by
-[[Work-Project-ADR-0042-Minor-Amendments-Batch]]** (2026-09-03): the
+[ADR-0042](Work-Project-ADR-0042-Minor-Amendments-Batch.md)** (2026-09-03): the
 hierarchy stands; adds a more precise AWS-specific ordering for
 observable-configuration findings.
 
@@ -45,6 +45,6 @@ state what additional evidence would be needed to actually assess it.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Product direction" and
-[[Research-ArchGuard-Differentiation-Claude]] (includes the Security+
+See the project decision log §"Product direction" and
+Research ArchGuard Differentiation Claude (includes the Security+
 domain-mapping viability research pass).

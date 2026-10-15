@@ -10,11 +10,11 @@ status: accepted
 # ADR 0043: Auth Method Simplified — Email/Password Primary, Emailed Auth Code as Second Factor
 
 **Status:** Accepted (2026-09-04) — **supersedes the auth-method framing in
-[[Work-Project-ADR-0029-Cognito-OTP-And-Guest-Caching]]**: guest-mode
+[ADR-0029](Work-Project-ADR-0029-Cognito-OTP-And-Guest-Caching.md)**: guest-mode
 caching and the "no magic link" correction in ADR-0029 both stand
 unchanged; only the passkey-primary decision is replaced. **Entirely
 superseded by
-[[Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential]]**
+[ADR-0044](Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential.md)**
 (2026-09-11): no user accounts, so no sign-in method is needed at all.
 
 ## Context
@@ -49,9 +49,9 @@ build time, rather than deciding it all now.
 - Meaningfully simpler to build than passkey/WebAuthn registration and
   relying-party-domain planning (ADR-0029's "plan the relying-party
   domain early" concern no longer applies to v1).
-- Updates [[Work-Project-Spec]]'s v1 scope bullet,
-  [[Work-Project-Build-Plan]]'s Phase 6 auth step, and
-  [[Research-Work-Auth]].
+- Updates the project spec's v1 scope bullet,
+  the build plan's Phase 6 auth step, and
+  Research Work Auth.
 - Still uses Cognito (ADR-0018 stands) and still avoids a magic-link flow
   (ADR-0029's correction stands) — this ADR only changes which method is
   primary vs. secondary.

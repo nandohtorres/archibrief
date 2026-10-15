@@ -10,7 +10,7 @@ status: accepted
 # ADR 0008: Agent Framework — LangGraph on Bedrock AgentCore
 
 **Status:** Accepted (2026-09-02) — **extended by
-[[Work-Project-ADR-0028-Orchestration-Ownership-Boundary]]**
+[ADR-0028](Work-Project-ADR-0028-Orchestration-Ownership-Boundary.md)**
 (2026-09-03): the LangGraph-on-AgentCore choice stands; ADR-0028 defines
 what it owns (the one reasoning/retrieval subworkflow) versus Step
 Functions/Lambda, closing a real duplication risk Codex flagged.
@@ -40,5 +40,5 @@ real, named framework skill. Graph-based state management fits the
 
 ## Full reasoning
 
-See [[Work-Project]] §"W1-W4 stack research findings" and
-[[Research-Work-Agent-Framework]].
+See the project decision log §"W1-W4 stack research findings" and
+Research Work Agent Framework.

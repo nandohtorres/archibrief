@@ -50,9 +50,9 @@ contract actually work.
 ## Consequences
 
 - More metadata fields than originally scoped in
-  [[Work-Project-System-Design]]'s S3 Vectors structure — update that doc
+  the system design notes's S3 Vectors structure — update that doc
   accordingly.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0020."
+See an independent design review §"ADR-0020."

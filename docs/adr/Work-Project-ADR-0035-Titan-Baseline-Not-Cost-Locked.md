@@ -50,5 +50,5 @@ live index.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0019" and conversation
+See an independent design review §"ADR-0019" and conversation
 2026-09-03 confirming the deferred-evaluation sequencing.

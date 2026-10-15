@@ -10,7 +10,7 @@ status: accepted
 # ADR 0024: Budget Ceiling — $50/month Target
 
 **Status:** Accepted (2026-09-03) — **framing superseded by
-[[Work-Project-ADR-0040-Budget-As-Target-Real-Cost-Reporting]]**
+[ADR-0040](Work-Project-ADR-0040-Budget-As-Target-Real-Cost-Reporting.md)**
 (2026-09-03): the $50 target stands, but "enforced ceiling" language was
 corrected, and real-measured-cost reporting was explicitly locked (no
 retroactive tailoring of the reported figure).
@@ -34,7 +34,7 @@ raise only if genuinely necessary.
 
 - Reinforces ADR-0011's rate-limiting requirements — the $50 target is
   only achievable with those limits actually enforced.
-- [[Work-Project-Cost-Log]] tracks whether this target is actually being
+- the cost log tracks whether this target is actually being
   met once real spend starts.
 
 ## Full reasoning

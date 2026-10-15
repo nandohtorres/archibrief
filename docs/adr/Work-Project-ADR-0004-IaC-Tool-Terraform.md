@@ -10,14 +10,14 @@ status: accepted
 # ADR 0004: IaC Tool — Terraform
 
 **Status:** Accepted (2026-09-02) — **amended by
-[[Work-Project-ADR-0042-Minor-Amendments-Batch]]** (2026-09-03): Terraform
+[ADR-0042](Work-Project-ADR-0042-Minor-Amendments-Batch.md)** (2026-09-03): Terraform
 choice stands; adds pinned CLI/provider constraints for ArchiBrief's own
 infra and a "report, don't trust/install" rule for user-submitted
 Terraform versions.
 
 ## Context
 
-Needed one IaC tool, shared with [[Personal-Website]] so there's only one
+Needed one IaC tool, shared with Personal Website so there's only one
 to learn deeply. Candidates: Terraform vs. AWS CDK.
 
 ## Decision
@@ -29,7 +29,7 @@ expected/recognized tool across the target-role research.
 
 ## Consequences
 
-- Shared decision with [[Personal-Website]] — same tool learned once,
+- Shared decision with Personal Website — same tool learned once,
   reused across both projects.
 - ArchiBrief's own input format is explicitly Terraform (bounded repo +
   workload brief) — this decision is doubly load-bearing since it's both
@@ -37,4 +37,4 @@ expected/recognized tool across the target-role research.
 
 ## Full reasoning
 
-See [[Research-Findings-Positioning-Synthesis]] §3.
+See Research Findings Positioning Synthesis §3.

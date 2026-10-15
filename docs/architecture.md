@@ -123,7 +123,7 @@ unauthenticated (ADR-0029).
 
 ## Human-in-the-loop: the clarification pause
 
-A real, live-tested path (see [[Work-Project-Issues-Log]], 2026-10-13),
+A real, live-tested path (see the issues log, 2026-10-13),
 not a hypothetical. When `Reason` can't resolve a required field under
 ADR-0031's per-field missing-data policy, it returns
 `needs_clarification` instead of findings, and the state machine pauses

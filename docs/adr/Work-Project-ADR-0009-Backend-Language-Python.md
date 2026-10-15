@@ -10,10 +10,10 @@ status: accepted
 # ADR 0009: Backend Language — Python
 
 **Status:** Accepted (2026-09-02) — **amended by
-[[Work-Project-ADR-0042-Minor-Amendments-Batch]]** (2026-09-03): Python
+[ADR-0042](Work-Project-ADR-0042-Minor-Amendments-Batch.md)** (2026-09-03): Python
 choice stands; adds a supported Lambda/AgentCore runtime, strict type
 checking, and one schema definition for the typed evidence ledger
-(already reflected in [[Work-Project-Coding-Conventions]]).
+(already reflected in the coding conventions).
 
 ## Context
 
@@ -33,4 +33,4 @@ RAG/LLM/LangGraph ecosystem's dominant language.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Open questions."
+See the project decision log §"Open questions."

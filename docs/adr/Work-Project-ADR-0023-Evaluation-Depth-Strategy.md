@@ -10,7 +10,7 @@ status: accepted
 # ADR 0023: Evaluation-Depth Strategy
 
 **Status:** Accepted (2026-09-03), with an explicit planned revisit —
-**extended by [[Work-Project-ADR-0039-Base-Report-Field-Completeness]]**
+**extended by [ADR-0039](Work-Project-ADR-0039-Base-Report-Field-Completeness.md)**
 (2026-09-03): the lightweight-first-pass default stands; ADR-0039
 clarifies that "lightweight" constrains prose depth only (every required
 typed field is still populated) and adds versioned snapshots so "go
@@ -41,5 +41,5 @@ depending on how the lightweight version actually feels to use.
 ## Full reasoning
 
 See `AI-Drafts/Claude/work-project-stack-planning-qa.md` §"Round 2,"
-question 8, and [[Work-Project]] §"Q5 and Q7 resolved" for the original
+question 8, and the project decision log §"Q5 and Q7 resolved" for the original
 flagging of this as undecided.

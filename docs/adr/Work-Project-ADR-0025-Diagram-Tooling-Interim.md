@@ -10,7 +10,7 @@ status: accepted
 # ADR 0025: Diagram Tooling — mingrammer/diagrams (Interim)
 
 **Status:** Accepted (2026-09-03), low priority — **amended by
-[[Work-Project-ADR-0042-Minor-Amendments-Batch]]** (2026-09-03): tooling
+[ADR-0042](Work-Project-ADR-0042-Minor-Amendments-Batch.md)** (2026-09-03): tooling
 choice stands; tempers the resume claim (skill is architecture
 communication/AWS judgment, not the library) and clarifies this isn't a
 head start on the future in-app diagram feature.
@@ -18,7 +18,7 @@ head start on the future in-app diagram feature.
 ## Context
 
 Two distinct needs exist: (a) the product's own future diagram-generation
-feature (deferred past v1 per [[Work-Project-Spec]]), and (b) practical
+feature (deferred past v1 per the project spec), and (b) practical
 documentation/portfolio diagrams needed now (READMEs, case study
 write-ups). Options considered: `mingrammer/diagrams` (free, code-based
 Python library, real AWS icon set), Cloudcraft (commercial, polished

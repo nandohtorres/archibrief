@@ -39,9 +39,9 @@ per baseline data point at the PreflightGate node:
 
 - Makes the `assumption` finding-type do real, defensible work instead of
   being a catch-all label.
-- The PreflightGate node (ADR-0028, [[Work-Project-System-Design]]) now
+- The PreflightGate node (ADR-0028, the system design notes) now
   branches three ways per missing field, not one.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0012."
+See an independent design review §"ADR-0012."
