@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArchiBrief · Landing option C (guided flow)</title>
+<!-- Design mockup only. Tokens copied from frontend/app/globals.css. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f7f9; --surface: #ffffff; --surface-2: #eaeff3; --surface-3: #dce5eb;
+  --border: #c5d0d9; --text: #131c24; --text-muted: #43596c; --text-faint: #566b7d;
+  --focus: #005ea8; --accent: #235f7a; --accent-ink: #ffffff; --accent-tint: #e1edf2;
+  --critical: #a52f24; --critical-bg: #fbeae8; --warning: #7f500f; --warning-bg: #faf1e2;
+  --success: #1f6d51; --success-bg: #e6f4ef; --unknown: #5c4d73; --unknown-bg: #f0ebf6;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --font-serif: "Source Serif 4", Georgia, serif;
+  --radius-s: 4px; --radius-m: 8px; --radius-l: 14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1319; --surface: #141d26; --surface-2: #1a2530; --surface-3: #23313e;
+    --border: #46596b; --text: #e7edf2; --text-muted: #a8bac9; --text-faint: #879aac;
+    --focus: #8bd5ff; --accent: #7bc1df; --accent-ink: #06222c; --accent-tint: #16323e;
+    --critical: #ee887b; --critical-bg: #2c1815; --warning: #e2ae61; --warning-bg: #2b2013;
+    --success: #77d2ae; --success-bg: #102820; --unknown: #c4a8e2; --unknown-bg: #261c32;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1319; --surface: #141d26; --surface-2: #1a2530; --surface-3: #23313e;
+  --border: #46596b; --text: #e7edf2; --text-muted: #a8bac9; --text-faint: #879aac;
+  --focus: #8bd5ff; --accent: #7bc1df; --accent-ink: #06222c; --accent-tint: #16323e;
+  --critical: #ee887b; --critical-bg: #2c1815; --warning: #e2ae61; --warning-bg: #2b2013;
+  --success: #77d2ae; --success-bg: #102820; --unknown: #c4a8e2; --unknown-bg: #261c32;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 1rem/1.55 var(--font-body); }
+h1, h2, h3, h4, p { margin-top: 0; }
+h1, h2, h3 { text-wrap: balance; }
+a { color: var(--accent); text-underline-offset: .18em; }
+:where(a, button):focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.skip-link { position: fixed; z-index: 10; top: .5rem; left: .5rem; transform: translateY(-160%);
+  padding: .5rem 1rem; border-radius: var(--radius-s); background: var(--text); color: var(--bg); }
+.skip-link:focus { transform: none; }
+.wrap { width: min(100% - 2rem, 1040px); margin: 0 auto; }
+.mono { font-family: var(--font-mono); }
+
+/* Header */
+.site-header { border-bottom: 1px solid var(--border); background: var(--surface); }
+.site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 0; }
+.brand { display: flex; align-items: center; gap: .6rem; color: var(--text); text-decoration: none; }
+.brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
+  background: var(--accent); color: var(--accent-ink); font: 700 1rem/1 var(--font-mono); }
+.brand strong { font: 700 1rem/1 var(--font-mono); }
+.theme-toggle { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); }
+.theme-toggle button { min-height: 32px; padding: 0 .7rem; border: 0; border-radius: 999px; background: transparent;
+  color: var(--text-muted); font: 600 .75rem/1 var(--font-mono); cursor: pointer; }
+.theme-toggle button[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent); }
+
+/* Hero — centered and compact; the flow below does the explaining */
+.hero { padding: clamp(2.75rem, 7vw, 5rem) 0 clamp(2rem, 5vw, 3rem); text-align: center; }
+.hero .kicker { display: inline-block; margin-bottom: 1rem; padding: .25rem .7rem; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text-muted); font: 600 .74rem/1.4 var(--font-mono); }
+.hero h1 { max-width: 20ch; margin: 0 auto 1rem; font: 600 clamp(2rem, 5.6vw, 3.3rem)/1.1 var(--font-serif); }
+.hero .lede { max-width: 58ch; margin: 0 auto 1.75rem; color: var(--text-muted); font-size: 1.06rem; }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .75rem; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 48px;
+  padding: .7rem 1.25rem; border-radius: var(--radius-m); font-weight: 700; text-decoration: none; }
+.button.primary { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+.button.secondary { border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.button:hover { filter: brightness(1.06); }
+.hero-badges { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem 1.25rem; margin: 1.5rem 0 0; padding: 0; list-style: none;
+  color: var(--text-muted); font-size: .86rem; }
+.hero-badges li::before { content: "✓"; margin-right: .4rem; color: var(--success); font-weight: 700; }
+
+/* The flow */
+.flow-title { margin: 0 0 .25rem; color: var(--accent); font: 700 .74rem/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+.flow-sub { margin: 0 auto 2.5rem; max-width: 46ch; color: var(--text-muted); text-align: center; }
+.flow { position: relative; margin: 0; padding: 0 0 1rem; list-style: none; counter-reset: step; }
+.flow::before { content: ""; position: absolute; top: 1.25rem; bottom: 2rem; left: 1.25rem; width: 2px; background: var(--border); }
+.step { position: relative; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 1.25rem 2.5rem;
+  padding: 0 0 3rem 4rem; counter-increment: step; }
+.step::before { content: counter(step); position: absolute; top: 0; left: 0; display: grid; place-items: center; width: 2.5rem; height: 2.5rem;
+  border: 2px solid var(--accent); border-radius: 50%; background: var(--bg); color: var(--accent); font: 700 .95rem/1 var(--font-mono); }
+.step.final::before { background: var(--accent); color: var(--accent-ink); }
+.step h2 { margin: .35rem 0 .5rem; font: 600 1.35rem/1.25 var(--font-body); }
+.step p { margin: 0 0 .6rem; color: var(--text-muted); font-size: .95rem; }
+.step .note { color: var(--text-faint); font-size: .84rem; }
+
+/* Step artifacts */
+.artifact { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--surface); overflow: hidden; }
+.artifact-head { display: flex; justify-content: space-between; gap: .5rem; padding: .55rem .9rem; border-bottom: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-muted); font: 600 .7rem/1.4 var(--font-mono); letter-spacing: .03em; }
+.artifact-body { padding: .9rem; }
+.tree { margin: 0; padding: 0; list-style: none; font: 400 .8rem/1.75 var(--font-mono); }
+.tree li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree .dir { color: var(--text); font-weight: 600; }
+.tree .indent { padding-left: 1.4em; color: var(--text-muted); }
+.brief { margin: .75rem 0 0; padding: .7rem .8rem; border-left: 3px solid var(--accent); border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  background: var(--accent-tint); color: var(--text); font-size: .85rem; }
+.brief b { display: block; margin-bottom: .15rem; color: var(--accent); font: 700 .66rem/1.4 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.rules { margin: 0; padding: 0; list-style: none; display: grid; gap: .45rem; font: 400 .78rem/1.45 var(--font-mono); }
+.rules li { display: grid; grid-template-columns: 4.6rem 1fr; gap: .6rem; align-items: start; }
+.status { display: inline-block; padding: .05rem .4rem; border-radius: var(--radius-s); font-weight: 700; font-size: .68rem; text-align: center; }
+.status.fail { background: var(--critical-bg); color: var(--critical); }
+.status.pass { background: var(--success-bg); color: var(--success); }
+.status.gap { background: var(--unknown-bg); color: var(--unknown); }
+.rules span:last-child { overflow-wrap: anywhere; color: var(--text); }
+.retrieved { margin-top: .8rem; padding-top: .75rem; border-top: 1px dashed var(--border); color: var(--text-muted); font-size: .8rem; }
+.retrieved code { color: var(--accent); font: 600 .78rem var(--font-mono); }
+.mini-finding { display: grid; gap: .55rem; }
+.pill { justify-self: start; display: inline-flex; align-items: center; padding: .15rem .55rem; border-radius: 999px; background: var(--critical-bg); color: var(--critical); font: 700 .7rem/1.4 var(--font-body); }
+.pill::before { width: .4rem; height: .4rem; margin-right: .35rem; border-radius: 50%; background: currentColor; content: ""; }
+.mini-finding h3 { margin: 0; font-size: 1rem; line-height: 1.35; }
+.mini-finding h3 code { font: 600 .9em var(--font-mono); }
+.mini-finding dl { display: grid; gap: .5rem; margin: 0; }
+.mini-finding dt { color: var(--text-faint); font: 700 .64rem/1.4 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.mini-finding dd { margin: .1rem 0 0; font-size: .85rem; overflow-wrap: anywhere; }
+.chip { display: inline-flex; align-items: center; gap: .35rem; padding: .15rem .5rem; border: 1px solid var(--accent); border-radius: var(--radius-s); color: var(--accent); font: 600 .74rem/1.4 var(--font-mono); }
+
+/* Final step: samples */
+.step.final { grid-template-columns: 1fr; padding-bottom: 0; }
+.samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: .5rem; }
+.sample { display: flex; flex-direction: column; gap: .5rem; padding: 1.1rem; border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--surface); }
+.sample.ready { border: 2px solid var(--accent); }
+.sample .tags { display: flex; flex-wrap: wrap; gap: .35rem; }
+.tag { display: inline-flex; padding: .1rem .5rem; border-radius: 999px; font: 600 .68rem/1.5 var(--font-mono); }
+.tag.hypo { background: var(--unknown-bg); color: var(--unknown); }
+.tag.ready { background: var(--success-bg); color: var(--success); }
+.tag.soon { background: var(--surface-2); color: var(--text-muted); }
+.sample h3 { margin: .2rem 0 0; font-size: 1.05rem; }
+.sample p { margin: 0; color: var(--text-muted); font-size: .87rem; }
+.sample .go { margin-top: auto; padding-top: .4rem; }
+.sample .button { width: 100%; min-height: 44px; font-size: .9rem; }
+.sample .soon-text { display: block; padding: .6rem 0 0; color: var(--text-faint); font-size: .85rem; font-weight: 600; text-align: center; }
+.own { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1.5rem; margin-top: 1rem;
+  padding: 1rem 1.2rem; border: 1px dashed var(--border); border-radius: var(--radius-l); }
+.own p { margin: 0; color: var(--text-muted); font-size: .9rem; }
+.own strong { color: var(--text); }
+.fine { margin: .9rem 0 0; color: var(--text-faint); font-size: .8rem; }
+
+/* Checks + trust */
+.band { margin-top: clamp(3rem, 7vw, 5rem); padding: clamp(2.5rem, 6vw, 4rem) 0; background: var(--surface); border-top: 1px solid var(--border); }
+.band-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 2.5rem 3.5rem; }
+.band h2 { margin-bottom: 1rem; font: 600 1.5rem/1.2 var(--font-serif); }
+.check-list { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem 1.5rem; }
+.check-list li { padding: .55rem 0; border-bottom: 1px solid var(--border); font-size: .92rem; }
+.check-list li span { display: block; color: var(--text-faint); font: 500 .74rem/1.5 var(--font-mono); }
+.trust-box { padding: 1.25rem 1.35rem; border-left: 4px solid var(--unknown); border-radius: var(--radius-s); background: var(--unknown-bg); }
+.trust-box h2 { font-size: 1.25rem; }
+.trust-box p { margin: 0 0 .75rem; color: var(--text-muted); font-size: .92rem; }
+.trust-box p:last-child { margin: 0; }
+.trust-box strong { color: var(--text); }
+
+footer { padding: 2rem 0 3rem; border-top: 1px solid var(--border); background: var(--surface); color: var(--text-faint); font-size: .84rem; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem 2rem; }
+footer p { margin: 0; }
+footer a { color: var(--text-muted); }
+
+@media (max-width: 860px) {
+  .step { grid-template-columns: 1fr; }
+  .samples { grid-template-columns: 1fr; }
+  .band-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .flow::before { left: 1rem; }
+  .step { padding-left: 3rem; }
+  .step::before { width: 2rem; height: 2rem; font-size: .82rem; }
+  .flow::before { top: 1rem; }
+  .actions .button { flex: 1 1 100%; }
+  .check-list { grid-template-columns: 1fr; }
+  .theme-toggle button { padding: 0 .55rem; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#" aria-label="ArchiBrief home">
+      <span class="brand-mark" aria-hidden="true">A</span>
+      <strong>ArchiBrief</strong>
+    </a>
+    <div class="theme-toggle" role="group" aria-label="Color theme">
+      <button type="button" data-theme-choice="system" aria-pressed="true">Auto</button>
+      <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap hero">
+    <span class="kicker">AWS Terraform → cited review</span>
+    <h1>From Terraform to a review you can verify, line by line.</h1>
+    <p class="lede">ArchiBrief checks your AWS Terraform against deterministic rules and the AWS Well-Architected Framework, and every finding it reports carries its own evidence.</p>
+    <div class="actions">
+      <a class="button primary" href="#sample-review">View sample review <span aria-hidden="true">→</span></a>
+      <a class="button secondary" href="#own">Review your own Terraform</a>
+    </div>
+    <ul class="hero-badges">
+      <li>Static analysis only</li>
+      <li>Never touches your AWS account</li>
+      <li>Every finding cites its source</li>
+    </ul>
+  </div>
+
+  <div class="wrap">
+    <p class="flow-title">How it works</p>
+    <p class="flow-sub">The same three steps run for every review, including the samples below.</p>
+    <ol class="flow">
+      <li class="step">
+        <div>
+          <h2>You submit Terraform and a brief</h2>
+          <p>A Terraform archive plus a few sentences about the workload: traffic, availability target, data rules.</p>
+          <p class="note">The brief matters. "99.95% availability" turns a single-AZ database from a footnote into a finding.</p>
+        </div>
+        <div class="artifact" aria-label="Example submission">
+          <div class="artifact-head"><span>streaming-platform.tar</span><span>input</span></div>
+          <div class="artifact-body">
+            <ul class="tree">
+              <li class="dir">main.tf</li>
+              <li class="dir">modules/</li>
+              <li class="indent">cdn/cloudfront.tf</li>
+              <li class="indent">origin/s3.tf</li>
+              <li class="indent">transcode/iam.tf</li>
+              <li class="indent">history/dynamodb.tf</li>
+            </ul>
+            <p class="brief"><b>Workload brief</b>Video streaming for subscribers in North America and the EU. Target 99.95% availability. Viewing history is personal data.</p>
+          </div>
+        </div>
+      </li>
+
+      <li class="step">
+        <div>
+          <h2>Rules run, guidance is retrieved</h2>
+          <p>16 deterministic checks scan the parsed Terraform. Relevant passages are then pulled from AWS Well-Architected and security best-practice docs.</p>
+          <p class="note">Anything outside the submitted code is marked as a gap, never assumed.</p>
+        </div>
+        <div class="artifact" aria-label="Example rule results">
+          <div class="artifact-head"><span>rule checks</span><span>deterministic</span></div>
+          <div class="artifact-body">
+            <ul class="rules">
+              <li><span class="status fail">FAIL</span><span>IAM policy 'transcode_worker' grants wildcard Action "*"</span></li>
+              <li><span class="status fail">FAIL</span><span>S3 bucket 'media_origin' has no public-access block</span></li>
+              <li><span class="status pass">PASS</span><span>DynamoDB 'watch_history' has point-in-time recovery</span></li>
+              <li><span class="status gap">GAP</span><span>No CloudTrail in submission; may exist at org level</span></li>
+            </ul>
+            <p class="retrieved">Retrieved: <code>SEC03-BP02</code> · <code>SEC08-BP02</code> · <code>REL10-BP01</code></p>
+          </div>
+        </div>
+      </li>
+
+      <li class="step">
+        <div>
+          <h2>You get a cited report</h2>
+          <p>A grounded model weighs each result against your brief. Its citations are re-checked against the retrieved passages before anything is published.</p>
+          <p class="note">Each finding: the code it's about, the guidance it relies on, a confidence score, and a recommended fix.</p>
+        </div>
+        <div class="artifact" aria-label="Example report finding">
+          <div class="artifact-head"><span>report · finding</span><span>output</span></div>
+          <div class="artifact-body mini-finding">
+            <span class="pill">High risk</span>
+            <h3>IAM policy <code>transcode_worker</code> grants wildcard Action "*"</h3>
+            <dl>
+              <div><dt>Evidence</dt><dd class="mono">modules/transcode/iam.tf · lines 14–15</dd></div>
+              <div><dt>Cites</dt><dd><span class="chip">SEC03-BP02</span> Grant least privilege access</dd></div>
+              <div><dt>Recommendation</dt><dd>Scope the policy to the MediaConvert and S3 actions the worker uses, on the specific bucket ARNs.</dd></div>
+            </dl>
+          </div>
+        </div>
+      </li>
+
+      <li class="step final" id="samples">
+        <div>
+          <h2>See it on a real-looking system</h2>
+          <p>Open a full sample review. Each one is a hypothetical architecture modeled on a service you already know.</p>
+        </div>
+        <div class="samples">
+          <article class="sample ready">
+            <div class="tags"><span class="tag hypo">Hypothetical</span><span class="tag ready">Ready</span></div>
+            <h3>Video streaming</h3>
+            <p>Netflix-style: CDN, S3 media origins, transcoding pipeline, watch history.</p>
+            <div class="go"><a class="button primary" href="#sample-review">View sample review</a></div>
+          </article>
+          <article class="sample">
+            <div class="tags"><span class="tag hypo">Hypothetical</span><span class="tag soon">Coming soon</span></div>
+            <h3>Online marketplace</h3>
+            <p>eBay-style: listings, search, bidding, and a payments boundary.</p>
+            <div class="go"><span class="soon-text">Coming soon</span></div>
+          </article>
+          <article class="sample">
+            <div class="tags"><span class="tag hypo">Hypothetical</span><span class="tag soon">Coming soon</span></div>
+            <h3>Ride-hailing</h3>
+            <p>Uber-style: live location ingest, driver matching, trip records.</p>
+            <div class="go"><span class="soon-text">Coming soon</span></div>
+          </article>
+        </div>
+        <div class="own" id="own">
+          <p><strong>Have your own Terraform?</strong> Public submissions are opening soon: no account needed, one review per visitor per day.</p>
+          <a class="button secondary" href="#submit">Review your own Terraform</a>
+        </div>
+        <p class="fine">Sample architectures are invented. Not affiliated with Netflix, eBay, or Uber.</p>
+      </li>
+    </ol>
+  </div>
+
+  <div class="band">
+    <div class="wrap band-grid">
+      <div>
+        <h2>What it checks</h2>
+        <ul class="check-list">
+          <li>Public exposure<span>S3 public access, open security groups</span></li>
+          <li>Identity &amp; access<span>wildcard IAM, unconditioned trust</span></li>
+          <li>Encryption at rest<span>S3, EBS, RDS storage</span></li>
+          <li>Recoverability<span>versioning, point-in-time recovery</span></li>
+          <li>Availability<span>single-AZ databases vs. your target</span></li>
+          <li>Audit trail<span>CloudTrail and log validation</span></li>
+        </ul>
+      </div>
+      <aside class="trust-box" aria-labelledby="trust-heading">
+        <h2 id="trust-heading">What ArchiBrief won't claim</h2>
+        <p><strong>It never touches your AWS account.</strong> It reads only the files you submit. No credentials, no API calls into your environment.</p>
+        <p><strong>It can't see what you didn't submit.</strong> Org-level controls and unsubmitted modules show up as gaps, not passes or failures.</p>
+        <p><strong>It's not a compliance audit.</strong> It's a cited second opinion to help you decide what to fix first.</p>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>ArchiBrief · independent project, not affiliated with Amazon Web Services.</p>
+    <p><a href="#">GitHub</a> · <a href="#">Methodology</a> · <a href="#">Privacy</a></p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement, KEY = "archibrief-theme";
+  function apply(choice) {
+    root.dataset.theme = choice;
+    document.querySelectorAll("[data-theme-choice]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.themeChoice === choice));
+    });
+    try { localStorage.setItem(KEY, choice); } catch (e) {}
+  }
+  var stored = "system";
+  try { stored = localStorage.getItem(KEY) || "system"; } catch (e) {}
+  apply(stored);
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-theme-choice]");
+    if (b) apply(b.dataset.themeChoice);
+  });
+})();
+</script>
+</body>
+</html>
