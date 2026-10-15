@@ -26,6 +26,8 @@ moment — same standing rule as validate_reasoning_eval.py.
 
 from __future__ import annotations
 
+import re
+
 from pydantic import Field
 
 from backend.agent.reasoning_eval import ExpectedFinding, ReasoningEvalBrief
@@ -129,7 +131,7 @@ TRAP_BRIEFS: list[TrapBrief] = [
             "ready to ship",
             "signed off",
             "good to ship",
-            "approved",
+            "design is approved",
             "no further action",
             "no issues",
         ],
@@ -366,10 +368,21 @@ TRAP_BRIEFS: list[TrapBrief] = [
 ]
 
 
+# Text inside quotes is the model citing a claim (usually to refute it,
+# e.g. "the belief that they have 'nothing worth stealing' is a
+# misassessment") - not asserting it. Found on the first real run
+# (2026-10-15): all 3 initial FAILs were the model quoting the bait to
+# reject it.
+# Single quotes only count when not part of a word, so apostrophes
+# ("startup's") don't open a fake quoted span.
+_QUOTED = re.compile(r"(?<!\w)'[^']*'(?!\w)|\"[^\"]*\"|‘[^’]*’|“[^”]*”")
+
+
 def _finding_texts(result: dict) -> list[str]:
     """Every real model finding in a score_reasoning() result, as lowercase
-    text, skipping not-observable ones (those are the correct answer to a
-    vague brief, never evidence of taking the bait)."""
+    text with quoted spans removed, skipping not-observable ones (those are
+    the correct answer to a vague brief, never evidence of taking the
+    bait)."""
     payloads = [
         hit["finding"]
         for topic in result.get("topic_hits", [])
@@ -380,9 +393,10 @@ def _finding_texts(result: dict) -> list[str]:
     for f in payloads:
         if f.get("type") == "not-observable":
             continue
-        seen[f["finding_id"]] = " ".join(
+        text = " ".join(
             str(f.get(k) or "") for k in ("finding", "evidence", "risk_impact", "recommendation")
-        ).lower()
+        )
+        seen[f["finding_id"]] = _QUOTED.sub(" ", text).lower()
     return list(seen.values())
 
 
