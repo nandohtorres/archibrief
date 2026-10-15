@@ -109,7 +109,7 @@ Rule findings are deterministic and were checked the same way.
 | Model: access-log bucket has versioning, object lock, lifecycle and encryption | Correct |
 | Model: encryption is on but whether it uses the customer-managed key isn't confirmed | Fair; the summary doesn't carry that setting |
 | Model: no IAM/STS shown for partner access | Fair for this slice |
-| Model: backup schedule, retention and copies "aren't visible" | **Incomplete**: the code sets them (every 4 hours kept 1 day, daily kept 7 days, copied to a second vault). Short retention for health data is a real finding the review couldn't state, because the resource summary doesn't include backup plans yet (open item) |
+| Model: backup schedule, retention and copies "aren't visible" | **Incomplete**: the code sets four rules (every 4 hours kept 1 day and copied to a second vault; daily kept 7; weekly kept 35; monthly kept 90). The resource summary didn't include backup plans; it does now (bug 5) |
 | Model: WAF logging and Datadog monitoring present, no further alerting shown | Fair |
 
 ### fec-database (not published)
@@ -125,7 +125,7 @@ Rule findings are deterministic and were checked the same way.
 | Model: no RDS event subscriptions | Correct |
 | Model: Aurora backtracking not configured | Correct |
 
-## Bugs the demos found (all fixed except one)
+## Bugs the demos found (all fixed)
 
 See the Issues Log entry of 2026-10-15 for detail.
 
@@ -137,7 +137,10 @@ See the Issues Log entry of 2026-10-15 for detail.
    policies at 256 MB (`ec537fe`, now 1024 MB / 30s).
 4. Resource counts weren't in the summary, so the model invented them
    (`ec537fe`).
-5. Open: backup plans aren't in the resource summary.
+5. Backup plans weren't in the resource summary, so the model couldn't
+   see schedules or retention. Each rule's schedule, retention, cold
+   storage, copy and continuous-backup setting is now stated; rule names
+   are free text and left out.
 
 ## Talking points for showing it
 

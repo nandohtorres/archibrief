@@ -43,7 +43,9 @@ COVERAGE_NOTE = (
     "Only the settings named for each resource were checked. A setting not "
     "named here may still be set in the code: never describe it as missing. "
     '"copies" is how many instances count or for_each creates ("unknown" when '
-    "it can't be worked out from the code); a resource without it is created once."
+    "it can't be worked out from the code); a resource without it is created once. "
+    '"rules" on a backup plan lists each backup rule: its schedule, how many days '
+    "recovery points are kept, and whether they are copied to another vault."
 )
 # A count above this is reported as unknown rather than trusted.
 MAX_COPIES = 1000
@@ -286,6 +288,69 @@ def _copies(body: dict, parsed: dict, module: str) -> int | str | None:
     return None
 
 
+MAX_BACKUP_RULES = 10
+_CRON_FIELD = (
+    r"(?:[0-9*?/,#LW-]|MON|TUE|WED|THU|FRI|SAT|SUN"
+    r"|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)+"
+)
+# An AWS Backup schedule: six cron fields or a rate. Letters are limited
+# to day and month names, so no words of the submitter's choosing get through.
+_SCHEDULE = re.compile(
+    rf"^(?:cron\({_CRON_FIELD}(?: {_CRON_FIELD}){{5}}\)"
+    r"|rate\(\d{1,4} (?:minutes?|hours?|days?)\))$"
+)
+
+
+def _backup_rules(body: dict, parsed: dict, module: str) -> list[dict]:
+    """Each rule's schedule, retention and copies, for aws_backup_plan.
+
+    A plan has several rule blocks, and the dotted-path settings only read
+    the first. The Medicare demo run (2026-10-15) said its schedule and
+    retention "aren't visible"; the code had four rules. Rule names are
+    free text and are left out.
+    """
+    rules = body.get("rule")
+    if isinstance(rules, dict):
+        rules = [rules]
+    if not isinstance(rules, list):
+        return []
+    out = []
+    for rule in rules[:MAX_BACKUP_RULES]:
+        if not isinstance(rule, dict):
+            continue
+        lifecycle = _first(rule.get("lifecycle"))
+        lifecycle = lifecycle if isinstance(lifecycle, dict) else {}
+
+        def value(block: dict, key: str, when_unset: str) -> object:
+            if key not in block:
+                return when_unset
+            return _safe_value(resolve(_first(block[key]), parsed, module), "")
+
+        out.append(
+            {
+                "schedule": _schedule(rule, parsed, module),
+                "delete_after_days": value(
+                    lifecycle, "delete_after", f"{NOT_SET} (default: kept until deleted)"
+                ),
+                "cold_storage_after_days": value(lifecycle, "cold_storage_after", NOT_SET),
+                "copied_to_another_vault": bool(rule.get("copy_action")),
+                "continuous_backup": value(
+                    rule, "enable_continuous_backup", f"{NOT_SET} (default: false)"
+                ),
+            }
+        )
+    return out
+
+
+def _schedule(rule: dict, parsed: dict, module: str) -> str:
+    if "schedule" not in rule:
+        return NOT_SET
+    schedule = resolve(_first(rule["schedule"]), parsed, module)
+    if isinstance(schedule, str) and _SCHEDULE.fullmatch(schedule.strip()):
+        return schedule.strip()
+    return UNKNOWN
+
+
 def build_resource_summary(parsed: dict) -> dict:
     """{"resources": [{"type", "name", "settings"}...], "truncated": bool,
     "note": str}."""
@@ -315,5 +380,7 @@ def build_resource_summary(parsed: dict) -> dict:
             copies = _copies(body, parsed, module) if isinstance(body, dict) else None
             if copies is not None:
                 entry["copies"] = copies
+            if resource_type == "aws_backup_plan" and isinstance(body, dict):
+                entry["rules"] = _backup_rules(body, parsed, module)
             entries.append(entry)
     return {"resources": entries, "truncated": total > len(entries), "note": COVERAGE_NOTE}
