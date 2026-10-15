@@ -85,3 +85,9 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "mark_review_failed_zip_path" {
+  type        = string
+  default     = "../../../backend/lambdas/mark_review_failed/build/mark_review_failed.zip"
+  description = "Deployment package for the mark-review-failed Lambda (built by scripts/package_lambdas.py)."
+}

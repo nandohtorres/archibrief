@@ -994,3 +994,81 @@ resource "aws_sfn_state_machine" "review" {
 
   tags = var.tags
 }
+
+# --- Mark failed reviews (Codex F05) -------------------------------------
+# No failure path updated the review record, so a dead run stayed
+# "pending" forever. Step Functions emits an EventBridge event on every
+# terminal status; one listener marks the review failed for all of them
+# (Fail states, uncaught Lambda errors, timeouts, aborts).
+
+data "aws_iam_policy_document" "mark_review_failed_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [var.reviews_table_arn]
+  }
+}
+
+resource "aws_iam_role" "mark_review_failed" {
+  name                 = "${var.name_prefix}-mark-review-failed"
+  assume_role_policy   = data.aws_iam_policy_document.lambda_trust.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "mark_review_failed_logs" {
+  role       = aws_iam_role.mark_review_failed.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "mark_review_failed_access" {
+  name   = "${var.name_prefix}-mark-review-failed-access"
+  role   = aws_iam_role.mark_review_failed.id
+  policy = data.aws_iam_policy_document.mark_review_failed_access.json
+}
+
+resource "aws_lambda_function" "mark_review_failed" {
+  function_name    = "${var.name_prefix}-mark-review-failed"
+  role             = aws_iam_role.mark_review_failed.arn
+  handler          = "backend.lambdas.mark_review_failed.handler.handler"
+  runtime          = "python3.12"
+  filename         = var.mark_review_failed_zip_path
+  source_code_hash = fileexists(var.mark_review_failed_zip_path) ? filebase64sha256(var.mark_review_failed_zip_path) : null
+  timeout          = 10
+  memory_size      = 128
+
+  environment {
+    variables = {
+      REVIEWS_TABLE_NAME = var.reviews_table_name
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_event_rule" "review_execution_failed" {
+  name        = "${var.name_prefix}-review-execution-failed"
+  description = "Review state machine reached FAILED, TIMED_OUT, or ABORTED."
+  event_pattern = jsonencode({
+    source        = ["aws.states"]
+    "detail-type" = ["Step Functions Execution Status Change"]
+    detail = {
+      stateMachineArn = [aws_sfn_state_machine.review.arn]
+      status          = ["FAILED", "TIMED_OUT", "ABORTED"]
+    }
+  })
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_event_target" "review_execution_failed" {
+  rule = aws_cloudwatch_event_rule.review_execution_failed.name
+  arn  = aws_lambda_function.mark_review_failed.arn
+}
+
+resource "aws_lambda_permission" "events_invoke_mark_review_failed" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.mark_review_failed.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.review_execution_failed.arn
+}

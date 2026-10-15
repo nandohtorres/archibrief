@@ -19,7 +19,12 @@ import {
 } from "@/lib/api";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
 import type { PreflightField, ReviewReport, ReviewStatusPointer } from "@/lib/contracts";
-import { makeIdempotencyKey, type AppScreen } from "@/lib/workflow";
+import {
+  REVIEW_DEADLINE_MS,
+  failureMessageFor,
+  makeIdempotencyKey,
+  type AppScreen,
+} from "@/lib/workflow";
 
 type ThemeChoice = "system" | "light" | "dark";
 
@@ -78,21 +83,17 @@ export function ArchiBriefApp() {
     return () => window.clearTimeout(timer);
   }, [progressIndex, progressMode, screen]);
 
-  // Real polling of GET /reviews/{reviewId} — added 2026-10-12. Before
-  // this, handleSubmission showed a hardcoded "failure" message after
-  // ANY successful submission (stale from before get_review existed; see
-  // Work-Project-Issues-Log.md). The pipeline's Fail states (kill switch,
-  // Ingest rejection, AgentCore timeout) never update the reviews-table
-  // item, so a genuinely failed run stays "pending" forever server-side —
-  // that's why this has a hard timeout rather than polling indefinitely,
-  // and why the timeout message says "may have failed," not "failed":
-  // this client cannot distinguish a slow run from a dead one.
+  // Real polling of GET /reviews/{reviewId}. A failed run is marked
+  // status "failed" with a public failureCode by the backend
+  // (mark_review_failed), so polling stops on it. The deadline covers the
+  // pipeline's own worst case (AgentCore alone may take 300s) so a slow
+  // success is never reported as a failure.
   useEffect(() => {
     if (screen !== "progress" || progressMode !== "live" || !liveReviewId) return;
     let cancelled = false;
     let attempts = 0;
-    const maxAttempts = 40;
     const intervalMs = 3000;
+    const maxAttempts = Math.ceil(REVIEW_DEADLINE_MS / intervalMs);
     const poll = async () => {
       attempts += 1;
       try {
@@ -118,11 +119,18 @@ export function ArchiBriefApp() {
           setScreen("clarify");
           return;
         }
+        if (result.status === "failed") {
+          setFailureMessage(failureMessageFor((result as ReviewStatusPointer).failureCode));
+          setScreen("failure");
+          return;
+        }
         if (attempts >= maxAttempts) {
+          console.error("review polling deadline exceeded", {
+            reviewId: liveReviewId,
+            lastStatus: result.status,
+          });
           setFailureMessage(
-            `Review ${liveReviewId} has not reached "complete" after ${Math.round(
-              (attempts * intervalMs) / 1000,
-            )}s (last known status: "${result.status}"). The pipeline's failure states don't update this review's record, so this client cannot tell a slow run from a dead one — check the Step Functions console for this execution, or CloudWatch Logs for the Lambdas involved. Nothing was treated as complete.`,
+            "This review is taking much longer than expected. Please try again in a few minutes.",
           );
           setScreen("failure");
           return;

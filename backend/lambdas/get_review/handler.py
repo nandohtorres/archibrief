@@ -43,6 +43,10 @@ _PENDING_ALLOWED_FIELDS = (
     "createdAt",
     "needsClarification",
     "preflightFields",
+    # Set by mark_review_failed (Codex F05): a short public code, never the
+    # raw Step Functions error/cause.
+    "failureCode",
+    "failedAt",
     # Added 2026-10-13 — the new per-stage progress tracker
     # (infra/modules/step-functions-lambda's RecordStage* states) writes
     # this directly onto the review's DynamoDB item; without it here,

@@ -81,6 +81,15 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
         ],
         "packages": [],
     },
+    "mark_review_failed": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/mark_review_failed/__init__.py",
+            "backend/lambdas/mark_review_failed/handler.py",
+        ],
+        "packages": [],
+    },
     "store_clarification_token": {
         "sources": [
             "backend/__init__.py",

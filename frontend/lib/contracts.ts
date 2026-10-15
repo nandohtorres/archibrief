@@ -140,6 +140,10 @@ export interface ReviewStatusPointer {
   // shown verbatim to the user; see lib/progress.ts's describeProgress()
   // for the generic macro/micro-label mapping this feeds.
   currentStage?: string;
+  // Set when the pipeline fails (backend/lambdas/mark_review_failed): a
+  // short public code, mapped to friendly copy by failureMessageFor().
+  failureCode?: string;
+  failedAt?: string;
 }
 
 // Corrected 2026-10-01 (see Work-Project-Issues-Log.md): `POST /reviews`

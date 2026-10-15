@@ -1,6 +1,8 @@
 import { fixtureReport } from "../../frontend/lib/fixtures";
 import {
+  REVIEW_DEADLINE_MS,
   confidenceLabel,
+  failureMessageFor,
   filterAndSortFindings,
   formatFindingId,
 } from "../../frontend/lib/workflow";
@@ -65,5 +67,29 @@ describe("finding workspace behavior", () => {
     expect(confidenceLabel(0.7)).toBe("Medium");
     expect(confidenceLabel(0.4)).toBe("Low");
     expect(formatFindingId("finding-7")).toBe("F-007");
+  });
+});
+
+describe("failureMessageFor", () => {
+  it.each([
+    "invalid_archive",
+    "input_blocked",
+    "paused",
+    "timed_out",
+    "clarification_expired",
+    "cancelled",
+  ])("gives a specific message for %s", (code) => {
+    expect(failureMessageFor(code)).not.toBe(failureMessageFor(undefined));
+  });
+
+  it("falls back to a generic message for unknown codes", () => {
+    expect(failureMessageFor("internal_error")).toBe(
+      failureMessageFor(undefined),
+    );
+    expect(failureMessageFor("Lambda.Unknown")).toMatch(/Something went wrong/);
+  });
+
+  it("allows longer than the slowest backend stage before giving up", () => {
+    expect(REVIEW_DEADLINE_MS).toBeGreaterThan(300_000);
   });
 });
