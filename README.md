@@ -13,7 +13,7 @@ evaluated via deterministic rule checks plus RAG-grounded LLM reasoning
 against the AWS Well-Architected Framework and security best practices.
 
 **Status: live, real deployment, admin-gated (2026-10-13).** The full
-pipeline — Ingest → RuleEngine → PreflightGate → Retrieve → Reason →
+pipeline — Ingest → Scan (Trivy) → RuleEngine → PreflightGate → Retrieve → Reason →
 Validate → Audit → Finalize, orchestrated by a real AWS Step Functions
 state machine — has completed a real `SUCCEEDED` execution end to end
 against the deployed AWS account, including a real human-in-the-loop
@@ -24,13 +24,14 @@ state-changing route sits behind a single pre-shared admin credential
 ## What's real right now
 
 - **Backend**: Python Lambda handlers, the LangGraph/Bedrock AgentCore
-  reasoning subworkflow, the `Finding` pydantic model, a 16-scenario
-  deterministic RuleEngine, and every Terraform module are implemented,
+  reasoning subworkflow, the `Finding` pydantic model, a deterministic
+  layer of Trivy's trusted checks plus ArchiBrief's own rules (ADR-0048),
+  and every Terraform module are implemented,
   deployed, and have produced a real finding set against a real
   submitted Terraform repo. Backend test suite (`pytest`, no AWS
   credentials required — AWS calls go through moto or stubbed
-  adapters): 307 passing, plus 17 `xfail` cases that document known
-  rule-engine gaps (see "Known gaps"). 4 of the 307 check the real
+  adapters): 377 passing, including an adversarial trap suite that
+  runs with and without Trivy. 4 of them check the real
   ingested corpus and skip when `backend/corpus/data/` (gitignored) is
   absent.
 - **RAG knowledge base**: AWS Well-Architected Framework + security
@@ -92,13 +93,14 @@ customer-managed policies, applied and verified live).
 
 **Still genuinely open:**
 
-1. **Rule-engine trap suite**: `tests/backend/traps/` runs adversarial
-   Terraform through the real parser + rule engine. Its first run
-   (2026-10-15) found the engine missed all 14 sneaky-but-dangerous
-   configs and flagged 3 of 4 safe red herrings. Those are recorded as
-   17 strict `xfail` cases, so CI stays green while the gaps are open
-   and a fix that closes one fails the run until its marker is removed.
-   The engine is not yet a reliable detector for these patterns.
+1. **Trap suite coverage, and the Scan step's first deploy**:
+   `tests/backend/traps/` runs adversarial Terraform through the real
+   parser, Trivy and the rule engine. Its first run (2026-10-15) found
+   the engine missed all 14 sneaky-but-dangerous configs and flagged 3
+   of 4 safe ones; with Trivy plus rebuilt rules (ADR-0048) it now
+   catches 14/14 with no false positives, with and without Trivy. The
+   suite only proves the patterns it contains, and the Scan Lambda and
+   Trivy layer are built but not yet deployed.
 2. The model-side trap briefs (`backend/agent/trap_eval.py`) and the
    retrieval-evaluation harness call real Bedrock, so they are run
    manually with explicit approval, not in CI.
