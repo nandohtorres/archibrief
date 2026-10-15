@@ -39,10 +39,17 @@ venv/
 # Node / Next.js
 node_modules/
 .next/
+.next-e2e-*/
 out/
+out-fixture/
+out-live/
 .env
 .env.local
 .env.*.local
+
+# Playwright E2E
+playwright-report/
+test-results/
 
 # Secrets / local config
 .env
@@ -52,6 +59,13 @@ credentials.json
 deploy-role-policy.json
 !deploy-role-policy.example.json
 _apply-commands.txt
+
+# Drafted-but-not-applied IAM policy split (2026-10-13) — same
+# real-account-ID/real-ARN sensitivity as deploy-role-policy.json
+# above, not yet redacted/parameterized for public visibility. Found
+# untracked-but-not-ignored during the pre-publish readiness pass —
+# would have been swept into a blanket `git add` otherwise.
+infra/environments/dev/deploy-role-policies-proposed/
 
 # OS / editor
 .DS_Store
