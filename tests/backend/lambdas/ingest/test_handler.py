@@ -346,3 +346,26 @@ def test_deployed_path_stores_parsed_terraform_in_s3_and_returns_a_reference(tmp
     stored = json.loads(s3.objects["parsed/r-123.json"])
     assert "aws_s3_bucket" in stored["resources"]
     assert stored["files_parsed"] == ["main.tf"]
+
+
+def test_stage_logs_are_structured_and_carry_the_review_id(tmp_path, capsys):
+    # Codex F26: the old "temporary" tracing was free-text print lines with
+    # no review_id, so concurrent reviews' lines couldn't be told apart.
+    archive_path = str(tmp_path / "good.tar")
+    _make_archive(archive_path, {"main.tf": b'resource "aws_s3_bucket" "x" {}'})
+    fake = _FakeGuardrailsClient(allow=True, calls=[])
+    event = {**_event_for(archive_path, "secret brief text"), "review_id": "r-9"}
+
+    handler(event, None, guardrails_client=fake)
+
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert [line["stage"] for line in lines] == [
+        "resolve_archive",
+        "extract",
+        "parse_hcl",
+        "guardrails",
+        "guardrails_done",
+    ]
+    assert all(line["review_id"] == "r-9" for line in lines)
+    assert "secret brief text" not in json.dumps(lines)
+    assert tmp_path.name not in json.dumps(lines)
