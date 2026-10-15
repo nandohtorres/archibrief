@@ -1,6 +1,30 @@
 import type { Metadata } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
+
+// Self-hosted at build time with size-matched fallbacks, so text doesn't
+// jump when the fonts arrive and no request goes to Google at runtime.
+// globals.css reads these through --font-body/--font-mono/--font-serif.
+const plexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-plex-sans",
+  display: "swap",
+});
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-mono",
+  display: "swap",
+});
+const sourceSerif = Source_Serif_4({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  variable: "--font-source-serif",
+  display: "swap",
+});
 
 // Intended public domain (archibrief.dev, registered 2026-09-08) - used
 // here even though DNS isn't wired to it yet (Work-Project-Issues-Log.md,
@@ -33,7 +57,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" data-theme="system" suppressHydrationWarning>
+    <html
+      lang="en"
+      data-theme="system"
+      className={`${plexSans.variable} ${plexMono.variable} ${sourceSerif.variable}`}
+      suppressHydrationWarning
+    >
       <body>{children}</body>
     </html>
   );
