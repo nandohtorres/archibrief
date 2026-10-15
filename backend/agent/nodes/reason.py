@@ -42,7 +42,7 @@ from backend.shared.models.finding import (
 # forcing + chunk_id/exact_quote instead of an asked-for Citation object),
 # so a finding persisted under the old free-text-citation prompt is not
 # reproducible under this prompt_version — see ADR-0039.
-PROMPT_VERSION = "reason_prompt@2026-09-16"
+PROMPT_VERSION = "reason_prompt@2026-10-15"
 
 _TOOL_NAME = "emit_findings"
 
@@ -88,7 +88,11 @@ results — never answer in plain text. You must:
 - Never label a design "compliant" — describe framework alignment, not
   certification.
 - Populate every field in the schema, even in lightweight mode.
-- Tag any finding that depends on an assumed default as type "assumption"."""
+- The "requirements" list holds the workload's settled requirements (traffic,
+  availability, data sensitivity, etc.), each labeled by source: "answered"
+  by the user, an "assumption" (conservative default), or "unknown". Tailor
+  findings to them, and tag any finding that depends on a requirement with
+  is_assumption=true as type "assumption"."""
 
 # Appended to SYSTEM_PROMPT only for a "go deeper" re-run (ADR-0023:
 # lightweight is the default first pass; deeper evaluation happens only
@@ -329,13 +333,32 @@ _FINDING_INPUT_SCHEMA = {
 }
 
 
+def _requirements_from_preflight(preflight_fields: dict | None) -> list[dict]:
+    """The requirement values preflight settled on, each labeled with how
+    it was established (answered by the user / conservative assumption /
+    unknown) so the model can tailor findings and tag the ones that rest on
+    an assumption (Codex F06: these never reached the prompt before)."""
+    return [
+        {
+            "requirement": name,
+            "value": field.get("value"),
+            "source": field.get("outcome"),
+            "is_assumption": bool(field.get("is_assumption")),
+        }
+        for name, field in sorted((preflight_fields or {}).items())
+        if isinstance(field, dict)
+    ]
+
+
 def build_user_content(
     workload_brief: str,
     rule_findings: list[dict],
     retrieved_chunks: list[dict],
+    preflight_fields: dict | None = None,
 ) -> dict:
     return {
         "workload_brief": workload_brief,
+        "requirements": _requirements_from_preflight(preflight_fields),
         "rule_engine_findings": rule_findings,
         "retrieved_evidence": retrieved_chunks,
     }
@@ -348,8 +371,11 @@ def call_reasoning_model(
     retrieved_chunks: list[dict],
     max_tokens: int,
     deep_mode: bool = False,
+    preflight_fields: dict | None = None,
 ) -> list[dict]:
-    user_content = json.dumps(build_user_content(workload_brief, rule_findings, retrieved_chunks))
+    user_content = json.dumps(
+        build_user_content(workload_brief, rule_findings, retrieved_chunks, preflight_fields)
+    )
     tool_input = reasoning_client.converse_structured(
         system_prompt=build_system_prompt(deep_mode),
         user_content=user_content,
@@ -586,7 +612,15 @@ def reason_node(state: dict) -> dict:
     reasoning_client: BedrockReasoningClient = state["reasoning_client"]
 
     workload_brief = state["workload_brief"]
-    if not guardrails.check(workload_brief, source="INPUT"):
+    # User-typed clarification answers now reach the prompt too (Codex F06),
+    # so they get the same Guardrails screen as the brief.
+    answered = [
+        str(field.get("value"))
+        for field in (state.get("preflight_fields") or {}).values()
+        if isinstance(field, dict) and field.get("outcome") == "answered" and field.get("value")
+    ]
+    screened_input = "\n".join([workload_brief, *answered])
+    if not guardrails.check(screened_input, source="INPUT"):
         raise GuardrailBlocked("reason_input")
 
     retrieved_chunks = state.get("retrieved_chunks", [])
@@ -601,6 +635,7 @@ def reason_node(state: dict) -> dict:
         retrieved_chunks=retrieved_chunks,
         max_tokens=state.get("max_tokens", 4096),
         deep_mode=deep_mode,
+        preflight_fields=state.get("preflight_fields"),
     )
 
     # Verified findings are kept even if others in the batch fail; failed
