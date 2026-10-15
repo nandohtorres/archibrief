@@ -39,10 +39,18 @@ run from here at all. boto3/botocore are never bundled — the Lambda
 runtime provides them natively, matching every existing zip in this
 repo (confirmed by inspecting admin_authorizer's/finalize's zips
 directly, not assumed).
+
+Reproducible builds (2026-10-15): third-party versions are pinned in
+scripts/lambda_constraints.txt, and the zip is written with fixed
+timestamps and permissions in a fixed order. Rebuilding unchanged code
+gives a byte-identical zip, so `terraform plan` only shows Lambdas whose
+code or dependencies really changed. Before this, every rebuild changed
+every zip's hash, even when the code inside was identical.
 """
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -51,6 +59,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
+CONSTRAINTS = ROOT / "scripts" / "lambda_constraints.txt"
+
+# Fixed metadata for every zip entry, so the same files always give the
+# same bytes (zip format can't store dates before 1980).
+_ZIP_DATE_TIME = (2026, 1, 1, 0, 0, 0)
+_ZIP_FILE_MODE = (0o100644 & 0xFFFF) << 16  # regular file, rw-r--r--
 
 # Each entry: Lambda name -> (source files/dirs to copy verbatim,
 # relative to ROOT; third-party PyPI packages to bundle as Linux wheels).
@@ -282,28 +296,75 @@ def _install_packages(packages: list[str], staging_dir: Path) -> None:
             "pip",
             "install",
             *_PIP_PLATFORM_ARGS,
+            "--constraint",
+            str(CONSTRAINTS),
             "--target",
             str(staging_dir),
             *packages,
         ],
         check=True,
     )
+    check_all_pinned(staging_dir)
     # pip's downloaded dist-info/__pycache__ directories aren't needed at
     # runtime and only bloat the zip — strip them, same as every existing
     # zip in this repo (confirmed: admin_authorizer's/finalize's zips
     # carry no __pycache__ entries).
     for junk_dir in staging_dir.rglob("__pycache__"):
         shutil.rmtree(junk_dir, ignore_errors=True)
+    # pip on Windows writes .exe launchers for console scripts (python-hcl2's
+    # hcl2tojson etc.) into bin/. Lambda runs Linux and never calls them, and
+    # they come out different on every build, as does the RECORD file
+    # listing their hashes. Neither is needed to import the packages.
+    shutil.rmtree(staging_dir / "bin", ignore_errors=True)
+    for record in staging_dir.glob("*.dist-info/RECORD"):
+        record.unlink()
+
+
+def _normalize(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def pinned_versions(constraints: Path = CONSTRAINTS) -> dict[str, str]:
+    pins: dict[str, str] = {}
+    for line in constraints.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        name, sep, version = line.partition("==")
+        if not sep:
+            raise ValueError(f"{constraints.name}: not an exact pin: {line!r}")
+        pins[_normalize(name)] = version.strip()
+    return pins
+
+
+def check_all_pinned(staging_dir: Path, constraints: Path = CONSTRAINTS) -> None:
+    """Fail if pip bundled a package, or a version, that isn't pinned."""
+    pins = pinned_versions(constraints)
+    for dist_info in staging_dir.glob("*.dist-info"):
+        name, _, version = dist_info.name[: -len(".dist-info")].rpartition("-")
+        if pins.get(_normalize(name)) != version:
+            raise SystemExit(
+                f"{name} {version} was bundled but isn't pinned in "
+                f"{constraints.name}. Add it there on purpose, then rebuild."
+            )
 
 
 def _zip_staging_dir(staging_dir: Path, zip_path: Path) -> None:
     zip_path.parent.mkdir(parents=True, exist_ok=True)
     if zip_path.exists():
         zip_path.unlink()
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file_path in sorted(staging_dir.rglob("*")):
-            if file_path.is_file():
-                zf.write(file_path, file_path.relative_to(staging_dir))
+    files = sorted(
+        (p for p in staging_dir.rglob("*") if p.is_file()),
+        key=lambda p: p.relative_to(staging_dir).as_posix(),
+    )
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for file_path in files:
+            info = zipfile.ZipInfo(
+                file_path.relative_to(staging_dir).as_posix(), _ZIP_DATE_TIME
+            )
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = _ZIP_FILE_MODE
+            zf.writestr(info, file_path.read_bytes())
 
 
 def package(name: str) -> Path:

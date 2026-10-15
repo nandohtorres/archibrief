@@ -144,10 +144,11 @@ on:
                    hosting, kill switch, cost controls, IAM), one module
                    per major component
 /backend
-  /lambdas       — bounded, stateless Lambda work: ingest, rule_engine,
-                   store_clarification_token, clarify_review, validate,
-                   audit, finalize, deeper_review, get_review, get_demo,
-                   admin_authorizer, create_upload
+  /lambdas       — bounded, stateless Lambda work: ingest, scan,
+                   rule_engine, store_clarification_token, clarify_review,
+                   validate, audit, finalize, mark_review_failed,
+                   deeper_review, get_review, get_demo, admin_authorizer,
+                   create_upload
   /agent         — the one LangGraph/AgentCore reasoning subworkflow:
                    /nodes (preflight, retrieve, reason) + graph.py. NOT
                    Lambda functions — Guardrails/"classify" runs inline
@@ -159,6 +160,22 @@ on:
 /tests           — mirrors /backend and /frontend
 /docs/adr        — copy of the vault's Work-Project-ADR/ folder
 ```
+
+## Building and deploying
+
+From the repo root, then `terraform plan` and `terraform apply` in
+`infra/environments/dev`:
+
+```
+python scripts/package_lambdas.py      # every Lambda zip
+python scripts/build_trivy_layer.py    # Trivy layer (ADR-0048)
+```
+
+Builds are reproducible. Third-party versions are pinned in
+`scripts/lambda_constraints.txt`, and the build fails if pip bundles
+anything not pinned there. Zips are written with fixed timestamps, so a
+plan only shows Lambdas whose code or dependencies really changed. To
+upgrade a dependency, change its pin, rebuild, and run the backend tests.
 
 ## Stack (locked, see ADRs for reasoning)
 

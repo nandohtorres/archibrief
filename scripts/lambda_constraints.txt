@@ -1,0 +1,21 @@
+# Exact versions of every third-party package bundled into a Lambda zip by
+# scripts/package_lambdas.py (passed to pip as --constraint). These are the
+# versions deployed and verified live on 2026-10-15, read from the built
+# zips' dist-info, not picked fresh.
+#
+# Why pinned: LAMBDA_SPECS asks for "pydantic>=2.0" etc., so without this a
+# rebuild silently picked up whatever was newest that day. A dependency
+# change then shipped unreviewed, and Terraform saw every rebuild as new
+# code. The packaging script fails if pip bundles a package not listed here,
+# so a new transitive dependency has to be added on purpose.
+#
+# To upgrade: change the version here, rebuild (python
+# scripts/package_lambdas.py), run the backend tests, then plan and apply.
+annotated-types==0.8.0
+lark==1.3.1
+pydantic==2.14.1
+pydantic-core==2.50.1
+python-hcl2==8.1.4
+regex==2026.9.29
+typing-extensions==4.16.0
+typing-inspection==0.4.4

@@ -28,7 +28,8 @@ def _load_package_script():
     return module
 
 
-LAMBDA_SPECS = _load_package_script().LAMBDA_SPECS
+PACKAGER = _load_package_script()
+LAMBDA_SPECS = PACKAGER.LAMBDA_SPECS
 
 
 def _module_file(module: str) -> Path | None:
@@ -89,3 +90,71 @@ def test_every_lambda_handler_has_a_packaging_spec():
         p.parent.name for p in (ROOT / "backend" / "lambdas").glob("*/handler.py")
     }
     assert handlers - set(LAMBDA_SPECS) == set()
+
+
+# Reproducible builds (2026-10-15): unchanged code must give a
+# byte-identical zip, or `terraform plan` reports every Lambda as changed.
+
+
+def _staging(tmp_path, files):
+    staging = tmp_path / "staging"
+    for rel, content in files.items():
+        f = staging / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(content)
+    return staging
+
+
+def test_zip_is_byte_identical_across_builds(tmp_path):
+    import os
+    import time
+
+    staging = _staging(tmp_path, {"b/handler.py": b"x = 1\n", "a.py": b"y = 2\n"})
+    PACKAGER._zip_staging_dir(staging, tmp_path / "one.zip")
+    # A later rebuild: same content, newer modification times.
+    later = time.time() + 3600
+    for f in staging.rglob("*.py"):
+        os.utime(f, (later, later))
+    PACKAGER._zip_staging_dir(staging, tmp_path / "two.zip")
+    assert (tmp_path / "one.zip").read_bytes() == (tmp_path / "two.zip").read_bytes()
+
+
+def test_zip_entries_use_forward_slashes_and_sorted_order(tmp_path):
+    import zipfile
+
+    staging = _staging(tmp_path, {"b/handler.py": b"", "a.py": b""})
+    PACKAGER._zip_staging_dir(staging, tmp_path / "out.zip")
+    assert zipfile.ZipFile(tmp_path / "out.zip").namelist() == ["a.py", "b/handler.py"]
+
+
+def test_every_pin_is_exact():
+    pins = PACKAGER.pinned_versions()
+    assert {"pydantic", "python-hcl2"} <= set(pins)
+    assert all(pins.values())
+
+
+def test_every_spec_package_is_pinned():
+    pins = PACKAGER.pinned_versions()
+    for name, spec in LAMBDA_SPECS.items():
+        for requirement in spec["packages"]:
+            pkg = PACKAGER._normalize(requirement.split(">")[0].split("=")[0])
+            assert pkg in pins, f"{name}: {requirement} has no pin"
+
+
+def test_unpinned_bundled_package_fails_the_build(tmp_path):
+    constraints = tmp_path / "c.txt"
+    constraints.write_text("pydantic==2.14.1\n", encoding="utf-8")
+    staging = _staging(tmp_path, {"pydantic-2.14.1.dist-info/METADATA": b""})
+    PACKAGER.check_all_pinned(staging, constraints)  # pinned: fine
+
+    (staging / "surprise_pkg-1.0.dist-info").mkdir()
+    with pytest.raises(SystemExit, match="surprise_pkg"):
+        PACKAGER.check_all_pinned(staging, constraints)
+
+
+def test_wrong_version_fails_the_build(tmp_path):
+    constraints = tmp_path / "c.txt"
+    constraints.write_text("pydantic==2.14.1\n", encoding="utf-8")
+    staging = _staging(tmp_path, {"pydantic-2.15.0.dist-info/METADATA": b""})
+    with pytest.raises(SystemExit, match="pydantic"):
+        PACKAGER.check_all_pinned(staging, constraints)
