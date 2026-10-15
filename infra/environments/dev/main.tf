@@ -130,9 +130,9 @@ module "step_functions_lambda" {
 }
 
 module "frontend_hosting" {
-  source             = "../../modules/frontend-hosting"
-  name_prefix        = "${var.name_prefix}-${var.environment}"
-  bucket_name        = "${var.name_prefix}-${var.environment}-frontend"
+  source      = "../../modules/frontend-hosting"
+  name_prefix = "${var.name_prefix}-${var.environment}"
+  bucket_name = "${var.name_prefix}-${var.environment}-frontend"
   # Space-separated - CSP connect-src accepts multiple source
   # expressions in one directive value. Includes the custom API domain
   # alongside the wildcard execute-api pattern since the frontend may be

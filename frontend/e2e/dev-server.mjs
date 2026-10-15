@@ -33,7 +33,9 @@ const variants = {
 
 const config = variants[variant];
 if (!config) {
-  throw new Error(`Unknown E2E server variant ${JSON.stringify(variant)} (expected "fixture" or "live")`);
+  throw new Error(
+    `Unknown E2E server variant ${JSON.stringify(variant)} (expected "fixture" or "live")`,
+  );
 }
 
 execFileSync("npm", ["run", "build:e2e"], {

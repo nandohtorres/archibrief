@@ -108,10 +108,7 @@ export async function requestUpload(
 // POST policy is the only authorization this request carries; adding an
 // unrelated admin-key header here would do nothing but could confuse a
 // future reader into thinking it's required.
-export async function uploadArchiveToS3(
-  upload: CreateUploadResponse,
-  file: File,
-): Promise<void> {
+export async function uploadArchiveToS3(upload: CreateUploadResponse, file: File): Promise<void> {
   const formData = new FormData();
   for (const [field, value] of Object.entries(upload.uploadFields)) {
     formData.append(field, value);

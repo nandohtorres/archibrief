@@ -193,9 +193,7 @@ _HYPHEN_VARIANT_CLASS = _PUNCTUATION_VARIANT_CLASSES["-"] + r"\s*"
 # followed by a "<Pillar Name> AWS Well-Architected Framework" line) — not
 # an arbitrary "skip any text" hole, so it can't be used to paper over a
 # real quote mismatch.
-_PAGE_BREAK_BOILERPLATE = (
-    r"(?:[A-Z0-9][A-Z0-9.]*-BP\d+[^\n]{0,200}?\d+\s*\n+[^\n]{0,80}AWS Well-Architected Framework\s*)?"
-)
+_PAGE_BREAK_BOILERPLATE = r"(?:[A-Z0-9][A-Z0-9.]*-BP\d+[^\n]{0,200}?\d+\s*\n+[^\n]{0,80}AWS Well-Architected Framework\s*)?"
 
 
 _LIGATURE_ASCII_TO_CHAR = {
@@ -242,6 +240,7 @@ def _build_tolerant_pattern(quote: str) -> re.Pattern[str]:
         else:
             parts.append(_escape_with_ligature_tolerance(text))
     return re.compile("".join(parts))
+
 
 _FINDING_INPUT_SCHEMA = {
     "type": "object",
@@ -406,7 +405,9 @@ def _resolve_citation(
         return None
     chunk = chunk_by_id.get(chunk_id)
     if chunk is None:
-        failures.append(f"finding[{index}]: chunk_id {chunk_id!r} is not in the retrieved evidence set")
+        failures.append(
+            f"finding[{index}]: chunk_id {chunk_id!r} is not in the retrieved evidence set"
+        )
         return None
 
     # Reject non-string and whitespace-only quotes explicitly. Without

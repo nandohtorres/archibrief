@@ -50,7 +50,11 @@ function schemaFor(field: string): FieldSchema {
   return { kind: "text", label, question: `Please provide an answer for "${label}".` };
 }
 
-type YesNoMultiSelectAnswer = { kind: "yes_no_multiselect"; yesNo: "yes" | "no" | null; selected: string[] };
+type YesNoMultiSelectAnswer = {
+  kind: "yes_no_multiselect";
+  yesNo: "yes" | "no" | null;
+  selected: string[];
+};
 type TextAnswer = { kind: "text"; value: string };
 type FieldAnswer = YesNoMultiSelectAnswer | TextAnswer;
 
@@ -89,7 +93,14 @@ export function ClarifyStep({
   function setYesNo(field: string, yesNo: "yes" | "no") {
     setFieldAnswers((current) => ({
       ...current,
-      [field]: { kind: "yes_no_multiselect", yesNo, selected: yesNo === "no" ? [] : (current[field] as YesNoMultiSelectAnswer | undefined)?.selected ?? [] },
+      [field]: {
+        kind: "yes_no_multiselect",
+        yesNo,
+        selected:
+          yesNo === "no"
+            ? []
+            : ((current[field] as YesNoMultiSelectAnswer | undefined)?.selected ?? []),
+      },
     }));
   }
 
@@ -152,7 +163,11 @@ export function ClarifyStep({
 
               {schema.kind === "yes_no_multiselect" && answer.kind === "yes_no_multiselect" && (
                 <>
-                  <div className="yes-no-toggle" role="group" aria-label={`${schema.label} — yes or no`}>
+                  <div
+                    className="yes-no-toggle"
+                    role="group"
+                    aria-label={`${schema.label} — yes or no`}
+                  >
                     <button
                       type="button"
                       className={`button small ${answer.yesNo === "yes" ? "primary" : "secondary"}`}
@@ -225,12 +240,7 @@ export function ClarifyStep({
       )}
 
       <div className="form-actions">
-        <button
-          className="button secondary"
-          type="button"
-          onClick={onCancel}
-          disabled={submitting}
-        >
+        <button className="button secondary" type="button" onClick={onCancel} disabled={submitting}>
           Cancel and return to submission
         </button>
         <button

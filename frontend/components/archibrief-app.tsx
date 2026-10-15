@@ -229,9 +229,7 @@ export function ArchiBriefApp() {
       setScreen("progress");
     } catch (error) {
       setClarifyError(
-        error instanceof Error
-          ? error.message
-          : "Could not submit the clarification answer.",
+        error instanceof Error ? error.message : "Could not submit the clarification answer.",
       );
     } finally {
       setClarifySubmitting(false);

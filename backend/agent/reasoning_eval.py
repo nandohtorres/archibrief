@@ -208,9 +208,7 @@ def _finding_covers_topic(finding: Finding, expected: ExpectedFinding) -> bool:
     for group in expected.keyword_groups:
         if not any(keyword.lower() in haystack for keyword in group):
             return False
-    if any(phrase.lower() in haystack for phrase in expected.negative_phrases):
-        return False
-    return True
+    return not any(phrase.lower() in haystack for phrase in expected.negative_phrases)
 
 
 def _finding_with_label(finding: Finding) -> dict:
@@ -265,7 +263,9 @@ def score_reasoning(
             }
         )
 
-    unmatched_findings = [_finding_with_label(f) for f in findings if f.finding_id not in matched_finding_ids]
+    unmatched_findings = [
+        _finding_with_label(f) for f in findings if f.finding_id not in matched_finding_ids
+    ]
 
     total = len(brief.expected_findings)
     covered = sum(1 for hit in topic_hits if hit["covered"])
@@ -397,8 +397,15 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
                     "reviewer should flag this as an open question/assumption given no "
                     "least-privilege scoping is mentioned, not assert it's definitely broad."
                 ),
-                keyword_groups=[["lambda"], ["least privilege", "least-privilege", "iam", "permission", "scop"]],
-                negative_phrases=["is tightly scoped", "already follows least privilege", "narrowly scoped"],
+                keyword_groups=[
+                    ["lambda"],
+                    ["least privilege", "least-privilege", "iam", "permission", "scop"],
+                ],
+                negative_phrases=[
+                    "is tightly scoped",
+                    "already follows least privilege",
+                    "narrowly scoped",
+                ],
                 plausible_source_documents=["waf-security-pillar", "iam-best-practices"],
             ),
         ],
@@ -448,9 +455,14 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
                 topic_id="oversized-instances",
                 category="cost",
                 description="EC2 instances oversized without utilization monitoring — rightsizing opportunity.",
-                keyword_groups=[["rightsiz", "oversiz", "right-siz", "instance size", "utilization"]],
+                keyword_groups=[
+                    ["rightsiz", "oversiz", "right-siz", "instance size", "utilization"]
+                ],
                 negative_phrases=["properly sized", "already rightsized", "correctly sized"],
-                plausible_source_documents=["waf-cost-optimization-pillar", "waf-performance-efficiency-pillar"],
+                plausible_source_documents=[
+                    "waf-cost-optimization-pillar",
+                    "waf-performance-efficiency-pillar",
+                ],
             ),
             ExpectedFinding(
                 topic_id="no-commitment-discounts",
@@ -506,7 +518,10 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
                 # "backup" AND a disabled-state word, a restore-testing
                 # sentence without an explicit backup-disabled statement
                 # is meaningfully less likely to match both groups.
-                keyword_groups=[["backup"], ["disabled", "not enabled", "no automated", "turned off"]],
+                keyword_groups=[
+                    ["backup"],
+                    ["disabled", "not enabled", "no automated", "turned off"],
+                ],
                 negative_phrases=[
                     "backups are already enabled",
                     "automated backups are already configured",
@@ -565,7 +580,10 @@ HOLDOUT_BRIEFS: list[ReasoningEvalBrief] = [
                 topic_id="shared-long-term-keys",
                 category="iam",
                 description="Long-term IAM access keys shared across a team instead of temporary/federated credentials.",
-                keyword_groups=[["access key", "long-term", "long term"], ["shar", "federat", "temporary"]],
+                keyword_groups=[
+                    ["access key", "long-term", "long term"],
+                    ["shar", "federat", "temporary"],
+                ],
                 negative_phrases=[
                     "keys are already rotated regularly",
                     "temporary credentials are already used",
@@ -577,13 +595,20 @@ HOLDOUT_BRIEFS: list[ReasoningEvalBrief] = [
                 topic_id="wildcard-bucket-policy",
                 category="exposure",
                 description="An IAM group policy grants s3:* on the bucket — violates least privilege.",
-                keyword_groups=[["s3:*", "wildcard", "all actions", "full access"], ["least privilege", "least-privilege"]],
+                keyword_groups=[
+                    ["s3:*", "wildcard", "all actions", "full access"],
+                    ["least privilege", "least-privilege"],
+                ],
                 negative_phrases=[
                     "policy is already scoped",
                     "least privilege is already enforced",
                     "no wildcard permissions",
                 ],
-                plausible_source_documents=["waf-security-pillar", "iam-best-practices", "aws-fsbp-standard"],
+                plausible_source_documents=[
+                    "waf-security-pillar",
+                    "iam-best-practices",
+                    "aws-fsbp-standard",
+                ],
             ),
         ],
     ),
@@ -602,21 +627,33 @@ HOLDOUT_BRIEFS: list[ReasoningEvalBrief] = [
                 topic_id="non-prod-always-on",
                 category="cost",
                 description="Dev/staging run 24/7 despite low off-hours usage — no scheduled shutdown.",
-                keyword_groups=[["dev", "staging", "non-production", "non production"], ["schedul", "shut down", "shutdown", "24/7"]],
+                keyword_groups=[
+                    ["dev", "staging", "non-production", "non production"],
+                    ["schedul", "shut down", "shutdown", "24/7"],
+                ],
                 negative_phrases=[
                     "already scheduled to shut down",
                     "auto-stop is already configured",
                     "already shuts down outside business hours",
                 ],
-                plausible_source_documents=["waf-cost-optimization-pillar", "waf-sustainability-pillar"],
+                plausible_source_documents=[
+                    "waf-cost-optimization-pillar",
+                    "waf-sustainability-pillar",
+                ],
             ),
             ExpectedFinding(
                 topic_id="no-spot-for-fault-tolerant",
                 category="cost",
                 description="Fault-tolerant, restartable batch jobs don't use Spot Instances.",
-                keyword_groups=[["spot instance", "spot"], ["fault-toleran", "fault toleran", "restart"]],
+                keyword_groups=[
+                    ["spot instance", "spot"],
+                    ["fault-toleran", "fault toleran", "restart"],
+                ],
                 negative_phrases=["already uses spot instances", "spot is already used for"],
-                plausible_source_documents=["waf-cost-optimization-pillar", "waf-performance-efficiency-pillar"],
+                plausible_source_documents=[
+                    "waf-cost-optimization-pillar",
+                    "waf-performance-efficiency-pillar",
+                ],
             ),
         ],
     ),

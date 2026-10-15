@@ -64,7 +64,11 @@ _PUT_VECTORS_BATCH_SIZE = 500  # S3 Vectors PutVectors hard limit per call
 _SMOKE_TEST_WAVE_SIZE = 1  # first wave — cheap config/permissions check
 _PROGRESS_EVERY = 50
 _MAX_RETRIES = 5
-_RETRYABLE_ERROR_CODES = {"ThrottlingException", "ServiceUnavailableException", "ModelTimeoutException"}
+_RETRYABLE_ERROR_CODES = {
+    "ThrottlingException",
+    "ServiceUnavailableException",
+    "ModelTimeoutException",
+}
 
 # A line only counts as page-furniture boilerplate (running header/footer,
 # e.g. "Security Pillar AWS Well-Architected Framework" repeated near the
@@ -144,7 +148,9 @@ def embed_with_retry(embedder: BedrockEmbeddingClient, text: str) -> list[float]
                 delay *= 2
                 continue
             raise
-    raise RuntimeError(f"embed_with_retry exhausted {_MAX_RETRIES} retries without returning or raising")
+    raise RuntimeError(
+        f"embed_with_retry exhausted {_MAX_RETRIES} retries without returning or raising"
+    )
 
 
 def compute_boilerplate_lines(chunks: list[dict]) -> dict[str | None, frozenset[str]]:
@@ -295,7 +301,9 @@ def _embed_wave(
             pool.submit(
                 embed_with_retry,
                 embedder,
-                embedding_input(chunk, boilerplate_lines.get(chunk.get("document_id"), frozenset())),
+                embedding_input(
+                    chunk, boilerplate_lines.get(chunk.get("document_id"), frozenset())
+                ),
             ): chunk
             for chunk in wave
         }
@@ -312,7 +320,9 @@ def _embed_wave(
     return results
 
 
-def _replay_pending_batch_if_any(vectors_client: S3VectorsClient, chunk_hashes: dict[str, str]) -> None:
+def _replay_pending_batch_if_any(
+    vectors_client: S3VectorsClient, chunk_hashes: dict[str, str]
+) -> None:
     """A pending-batch file means a previous run embedded (and paid for)
     a batch but crashed before confirming it was written + checkpointed.
     Replaying the PutVectors call is safe — S3 Vectors overwrites an
@@ -350,7 +360,9 @@ def _write_wave(
     boilerplate_lines = boilerplate_lines or {}
     records = [to_vector_record(chunk, embedding) for chunk, embedding in wave_results]
     embedding_hashes = {
-        chunk["chunk_id"]: _embedding_hash(chunk, boilerplate_lines.get(chunk.get("document_id"), frozenset()))
+        chunk["chunk_id"]: _embedding_hash(
+            chunk, boilerplate_lines.get(chunk.get("document_id"), frozenset())
+        )
         for chunk, _ in wave_results
     }
     _atomic_write_json(

@@ -15,7 +15,9 @@ test.describe("fixture/demo critical path (no live API)", () => {
   }) => {
     await page.goto(FIXTURE_URL);
 
-    await expect(page.getByRole("heading", { name: "Review an existing AWS architecture" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Review an existing AWS architecture" }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Load reference fixture" }).click();
     await page.getByRole("button", { name: "Continue with fixture" }).click();
 
@@ -34,6 +36,8 @@ test.describe("fixture/demo critical path (no live API)", () => {
 
     await expect(page.getByRole("button", { name: "Go deeper" }).first()).toBeVisible();
     await page.getByRole("button", { name: "Go deeper" }).first().click();
-    await expect(page.getByText(/Fixture only:.*would create a versioned child finding/)).toBeVisible();
+    await expect(
+      page.getByText(/Fixture only:.*would create a versioned child finding/),
+    ).toBeVisible();
   });
 });

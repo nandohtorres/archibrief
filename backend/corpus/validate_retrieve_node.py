@@ -68,10 +68,7 @@ def run(queries: list[EvalQuery]) -> list[dict]:
         lexical_terms = extract_lexical_terms(eval_query.query)
         lexical_hits = [c for c in chunks if c["match_type"] == "lexical"]
         missing_fields = [
-            field
-            for chunk in chunks
-            for field in _REQUIRED_CITATION_FIELDS
-            if not chunk.get(field)
+            field for chunk in chunks for field in _REQUIRED_CITATION_FIELDS if not chunk.get(field)
         ]
         reports.append(
             {
@@ -94,7 +91,9 @@ def print_report(reports: list[dict]) -> None:
     for report in reports:
         print(f"{report['query_id']}: {report['query']}")
         print(f"  lexical_terms:      {report['lexical_terms']}")
-        print(f"  chunks retrieved:   {report['chunk_count']} (lexical hits: {report['lexical_hit_count']})")
+        print(
+            f"  chunks retrieved:   {report['chunk_count']} (lexical hits: {report['lexical_hit_count']})"
+        )
         print(f"  expected chunk hit: {report['expected_chunk_hit']}")
         print(f"  missing citations:  {report['missing_citation_fields'] or 'none'}")
         print(f"  sample chunk_ids:   {report['sample_chunk_ids']}")

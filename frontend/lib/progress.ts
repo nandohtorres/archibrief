@@ -26,11 +26,31 @@ const TOTAL_MACRO_STAGES = 4;
 // Order matters only for documentation here — percent is computed from
 // each stage's own `index`, not array position.
 const STAGE_MAP: Record<string, StageInfo> = {
-  ingest: { index: 1, macroLabel: "Preparing", microLabel: "Reading and screening the submitted configuration" },
-  rule_engine: { index: 2, macroLabel: "Analyzing", microLabel: "Running deterministic architecture checks" },
-  reasoning: { index: 3, macroLabel: "Analyzing", microLabel: "Reasoning over the architecture and evidence" },
-  needs_clarification: { index: 3, macroLabel: "Analyzing", microLabel: "Waiting on your answer to continue" },
-  validate: { index: 4, macroLabel: "Verifying", microLabel: "Checking findings against the evidence schema" },
+  ingest: {
+    index: 1,
+    macroLabel: "Preparing",
+    microLabel: "Reading and screening the submitted configuration",
+  },
+  rule_engine: {
+    index: 2,
+    macroLabel: "Analyzing",
+    microLabel: "Running deterministic architecture checks",
+  },
+  reasoning: {
+    index: 3,
+    macroLabel: "Analyzing",
+    microLabel: "Reasoning over the architecture and evidence",
+  },
+  needs_clarification: {
+    index: 3,
+    macroLabel: "Analyzing",
+    microLabel: "Waiting on your answer to continue",
+  },
+  validate: {
+    index: 4,
+    macroLabel: "Verifying",
+    microLabel: "Checking findings against the evidence schema",
+  },
   audit: { index: 4, macroLabel: "Verifying", microLabel: "Recording the audit trail" },
   finalize: { index: 4, macroLabel: "Finalizing", microLabel: "Assembling the final report" },
 };

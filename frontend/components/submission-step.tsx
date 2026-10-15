@@ -102,9 +102,7 @@ export function SubmissionStep({
       });
       setAttempted(false);
     } catch (error) {
-      setPresetError(
-        error instanceof Error ? error.message : "Could not load this preset.",
-      );
+      setPresetError(error instanceof Error ? error.message : "Could not load this preset.");
     } finally {
       setLoadingPresetId(null);
     }
@@ -150,9 +148,7 @@ export function SubmissionStep({
               disabled={loadingPresetId !== null}
               onClick={() => loadPreset(preset)}
             >
-              <strong>
-                {loadingPresetId === preset.id ? "Loading…" : preset.label}
-              </strong>
+              <strong>{loadingPresetId === preset.id ? "Loading…" : preset.label}</strong>
               <span>{preset.description}</span>
             </button>
           ))}

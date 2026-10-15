@@ -35,14 +35,19 @@ _METADATA_KEYS = (
     "heading_path",
     "corpus_version",
     "content_type",
-    "retrieved_at",
-    "source_edition",
-    "parser_version",
 )
+
+# Provenance fields added to the corpus after the first chunks were
+# written. retrieve.py already reads them with a "" default, so match
+# that here instead of failing on older chunk data.
+_OPTIONAL_PROVENANCE_KEYS = ("retrieved_at", "source_edition", "parser_version")
 
 
 def _chunk_metadata(chunk: dict) -> dict:
-    metadata = {key: chunk[key] for key in _METADATA_KEYS if key != "heading_path" and key != "content_type"}
+    metadata = {
+        key: chunk[key] for key in _METADATA_KEYS if key != "heading_path" and key != "content_type"
+    }
+    metadata.update({key: chunk.get(key, "") for key in _OPTIONAL_PROVENANCE_KEYS})
     # heading_path is stored as a list of headings in the raw chunk data
     # (see backend/corpus/data/chunks/*.json); embed.py's embedding_input
     # joins it the same way when building what Titan actually sees, so
