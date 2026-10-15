@@ -14,7 +14,9 @@ anything Terraform-side.
 from __future__ import annotations
 
 import os
+import shutil
 import tarfile
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
@@ -81,11 +83,14 @@ def extract_archive(archive_path: str, dest_dir: str) -> list[str]:
     total_uncompressed = 0
 
     with tarfile.open(archive_path, mode="r:*") as archive:
-        members = archive.getmembers()
-        if len(members) > MAX_ARCHIVE_MEMBERS:
-            raise IngestRejected("archive contains too many members")
-
-        for member in members:
+        # Iterate rather than getmembers(): limits are enforced as each
+        # header is read, so an archive with a huge member count is
+        # rejected at member 501 instead of after scanning every header.
+        members: list[tarfile.TarInfo] = []
+        for member in archive:
+            members.append(member)
+            if len(members) > MAX_ARCHIVE_MEMBERS:
+                raise IngestRejected("archive contains too many members")
             _reject_unsafe_member(member)
             total_uncompressed += max(member.size, 0)
             if total_uncompressed > MAX_UNCOMPRESSED_BYTES:
@@ -209,7 +214,24 @@ def handler(
     s3_client: S3Client | None = None,
 ):
     workload_brief = event["workload_brief"]
-    dest_dir = event.get("dest_dir", "/tmp/archibrief-ingest")
+    # A fresh directory per invocation, removed afterwards: warm Lambda
+    # containers reuse /tmp, so a fixed path kept every previous
+    # submission's files on disk (Codex F14).
+    dest_dir = event.get("dest_dir") or tempfile.mkdtemp(prefix="archibrief-ingest-")
+    try:
+        return _ingest(event, workload_brief, dest_dir, guardrails_client, s3_client)
+    finally:
+        if not event.get("dest_dir"):
+            shutil.rmtree(dest_dir, ignore_errors=True)
+
+
+def _ingest(
+    event: dict,
+    workload_brief: str,
+    dest_dir: str,
+    guardrails_client: GuardrailsClient | None,
+    s3_client: S3Client | None,
+) -> dict:
 
     # Temporary stage-tracing (2026-10-12): this handler had zero logging,
     # so a hard Lambda timeout (process killed, no exception, no traceback)
