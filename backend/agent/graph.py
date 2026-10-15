@@ -76,6 +76,8 @@ class ReviewState(TypedDict, total=False):
     corpus_version: str
     deterministic_rule_version: str | None
     reasoned_findings: list[dict]
+    # Model findings excluded by citation/shape verification (reason_node).
+    dropped_model_findings: list[str]
     # "Go deeper" only (build_deeper_graph below) — same silent-drop
     # failure mode as every other field in this TypedDict, so both must
     # be declared here even though build_graph()'s own path never sets

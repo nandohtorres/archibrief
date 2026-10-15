@@ -458,7 +458,37 @@ def parse_model_findings(
     deterministic_rule_version: str | None,
     parent_finding_id: str | None = None,
 ) -> list[Finding]:
-    """Builds real, server-verified Finding objects from the model's
+    """Strict form of verify_model_findings: raises FindingValidationError
+    if ANY finding fails. Used by the eval/validation scripts, which need to
+    see every failure. The live pipeline uses verify_model_findings so one
+    bad citation doesn't discard the whole review (Codex F04)."""
+    findings, failures = verify_model_findings(
+        raw_findings,
+        review_id,
+        model_id,
+        corpus_version,
+        retrieved_chunks,
+        deterministic_rule_version,
+        parent_finding_id,
+    )
+    if failures:
+        raise FindingValidationError(failures)
+    return findings
+
+
+def verify_model_findings(
+    raw_findings: list[dict],
+    review_id: str,
+    model_id: str,
+    corpus_version: str,
+    retrieved_chunks: list[dict],
+    deterministic_rule_version: str | None,
+    parent_finding_id: str | None = None,
+) -> tuple[list[Finding], list[str]]:
+    """Returns (verified findings, failure reasons). An item that fails
+    citation or shape verification is excluded, never relaxed.
+
+    Builds real, server-verified Finding objects from the model's
     chunk_id/exact_quote pairs — the model never supplies a Citation
     directly (per Codex review 2026-09-16: a model-supplied citation string
     can't be trusted to actually be in the evidence it was given, and the
@@ -527,9 +557,7 @@ def parse_model_findings(
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
             failures.append(f"finding[{index}]: failed to build a valid Finding: {exc}")
 
-    if failures:
-        raise FindingValidationError(failures)
-    return findings
+    return findings, failures
 
 
 def resolve_rule_findings(rule_findings: list[dict]) -> list[Finding]:
@@ -575,7 +603,10 @@ def reason_node(state: dict) -> dict:
         deep_mode=deep_mode,
     )
 
-    model_findings = parse_model_findings(
+    # Verified findings are kept even if others in the batch fail; failed
+    # ones are dropped (never relaxed) and reported so the review can show
+    # its model coverage was incomplete (Codex F04).
+    model_findings, dropped = verify_model_findings(
         raw_findings=raw_findings,
         review_id=state["review_id"],
         model_id=reasoning_client.model_id,
@@ -589,4 +620,5 @@ def reason_node(state: dict) -> dict:
     return {
         **state,
         "reasoned_findings": [f.model_dump(mode="json") for f in findings],
+        "dropped_model_findings": dropped,
     }

@@ -111,6 +111,7 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
+        "dropped_model_findings": result_state.get("dropped_model_findings", []),
     }
 
 
@@ -182,6 +183,7 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     return {
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
+        "dropped_model_findings": result_state.get("dropped_model_findings", []),
         # Added 2026-10-01 — previously dropped on this path (only ever
         # returned on the needs_clarification early exit above), which
         # meant Finalize had no way to persist per-field preflight
