@@ -75,6 +75,12 @@ export function ArchiBriefApp() {
     setAdminKey(loadAdminKey(window.sessionStorage, window.localStorage));
   }, []);
 
+  // Each screen starts at the top; otherwise opening the sample from far
+  // down the landing page left the report scrolled to its middle.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [screen]);
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("archibrief-theme", theme);
