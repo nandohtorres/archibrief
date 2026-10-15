@@ -1,6 +1,6 @@
 # ArchiBrief Architecture
 
-Written against the real deployed system as of 2026-10-13. Diagrams are
+Written against the real deployed system as of 2026-10-15. Diagrams are
 Mermaid rather than `mingrammer/diagrams` (ADR-0025's stated tool) —
 that needs a local Graphviz install this machine doesn't have, and
 ADR-0025 itself calls its own choice "low-stakes, easily revisited," so
@@ -27,6 +27,7 @@ flowchart LR
 
     subgraph Compute["Bounded, stateless Lambdas"]
         Ingest["Ingest"]
+        Scan["Scan<br/>(Trivy layer, ADR-0048)"]
         Rules["RuleEngine"]
         Validate["Validate"]
         Audit["Audit"]
@@ -69,6 +70,7 @@ flowchart LR
     APIGW --> CreateUpload
 
     SFN --> Ingest --> GR
+    SFN --> Scan
     SFN --> Rules
     SFN --> Preflight --> Retrieve --> S3V
     Retrieve --> Reason
@@ -97,9 +99,17 @@ flowchart LR
 4. **Ingest** — downloads the archive from S3, statically parses the
    Terraform with `python-hcl2` (never executes it), runs the content
    through Bedrock Guardrails.
-5. **RuleEngine** — 16 deterministic Well-Architected/security checks
-   against the parsed Terraform, independent of any model call.
-6. **PreflightGate → Retrieve → Reason** (AgentCore Runtime) — resolves
+5. **Scan** — runs Trivy (pinned, checksum-verified, shipped as a Lambda
+   layer) over the uploaded Terraform in its own Lambda: no AWS
+   credentials in its environment, no network, remote module sources
+   rewritten before scanning, read-only access to `uploads/`. If it fails
+   for any reason the review continues without it and says the scanner
+   didn't run (ADR-0048).
+6. **RuleEngine** — deterministic checks against the parsed Terraform,
+   independent of any model call: Trivy's 16 trusted checks when Scan
+   ran, plus ArchiBrief's own rules for what Trivy misses (and for
+   everything, if Scan didn't run).
+7. **PreflightGate → Retrieve → Reason** (AgentCore Runtime) — resolves
    per-field missing-data policy, retrieves relevant RAG chunks from S3
    Vectors (embedded via Titan V2), and reasons over
    workload brief + rule findings + retrieved evidence via Claude.
@@ -107,12 +117,12 @@ flowchart LR
    field truly can't be resolved, the workflow pauses at
    `StoreClarificationToken` (a `waitForTaskToken` state, up to 7 days)
    until the admin answers via `POST /reviews/{reviewId}/clarify`.
-7. **Validate** — schema-checks every returned finding and independently
+8. **Validate** — schema-checks every returned finding and independently
    verifies each citation resolves to a real retrieved chunk; a finding
    that fails either check is rejected, not silently kept.
-8. **Audit → Finalize** — assembles the evidence ledger, persists it to
+9. **Audit → Finalize** — assembles the evidence ledger, persists it to
    S3, and updates the review's DynamoDB pointer item.
-9. **Read results** — `GET /reviews/{reviewId}` returns the assembled
+10. **Read results** — `GET /reviews/{reviewId}` returns the assembled
    report; `POST /reviews/{reviewId}/findings/{findingId}/deeper`
    re-invokes AgentCore (Retrieve → Reason(deep) → Validate) scoped to
    one finding, bypassing the rest of the pipeline entirely.
@@ -123,7 +133,7 @@ unauthenticated (ADR-0029).
 
 ## Human-in-the-loop: the clarification pause
 
-A real, live-tested path (see the issues log, 2026-10-13),
+A real, live-tested path (first exercised end to end 2026-10-13),
 not a hypothetical. When `Reason` can't resolve a required field under
 ADR-0031's per-field missing-data policy, it returns
 `needs_clarification` instead of findings, and the state machine pauses
