@@ -1,0 +1,41 @@
+{
+  "note": "Free demo reviews of real, public Terraform. Each archive holds the reviewed .tf files unchanged, plus SOURCE.md (repository, commit, license) and the project's license file. Briefs are written by ArchiBrief from each project's public README; the projects' owners did not write them or review these results. Reports are generated once, by the site owner, and served as saved files: visiting never starts a paid review.",
+  "demos": [
+    {
+      "id": "breach-pattern",
+      "title": "The 2019 bank breach pattern",
+      "subtitle": "A card-data bucket behind a misconfigured proxy",
+      "source": "Rhino Security Labs, CloudGoat scenario cloud_breach_s3",
+      "sourceUrl": "https://github.com/RhinoSecurityLabs/cloudgoat/tree/63c65bd26edc6919499adfa20b176c450e35c33c/cloudgoat/scenarios/aws/cloud_breach_s3",
+      "license": "BSD-3-Clause",
+      "disclaimer": "A security firm's vulnerable-by-design lab. Its attack path matches the one publicly reported for the 2019 Capital One breach. It is not Capital One's code, and Capital One has no part in this demo.",
+      "archive": "/demos/breach-pattern.tar",
+      "repoLabel": "github.com/RhinoSecurityLabs/cloudgoat@63c65bd",
+      "brief": "A bank's card platform on AWS. A reverse proxy (nginx on one EC2 instance) is the only internet-facing piece and forwards requests to internal services. An S3 bucket holds cardholder data, so PCI-DSS applies and the bucket must never be reachable from the internet, directly or through the proxy. Target availability is 99.9%. Treat any path from the internet to the card data as the top risk."
+    },
+    {
+      "id": "medicare-platform",
+      "title": "Medicare data APIs platform",
+      "subtitle": "CMS's shared platform for AB2D, BCDA and DPC",
+      "source": "Centers for Medicare & Medicaid Services, CMSgov/cdap",
+      "sourceUrl": "https://github.com/CMSgov/cdap/tree/e3b284998d05d77660f6a734a11aa2b42de1f205",
+      "license": "CC0-1.0",
+      "disclaimer": "Real public Terraform from a US federal agency (public domain). Reviewed slice: network, firewall, encryption keys, backups and access logs. A shared module pulled from another repository isn't included and shows up as a gap.",
+      "archive": "/demos/medicare-platform.tar",
+      "repoLabel": "github.com/CMSgov/cdap@e3b2849",
+      "brief": "A shared AWS platform for three CMS APIs that deliver Medicare claims data: BCDA to Accountable Care Organizations, AB2D to Part D plan sponsors, and DPC to healthcare providers. The data is protected health information, so HIPAA and federal FISMA controls apply. The APIs are internet-facing but only for allowlisted partner IP ranges. This slice covers the network, web firewall, encryption keys, backups and access logs. Downtime delays partners' data pulls but isn't life-critical; target 99.9%."
+    },
+    {
+      "id": "fec-database",
+      "title": "Federal Election Commission databases",
+      "subtitle": "Aurora PostgreSQL for production, staging and development",
+      "source": "Federal Election Commission, fecgov/fec-infrastructure",
+      "sourceUrl": "https://github.com/fecgov/fec-infrastructure/tree/bd6fbd5ca00e3927b0d2ce0fd543ec9395315edd",
+      "license": "US Government work, public domain in the US",
+      "disclaimer": "Real public Terraform from a US federal agency, last changed in 2020. It may not match what runs today.",
+      "archive": "/demos/fec-database.tar",
+      "repoLabel": "github.com/fecgov/fec-infrastructure@bd6fbd5",
+      "brief": "Aurora PostgreSQL database clusters (production, staging and development) for the Federal Election Commission's campaign-finance data, which the public reads through the FEC website and API. The data is public record, but its integrity matters: changes must be traceable and the databases should only be reachable from the FEC's own application platform, never directly from the internet. Read traffic peaks around filing deadlines."
+    }
+  ]
+}
