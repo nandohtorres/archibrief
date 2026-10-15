@@ -61,6 +61,8 @@ interface SubmissionStepProps {
   apiConfigured: boolean;
   initialValues: SubmissionValues;
   submitting: boolean;
+  // Shown under the submit button, e.g. while submissions are owner-only.
+  notice?: string | null;
   onSubmit: (values: SubmissionValues) => Promise<void>;
 }
 
@@ -75,6 +77,7 @@ export function SubmissionStep({
   apiConfigured,
   initialValues,
   submitting,
+  notice = null,
   onSubmit,
 }: SubmissionStepProps) {
   const [values, setValues] = useState(initialValues);
@@ -252,6 +255,11 @@ export function SubmissionStep({
                 : "Continue with fixture"}
           </button>
         </div>
+        {notice && (
+          <p className="submit-notice" role="alert">
+            {notice}
+          </p>
+        )}
       </form>
     </section>
   );

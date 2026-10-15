@@ -214,28 +214,3 @@ export function LandingIntro({ sampleLoading, onOpenSample }: LandingIntroProps)
     </div>
   );
 }
-
-// Shown in place of the submission form on the public site until public
-// submissions open (ADR-0046, master-list Phase 3).
-export function SubmissionsOpeningSoon({ sampleLoading, onOpenSample }: LandingIntroProps) {
-  return (
-    <section className="flow-card submissions-soon" aria-labelledby="submission-heading">
-      <div className="step-kicker">Review your own Terraform</div>
-      <h2 id="submission-heading">Public submissions are opening soon</h2>
-      <p className="lede">
-        You&apos;ll be able to upload a Terraform archive and a short workload brief and get the
-        same kind of cited review. Until then, the sample shows exactly what you&apos;d get back.
-      </p>
-      <div className="form-actions">
-        <button
-          className="button primary"
-          type="button"
-          onClick={onOpenSample}
-          disabled={sampleLoading}
-        >
-          {sampleLoading ? "Loading sample…" : "View sample review"}
-        </button>
-      </div>
-    </section>
-  );
-}

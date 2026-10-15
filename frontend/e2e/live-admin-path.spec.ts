@@ -63,10 +63,11 @@ test.describe("admin-gated live critical path (mocked network)", () => {
       });
     });
 
-    await page.goto(`${LIVE_URL}/?admin`);
+    await page.goto(LIVE_URL);
     await expect(
       page.getByRole("heading", { name: "Review an existing AWS architecture" }),
     ).toBeVisible();
+    await page.getByLabel("Admin key").fill("e2e-admin-key");
 
     await page.getByRole("button", { name: /Detailed \(complex, cross-checked\)/ }).click();
     await expect(page.getByRole("button", { name: "Submit to deployed API" })).toBeEnabled();
@@ -88,7 +89,7 @@ test.describe("admin-gated live critical path (mocked network)", () => {
       await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
     });
 
-    await page.goto(`${LIVE_URL}/?admin`);
+    await page.goto(LIVE_URL);
     await page.getByLabel("Admin key").fill("e2e-admin-key");
 
     const stored = await page.evaluate(() => ({

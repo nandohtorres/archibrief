@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "./app-header";
 import { FailurePanel } from "./state-panel";
 import { ClarifyStep } from "./clarify-step";
-import { LandingIntro, SubmissionsOpeningSoon } from "./landing-intro";
+import { LandingIntro } from "./landing-intro";
 import { LiveProgressStep } from "./live-progress-step";
 import { PreflightStep } from "./preflight-step";
 import { ProgressStep } from "./progress-step";
 import { ReportWorkspace } from "./report-workspace";
 import { SubmissionStep, type SubmissionValues } from "./submission-step";
 import {
+  ApiRequestError,
   fetchDemoReport,
   fetchReview,
   getApiBaseUrl,
@@ -32,6 +33,11 @@ import {
 
 type ThemeChoice = "system" | "light" | "dark";
 
+const OWNER_ONLY_NOTICE =
+  "Submissions are limited to the site owner for now. Public submissions are coming soon. In the meantime, the sample review shows exactly what you'd get back.";
+const KEY_REJECTED_NOTICE =
+  "That key wasn't accepted. Submissions are limited to the site owner for now.";
+
 const emptySubmission: SubmissionValues = {
   terraformRepoRef: "",
   workloadBrief: "",
@@ -42,10 +48,7 @@ export function ArchiBriefApp() {
   const [screen, setScreen] = useState<AppScreen>("submission");
   const [theme, setTheme] = useState<ThemeChoice>("system");
   const [adminKey, setAdminKey] = useState("");
-  // The admin controls stay out of the public page until public
-  // submissions open (Phase 3). Shown when a key is already set for this
-  // tab or the URL asks for them (?admin).
-  const [adminMode, setAdminMode] = useState(false);
+  const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submission, setSubmission] = useState(emptySubmission);
   const [preflightFields, setPreflightFields] = useState(fixturePreflightFields);
@@ -69,9 +72,7 @@ export function ArchiBriefApp() {
     const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
     if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
     // Tab-scoped, never localStorage (Codex F18) — see lib/admin-key.ts.
-    const storedKey = loadAdminKey(window.sessionStorage, window.localStorage);
-    setAdminKey(storedKey);
-    setAdminMode(Boolean(storedKey) || new URLSearchParams(window.location.search).has("admin"));
+    setAdminKey(loadAdminKey(window.sessionStorage, window.localStorage));
   }, []);
 
   useEffect(() => {
@@ -174,6 +175,14 @@ export function ArchiBriefApp() {
 
   async function handleSubmission(values: SubmissionValues) {
     setSubmission(values);
+    setSubmitNotice(null);
+    // Owner-only for now (ADR-0047, amended 2026-10-15): every submit
+    // route already requires the admin key server-side; this just answers
+    // a visitor plainly instead of sending a request that would fail.
+    if (apiConfigured && !adminKey.trim()) {
+      setSubmitNotice(OWNER_ONLY_NOTICE);
+      return;
+    }
     if (!apiConfigured) {
       setPreflightFields(fixturePreflightFields);
       setScreen("preflight");
@@ -222,6 +231,10 @@ export function ArchiBriefApp() {
       setProgressMode("live");
       setScreen("progress");
     } catch (error) {
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
+        setSubmitNotice(KEY_REJECTED_NOTICE);
+        return;
+      }
       setFailureMessage(
         error instanceof Error
           ? error.message
@@ -320,7 +333,6 @@ export function ArchiBriefApp() {
         onThemeChange={setTheme}
         onPreview={preview}
         adminKey={adminKey}
-        adminMode={adminMode}
         onAdminKeyChange={handleAdminKeyChange}
       />
       <main id="main-content">
@@ -328,16 +340,13 @@ export function ArchiBriefApp() {
           <>
             <LandingIntro sampleLoading={sampleLoading} onOpenSample={openSample} />
             <div id="submit" className="landing-submit">
-              {apiConfigured && !adminMode ? (
-                <SubmissionsOpeningSoon sampleLoading={sampleLoading} onOpenSample={openSample} />
-              ) : (
-                <SubmissionStep
-                  apiConfigured={apiConfigured}
-                  initialValues={submission}
-                  submitting={submitting}
-                  onSubmit={handleSubmission}
-                />
-              )}
+              <SubmissionStep
+                apiConfigured={apiConfigured}
+                initialValues={submission}
+                submitting={submitting}
+                notice={submitNotice}
+                onSubmit={handleSubmission}
+              />
             </div>
           </>
         )}
