@@ -145,7 +145,8 @@ sequenceDiagram
     Note over SFN: Execution pauses here.<br/>Task token held, up to 7 days.
     Admin->>CR: POST /reviews/{id}/clarify<br/>(answers + optional notes)
     CR->>SFN: SendTaskSuccess(taskToken, answers)
-    SFN->>SFN: PrepareAgentInputAfterClarification<br/>(appends clarification_note to workload_brief)
+    SFN->>SFN: ApplyClarification<br/>(appends clarification_note to the brief,<br/>merges answers over earlier rounds)
+    SFN->>SFN: ClarificationRoundGate<br/>(fails the review past max_clarification_rounds)
     SFN->>Agent: InvokeAgent (retry, with clarification folded in)
     Agent-->>SFN: findings
 ```

@@ -21,8 +21,9 @@ a second call for the same review can't resume an already-resumed (or
 never-paused) execution.
 
 `answers` is returned to the state machine as the task's output under
-`baseline_answers` — the outer definition merges it into
-`$.baseline_answers` before re-invoking the agent, per
+`baseline_answers` — the outer definition's ApplyClarification state
+merges it over earlier rounds' answers in `$.effective.baseline_answers`
+before re-invoking the agent, per
 Work-Project-Build-Plan.md's 2026-09-17 design (Codex-reviewed:
 `lambda:invoke.waitForTaskToken`, not a DynamoDB-based resume — AWS does
 not support `dynamodb:updateItem.waitForTaskToken`).
@@ -36,8 +37,9 @@ values for fields `preflight_node` actually evaluates by name
 arbitrary extra key there would just be silently ignored. Instead this
 handler computes `clarification_note` (empty string if no notes were
 given) and returns it alongside `baseline_answers`; the ASL's
-PrepareAgentInputAfterClarification state appends it onto
-`workload_brief` via `States.Format`, which is the only field
+ApplyClarification state appends it onto `$.effective.workload_brief`
+via `States.Format` (kept for every later round and for Finalize's
+ledger), which is the only field
 reason_node's prompt actually reads.
 """
 
