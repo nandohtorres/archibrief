@@ -1,5 +1,5 @@
 import type { ReportFinding, ReviewReport } from "@/lib/contracts";
-import { confidenceLabel, formatFindingId } from "@/lib/workflow";
+import { confidenceLabel, formatFindingId, stakeholderSummary } from "@/lib/workflow";
 
 interface GuidedReportProps {
   report: ReviewReport;
@@ -11,14 +11,12 @@ export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedRe
   const visibleFindings = report.findings.filter(
     ({ presentation }) => presentation.priority !== "confirmed",
   );
+  const summary = stakeholderSummary(report);
   return (
     <div className="guided-report">
       <span className="guided-eyebrow">Stakeholder view · same evidence ledger</span>
-      <h2>What this review means for payments-api</h2>
-      <p className="guided-intro">
-        Three high-risk configuration gaps warrant validation before production. They indicate
-        focused control work—not proof that the architecture requires a redesign.
-      </p>
+      <h2>{summary.heading}</h2>
+      <p className="guided-intro">{summary.intro}</p>
 
       <aside className="scope-note">
         <strong>What ArchiBrief can and cannot establish</strong>
@@ -30,14 +28,23 @@ export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedRe
 
       <section className="stakeholder-summary" aria-labelledby="stakeholder-summary-heading">
         <h3 id="stakeholder-summary-heading">Decision summary</h3>
-        <p>
-          First validate public-access controls, narrow the Lambda role, and confirm whether
-          organization-level CloudTrail already covers this account.
-        </p>
-        <p>
-          <strong>Coverage limit:</strong> data-residency requirements were not supplied, so
-          dependent conclusions remain not observable.
-        </p>
+        {summary.startWith.length > 0 ? (
+          <>
+            <p>Start with:</p>
+            <ul>
+              {summary.startWith.map((title) => (
+                <li key={title}>{title}</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p>No high-risk gaps need fixing first; review the items below.</p>
+        )}
+        {summary.coverageLimits.map((limit) => (
+          <p key={limit}>
+            <strong>Coverage limit:</strong> {limit}
+          </p>
+        ))}
       </section>
 
       <div className="baseline-strip" aria-label="Workload context">

@@ -1,4 +1,4 @@
-import type { FindingPriority, ReportFinding } from "./contracts";
+import type { FindingPriority, ReportFinding, ReviewReport } from "./contracts";
 
 export type AppScreen = "submission" | "preflight" | "progress" | "clarify" | "report" | "failure";
 // Where the report on screen came from: the public sample (GET /demo),
@@ -79,11 +79,63 @@ export function failureMessageFor(code: string | undefined): string {
   );
 }
 
-// "github.com/example/payments-api@a91f3c2" -> "payments-api". Falls back
-// to a generic title when the reference has no recognizable name.
+// "github.com/example/payments-api@a91f3c2" -> "payments-api"; "" when the
+// reference has no recognizable name.
+export function workloadName(terraformRepoRef: string): string {
+  return terraformRepoRef.split("@")[0].split("/").filter(Boolean).pop()?.trim() ?? "";
+}
+
 export function reportTitle(terraformRepoRef: string): string {
-  const name = terraformRepoRef.split("@")[0].split("/").filter(Boolean).pop()?.trim();
+  const name = workloadName(terraformRepoRef);
   return name ? `${name} architecture review` : "Architecture review";
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+export interface StakeholderSummary {
+  heading: string;
+  intro: string;
+  startWith: string[];
+  coverageLimits: string[];
+}
+
+// The stakeholder view's headline text, built from the real report. It
+// used to be fixed sample wording ("payments-api", "Three high-risk
+// gaps"), so a live review of any other system showed the sample's
+// conclusions (master-list 15c). Wording stays factual: counts, the
+// findings' own titles, and which workload answers were not supplied.
+export function stakeholderSummary(report: ReviewReport): StakeholderSummary {
+  const name = workloadName(report.terraform_repo_ref);
+  const high = report.findings.filter(({ presentation }) => presentation.priority === "high");
+  const review = report.findings.filter(({ presentation }) => presentation.priority === "review");
+
+  const toReview = plural(review.length, "item", "items");
+  const intro =
+    high.length > 0
+      ? `${plural(high.length, "high-risk configuration gap was", "high-risk configuration gaps were")} found by deterministic checks` +
+        (review.length > 0 ? `, plus ${toReview} to review` : "") +
+        ". Each points to specific settings to change; none of them alone means the architecture needs a redesign."
+      : "No high-risk configuration gaps were found by the deterministic checks." +
+        (review.length > 0
+          ? ` ${toReview} to review ${review.length === 1 ? "is" : "are"} listed below.`
+          : "");
+
+  const coverageLimits = report.baseline_answers
+    .filter(({ outcome }) => outcome !== "answered")
+    .map(({ label, outcome }) =>
+      outcome === "assumption"
+        ? `${label} was not supplied, so a conservative assumption was used.`
+        : `${label} was not supplied, so conclusions that depend on it are not observable.`,
+    );
+
+  return {
+    heading: name ? `What this review means for ${name}` : "What this review means",
+    intro,
+    startWith: high.slice(0, 3).map(({ record }) => record.finding),
+    coverageLimits,
+  };
 }
 
 export const reportSourceLabels: Record<ReportSource, string> = {
