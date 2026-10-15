@@ -6,3 +6,6 @@ out-fixture
 out-live
 playwright-report
 test-results
+design
+.lighthouseci
+lighthouse-reports

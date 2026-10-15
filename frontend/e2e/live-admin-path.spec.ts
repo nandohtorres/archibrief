@@ -63,7 +63,7 @@ test.describe("admin-gated live critical path (mocked network)", () => {
       });
     });
 
-    await page.goto(LIVE_URL);
+    await page.goto(`${LIVE_URL}/?admin`);
     await expect(
       page.getByRole("heading", { name: "Review an existing AWS architecture" }),
     ).toBeVisible();
@@ -88,7 +88,7 @@ test.describe("admin-gated live critical path (mocked network)", () => {
       await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
     });
 
-    await page.goto(LIVE_URL);
+    await page.goto(`${LIVE_URL}/?admin`);
     await page.getByLabel("Admin key").fill("e2e-admin-key");
 
     const stored = await page.evaluate(() => ({

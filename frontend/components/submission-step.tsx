@@ -123,8 +123,8 @@ export function SubmissionStep({
 
   return (
     <section className="flow-card submission-card" aria-labelledby="submission-heading">
-      <div className="step-kicker">New review · Step 1 of 3</div>
-      <h1 id="submission-heading">Review an existing AWS architecture</h1>
+      <div className="step-kicker">Review your own Terraform · Step 1 of 3</div>
+      <h2 id="submission-heading">Review an existing AWS architecture</h2>
       <p className="lede">
         Submit a bounded Terraform reference and a workload brief. ArchiBrief statically reviews the
         code—it never runs Terraform or accesses your live AWS account.

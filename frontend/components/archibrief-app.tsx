@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "./app-header";
 import { FailurePanel } from "./state-panel";
 import { ClarifyStep } from "./clarify-step";
+import { LandingIntro, SubmissionsOpeningSoon } from "./landing-intro";
 import { LiveProgressStep } from "./live-progress-step";
 import { PreflightStep } from "./preflight-step";
 import { ProgressStep } from "./progress-step";
@@ -41,6 +42,10 @@ export function ArchiBriefApp() {
   const [screen, setScreen] = useState<AppScreen>("submission");
   const [theme, setTheme] = useState<ThemeChoice>("system");
   const [adminKey, setAdminKey] = useState("");
+  // The admin controls stay out of the public page until public
+  // submissions open (Phase 3). Shown when a key is already set for this
+  // tab or the URL asks for them (?admin).
+  const [adminMode, setAdminMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submission, setSubmission] = useState(emptySubmission);
   const [preflightFields, setPreflightFields] = useState(fixturePreflightFields);
@@ -64,7 +69,9 @@ export function ArchiBriefApp() {
     const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
     if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
     // Tab-scoped, never localStorage (Codex F18) — see lib/admin-key.ts.
-    setAdminKey(loadAdminKey(window.sessionStorage, window.localStorage));
+    const storedKey = loadAdminKey(window.sessionStorage, window.localStorage);
+    setAdminKey(storedKey);
+    setAdminMode(Boolean(storedKey) || new URLSearchParams(window.location.search).has("admin"));
   }, []);
 
   useEffect(() => {
@@ -313,19 +320,26 @@ export function ArchiBriefApp() {
         onThemeChange={setTheme}
         onPreview={preview}
         adminKey={adminKey}
+        adminMode={adminMode}
         onAdminKeyChange={handleAdminKeyChange}
       />
       <main id="main-content">
         {screen === "submission" && (
-          <SampleBanner loading={sampleLoading} onOpenSample={openSample} />
-        )}
-        {screen === "submission" && (
-          <SubmissionStep
-            apiConfigured={apiConfigured}
-            initialValues={submission}
-            submitting={submitting}
-            onSubmit={handleSubmission}
-          />
+          <>
+            <LandingIntro sampleLoading={sampleLoading} onOpenSample={openSample} />
+            <div id="submit" className="landing-submit">
+              {apiConfigured && !adminMode ? (
+                <SubmissionsOpeningSoon sampleLoading={sampleLoading} onOpenSample={openSample} />
+              ) : (
+                <SubmissionStep
+                  apiConfigured={apiConfigured}
+                  initialValues={submission}
+                  submitting={submitting}
+                  onSubmit={handleSubmission}
+                />
+              )}
+            </div>
+          </>
         )}
         {screen === "preflight" && (
           <PreflightStep
@@ -377,7 +391,10 @@ export function ArchiBriefApp() {
         )}
       </main>
       <footer className="site-footer">
-        <span>ArchiBrief · auditable second opinion</span>
+        <span>
+          ArchiBrief is an independent project, not affiliated with or endorsed by Amazon Web
+          Services.
+        </span>
         <span>
           {apiConfigured
             ? "Static analysis only · never accesses your AWS account"
@@ -385,19 +402,5 @@ export function ArchiBriefApp() {
         </span>
       </footer>
     </div>
-  );
-}
-
-function SampleBanner({ loading, onOpenSample }: { loading: boolean; onOpenSample: () => void }) {
-  return (
-    <section className="sample-banner" aria-labelledby="sample-banner-heading">
-      <div>
-        <h2 id="sample-banner-heading">See a finished review first</h2>
-        <p>A precomputed review of a hypothetical payments API. Nothing is uploaded.</p>
-      </div>
-      <button className="button primary" type="button" onClick={onOpenSample} disabled={loading}>
-        {loading ? "Loading sample…" : "View sample review"}
-      </button>
-    </section>
   );
 }

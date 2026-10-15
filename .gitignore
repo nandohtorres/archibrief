@@ -79,3 +79,7 @@ infra/environments/dev/deploy-role-policies-proposed/
 Thumbs.db
 .vscode/
 .idea/
+
+# Lighthouse CI output (npm run lighthouse)
+frontend/lighthouse-reports/
+frontend/.lighthouseci/

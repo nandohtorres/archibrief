@@ -62,6 +62,10 @@ export async function findContrastFailures(page: Page): Promise<ContrastFailure[
       return fill && fill[3] > 0 ? over(fill, base) : base;
     }
     function visible(el: Element): boolean {
+      // Content of a closed <details> is skipped by the browser's style
+      // engine, so its computed colors can be stale. It isn't shown anyway.
+      const details = el.closest("details");
+      if (details && !details.open && !el.closest("summary")) return false;
       const style = getComputedStyle(el);
       const box = el.getBoundingClientRect();
       return (

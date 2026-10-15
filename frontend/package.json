@@ -2,7 +2,7 @@
   "name": "archibrief-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "ArchiBrief frontend — Next.js, static/client-first rendering (ADR-0016/0042)",
+  "description": "ArchiBrief frontend \u2014 Next.js, static/client-first rendering (ADR-0016/0042)",
   "engines": {
     "node": "20.x || 22.x"
   },
@@ -17,7 +17,8 @@
     "test": "vitest run --globals --environment node --pool threads --maxWorkers 1 --minWorkers 1 --dir ../tests/frontend",
     "test:watch": "vitest --globals --environment node --pool threads --maxWorkers 1 --minWorkers 1 --dir ../tests/frontend",
     "build:e2e": "next build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "lighthouse": "node e2e/dev-server.mjs live --build-only && lhci autorun"
   },
   "dependencies": {
     "next": "^15.0.0",
@@ -26,15 +27,16 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.47.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.6.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.0.0",
     "prettier": "^3.3.0",
     "serve": "^14.2.0",
+    "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   },
   "overrides": {

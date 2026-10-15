@@ -9,6 +9,7 @@ interface AppHeaderProps {
   onThemeChange: (theme: ThemeChoice) => void;
   onPreview: (screen: AppScreen) => void;
   adminKey: string;
+  adminMode: boolean;
   onAdminKeyChange: (value: string) => void;
 }
 
@@ -27,6 +28,7 @@ export function AppHeader({
   onThemeChange,
   onPreview,
   adminKey,
+  adminMode,
   onAdminKeyChange,
 }: AppHeaderProps) {
   return (
@@ -50,7 +52,7 @@ export function AppHeader({
               <span aria-hidden="true">●</span> Fixture mode
             </span>
           )}
-          {apiConfigured && (
+          {apiConfigured && adminMode && (
             <div className="admin-key-control">
               <label htmlFor="admin-key-input">Admin key</label>
               <input

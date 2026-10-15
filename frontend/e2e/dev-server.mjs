@@ -54,6 +54,10 @@ if (!existsSync(indexHtml)) {
   throw new Error(`next build did not produce ${indexHtml} for variant ${variant}`);
 }
 
+// `--build-only` stops here (used by `npm run lighthouse`, where Lighthouse
+// CI serves the built directory itself).
+if (process.argv.includes("--build-only")) process.exit(0);
+
 const result = spawnSync("npx", ["serve", config.outDir, "-s", "-l", String(config.port)], {
   cwd: FRONTEND_DIR,
   stdio: "inherit",

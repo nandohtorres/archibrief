@@ -8,13 +8,22 @@ import { findContrastFailures } from "./support/contrast";
 const PHONE = { width: 390, height: 844 };
 const THEMES = ["light", "dark"] as const;
 
-async function setTheme(page: Page, theme: (typeof THEMES)[number]) {
-  await page.getByLabel("Theme").selectOption(theme);
+// Boots the page already in the given theme (stored choice, like a
+// returning visitor). Switching themes mid-test through the select was
+// flaky in headless Chrome: a few elements kept the old theme's colors.
+async function openInTheme(page: Page, theme: (typeof THEMES)[number]) {
+  await page.addInitScript((choice) => {
+    window.localStorage.setItem("archibrief-theme", choice);
+  }, theme);
+  await page.goto(FIXTURE_URL);
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor))
+    .toBe(theme === "dark" ? "rgb(13, 19, 25)" : "rgb(244, 247, 249)");
 }
 
 async function openReport(page: Page) {
-  await page.getByRole("button", { name: "View sample review" }).click();
+  await page.getByRole("button", { name: "View sample review" }).first().click();
   await expect(page.locator("#report-heading")).toBeVisible();
 }
 
@@ -58,8 +67,7 @@ test.describe("phone layout at 390px", () => {
   for (const screen of screens) {
     for (const theme of THEMES) {
       test(`${screen.name} (${theme}) has no horizontal scroll`, async ({ page }) => {
-        await page.goto(FIXTURE_URL);
-        await setTheme(page, theme);
+        await openInTheme(page, theme);
         await screen.open(page);
         const result = await horizontalOverflow(page);
         expect(result.offenders, "elements past the right edge").toEqual([]);
@@ -70,7 +78,7 @@ test.describe("phone layout at 390px", () => {
 
   test("main actions are visible and large enough to tap", async ({ page }) => {
     await page.goto(FIXTURE_URL);
-    const sample = page.getByRole("button", { name: "View sample review" });
+    const sample = page.getByRole("button", { name: "View sample review" }).first();
     await expect(sample).toBeInViewport();
     // WCAG 2.2 target size (minimum) is 24x24 CSS px.
     expect((await sample.boundingBox())!.height).toBeGreaterThanOrEqual(24);
@@ -83,12 +91,22 @@ test.describe("phone layout at 390px", () => {
   });
 });
 
+test("the theme select switches the page theme", async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel("Theme").selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByLabel("Theme").selectOption("light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+});
+
 test.describe("color contrast (WCAG AA)", () => {
   test("the checker itself flags low contrast, including SVG text", async ({ page }) => {
     await page.setContent(`
       <body style="background:#fff">
         <p style="color:#999">too light</p>
         <p style="color:#222">fine</p>
+        <details><summary style="color:#222">open me</summary><p style="color:#eee">hidden</p></details>
         <svg width="200" height="60"><g>
           <rect width="200" height="60" style="fill:#333"></rect>
           <text x="10" y="35" style="fill:#555;font-size:14px">dim label</text>
@@ -106,10 +124,8 @@ test.describe("color contrast (WCAG AA)", () => {
     for (const screen of screens) {
       for (const theme of THEMES) {
         test(`${screen.name} ${viewport.label} ${theme}`, async ({ page }) => {
-          await page.emulateMedia({ reducedMotion: "reduce" });
           await page.setViewportSize(viewport.size);
-          await page.goto(FIXTURE_URL);
-          await setTheme(page, theme);
+          await openInTheme(page, theme);
           await screen.open(page);
           expect(await findContrastFailures(page)).toEqual([]);
         });

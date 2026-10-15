@@ -21,7 +21,7 @@ test.describe("sample review from GET /demo (mocked network)", () => {
     });
 
     await page.goto(LIVE_URL);
-    await page.getByRole("button", { name: "View sample review" }).click();
+    await page.getByRole("button", { name: "View sample review" }).first().click();
 
     await expect(page.locator("#report-heading")).toHaveText(
       "streaming-platform architecture review",
@@ -49,7 +49,7 @@ test.describe("sample review from GET /demo (mocked network)", () => {
     );
 
     await page.goto(LIVE_URL);
-    await page.getByRole("button", { name: "View sample review" }).click();
+    await page.getByRole("button", { name: "View sample review" }).first().click();
 
     await expect(page.getByText(/sample review could not be loaded right now/)).toBeVisible();
     await expect(page.getByText("boom")).toHaveCount(0);
