@@ -236,6 +236,53 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
         # validate.handler imports pydantic directly for ValidationError.
         "packages": ["pydantic>=2.0"],
     },
+    # The report chat (ADR-0050). ask_question makes the one paid model
+    # call; it reuses retrieve.vector_search, which needs only the shared
+    # clients. Standard library + boto3 only: the chat code deliberately
+    # avoids the pydantic models.
+    "ask_question": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/agent/__init__.py",
+            "backend/agent/nodes/__init__.py",
+            "backend/agent/nodes/retrieve.py",
+            "backend/chat/__init__.py",
+            "backend/chat/access.py",
+            "backend/chat/answer.py",
+            "backend/chat/context.py",
+            "backend/chat/observe.py",
+            "backend/chat/pricing.py",
+            "backend/chat/prompt.py",
+            "backend/chat/suggested.py",
+            "backend/chat/verify.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/ask_question/__init__.py",
+            "backend/lambdas/ask_question/handler.py",
+            "backend/shared/__init__.py",
+            "backend/shared/citations.py",
+            "backend/shared/clients/__init__.py",
+            "backend/shared/kill_switch.py",
+            "backend/shared/sanitize.py",
+        ],
+        "packages": [],
+    },
+    # Read-only transcript; no model code bundled.
+    "list_questions": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/chat/__init__.py",
+            "backend/chat/access.py",
+            "backend/chat/context.py",
+            "backend/chat/suggested.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/list_questions/__init__.py",
+            "backend/lambdas/list_questions/handler.py",
+            "backend/shared/__init__.py",
+            "backend/shared/clients/__init__.py",
+            "backend/shared/sanitize.py",
+        ],
+        "packages": [],
+    },
     # admin_authorizer and validate were deployed from zips built outside
     # this script (Codex F23); listed here so every Lambda builds the same
     # way. tests/backend/test_package_lambdas.py keeps these lists honest.

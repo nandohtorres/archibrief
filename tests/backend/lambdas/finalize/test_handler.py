@@ -1,3 +1,5 @@
+import json
+
 import backend.lambdas.finalize.handler as handler_module
 from backend.lambdas.finalize.handler import (
     assemble_baseline_answers,
@@ -245,3 +247,35 @@ def test_cost_tier_uses_resource_count_when_resources_are_not_in_state():
     assert compute_cost_estimate_tier(None, resource_count=3) == "low"
     assert compute_cost_estimate_tier(None, resource_count=12) == "medium"
     assert compute_cost_estimate_tier(None, resource_count=40) == "high"
+
+
+def test_ledger_keeps_the_resource_summary_for_the_chat():
+    # ADR-0050: the report chat answers from the same summary Reason saw.
+    summary = {"resources": [{"type": "aws_s3_bucket", "name": "logs", "settings": {}}]}
+    ledger = assemble_evidence_ledger("r1", [_finding()], terraform_resources=summary)
+    assert ledger["terraform_resources"] == summary
+    assert assemble_evidence_ledger("r1", [_finding()])["terraform_resources"] is None
+
+
+def test_handler_stores_the_resource_summary_from_the_event(monkeypatch):
+    written = {}
+
+    class FakeS3:
+        def __init__(self, bucket):
+            pass
+
+        def put_object(self, key, body):
+            written["ledger"] = json.loads(body)
+
+    monkeypatch.setattr("backend.lambdas.finalize.handler.S3Client", FakeS3)
+    summary = {"resources": [], "truncated": False, "note": "n"}
+    handler(
+        {
+            "review_id": "r1",
+            "findings": [_finding().model_dump(mode="json")],
+            "terraform_resources": summary,
+            "report_bucket": "reports",
+        },
+        None,
+    )
+    assert written["ledger"]["terraform_resources"] == summary

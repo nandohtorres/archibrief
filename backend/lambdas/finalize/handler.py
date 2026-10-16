@@ -89,6 +89,7 @@ def assemble_evidence_ledger(
     findings: list[Finding],
     workload_brief: str | None = None,
     baseline_answers: list[dict[str, Any]] | None = None,
+    terraform_resources: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     by_category: dict[str, list[dict]] = {}
     for f in findings:
@@ -110,6 +111,10 @@ def assemble_evidence_ledger(
         # before this (runtime_entrypoint.py dropped preflight_fields on
         # every path except needs_clarification).
         "baseline_answers": baseline_answers or [],
+        # RuleEngine's sanitized resource summary (ADR-0049), kept so the
+        # report chat can answer from the same facts Reason saw (ADR-0050).
+        # None for reviews finalized before 2026-10-15; the chat says so.
+        "terraform_resources": terraform_resources,
         "generated_at": datetime.now(UTC).isoformat(),
         "finding_count": len(findings),
         "findings_by_category": by_category,
@@ -124,7 +129,11 @@ def handler(event, context):
         event.get("preflight_fields") or {}, event.get("defaults_version")
     )
     ledger = assemble_evidence_ledger(
-        review_id, findings, event.get("workload_brief"), baseline_answers
+        review_id,
+        findings,
+        event.get("workload_brief"),
+        baseline_answers,
+        event.get("terraform_resources"),
     )
 
     report_bucket = event.get("report_bucket")

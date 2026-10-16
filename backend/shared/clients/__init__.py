@@ -14,12 +14,15 @@ tested against botocore.stub.Stubber / moto.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
 import boto3
+from boto3.dynamodb.types import TypeSerializer
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 
 def _dynamodb_safe(value: Any) -> Any:
@@ -242,9 +245,23 @@ class BedrockReasoningClient:
 
     model_id: str
     region_name: str = "us-east-1"
+    # Both None = botocore's defaults (the review runtime). The chat sets a
+    # read timeout under its API's 30 s limit and no retries, since a
+    # retried call after a timeout would be a second paid call (ADR-0050).
+    read_timeout_seconds: int | None = None
+    no_retries: bool = False
 
     def __post_init__(self) -> None:
-        self._client = boto3.client("bedrock-runtime", region_name=self.region_name)
+        config_kwargs: dict[str, Any] = {}
+        if self.read_timeout_seconds is not None:
+            config_kwargs["read_timeout"] = self.read_timeout_seconds
+        if self.no_retries:
+            config_kwargs["retries"] = {"total_max_attempts": 1, "mode": "standard"}
+        self._client = boto3.client(
+            "bedrock-runtime",
+            region_name=self.region_name,
+            **({"config": Config(**config_kwargs)} if config_kwargs else {}),
+        )
 
     @staticmethod
     def _check_stop_reason(response: dict[str, Any], expected: str) -> None:
@@ -350,6 +367,89 @@ class BedrockReasoningClient:
             f"expected exactly one {tool_name!r} tool call, got {len(matches)}: {response!r}"
         )
 
+    def converse_tool_cached(
+        self,
+        system_prompt: str,
+        cached_user_text: str,
+        user_text: str,
+        max_tokens: int,
+        tool_name: str,
+        tool_description: str,
+        input_schema: dict[str, Any],
+    ) -> tuple[Any, dict[str, int]]:
+        """converse_structured for the chat (ADR-0050): the same forced,
+        strict tool call, plus prompt caching and token usage.
+
+        Cache points sit after the system prompt and after
+        `cached_user_text` (the review block, the same for every question
+        on a review), so later questions read that prefix from cache.
+        `user_text` (history, retrieved chunks, the question) follows
+        uncached in the same user message. A prefix under the model's
+        minimum cacheable size simply isn't cached; the call still works.
+
+        Returns (tool input, usage), where usage has inputTokens,
+        outputTokens, cacheReadInputTokens and cacheWriteInputTokens
+        (0 when absent).
+        """
+        response = self._client.converse(
+            modelId=self.model_id,
+            system=[{"text": system_prompt}, {"cachePoint": {"type": "default"}}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"text": cached_user_text},
+                        {"cachePoint": {"type": "default"}},
+                        {"text": user_text},
+                    ],
+                }
+            ],
+            inferenceConfig={"maxTokens": max_tokens, "temperature": 0},
+            toolConfig={
+                "tools": [
+                    {
+                        "toolSpec": {
+                            "name": tool_name,
+                            "description": tool_description,
+                            "inputSchema": {"json": input_schema},
+                            "strict": True,
+                        }
+                    }
+                ],
+                "toolChoice": {"tool": {"name": tool_name}},
+            },
+        )
+        self._check_stop_reason(response, expected="tool_use")
+        raw_usage = response.get("usage") or {}
+        usage = {
+            key: int(raw_usage.get(key) or 0)
+            for key in (
+                "inputTokens",
+                "outputTokens",
+                "cacheReadInputTokens",
+                "cacheWriteInputTokens",
+            )
+        }
+        matches = [
+            block["toolUse"]
+            for block in response["output"]["message"]["content"]
+            if block.get("toolUse", {}).get("name") == tool_name
+        ]
+        if len(matches) != 1:
+            raise ToolCallMissing(
+                f"expected exactly one {tool_name!r} tool call, got {len(matches)}"
+            )
+        return matches[0]["input"], usage
+
+
+@dataclass
+class GuardrailVerdict:
+    """What one ApplyGuardrail input check decided. `filters` names what
+    fired (e.g. "PROMPT_ATTACK", "topic:OtherUsersData"), never content."""
+
+    blocked: bool
+    filters: list[str]
+
 
 @dataclass
 class GuardrailsClient:
@@ -375,6 +475,108 @@ class GuardrailsClient:
             content=[{"text": {"text": text}}],
         )
         return response["action"] == "NONE"
+
+    def assess(self, text: str) -> GuardrailVerdict:
+        """check(), plus which filters fired, for the chat's stage-7 log
+        (ADR-0050). Fails closed: any action other than NONE is a block."""
+        response = self._client.apply_guardrail(
+            guardrailIdentifier=self.guardrail_id,
+            guardrailVersion=self.guardrail_version,
+            source="INPUT",
+            content=[{"text": {"text": text}}],
+        )
+        filters: list[str] = []
+        for assessment in response.get("assessments") or []:
+            for item in (assessment.get("contentPolicy") or {}).get("filters") or []:
+                if item.get("action") == "BLOCKED":
+                    filters.append(str(item.get("type", "content")))
+            for item in (assessment.get("topicPolicy") or {}).get("topics") or []:
+                if item.get("action") == "BLOCKED":
+                    filters.append(f"topic:{item.get('name', 'unknown')}")
+        return GuardrailVerdict(blocked=response.get("action") != "NONE", filters=filters)
+
+    def grounding_scores(self, source: str, query: str, answer: str) -> dict[str, float]:
+        """Contextual grounding scores for an answer ({"GROUNDING": 0.8,
+        "RELEVANCE": 0.9}), for detect-only logging (ADR-0050 §4). The
+        caller never blocks on these."""
+        response = self._client.apply_guardrail(
+            guardrailIdentifier=self.guardrail_id,
+            guardrailVersion=self.guardrail_version,
+            source="OUTPUT",
+            content=[
+                {"text": {"text": source, "qualifiers": ["grounding_source"]}},
+                {"text": {"text": query, "qualifiers": ["query"]}},
+                {"text": {"text": answer, "qualifiers": ["guard_content"]}},
+            ],
+        )
+        scores: dict[str, float] = {}
+        for assessment in response.get("assessments") or []:
+            policy = assessment.get("contextualGroundingPolicy") or {}
+            for item in policy.get("filters") or []:
+                if "type" in item and "score" in item:
+                    scores[str(item["type"])] = float(item["score"])
+        return scores
+
+
+class TransactionCanceled(Exception):
+    """A DynamoDB transaction was cancelled. `reasons` has one code per
+    action, in order ("None" for an action that wasn't the cause)."""
+
+    def __init__(self, reasons: list[str]) -> None:
+        self.reasons = reasons
+        super().__init__(f"transaction cancelled: {reasons}")
+
+
+@dataclass
+class DynamoDBTransactionClient:
+    """TransactWriteItems over plain Python values (ADR-0050's chat
+    admission: the per-review counter, the question record and the global
+    budget reservation succeed or fail together).
+
+    Each action is {"Put"|"Update": {...}} in the low-level API's shape,
+    except that Key, Item and ExpressionAttributeValues hold plain Python
+    values; they're serialized here.
+    """
+
+    region_name: str = "us-east-1"
+
+    def __post_init__(self) -> None:
+        self._client = boto3.client("dynamodb", region_name=self.region_name)
+        self._serializer = TypeSerializer()
+
+    def _serialize(self, values: dict[str, Any]) -> dict[str, Any]:
+        return {k: self._serializer.serialize(_dynamodb_safe(v)) for k, v in values.items()}
+
+    def transact_write(self, actions: list[dict[str, Any]]) -> None:
+        items = []
+        for action in actions:
+            ((kind, body),) = action.items()
+            body = dict(body)
+            for field in ("Key", "Item", "ExpressionAttributeValues"):
+                if field in body:
+                    body[field] = self._serialize(body[field])
+            items.append({kind: body})
+        try:
+            self._client.transact_write_items(TransactItems=items)
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") != "TransactionCanceledException":
+                raise
+            raise TransactionCanceled(_cancellation_reasons(exc, len(items))) from exc
+
+
+def _cancellation_reasons(exc: Any, count: int) -> list[str]:
+    """CancellationReasons from the response, or parsed from the message
+    ("... reasons [ConditionalCheckFailed, None]") when only that is set."""
+    reasons = exc.response.get("CancellationReasons")
+    if reasons:
+        return [str(r.get("Code", "None")) for r in reasons]
+    message = exc.response.get("Error", {}).get("Message", "")
+    match = re.search(r"\[([^\]]*)\]", message)
+    if match:
+        parsed = [part.strip() for part in match.group(1).split(",")]
+        if len(parsed) == count:
+            return parsed
+    return ["Unknown"] * count
 
 
 @dataclass
