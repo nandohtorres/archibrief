@@ -97,3 +97,20 @@ def test_deeper_findings_point_at_their_parent_by_alias(ledger):
     ctx = build_review_context(ledger)
     deeper = next(f for f in ctx.review_data["findings"] if f["ref"] == "F2")
     assert deeper["deeper_analysis_of"] == "F1"
+
+
+def test_findings_trimmed_out_of_the_prompt_cannot_be_cited(ledger):
+    template = ledger["findings"][0]
+    ledger["findings"] = [
+        {
+            **template,
+            "finding_id": f"id-{i}",
+            "evidence": "e" * 1200,
+            "finding": "f" * 1200,
+        }
+        for i in range(60)
+    ]
+    ctx = build_review_context(ledger)
+    shown = {f["ref"] for f in ctx.review_data["findings"]}
+    assert ctx.review_data.get("omitted_findings")
+    assert set(ctx.finding_ids) == shown

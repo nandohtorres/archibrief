@@ -215,4 +215,14 @@ def build_review_context(ledger: dict[str, Any]) -> ReviewContext:
             "terraform_resources": terraform_resources,
         }
     )
+    # A finding trimmed out of the prompt can't be cited or suggested
+    # either: the model never saw it (code review 2026-10-15).
+    shown = {f["ref"] for f in ctx.review_data["findings"]}
+    for alias in [a for a in ctx.finding_ids if a not in shown]:
+        del ctx.finding_ids[alias]
+        ctx.finding_titles.pop(alias, None)
+        ctx.finding_categories.pop(alias, None)
+        ctx.finding_citations.pop(f"C-{alias}", None)
+    ctx.not_observable_aliases = [a for a in ctx.not_observable_aliases if a in shown]
+    ctx.alternatives = [(a, o) for a, o in ctx.alternatives if a in shown]
     return ctx

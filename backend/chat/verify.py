@@ -27,6 +27,7 @@ UI says "cited answer", never "verified answer".
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -68,7 +69,23 @@ _FINDING_REF = re.compile(r"^F(\d{1,3})$")
 _FINDING_SOURCE_REF = re.compile(r"^C-F(\d{1,3})$")
 _CHUNK_REF = re.compile(r"^R(\d{1,2})$")
 _MARKDOWN_LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
-_URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+# Any scheme link (http, ftp, javascript:, data:, mailto: ...), www.
+# hosts, and dotted-host obfuscations like evil[.]com. Plain dotted names
+# such as aws_s3_bucket.logs are kept: they're resource addresses.
+_URL = re.compile(
+    r"(?:\b[a-z][a-z0-9+.-]{1,15}://\S*|\b(?:javascript|data|vbscript|mailto|file):\S*"
+    r"|\bwww\.\S+|\S*\[\.\]\S*|\S*\(dot\)\S*)",
+    re.IGNORECASE,
+)
+# A code block may show a fix, never fetch and run something (security
+# review 2026-10-15): lines that download or pipe into a shell are dropped.
+_FETCH_OR_EXEC = re.compile(
+    r"\b(?:curl|wget|iwr|Invoke-WebRequest|Invoke-Expression|iex|certutil|bitsadmin)\b"
+    r"|\|\s*(?:ba|z|k)?sh\b|\|\s*python\d*\b|\bbase64\s+-d",
+    re.IGNORECASE,
+)
+# A quote shorter than this proves nothing (one letter matches any chunk).
+MIN_QUOTE_CHARS = 20
 _REF_IN_TEXT = re.compile(r"\b(C-F\d{1,3}|F\d{1,3}|R\d{1,2})\b")
 _CODE_BLOCK = re.compile(r"```[^\n`]*\n?(.*?)(?:```|$)", re.DOTALL)
 
@@ -108,6 +125,22 @@ def _not_determinable(missing: str | None) -> VerifiedAnswer:
     return fixed_answer("not_determinable", text)
 
 
+def _squash(text: str) -> str:
+    return "".join(unicodedata.normalize("NFKC", remove_invisible(text)).casefold().split())
+
+
+def _leaks(canary: str, text: str) -> bool:
+    """The canary in the text, ignoring case, spacing, invisible and
+    compatibility characters."""
+    return bool(canary) and _squash(canary) in _squash(text)
+
+
+def _canary_refusal() -> VerifiedAnswer:
+    answer = refusal("prompt_disclosure")
+    answer.canary_hit = True
+    return answer
+
+
 def _resolve(
     citation: Any,
     ctx: ReviewContext,
@@ -127,6 +160,8 @@ def _resolve(
         }
     if _FINDING_SOURCE_REF.match(ref) and ref in ctx.finding_citations:
         stored = ctx.finding_citations[ref]
+        if quote.strip() and len(quote.strip()) < min(MIN_QUOTE_CHARS, len(stored["span"])):
+            return None
         span = find_quote(quote, stored["span"]) if quote.strip() else stored["span"]
         if span is None:
             return None
@@ -139,6 +174,8 @@ def _resolve(
         }
     if _CHUNK_REF.match(ref) and ref in chunks:
         chunk = chunks[ref]
+        if len(quote.strip()) < min(MIN_QUOTE_CHARS, len(chunk["text"].strip())):
+            return None
         span = find_quote(quote, chunk["text"])
         if span is None:
             return None
@@ -157,8 +194,7 @@ def _resolve(
     return None
 
 
-def _clean_text(text: str, ctx: ReviewContext, code_budget: list[int]) -> str:
-    text = remove_invisible(text)
+def _clean_prose(text: str, ctx: ReviewContext, chunk_refs: set[str]) -> str:
     text = _MARKDOWN_LINK.sub(lambda m: m.group(1), text)
     text = _URL.sub("", text)
 
@@ -167,31 +203,54 @@ def _clean_text(text: str, ctx: ReviewContext, code_budget: list[int]) -> str:
         alias = ref.removeprefix("C-")
         if alias in ctx.finding_titles:
             return f'"{clip(ctx.finding_titles[alias], 60)}"'
-        return "the cited guidance"
+        if ref in chunk_refs:
+            return "the cited guidance"
+        return ref  # not one of ours (e.g. "R53"): leave it alone
 
-    def code_block(match: re.Match[str]) -> str:
-        if code_budget[0] <= 0:
-            return "(code omitted)"
-        code_budget[0] -= 1
-        lines = match.group(1).rstrip("\n").split("\n")
-        body = "\n".join(lines[:MAX_CODE_LINES])
-        if len(lines) > MAX_CODE_LINES or len(body) > MAX_CODE_CHARS:
-            body = body[:MAX_CODE_CHARS].rstrip() + "\n# (shortened)"
-        return f"```\n{body}\n```"
+    text = _REF_IN_TEXT.sub(ref_name, text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    return re.sub(r"[ \t]{2,}", " ", text)
 
-    # Code first, so ref codes and URLs inside a code block are kept as code.
+
+def _clean_code(body: str, code_budget: list[int]) -> str:
+    if code_budget[0] <= 0:
+        return "(code omitted)"
+    code_budget[0] -= 1
+    lines = [
+        line
+        for line in body.rstrip("\n").split("\n")
+        if not _FETCH_OR_EXEC.search(line) and not _URL.search(line)
+    ]
+    if not any(line.strip() for line in lines):
+        return "(code omitted)"
+    kept = "\n".join(lines[:MAX_CODE_LINES])
+    if len(lines) > MAX_CODE_LINES or len(kept) > MAX_CODE_CHARS:
+        kept = kept[:MAX_CODE_CHARS].rstrip() + "\n# (shortened)"
+    return f"```\n{kept}\n```"
+
+
+def _clean_text(text: str, ctx: ReviewContext, code_budget: list[int], chunk_refs: set[str]) -> str:
+    """Split out code blocks first, so link stripping and ref rewriting
+    only touch prose and a code block's own characters and indentation are
+    kept (code review 2026-10-15). Code only loses fetch/exec and URL lines."""
+    text = remove_invisible(text)
     parts = []
     last = 0
     for match in _CODE_BLOCK.finditer(text):
-        prose = text[last : match.start()]
-        parts.append(_REF_IN_TEXT.sub(ref_name, prose))
-        parts.append(code_block(match))
+        parts.append(_clean_prose(text[last : match.start()], ctx, chunk_refs))
+        parts.append(_clean_code(match.group(1), code_budget))
         last = match.end()
-    parts.append(_REF_IN_TEXT.sub(ref_name, text[last:]))
-    cleaned = "".join(parts)
-    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+    parts.append(_clean_prose(text[last:], ctx, chunk_refs))
+    return re.sub(r"\n{3,}", "\n\n", "".join(parts)).strip()
+
+
+def _clip_paragraph(text: str, limit: int) -> str:
+    """clip(), without leaving a code fence open: a block that doesn't fit
+    is dropped rather than cut in half."""
+    clipped = clip(text, limit)
+    if clipped.count("```") % 2 == 1:
+        clipped = clip(clipped[: clipped.rindex("```")].rstrip() or "…", limit)
+    return clipped
 
 
 def verify_answer(
@@ -202,10 +261,8 @@ def verify_answer(
 ) -> VerifiedAnswer:
     if not isinstance(raw, dict) or not isinstance(raw.get("paragraphs", []), list):
         raise MalformedAnswer("answer is not an object with a paragraphs list")
-    if canary and canary in repr(raw):
-        answer = refusal("prompt_disclosure")
-        answer.canary_hit = True
-        return answer
+    if _leaks(canary, repr(raw)):
+        return _canary_refusal()
 
     status = raw.get("status")
     if status == "refused":
@@ -229,12 +286,18 @@ def verify_answer(
                 dropped += resolved is None
                 continue
             citations.append(resolved)
-        text = _clean_text(paragraph["text"], ctx, code_budget)
+        text = _clean_text(paragraph["text"], ctx, code_budget, set(chunks))
         if not citations or not text:
             continue
         kept.append({"text": text, "citations": citations})
         for c in citations:
             cited_text.append(c.get("quote") or c.get("title") or "")
+
+    # Checked again on the cleaned text: cleaning removes invisible
+    # characters, which could have hidden a split-up canary from the raw
+    # check (security review 2026-10-15).
+    if _leaks(canary, " ".join(p["text"] for p in kept)):
+        return _canary_refusal()
 
     if not kept:
         answer = _not_determinable(missing or ("not_in_review" if status == "answered" else None))
@@ -254,7 +317,7 @@ def verify_answer(
         if budget <= 0:
             break
         if len(paragraph["text"]) > budget:
-            paragraph = {**paragraph, "text": clip(paragraph["text"], budget)}
+            paragraph = {**paragraph, "text": _clip_paragraph(paragraph["text"], budget)}
         # +1 for the line break between paragraphs when they're shown joined.
         budget -= len(paragraph["text"]) + 1
         capped.append(paragraph)

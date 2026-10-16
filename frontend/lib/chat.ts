@@ -14,6 +14,7 @@ const CHAT_ERRORS: Record<string, string> = {
   daily_cap_reached:
     "Today's free questions are used up. Try again tomorrow. Suggested answers already given still work.",
   too_many_blocked: "Too many questions on this review couldn't be processed.",
+  too_many_failed: "Answers on this review keep failing. Try again later.",
   answer_failed: "The answer couldn't be completed. Your question wasn't counted.",
   answer_timeout: "The answer took too long. Your question wasn't counted.",
   chat_paused: "Chat is paused right now.",

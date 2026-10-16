@@ -184,6 +184,30 @@ test.describe("report chat (mocked network)", () => {
     );
   });
 
+  test("a retry after a timeout reuses the request id; a new question gets a new one", async ({
+    page,
+  }) => {
+    let calls = 0;
+    const asked = await openLiveReport(page, (body) => {
+      calls += 1;
+      return calls === 1
+        ? { code: 504, body: { error: "answer_timeout" } }
+        : { body: answer(body.question, "custom", 3) };
+    });
+    const chat = page.locator("#ask-review");
+    await page.getByLabel("Ask about this architecture review").fill("Why is the role risky?");
+    await chat.getByRole("button", { name: "Ask" }).click();
+    await expect(chat.getByRole("alert")).toHaveText(/took too long/);
+    await chat.getByRole("button", { name: "Ask" }).click();
+    await expect(chat.getByText("3 of 5 questions left on this review")).toBeVisible();
+    expect(asked[1].client_request_id).toBe(asked[0].client_request_id);
+
+    await page.getByLabel("Ask about this architecture review").fill("Another one?");
+    await chat.getByRole("button", { name: "Ask" }).click();
+    await expect.poll(() => asked.length).toBe(3);
+    expect(asked[2].client_request_id).not.toBe(asked[0].client_request_id);
+  });
+
   test("asking about a finding sends that finding as the focus", async ({ page }) => {
     const asked = await openLiveReport(page, (body) => ({
       body: answer(body.question, "custom", 1),

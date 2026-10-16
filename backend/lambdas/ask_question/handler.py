@@ -84,6 +84,17 @@ MAX_BODY_BYTES = 4096
 DEFAULT_BLOCKED_PER_REVIEW = 5
 DEFAULT_DAILY_BUDGET_MICRO_USD = 400_000  # $0.40/day, ADR-0050 §5
 DEFAULT_DAILY_MAX_QUESTIONS = 100
+# Failed paid calls per review: the first few give the question back, and
+# after MAX_FAILURES_PER_REVIEW the review stops accepting paid questions.
+MAX_REFUNDED_FAILURES = 3
+RETRYABLE_BEDROCK_ERRORS = {
+    "ThrottlingException",
+    "ServiceUnavailableException",
+    "ModelNotReadyException",
+    "InternalServerException",
+    "ModelTimeoutException",
+}
+MAX_FAILURES_PER_REVIEW = 6
 _ALLOWED_FIELDS = {"client_request_id", "question", "focus_finding_id", "suggested_id"}
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SUGGESTED_ID = re.compile(r"^s\d{1,2}$")
@@ -98,6 +109,7 @@ ERROR_MESSAGES = {
     "review_quota_exhausted": "You've used this review's questions.",
     "daily_cap_reached": "Today's free questions are used up. Try again tomorrow.",
     "too_many_blocked": "Too many questions on this review couldn't be processed.",
+    "too_many_failed": "Answers on this review keep failing. Try again later.",
     "answer_failed": "The answer couldn't be completed. Your question wasn't counted.",
     "answer_timeout": "The answer took too long. Your question wasn't counted.",
     "chat_paused": "Chat is paused right now.",
@@ -205,7 +217,10 @@ def _history(tables: _Tables, review_id: str, exclude_key: str, now: float) -> l
         i
         for i in items
         if i["questionKey"] != exclude_key
-        and i.get("status") in FINAL_STATUSES
+        # Only answered turns. A refused question, and above all one
+        # Guardrails blocked, must not reach the model as history on a
+        # later turn (code and security reviews, 2026-10-15).
+        and i.get("status") in ("answered", "not_determinable")
         and int(i.get("ttl", now + 1)) > now
     ]
     turns.sort(key=lambda i: (int(i.get("createdAt", 0)), str(i.get("askedAt", ""))))
@@ -247,17 +262,63 @@ def _record_blocked(tables: _Tables, review_id: str, admin: bool, max_blocked: i
     return True
 
 
-def _refund_slot(tables: _Tables, review_id: str) -> None:
-    try:
-        tables.reviews.update_item(
-            Key={"reviewId": review_id},
-            UpdateExpression="ADD questionsUsed :minus",
-            ConditionExpression="questionsUsed > :zero",
-            ExpressionAttributeValues={":minus": -1, ":zero": 0},
-        )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
-            raise
+def _record_failure(tables: _Tables, review_id: str, refund: bool) -> None:
+    """Count a failed paid call on the review, and give the question back
+    for the first MAX_REFUNDED_FAILURES of them. Without the cap, failed
+    calls (refunded, but billed) would be bounded only by the daily cap
+    (security review 2026-10-15)."""
+    if refund:
+        try:
+            tables.reviews.update_item(
+                Key={"reviewId": review_id},
+                UpdateExpression="SET chatFailed = if_not_exists(chatFailed, :zero) + :one "
+                "ADD questionsUsed :minus",
+                ConditionExpression="questionsUsed > :zero AND "
+                "(attribute_not_exists(chatFailed) OR chatFailed < :max)",
+                ExpressionAttributeValues={
+                    ":minus": -1,
+                    ":zero": 0,
+                    ":one": 1,
+                    ":max": MAX_REFUNDED_FAILURES,
+                },
+            )
+            return
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                raise
+    tables.reviews.update_item(
+        Key={"reviewId": review_id},
+        UpdateExpression="SET chatFailed = if_not_exists(chatFailed, :zero) + :one",
+        ExpressionAttributeValues={":zero": 0, ":one": 1},
+    )
+
+
+def _precheck(
+    tables: _Tables,
+    review: dict[str, Any],
+    admin: bool,
+    counts_slot: bool,
+    reserve: int,
+    now: float,
+) -> str | None:
+    """Cheap reads before any spend, so a review or day that's used up
+    doesn't keep paying for Guardrails checks (security review
+    2026-10-15). The admission transaction still decides; this only
+    turns away requests that would certainly fail it."""
+    if not admin:
+        if counts_slot and int(review.get("questionsUsed", 0)) >= questions_per_review():
+            return "review_quota_exhausted"
+        if int(review.get("chatFailed", 0)) >= MAX_FAILURES_PER_REVIEW:
+            return "too_many_failed"
+    day = _day(now)
+    budget = tables.counters.get_item({"counterKey": f"global#{day}#chat_remaining_micro_usd"})
+    if budget is not None and int(budget.get("remaining", 0)) < reserve:
+        return "daily_cap_reached"
+    count = tables.counters.get_item({"counterKey": f"global#{day}#chat_questions"})
+    max_count = _env_int("CHAT_DAILY_MAX_QUESTIONS", DEFAULT_DAILY_MAX_QUESTIONS)
+    if count is not None and int(count.get("n", 0)) >= max_count:
+        return "daily_cap_reached"
+    return None
 
 
 def _mark_failed(tables: _Tables, review_id: str, keys: list[str], error: str) -> None:
@@ -511,6 +572,18 @@ def handler(event: dict, _context: object) -> dict:
         base_item.update({"kind": "custom"})
         log["kind"] = "custom"
 
+    model_id = os.environ.get("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    canary = os.environ.get("CHAT_CANARY", "")
+    log.update({"model_id": model_id, "prompt_version": PROMPT_VERSION})
+    prompt_chars = len(build_system_prompt(canary)) + len(ctx.cached_text()) + 12000
+    reserve = reserve_micro_usd(model_id, prompt_chars, MAX_OUTPUT_TOKENS)
+    log["reserve_micro_usd"] = reserve
+    counts_slot = suggestion_key is None
+    turned_away = _precheck(tables, review, admin, counts_slot, reserve, now)
+    if turned_away:
+        return finish(_error(429, turned_away), "rejected", error=turned_away)
+
+    if suggestion_key is None:
         try:
             verdict = GuardrailsClient(
                 guardrail_id=os.environ["CHAT_GUARDRAIL_ID"],
@@ -547,16 +620,10 @@ def handler(event: dict, _context: object) -> dict:
                 **fields,
             )
 
-    model_id = os.environ.get("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
-    canary = os.environ.get("CHAT_CANARY", "")
-    log.update({"model_id": model_id, "prompt_version": PROMPT_VERSION})
-    prompt_chars = len(build_system_prompt(canary)) + len(ctx.cached_text()) + 12000
-    reserve = reserve_micro_usd(model_id, prompt_chars, MAX_OUTPUT_TOKENS)
-    log["reserve_micro_usd"] = reserve
-    counts_slot = suggestion_key is None
     question_item = {**base_item, "question": question, "status": "in_flight"}
     if focus_alias:
         question_item["focusFindingId"] = ctx.finding_ids[focus_alias]
+    history = [] if suggestion_key else _history(tables, review_id, question_key, now)
     refused = _admit(
         tables, review_id, question_item, suggestion_key, counts_slot, admin, reserve, now
     )
@@ -569,23 +636,28 @@ def handler(event: dict, _context: object) -> dict:
         return finish(_error(status_code, refused), "rejected", error=refused)
 
     in_flight_keys = [question_key] + ([suggestion_key] if suggestion_key else [])
-    history = [] if suggestion_key else _history(tables, review_id, question_key, now)
     try:
         result = answer_question(ctx, question, history, focus_alias, _clients(model_id), canary)
     except ReadTimeoutError:
         _mark_failed(tables, review_id, in_flight_keys, "answer_timeout")
-        if counts_slot:
-            _refund_slot(tables, review_id)
+        _record_failure(tables, review_id, refund=counts_slot)
         return finish(_error(504, "answer_timeout"), "failed", error="answer_timeout")
+    except ClientError as exc:
+        # Bedrock throttling or a service error: a plain, retryable
+        # failure rather than a bare 500 (code review 2026-10-15).
+        code = exc.response.get("Error", {}).get("Code", "")
+        _mark_failed(tables, review_id, in_flight_keys, "answer_failed")
+        _record_failure(tables, review_id, refund=counts_slot)
+        if code in RETRYABLE_BEDROCK_ERRORS:
+            return finish(_error(503, "answer_failed"), "failed", error=code)
+        raise
     except (ModelOutputTruncated, UnexpectedStopReason, ToolCallMissing, MalformedAnswer):
         _mark_failed(tables, review_id, in_flight_keys, "answer_failed")
-        if counts_slot:
-            _refund_slot(tables, review_id)
+        _record_failure(tables, review_id, refund=counts_slot)
         return finish(_error(502, "answer_failed"), "failed", error="answer_failed")
     except Exception:
         _mark_failed(tables, review_id, in_flight_keys, "internal_error")
-        if counts_slot:
-            _refund_slot(tables, review_id)
+        _record_failure(tables, review_id, refund=counts_slot)
         raise
 
     answered_at = datetime.now(UTC).isoformat()

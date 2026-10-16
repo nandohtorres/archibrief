@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type {
   ChatCitation,
   ChatParagraph,
@@ -37,6 +37,9 @@ interface ReportQuestionsProps {
 }
 
 type Mode = "live" | "sample" | "fixture";
+
+// Errors after which the same question may be sent again with the same id.
+const RETRYABLE_CODES = new Set(["answer_timeout", "answer_failed", "request_in_progress"]);
 
 const STATUS_LABELS: Record<ChatTurn["status"], string> = {
   answered: "Cited answer",
@@ -83,13 +86,16 @@ export function ReportQuestions({
   const [loadError, setLoadError] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
 
-  const updateTurns = useCallback(
-    (next: ChatTurn[]) => {
-      setTurns(next);
-      onTranscriptChange(next);
-    },
-    [onTranscriptChange],
-  );
+  const [loaded, setLoaded] = useState(false);
+  // One request id per attempt, reused when the same question is retried
+  // after a timeout or a dropped connection, so the server replays or
+  // resumes it instead of charging a second question (code review
+  // 2026-10-15).
+  const attempt = useRef<{ key: string; id: string } | null>(null);
+
+  useEffect(() => {
+    onTranscriptChange(turns);
+  }, [onTranscriptChange, turns]);
 
   useEffect(() => {
     if (!questionSeed) return;
@@ -104,7 +110,8 @@ export function ReportQuestions({
     fetchQuestions(reviewId, adminKey)
       .then((transcript) => {
         if (cancelled) return;
-        updateTurns(transcript.questions);
+        setTurns(transcript.questions);
+        setLoaded(true);
         setSuggested(transcript.suggested);
         setRemaining(transcript.questions_remaining);
         setLimit(transcript.limit);
@@ -121,7 +128,7 @@ export function ReportQuestions({
     return () => {
       cancelled = true;
     };
-  }, [adminKey, mode, reviewId, updateTurns]);
+  }, [adminKey, mode, reviewId]);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
@@ -131,17 +138,20 @@ export function ReportQuestions({
     if (pending) return;
     setNotice("");
     setPending(shown);
+    const body = {
+      ...request,
+      ...(request.question && focusFindingId ? { focus_finding_id: focusFindingId } : {}),
+    };
+    const key = JSON.stringify(body);
+    if (attempt.current?.key !== key) attempt.current = { key, id: newClientRequestId() };
     try {
       const response = await askQuestion(
         reviewId,
-        {
-          client_request_id: newClientRequestId(),
-          ...request,
-          ...(request.question && focusFindingId ? { focus_finding_id: focusFindingId } : {}),
-        },
+        { client_request_id: attempt.current.id, ...body },
         adminKey,
       );
-      updateTurns([...turns, response]);
+      attempt.current = null;
+      setTurns((current) => [...current, response]);
       setRemaining(response.questions_remaining);
       setLimit(response.limit);
       setLimitApplies(response.limit_applies);
@@ -156,6 +166,7 @@ export function ReportQuestions({
       }
     } catch (error) {
       const code = error instanceof ChatRequestError ? error.code : "answer_failed";
+      if (!RETRYABLE_CODES.has(code)) attempt.current = null;
       setNotice(chatErrorMessage(code));
       if (code === "review_quota_exhausted") setRemaining(0);
     } finally {
@@ -164,19 +175,22 @@ export function ReportQuestions({
   }
 
   function showStored(entry: DemoChat["suggested"][number], index: number) {
-    if (turns.some((t) => t.question_id === `demo-${index}`)) return;
-    updateTurns([
-      ...turns,
-      { ...entry, question_id: `demo-${index}`, kind: "suggested", asked_at: null },
-    ]);
+    setTurns((current) =>
+      current.some((t) => t.question_id === `demo-${index}`)
+        ? current
+        : [
+            ...current,
+            { ...entry, question_id: `demo-${index}`, kind: "suggested", asked_at: null },
+          ],
+    );
   }
 
   function askFixture(question: string) {
     const answer = fixtureAnswer(question, findings, selectedFindingId);
-    updateTurns([
-      ...turns,
+    setTurns((current) => [
+      ...current,
       {
-        question_id: `fixture-${turns.length + 1}`,
+        question_id: `fixture-${current.length + 1}`,
         kind: "custom",
         suggested_id: null,
         question,
@@ -212,7 +226,7 @@ export function ReportQuestions({
   }
 
   const exhausted = mode === "live" && limitApplies && remaining !== null && remaining <= 0;
-  const canType = mode === "fixture" || (mode === "live" && !loadError);
+  const canType = mode === "fixture" || (mode === "live" && loaded && !loadError);
 
   return (
     <section

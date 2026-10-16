@@ -19,7 +19,11 @@ def is_admin(event: dict) -> bool:
     expected = os.environ.get("ADMIN_KEY", "")
     headers = {str(k).lower(): v for k, v in (event.get("headers") or {}).items()}
     provided = headers.get("x-admin-key", "")
-    return bool(expected) and hmac.compare_digest(str(provided), expected)
+    # Bytes, so a non-ASCII header can't raise (compare_digest rejects
+    # non-ASCII str).
+    return bool(expected) and hmac.compare_digest(
+        str(provided).encode("utf-8"), expected.encode("utf-8")
+    )
 
 
 def caller_allowed(admin: bool) -> bool:
