@@ -46,8 +46,10 @@ state-changing route sits behind a single pre-shared admin credential
   (generic macro labels only — internal pipeline stage names are never
   exposed to the client), a real yes/no + multi-select clarification UI
   for human-in-the-loop pauses, three one-click quick-test presets
-  (`detailed`/`medium`/`loose` severity), and a "go deeper" per-finding
-  re-analysis action. 33 frontend unit tests (Vitest) and 29 Playwright
+  (`detailed`/`medium`/`loose` severity), a "go deeper" per-finding
+  re-analysis action, and a grounded report chat whose every answer cites
+  the review or AWS guidance (ADR-0050, admin-only until public reviews
+  open). 33 frontend unit tests (Vitest) and 29 Playwright
   E2E tests against a mocked network (never real AWS): the fixture path,
   the admin-gated submit → report → "go deeper" path and admin-key
   handling, the landing page and sample review, and phone-width (390px)
@@ -152,7 +154,9 @@ on:
                    rule_engine, store_clarification_token, clarify_review,
                    validate, audit, finalize, mark_review_failed,
                    deeper_review, get_review, get_demo, admin_authorizer,
-                   create_upload
+                   create_upload, ask_question, list_questions
+  /chat          — the grounded report chat (ADR-0050): context, prompt,
+                   citation verification, the trap suite and paid eval
   /agent         — the one LangGraph/AgentCore reasoning subworkflow:
                    /nodes (preflight, retrieve, reason) + graph.py. NOT
                    Lambda functions — Guardrails/"classify" runs inline

@@ -37,6 +37,7 @@ flowchart LR
         GetReview["get_review"]
         GetDemo["get_demo"]
         CreateUpload["create_upload"]
+        Chat["ask_question /<br/>list_questions (ADR-0050)"]
     end
 
     subgraph Reasoning["AgentCore Runtime (LangGraph)"]
@@ -129,6 +130,11 @@ flowchart LR
    report; `POST /reviews/{reviewId}/findings/{findingId}/deeper`
    re-invokes AgentCore (Retrieve → Reason(deep) → Validate) scoped to
    one finding, bypassing the rest of the pipeline entirely.
+11. **Ask about it** — `POST /reviews/{reviewId}/questions` answers one
+   question with a single Bedrock call over the stored review (findings
+   under aliases, the resource summary, three retrieved WAF chunks, the
+   last four turns), and the server keeps only what it can verify
+   against the review. Admin-only until Phase 3; see `docs/chat.md`.
 
 `GET /demo` is the one route with no Lambda/Step Functions/Bedrock cost
 at all — a precomputed, static reference report, deliberately
