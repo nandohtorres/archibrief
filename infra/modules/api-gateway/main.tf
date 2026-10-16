@@ -656,5 +656,13 @@ resource "aws_apigatewayv2_stage" "default" {
     throttling_rate_limit  = var.demo_throttling_rate_limit
   }
 
+  # Each chat question is a paid model call (ADR-0050 §5). The daily $ cap
+  # is the real stop; this keeps one client from spending it in seconds.
+  route_settings {
+    route_key              = aws_apigatewayv2_route.post_questions.route_key
+    throttling_burst_limit = var.chat_throttling_burst_limit
+    throttling_rate_limit  = var.chat_throttling_rate_limit
+  }
+
   tags = var.tags
 }

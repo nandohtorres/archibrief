@@ -148,3 +148,130 @@ variable "kill_switch_parameter_name" {
 variable "kill_switch_parameter_arn" {
   type = string
 }
+
+# --- Report chat (ADR-0050) ----------------------------------------------
+
+variable "ask_question_zip_path" {
+  type        = string
+  description = "Deployment package for POST /reviews/{reviewId}/questions (backend/lambdas/ask_question)."
+}
+
+variable "list_questions_zip_path" {
+  type        = string
+  description = "Deployment package for GET /reviews/{reviewId}/questions (backend/lambdas/list_questions)."
+}
+
+variable "review_questions_table_name" {
+  type = string
+}
+
+variable "review_questions_table_arn" {
+  type = string
+}
+
+variable "usage_counters_table_name" {
+  type = string
+}
+
+variable "usage_counters_table_arn" {
+  type = string
+}
+
+variable "chat_guardrail_id" {
+  type = string
+}
+
+variable "chat_guardrail_version" {
+  type = string
+}
+
+variable "chat_guardrail_arn" {
+  type = string
+}
+
+variable "chat_grounding_guardrail_id" {
+  type = string
+}
+
+variable "chat_grounding_guardrail_version" {
+  type = string
+}
+
+variable "chat_grounding_guardrail_arn" {
+  type = string
+}
+
+variable "chat_grounding_check_enabled" {
+  type        = bool
+  default     = true
+  description = "Log contextual grounding scores for chat answers (detect-only, never blocks). About $0.0006 a question."
+}
+
+variable "vector_bucket_name" {
+  type = string
+}
+
+variable "vector_index_name" {
+  type = string
+}
+
+variable "chat_model_id" {
+  type        = string
+  default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  description = "Model for chat answers. The chat eval picks the cheapest that passes (ADR-0050 §8); must be in chat_model_ids."
+}
+
+variable "chat_model_ids" {
+  type        = list(string)
+  default     = ["us.anthropic.claude-haiku-4-5-20251001-v1:0", "us.anthropic.claude-sonnet-4-6"]
+  description = "Models the chat role may invoke, so switching chat_model_id needs no IAM change. Each must also be allowed by the runtime boundary (modules/iam)."
+}
+
+variable "chat_public_enabled" {
+  type        = bool
+  default     = false
+  description = "Second lock behind the admin authorizer: non-admin callers are refused unless true. Stays false until Phase 3's visitor limits exist; Fernando's call."
+}
+
+variable "chat_questions_per_review" {
+  type    = number
+  default = 5
+}
+
+variable "chat_blocked_per_review" {
+  type    = number
+  default = 5
+}
+
+variable "chat_daily_budget_micro_usd" {
+  type        = number
+  default     = 400000
+  description = "Estimated chat spend allowed per UTC day, in millionths of a dollar ($0.40). The hard stop; master-list item 29 sets the real value from measured cost."
+}
+
+variable "chat_daily_max_questions" {
+  type    = number
+  default = 100
+}
+
+variable "chat_throttling_burst_limit" {
+  type    = number
+  default = 5
+}
+
+variable "chat_throttling_rate_limit" {
+  type    = number
+  default = 2
+}
+
+variable "chat_alarms_enabled" {
+  type        = bool
+  default     = false
+  description = "Create the chat's metric filters and alarms. Needs the deploy-role statement in infra/environments/dev/proposed-chat-iam.md first."
+}
+
+variable "alarm_topic_arn" {
+  type        = string
+  default     = null
+  description = "SNS topic for chat alarms (the budget alerts topic)."
+}

@@ -17,3 +17,7 @@ output "usage_counters_table_name" {
 output "audit_log_table_name" {
   value = aws_dynamodb_table.audit_log.name
 }
+
+output "review_questions_table_name" {
+  value = aws_dynamodb_table.review_questions.name
+}

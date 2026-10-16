@@ -113,3 +113,23 @@ variable "tags" {
     Project = "archibrief"
   }
 }
+
+# Report chat (ADR-0050). Defaults point at scripts/package_lambdas.py's
+# output, so terraform.tfvars needs no new lines.
+variable "ask_question_zip_path" {
+  type        = string
+  default     = "../../../backend/lambdas/ask_question/build/ask_question.zip"
+  description = "Deployment package for POST /reviews/{reviewId}/questions (backend/lambdas/ask_question)."
+}
+
+variable "list_questions_zip_path" {
+  type        = string
+  default     = "../../../backend/lambdas/list_questions/build/list_questions.zip"
+  description = "Deployment package for GET /reviews/{reviewId}/questions (backend/lambdas/list_questions)."
+}
+
+variable "chat_alarms_enabled" {
+  type        = bool
+  default     = false
+  description = "Chat metric filters and alarms. Needs the deploy-role statement in proposed-chat-iam.md first."
+}

@@ -156,6 +156,10 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-5",
       "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+      # The report chat's default model (ADR-0050). Only the chat Lambda's
+      # own role grants it; the boundary just has to allow it.
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
       # Titan V2 embeddings (ADR-0035) — this boundary statement caps the
       # AgentCore execution role's own ReasoningInvoke grant (see
       # modules/agentcore-runtime/main.tf), so it needs the same Titan ARN

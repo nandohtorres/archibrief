@@ -1161,12 +1161,12 @@ resource "aws_sfn_state_machine" "review" {
           # Feeds compute_cost_estimate_tier. Always present here:
           # IngestResponseGate routes rejected/blocked results to a Fail
           # state before Finalize can run.
-          "resource_count.$"   = "$.ingestResult.resource_count"
+          "resource_count.$" = "$.ingestResult.resource_count"
           # ADR-0049's summary, stored in the ledger for the report chat
           # (ADR-0050). RuleEngine always runs before Finalize.
           "terraform_resources.$" = "$.ruleEngineResult.resource_summary"
           "report_bucket"         = var.reports_bucket_name
-          "reviews_table_name" = var.reviews_table_name
+          "reviews_table_name"    = var.reviews_table_name
         }
         End = true
       }

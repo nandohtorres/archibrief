@@ -171,7 +171,26 @@ module "api_gateway" {
   reports_bucket_arn         = module.s3.bucket_arn
   agentcore_runtime_arn      = module.agentcore_runtime.agent_runtime_arn
   permissions_boundary_arn   = module.iam.runtime_permissions_boundary_arn
-  tags                       = var.tags
+
+  # Report chat (ADR-0050).
+  ask_question_zip_path            = var.ask_question_zip_path
+  list_questions_zip_path          = var.list_questions_zip_path
+  review_questions_table_name      = module.dynamodb.review_questions_table_name
+  review_questions_table_arn       = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.review_questions_table_name}"
+  usage_counters_table_name        = module.dynamodb.usage_counters_table_name
+  usage_counters_table_arn         = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.usage_counters_table_name}"
+  chat_guardrail_id                = module.guardrails.chat_guardrail_id
+  chat_guardrail_version           = module.guardrails.chat_guardrail_version
+  chat_guardrail_arn               = module.guardrails.chat_guardrail_arn
+  chat_grounding_guardrail_id      = module.guardrails.chat_grounding_guardrail_id
+  chat_grounding_guardrail_version = module.guardrails.chat_grounding_guardrail_version
+  chat_grounding_guardrail_arn     = module.guardrails.chat_grounding_guardrail_arn
+  vector_bucket_name               = module.s3_vectors.vector_bucket_name
+  vector_index_name                = module.s3_vectors.index_name
+  chat_alarms_enabled              = var.chat_alarms_enabled
+  alarm_topic_arn                  = module.cost_controls.budget_alerts_topic_arn
+
+  tags = var.tags
 }
 
 module "cost_controls" {
