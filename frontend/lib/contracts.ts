@@ -252,3 +252,108 @@ export function isReviewReport(value: unknown): value is ReviewReport {
     Array.isArray(candidate.baseline_answers)
   );
 }
+
+// Report chat (ADR-0050): POST/GET /reviews/{reviewId}/questions.
+// Citations are resolved server-side; source links come from the server's
+// own records, never from model text.
+export type ChatCitation =
+  | { kind: "finding"; finding_id: string; title: string }
+  | {
+      kind: "source";
+      finding_id?: string;
+      chunk_id?: string;
+      quote: string;
+      source_url: string;
+      heading_path: string;
+    }
+  | { kind: "resource"; address: string }
+  | { kind: "requirement"; field: string; label: string };
+
+export interface ChatParagraph {
+  text: string;
+  citations: ChatCitation[];
+}
+
+export type ChatStatus = "answered" | "not_determinable" | "refused";
+
+export interface ChatTurn {
+  question_id: string;
+  kind: "custom" | "suggested";
+  suggested_id: string | null;
+  question: string;
+  status: ChatStatus;
+  refusal_reason: string | null;
+  answer: ChatParagraph[];
+  asked_at: string | null;
+  model_id: string | null;
+  prompt_version: string | null;
+}
+
+export interface AskQuestionRequest {
+  client_request_id: string;
+  question?: string;
+  focus_finding_id?: string | null;
+  suggested_id?: string | null;
+}
+
+export interface AskQuestionResponse extends ChatTurn {
+  questions_remaining: number;
+  limit: number;
+  limit_applies: boolean;
+}
+
+export interface SuggestedQuestion {
+  id: string;
+  question: string;
+  answered: boolean;
+}
+
+export interface QuestionsTranscript {
+  review_id: string;
+  questions: ChatTurn[];
+  suggested: SuggestedQuestion[];
+  questions_remaining: number;
+  limit: number;
+  limit_applies: boolean;
+}
+
+// Pregenerated suggested answers for a demo (scripts/pregenerate_demo_chats.py,
+// served from /demos/chats/<demo-id>.json).
+export interface DemoChat {
+  review_id: string;
+  generated_at: string;
+  suggested: Array<Omit<ChatTurn, "question_id" | "kind" | "asked_at">>;
+}
+
+const chatStatuses: readonly string[] = ["answered", "not_determinable", "refused"];
+
+export function isChatTurn(value: unknown): value is ChatTurn {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.question_id === "string" &&
+    typeof candidate.question === "string" &&
+    typeof candidate.status === "string" &&
+    chatStatuses.includes(candidate.status) &&
+    Array.isArray(candidate.answer) &&
+    candidate.answer.every(
+      (p) =>
+        typeof p === "object" &&
+        p !== null &&
+        typeof (p as ChatParagraph).text === "string" &&
+        Array.isArray((p as ChatParagraph).citations),
+    )
+  );
+}
+
+export function isQuestionsTranscript(value: unknown): value is QuestionsTranscript {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.review_id === "string" &&
+    Array.isArray(candidate.questions) &&
+    candidate.questions.every(isChatTurn) &&
+    Array.isArray(candidate.suggested) &&
+    typeof candidate.questions_remaining === "number"
+  );
+}

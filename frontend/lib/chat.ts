@@ -1,0 +1,206 @@
+import type { ChatCitation, ChatTurn, ReviewReport } from "./contracts";
+
+// Plain messages for the chat API's error codes (backend/lambdas/
+// ask_question ERROR_MESSAGES). The server's own text is never shown, so
+// the UI stays in control of the wording.
+const CHAT_ERRORS: Record<string, string> = {
+  invalid_request: "That request couldn't be read. Reload the page and try again.",
+  invalid_question: "Please ask in plain text, in under 500 characters.",
+  chat_not_public: "Questions are open to the site owner only for now.",
+  review_not_found: "This review doesn't exist or has expired.",
+  review_not_complete: "Questions open once the review is finished.",
+  request_in_progress: "That question is still being answered. Try again in a moment.",
+  review_quota_exhausted: "You've used this review's questions.",
+  daily_cap_reached:
+    "Today's free questions are used up. Try again tomorrow. Suggested answers already given still work.",
+  too_many_blocked: "Too many questions on this review couldn't be processed.",
+  answer_failed: "The answer couldn't be completed. Your question wasn't counted.",
+  answer_timeout: "The answer took too long. Your question wasn't counted.",
+  chat_paused: "Chat is paused right now.",
+  guardrails_unavailable: "Questions can't be checked right now. Try again shortly.",
+};
+
+export function chatErrorMessage(code: string): string {
+  return CHAT_ERRORS[code] ?? "Something went wrong asking that question.";
+}
+
+export function remainingLabel(remaining: number, limit: number, limitApplies: boolean): string {
+  if (!limitApplies) return "Owner access: no question limit";
+  if (remaining <= 0) return `You've used this review's ${limit} questions`;
+  return `${remaining} of ${limit} question${limit === 1 ? "" : "s"} left on this review`;
+}
+
+export function newClientRequestId(): string {
+  return crypto.randomUUID();
+}
+
+export const MAX_QUESTION_CHARS = 500;
+
+export function citationLabel(citation: ChatCitation): string {
+  switch (citation.kind) {
+    case "finding":
+      return citation.title;
+    case "source":
+      return citation.heading_path || "AWS guidance";
+    case "resource":
+      return citation.address;
+    case "requirement":
+      return citation.label;
+  }
+}
+
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+export function escapeHtml(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
+}
+
+// Only http(s) links from the server's own citation records are made
+// clickable; anything else is shown as text.
+function safeHref(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function paragraphHtml(text: string): string {
+  // Code blocks the server kept (at most one, 20 lines) render as <pre>.
+  return text
+    .split(/```/)
+    .map((part, i) =>
+      i % 2 === 1
+        ? `<pre>${escapeHtml(part.replace(/^\n/, ""))}</pre>`
+        : part.trim()
+          ? `<p>${escapeHtml(part.trim()).replace(/\n/g, "<br>")}</p>`
+          : "",
+    )
+    .join("");
+}
+
+function citationHtml(citation: ChatCitation): string {
+  if (citation.kind === "source") {
+    const href = safeHref(citation.source_url);
+    const heading = escapeHtml(citation.heading_path || "AWS guidance");
+    const link = href ? `<a href="${escapeHtml(href)}">${heading}</a>` : heading;
+    return `<li>${link}: “${escapeHtml(citation.quote)}”</li>`;
+  }
+  const kind = { finding: "Finding", resource: "Resource", requirement: "Requirement" }[
+    citation.kind
+  ];
+  return `<li>${kind}: ${escapeHtml(citationLabel(citation))}</li>`;
+}
+
+// One self-contained HTML file: inline CSS, no scripts, print-friendly
+// (ADR-0050 §10). Every value is escaped; model text is never inserted as
+// HTML.
+export function buildReportHtml(
+  report: ReviewReport,
+  transcript: ChatTurn[],
+  title: string,
+): string {
+  const findings = report.findings
+    .map(
+      ({ record, presentation }) => `
+    <article class="finding">
+      <h3>${escapeHtml(record.finding)}</h3>
+      <p class="meta">${escapeHtml(presentation.short_label)} · ${escapeHtml(record.category)} · ${escapeHtml(record.type)} · confidence ${Math.round(record.confidence * 100)}%</p>
+      <p><strong>Evidence.</strong> ${escapeHtml(record.evidence)}</p>
+      <p><strong>Risk.</strong> ${escapeHtml(record.risk_impact)}</p>
+      <p><strong>Recommendation.</strong> ${escapeHtml(record.recommendation)}</p>
+      ${
+        record.citation
+          ? `<p class="source"><strong>Source.</strong> ${escapeHtml(record.citation.heading_path)}: “${escapeHtml(record.citation.exact_text_span)}”${
+              safeHref(record.citation.source_url)
+                ? ` (<a href="${escapeHtml(safeHref(record.citation.source_url))}">${escapeHtml(record.citation.source_url)}</a>)`
+                : ""
+            }</p>`
+          : ""
+      }
+    </article>`,
+    )
+    .join("");
+  const baseline = report.baseline_answers
+    .map(
+      (a) =>
+        `<li><strong>${escapeHtml(a.label)}:</strong> ${escapeHtml(a.value)} <span class="meta">(${escapeHtml(a.outcome)})</span></li>`,
+    )
+    .join("");
+  const conversation = transcript.length
+    ? transcript
+        .map(
+          (turn) => `
+    <article class="turn">
+      <p class="q"><strong>Q.</strong> ${escapeHtml(turn.question)}</p>
+      ${turn.answer.map((p) => paragraphHtml(p.text)).join("")}
+      ${
+        turn.answer.some((p) => p.citations.length)
+          ? `<ul class="cites">${turn.answer
+              .flatMap((p) => p.citations)
+              .map(citationHtml)
+              .join("")}</ul>`
+          : ""
+      }
+      <p class="meta">${escapeHtml(turn.status.replace("_", " "))}${turn.model_id ? ` · ${escapeHtml(turn.model_id)}` : ""}${turn.prompt_version ? ` · ${escapeHtml(turn.prompt_version)}` : ""}</p>
+    </article>`,
+        )
+        .join("")
+    : "<p>No questions were asked.</p>";
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>
+  body { font: 15px/1.55 Georgia, serif; color: #131c24; background: #fff; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; }
+  h1, h2, h3 { font-family: system-ui, sans-serif; line-height: 1.25; }
+  h1 { font-size: 1.6rem; } h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #c5d0d9; padding-bottom: .3rem; }
+  h3 { font-size: 1rem; margin: 0 0 .3rem; }
+  .finding, .turn { border: 1px solid #c5d0d9; border-radius: 8px; padding: .8rem 1rem; margin: .8rem 0; break-inside: avoid; }
+  .meta { color: #43596c; font: 12px/1.4 system-ui, sans-serif; }
+  .q { font-family: system-ui, sans-serif; }
+  .cites { font-size: 13px; color: #43596c; }
+  pre { background: #f4f7f9; padding: .6rem; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+  a { color: #235f7a; }
+  footer { margin-top: 2rem; color: #43596c; font: 12px/1.5 system-ui, sans-serif; }
+  @media print { body { margin: 0; } a { color: inherit; } }
+</style>
+</head>
+<body>
+<h1>${escapeHtml(title)}</h1>
+<p class="meta">${escapeHtml(report.terraform_repo_ref)} · ${escapeHtml(report.created_at)} · review ${escapeHtml(report.review_id)}</p>
+<h2>Requirements used</h2>
+<ul>${baseline || "<li>None recorded.</li>"}</ul>
+<h2>Findings (${report.findings.length})</h2>
+${findings}
+<h2>Conversation</h2>
+${conversation}
+<footer>
+  Generated by ArchiBrief. AI-assisted and grounded in this review snapshot: every answer cites the
+  review's own findings or AWS guidance. It describes evidence, not compliance certification, and it
+  can't see live AWS state.
+</footer>
+</body>
+</html>
+`;
+}
+
+export function downloadFile(filename: string, contents: string, type: string): void {
+  const blob = new Blob([contents], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}

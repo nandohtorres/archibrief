@@ -1,7 +1,12 @@
 import {
+  isChatTurn,
+  isQuestionsTranscript,
   isReviewReport,
   isSubmitReviewResponse,
+  type AskQuestionRequest,
+  type AskQuestionResponse,
   type ClarificationRequest,
+  type QuestionsTranscript,
   type CreateUploadRequest,
   type CreateUploadResponse,
   type ReviewReport,
@@ -184,4 +189,78 @@ export async function requestDeeperFinding(
     { method: "POST", headers: requestHeaders(adminKey) },
   );
   return readJson(response);
+}
+
+// Report chat (ADR-0050). Errors carry the server's short code (e.g.
+// "review_quota_exhausted") so the UI can show a plain, specific message.
+export class ChatRequestError extends ApiRequestError {
+  constructor(
+    message: string,
+    status: number | null,
+    readonly code: string,
+  ) {
+    super(message, status);
+    this.name = "ChatRequestError";
+  }
+}
+
+async function readChatJson(response: Response): Promise<unknown> {
+  const text = await response.text();
+  let body: unknown = null;
+  try {
+    body = text ? (JSON.parse(text) as unknown) : null;
+  } catch {
+    body = null;
+  }
+  if (!response.ok) {
+    const code =
+      typeof body === "object" &&
+      body !== null &&
+      typeof (body as { error?: unknown }).error === "string"
+        ? (body as { error: string }).error
+        : response.status === 401 || response.status === 403
+          ? "chat_not_public"
+          : "answer_failed";
+    throw new ChatRequestError(`Chat request failed (${response.status}).`, response.status, code);
+  }
+  return body;
+}
+
+export async function askQuestion(
+  reviewId: string,
+  request: AskQuestionRequest,
+  adminKey?: string,
+): Promise<AskQuestionResponse> {
+  const response = await fetch(
+    `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/questions`,
+    { method: "POST", headers: requestHeaders(adminKey), body: JSON.stringify(request) },
+  );
+  const value = await readChatJson(response);
+  if (!isChatTurn(value)) {
+    throw new ChatRequestError(
+      "The answer came back in an unexpected format.",
+      response.status,
+      "answer_failed",
+    );
+  }
+  return value as AskQuestionResponse;
+}
+
+export async function fetchQuestions(
+  reviewId: string,
+  adminKey?: string,
+): Promise<QuestionsTranscript> {
+  const response = await fetch(
+    `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/questions`,
+    { headers: requestHeaders(adminKey) },
+  );
+  const value = await readChatJson(response);
+  if (!isQuestionsTranscript(value)) {
+    throw new ChatRequestError(
+      "The conversation came back in an unexpected format.",
+      response.status,
+      "answer_failed",
+    );
+  }
+  return value;
 }

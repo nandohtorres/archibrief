@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useMemo,
   useRef,
   useState,
@@ -8,8 +9,9 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import type { ReportFinding, ReviewReport } from "@/lib/contracts";
+import type { ChatTurn, DemoChat, ReportFinding, ReviewReport } from "@/lib/contracts";
 import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
+import { buildReportHtml, downloadFile } from "@/lib/chat";
 import {
   filterAndSortFindings,
   formatFindingId,
@@ -28,6 +30,8 @@ interface ReportWorkspaceProps {
   report: ReviewReport;
   source: ReportSource;
   adminKey: string;
+  // Pregenerated suggested answers when this is a demo review.
+  demoChat?: DemoChat | null;
   onNewReview: () => void;
 }
 
@@ -35,7 +39,13 @@ const DEFAULT_DETAIL_PANE_WIDTH = 75;
 const MIN_DETAIL_PANE_WIDTH = 45;
 const MAX_DETAIL_PANE_WIDTH = 85;
 
-export function ReportWorkspace({ report, source, adminKey, onNewReview }: ReportWorkspaceProps) {
+export function ReportWorkspace({
+  report,
+  source,
+  adminKey,
+  demoChat = null,
+  onNewReview,
+}: ReportWorkspaceProps) {
   const [view, setView] = useState<"technical" | "stakeholder">("technical");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FindingFilter>("all");
@@ -44,6 +54,8 @@ export function ReportWorkspace({ report, source, adminKey, onNewReview }: Repor
   const [selectedId, setSelectedId] = useState(report.findings[0]?.record.finding_id ?? "");
   const [status, setStatus] = useState("");
   const [questionSeed, setQuestionSeed] = useState("");
+  const [seedFindingId, setSeedFindingId] = useState("");
+  const [transcript, setTranscript] = useState<ChatTurn[]>([]);
   const [detailPaneWidth, setDetailPaneWidth] = useState(DEFAULT_DETAIL_PANE_WIDTH);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -116,13 +128,14 @@ export function ReportWorkspace({ report, source, adminKey, onNewReview }: Repor
   }
 
   function askAboutFinding(finding: ReportFinding) {
-    setQuestionSeed(
-      `Explain ${formatFindingId(finding.record.finding_id)}: ${finding.record.finding}`,
-    );
+    setQuestionSeed(`Explain this finding: ${finding.record.finding}`);
+    setSeedFindingId(finding.record.finding_id);
     window.requestAnimationFrame(() =>
       document.getElementById("ask-review")?.scrollIntoView({ block: "start" }),
     );
   }
+
+  const consumeQuestionSeed = useCallback(() => setQuestionSeed(""), []);
 
   function showOnArchitecture(findingId: string) {
     setStatus(`${formatFindingId(findingId)} is represented in the architecture-impact section.`);
@@ -164,20 +177,29 @@ export function ReportWorkspace({ report, source, adminKey, onNewReview }: Repor
   }
 
   function exportLedger() {
-    const blob = new Blob([JSON.stringify({ ...report, findings }, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${report.review_id}-evidence-ledger.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    // The raw data, plus the conversation in the same shape as
+    // GET /reviews/{id}/questions (ADR-0050 §10).
+    downloadFile(
+      `${report.review_id}-evidence-ledger.json`,
+      JSON.stringify({ ...report, findings, chat_transcript: transcript }, null, 2),
+      "application/json",
+    );
     setStatus(
       source === "fixture"
         ? "Fixture evidence ledger exported as JSON."
         : "Evidence ledger exported as JSON.",
     );
+  }
+
+  function downloadReport() {
+    // One self-contained, escaped HTML file with the findings and the
+    // conversation; Print → PDF works from it (ADR-0050 §10).
+    downloadFile(
+      `${report.review_id}-report.html`,
+      buildReportHtml({ ...report, findings }, transcript, reportTitle(report.terraform_repo_ref)),
+      "text/html",
+    );
+    setStatus("Report downloaded with this conversation.");
   }
 
   return (
@@ -207,7 +229,10 @@ export function ReportWorkspace({ report, source, adminKey, onNewReview }: Repor
             >
               Ask questions ↓
             </button>
-            <button className="button primary" type="button" onClick={exportLedger}>
+            <button className="button primary" type="button" onClick={downloadReport}>
+              Download report
+            </button>
+            <button className="button secondary" type="button" onClick={exportLedger}>
               Export ledger
             </button>
             <button className="button quiet" type="button" onClick={onNewReview}>
@@ -437,11 +462,18 @@ export function ReportWorkspace({ report, source, adminKey, onNewReview }: Repor
 
       <div className="report-content">
         <ReportQuestions
+          reviewId={report.review_id}
+          source={source}
+          adminKey={adminKey}
           findings={findings}
           selectedFindingId={selectedId}
           questionSeed={questionSeed}
-          onQuestionSeedConsumed={() => setQuestionSeed("")}
+          seedFindingId={seedFindingId}
+          demoChat={demoChat}
+          onQuestionSeedConsumed={consumeQuestionSeed}
           onOpenFinding={openTechnicalFinding}
+          onTranscriptChange={setTranscript}
+          onDownload={downloadReport}
         />
         <div className="snapshot-bar">
           Snapshot · rules 2026.09.1 · corpus 2026-09-06 · prompt 1.4 where used · static review
