@@ -22,7 +22,10 @@ jobs:
       # "backend.xxx" from the repo root (see backend/pyproject.toml's
       # pythonpath = [".."] pytest setting), so CI installs dependencies
       # directly rather than `pip install -e backend`.
-      - run: pip install pydantic boto3 langgraph python-hcl2 ruff pytest pytest-cov "moto[dynamodb,s3]"
+      # The runtime dependencies from backend/pyproject.toml (bs4 and pypdf
+      # for the corpus pipeline), plus reportlab, which only the PDF tests
+      # use to build their sample files.
+      - run: pip install pydantic boto3 langgraph python-hcl2 beautifulsoup4 pypdf reportlab ruff pytest pytest-cov "moto[dynamodb,s3]"
       # Trivy (ADR-0048), the same pinned, checksum-verified release the
       # Lambda layer ships (scripts/build_trivy_layer.py; a test keeps the
       # two in sync). TRIVY_PATH makes the trap suite run its Trivy mode.
@@ -113,6 +116,10 @@ jobs:
 
   secrets-scan:
     runs-on: ubuntu-latest
+    # gitleaks-action needs the token to list a pull request's commits.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -120,3 +127,6 @@ jobs:
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No PR comments: they'd need write access and would quote findings.
+          GITLEAKS_ENABLE_COMMENTS: "false"
