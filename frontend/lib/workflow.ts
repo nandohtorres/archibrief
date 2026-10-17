@@ -4,7 +4,8 @@ export type AppScreen = "submission" | "preflight" | "progress" | "clarify" | "r
 // Where the report on screen came from: the public sample (GET /demo),
 // a real review the admin ran, or the bundled fixture in a build with no
 // API configured. Drives labels and whether paid actions are offered.
-export type ReportSource = "sample" | "live" | "fixture";
+// "demo": a saved review of real public Terraform (lib/demos.ts).
+export type ReportSource = "sample" | "demo" | "live" | "fixture";
 export type FindingFilter = "all" | FindingPriority;
 export type FindingSort = "priority" | "confidence" | "title";
 
@@ -140,6 +141,7 @@ export function stakeholderSummary(report: ReviewReport): StakeholderSummary {
 
 export const reportSourceLabels: Record<ReportSource, string> = {
   sample: "Sample review · hypothetical workload",
+  demo: "Demo review · real public Terraform, checked by hand",
   live: "Complete · evidence ledger",
   fixture: "Complete · fixture evidence ledger",
 };

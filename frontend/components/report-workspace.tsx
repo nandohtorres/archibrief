@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { ChatTurn, DemoChat, ReportFinding, ReviewReport } from "@/lib/contracts";
 import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
+import { reviewerNotesById, type DemoEntry } from "@/lib/demos";
 import { buildReportHtml, downloadFile } from "@/lib/chat";
 import {
   filterAndSortFindings,
@@ -30,7 +31,9 @@ interface ReportWorkspaceProps {
   report: ReviewReport;
   source: ReportSource;
   adminKey: string;
-  // Pregenerated suggested answers when this is a demo review.
+  // The demo's index entry (source, license, reviewer notes) and its
+  // pregenerated suggested answers, when this is a demo review.
+  demo?: DemoEntry | null;
   demoChat?: DemoChat | null;
   onNewReview: () => void;
 }
@@ -43,9 +46,11 @@ export function ReportWorkspace({
   report,
   source,
   adminKey,
+  demo = null,
   demoChat = null,
   onNewReview,
 }: ReportWorkspaceProps) {
+  const reviewerNotes = useMemo(() => reviewerNotesById(demo), [demo]);
   const [view, setView] = useState<"technical" | "stakeholder">("technical");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FindingFilter>("all");
@@ -145,9 +150,9 @@ export function ReportWorkspace({
   async function goDeeper(findingId: string) {
     // The sample is precomputed and has no stored review behind it, so
     // there is nothing to take deeper (and no paid run to start).
-    if (source === "sample") {
+    if (source === "sample" || source === "demo") {
       setStatus(
-        `Going deeper runs a new analysis on your own reviews. ${formatFindingId(findingId)} is part of the precomputed sample.`,
+        `Going deeper runs a new analysis on your own reviews. ${formatFindingId(findingId)} is part of the ${source === "demo" ? "saved demo review" : "precomputed sample"}.`,
       );
       return;
     }
@@ -240,6 +245,24 @@ export function ReportWorkspace({
             </button>
           </div>
         </header>
+        {demo && (
+          <aside className="demo-provenance" aria-label="About this demo">
+            <p>
+              <strong>Source:</strong>{" "}
+              <a href={demo.sourceUrl} target="_blank" rel="noopener noreferrer">
+                {demo.source}
+              </a>{" "}
+              · {demo.license}
+            </p>
+            <p>{demo.disclaimer}</p>
+            <p>
+              Every finding was checked by hand against the code.
+              {reviewerNotes.size > 0
+                ? ` ${reviewerNotes.size === 1 ? "One finding carries" : `${reviewerNotes.size} findings carry`} a reviewer note from that check.`
+                : " The check found nothing to correct."}
+            </p>
+          </aside>
+        )}
 
         <div className="report-metrics" aria-label="Report summary">
           <Metric
@@ -408,6 +431,7 @@ export function ReportWorkspace({
                 />
                 <FindingDetail
                   finding={selected}
+                  reviewerNote={reviewerNotes.get(selected.record.finding_id) ?? null}
                   onAsk={askAboutFinding}
                   onShowArchitecture={showOnArchitecture}
                   onGoDeeper={goDeeper}
@@ -443,6 +467,7 @@ export function ReportWorkspace({
           >
             <GuidedReport
               report={report}
+              reviewerNotes={reviewerNotes}
               onOpenTechnicalFinding={openTechnicalFinding}
               onAsk={askAboutFinding}
             />

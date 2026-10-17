@@ -1,20 +1,30 @@
 import type { ReportFinding, ReviewReport } from "@/lib/contracts";
+import type { ReviewerNote } from "@/lib/demos";
 import { confidenceLabel, formatFindingId, stakeholderSummary } from "@/lib/workflow";
 
 interface GuidedReportProps {
   report: ReviewReport;
   onOpenTechnicalFinding: (findingId: string) => void;
   onAsk: (finding: ReportFinding) => void;
+  // Hand-check notes when this is a demo review, keyed by finding id.
+  reviewerNotes?: Map<string, ReviewerNote>;
 }
 
 interface FindingCardProps {
   finding: ReportFinding;
+  reviewerNote: ReviewerNote | null;
   open: boolean;
   onOpenTechnicalFinding: (findingId: string) => void;
   onAsk: (finding: ReportFinding) => void;
 }
 
-function FindingCard({ finding, open, onOpenTechnicalFinding, onAsk }: FindingCardProps) {
+function FindingCard({
+  finding,
+  reviewerNote,
+  open,
+  onOpenTechnicalFinding,
+  onAsk,
+}: FindingCardProps) {
   return (
     <details open={open}>
       <summary>
@@ -30,6 +40,12 @@ function FindingCard({ finding, open, onOpenTechnicalFinding, onAsk }: FindingCa
         <i aria-hidden="true">›</i>
       </summary>
       <div className="guided-finding-body">
+        {reviewerNote && (
+          <aside className="reviewer-note" aria-label="Reviewer note">
+            <strong>Reviewer note · {reviewerNote.verdict}</strong>
+            <p>{reviewerNote.note}</p>
+          </aside>
+        )}
         <h4>Why it matters</h4>
         <p>{finding.record.risk_impact}</p>
         <h4>Recommended action</h4>
@@ -55,7 +71,12 @@ function FindingCard({ finding, open, onOpenTechnicalFinding, onAsk }: FindingCa
   );
 }
 
-export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedReportProps) {
+export function GuidedReport({
+  report,
+  onOpenTechnicalFinding,
+  onAsk,
+  reviewerNotes = new Map(),
+}: GuidedReportProps) {
   const decisionFindings = report.findings.filter(
     ({ presentation }) => presentation.priority !== "confirmed",
   );
@@ -120,6 +141,7 @@ export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedRe
           <FindingCard
             key={finding.record.finding_id}
             finding={finding}
+            reviewerNote={reviewerNotes.get(finding.record.finding_id) ?? null}
             open={index === 0}
             onOpenTechnicalFinding={onOpenTechnicalFinding}
             onAsk={onAsk}
@@ -139,6 +161,7 @@ export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedRe
               <FindingCard
                 key={finding.record.finding_id}
                 finding={finding}
+                reviewerNote={reviewerNotes.get(finding.record.finding_id) ?? null}
                 open={false}
                 onOpenTechnicalFinding={onOpenTechnicalFinding}
                 onAsk={onAsk}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppHeader } from "./app-header";
+import { DemoCards } from "./demo-cards";
 import { FailurePanel } from "./state-panel";
 import { ClarifyStep } from "./clarify-step";
 import { LandingClosing, LandingIntro } from "./landing-intro";
@@ -22,7 +23,8 @@ import {
 } from "@/lib/api";
 import { loadAdminKey, saveAdminKey } from "@/lib/admin-key";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
-import type { PreflightField, ReviewReport, ReviewStatusPointer } from "@/lib/contracts";
+import type { DemoChat, PreflightField, ReviewReport, ReviewStatusPointer } from "@/lib/contracts";
+import { fetchDemo, type DemoEntry } from "@/lib/demos";
 import {
   REVIEW_DEADLINE_MS,
   failureMessageFor,
@@ -63,6 +65,10 @@ export function ArchiBriefApp() {
   const [report, setReport] = useState<ReviewReport>(fixtureReport);
   const [reportSource, setReportSource] = useState<ReportSource>("fixture");
   const [sampleLoading, setSampleLoading] = useState(false);
+  // Set only while a demo review is open (reportSource "demo").
+  const [demo, setDemo] = useState<DemoEntry | null>(null);
+  const [demoChat, setDemoChat] = useState<DemoChat | null>(null);
+  const [openingDemoId, setOpeningDemoId] = useState<string | null>(null);
   const [failureMessage, setFailureMessage] = useState(
     "The fixture failure state shows how ArchiBrief responds when a pipeline stage cannot complete.",
   );
@@ -121,6 +127,7 @@ export function ArchiBriefApp() {
         if (result.status === "complete") {
           setReport(result as ReviewReport);
           setReportSource("live");
+          clearDemo();
           setScreen("report");
           return;
         }
@@ -252,12 +259,39 @@ export function ArchiBriefApp() {
     }
   }
 
+  function clearDemo() {
+    setDemo(null);
+    setDemoChat(null);
+  }
+
+  // Opens a finished demo review from its saved files (lib/demos.ts).
+  async function openDemo(entry: DemoEntry) {
+    setOpeningDemoId(entry.id);
+    try {
+      const loaded = await fetchDemo(entry);
+      setReport(loaded.report);
+      setReportSource("demo");
+      setDemo(loaded.entry);
+      setDemoChat(loaded.chat);
+      setScreen("report");
+    } catch (error) {
+      console.error("demo review could not be loaded", error);
+      setFailureMessage(
+        "That demo review could not be loaded right now. Please try again shortly.",
+      );
+      setScreen("failure");
+    } finally {
+      setOpeningDemoId(null);
+    }
+  }
+
   // Opens the public sample review: the real GET /demo response in a
   // build pointed at the API, the bundled fixture otherwise.
   async function openSample() {
     if (!apiConfigured) {
       setReport(fixtureReport);
       setReportSource("fixture");
+      clearDemo();
       setScreen("report");
       return;
     }
@@ -265,6 +299,7 @@ export function ArchiBriefApp() {
     try {
       setReport(await fetchDemoReport());
       setReportSource("sample");
+      clearDemo();
       setScreen("report");
     } catch (error) {
       console.error("sample review could not be loaded", error);
@@ -303,6 +338,7 @@ export function ArchiBriefApp() {
   function handlePreflightComplete(fields: PreflightField[]) {
     const traffic = fields.find((field) => field.id === "expected_traffic_scale")?.value;
     setReportSource("fixture");
+    clearDemo();
     setReport({
       ...fixtureReport,
       terraform_repo_ref: submission.terraformRepoRef || fixtureReport.terraform_repo_ref,
@@ -352,6 +388,7 @@ export function ArchiBriefApp() {
                 adminKey={adminKey}
                 onAdminKeyChange={handleAdminKeyChange}
                 onSubmit={handleSubmission}
+                demos={<DemoCards openingId={openingDemoId} onOpen={openDemo} />}
               />
             </div>
             <LandingClosing />
@@ -394,6 +431,8 @@ export function ArchiBriefApp() {
             report={report}
             source={reportSource}
             adminKey={adminKey}
+            demo={demo}
+            demoChat={demoChat}
             onNewReview={() => setScreen("submission")}
           />
         )}

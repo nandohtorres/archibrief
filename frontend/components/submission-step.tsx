@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 
 import { createTar } from "@/lib/tar";
 
@@ -80,6 +80,8 @@ interface SubmissionStepProps {
   adminKey: string;
   onAdminKeyChange: (value: string) => void;
   onSubmit: (values: SubmissionValues) => Promise<void>;
+  // Finished demo reviews, shown above the example architectures.
+  demos?: ReactNode;
 }
 
 const fixtureValues: SubmissionValues = {
@@ -102,6 +104,7 @@ export function SubmissionStep({
   adminKey,
   onAdminKeyChange,
   onSubmit,
+  demos = null,
 }: SubmissionStepProps) {
   const [values, setValues] = useState(initialValues);
   const [source, setSource] = useState<Source>("upload");
@@ -183,6 +186,8 @@ export function SubmissionStep({
           show up as gaps.
         </span>
       </div>
+
+      {demos}
 
       {apiConfigured && (
         <>
