@@ -4,6 +4,10 @@ Snapshot: `8d391b0`, evaluated locally on 2026-10-16. No AWS calls or paid model
 evaluations were run for this document. Counts below refer to this checkout,
 before the additional launch-prep Playwright specs.
 
+The subsequent [browser evaluation](evidence/browser-results.md) records all
+Playwright counts, the initial failures, the final axe-only rerun, and automated
+accessibility limits. It includes a machine-readable per-case result summary.
+
 ## Free test results
 
 | Suite | Result | Source and command |
