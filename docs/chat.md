@@ -104,8 +104,8 @@ Remaining before public access:
 
 1. Run the paid chat quality/trap evaluation with explicit approval, then choose
    the model and decide whether grounding scores should block an answer.
-2. Complete atomic accounting across all paid paths, including input screening,
-   rather than treating the preliminary quota read as an atomic budget check.
+2. Deploy and verify the local input-screening reservation fix, then complete
+   atomic accounting across initial review, deeper review and continuation paths.
 3. Implement Turnstile, visitor limits, retention enforcement and server-issued
    review IDs/upload binding before enabling `chat_public_enabled`.
 4. Reconcile measured charges with the configured estimates and set explicit
@@ -118,20 +118,22 @@ requires `--confirm-paid`. None of these commands is part of an offline test run
 
 ## Known limits
 
-- Terraform configures Sonnet 4.6 and a $1.00/day allowance, but the handler's
-  unset-environment fallbacks remain Haiku 4.5 and $0.40/day. Deployments should
-  supply both settings explicitly; these fallbacks were not changed in this
-  documentation-only pass.
-- Input Guardrails runs before the atomic admission transaction. Blocked input
-  is logged with an estimated screening cost but does not reserve the daily
-  spend counter. Concurrent checks can spend beyond the preliminary read.
-- Transcript listing filters expired questions, but POST replay and the direct
-  stored-suggestion path do not consistently check expiry before returning data.
-  Public retention must be enforced on every access path.
+- Local handler defaults now match Terraform's Sonnet 4.6 and $1.00/day
+  allowance, with a configuration-contract test. Deployments should still supply
+  both settings explicitly. This continuation did not redeploy the code.
+- Local chat admission now atomically reserves screening cost and a daily
+  request before Guardrails. Blocked/failed screening retains that estimate;
+  allowed screening reserves the remaining model allowance separately. Initial
+  review and deeper review still need shared global/visitor accounting.
+- Local replay, transcript, suggestion, review, clarification and deeper-review
+  paths enforce expiry. New chat records cannot outlive their review. Storage
+  cleanup and workflow-history isolation remain separate public-launch work;
+  see [the implementation plan](public-access-plan.md).
 
 - A Lambda killed at its 28 s timeout refunds nothing; a retry with the
-  same id after 90 s is admitted and charged again. The model read
-  timeout (20 s) makes this rare.
+  same id after 90 s is admitted and charged again. The local model timeout
+  is sized after retrieval, up to 24 s; it declines to start when fewer than
+  five read-timeout seconds remain after connection time and the handler margin.
 - Citations prove that what's cited exists, not that it supports the
   sentence. The grounding score is logged for the eval; the UI says
   "cited answer".

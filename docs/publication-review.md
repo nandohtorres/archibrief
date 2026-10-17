@@ -1,5 +1,10 @@
 # Publication cleanup and project review
 
+Follow-up: [the hardening report](hardening-results.md) records subsequent
+behavioral fixes, toolchain upgrades and proposed retention changes. The
+findings and counts below describe the earlier cleanup checkpoint; they are
+retained as its audit record, not the current unresolved-issue list.
+
 Reviewed 2026-10-17 from handoff `dc4db7a`. This continues the local
 `mobile-laptop/chore/public-cleanup` work. It is an engineering review of the
 checkout and local tests, not a fresh inspection of AWS or a formal security

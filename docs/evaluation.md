@@ -10,6 +10,13 @@ accessibility limits. It includes a machine-readable per-case result summary.
 
 ## Free test results
 
+The subsequent hardening run passed **669 backend tests, with 5 skipped**,
+**56 frontend unit tests**, and **60 Playwright tests**. Sources and commands
+are in [hardening-checks.json](evidence/hardening-checks.json) and the
+[hardening report](hardening-results.md). Node 24 is now supported and selected
+for CI; the backend local interpreter remains Python 3.14, while CI/deployment
+use 3.12. The table below preserves the earlier cleanup checkpoint.
+
 | Suite | Result | Source and command |
 |---|---|---|
 | Backend | 625 passed, 5 skipped | Publication-cleanup rerun: `python -m pytest tests/backend -q --tb=short -p no:cacheprovider` |
@@ -24,9 +31,9 @@ skips require the gitignored ingested corpus; one Trivy unit test is Linux-only
 and skips on Windows. The 60 deterministic trap tests still ran in both modes.
 These counts describe local validation, not a new paid or deployed evaluation.
 
-None of these is a model-quality measurement. The local frontend run used
-Node v24.14.0, outside `frontend/package.json`'s supported Node 20/22 range;
-`npm ci` completed, and CI repeats the suites on a supported runtime.
+None of these is a model-quality measurement. At the earlier checkpoint the
+local Node v24.14.0 was outside the then-declared Node 20/22 range. The hardening
+change updates that contract and CI. Remote CI was not run in this continuation.
 
 ## Deterministic traps
 
@@ -115,3 +122,7 @@ future run. A useful future artifact should preserve model/prompt/corpus
 versions, all attempted findings/citations, rejected findings, blocked briefs,
 and per-case verdicts so survival, coverage and semantic support cannot be
 mistaken for one another.
+
+Both runners now offer `--plan` without constructing AWS clients and require
+`--confirm-paid` for execution. See the [evaluation runbook](evaluation-runbook.md)
+for case counts, partial batches and the remaining budget/authorization boundary.
