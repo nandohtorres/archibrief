@@ -10,6 +10,7 @@ import {
   type PointerEvent,
 } from "react";
 import type { ChatTurn, DemoChat, ReportFinding, ReviewReport } from "@/lib/contracts";
+import type { ArchitectureGraph } from "@/lib/architecture";
 import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
 import { reviewerNotesById, type DemoEntry } from "@/lib/demos";
 import { buildReportHtml, downloadFile } from "@/lib/chat";
@@ -35,6 +36,8 @@ interface ReportWorkspaceProps {
   // pregenerated suggested answers, when this is a demo review.
   demo?: DemoEntry | null;
   demoChat?: DemoChat | null;
+  // The diagram built from the code; reports without one show no diagram.
+  architecture?: ArchitectureGraph | null;
   onNewReview: () => void;
 }
 
@@ -48,6 +51,7 @@ export function ReportWorkspace({
   adminKey,
   demo = null,
   demoChat = null,
+  architecture = null,
   onNewReview,
 }: ReportWorkspaceProps) {
   const reviewerNotes = useMemo(() => reviewerNotesById(demo), [demo]);
@@ -58,6 +62,10 @@ export function ReportWorkspace({
   const [filter, setFilter] = useState<FindingFilter>("all");
   const [sort, setSort] = useState<FindingSort>("priority");
   const [findings, setFindings] = useState<ReportFinding[]>(report.findings);
+  const [architectureFocus, setArchitectureFocus] = useState<{
+    findingId: string;
+    at: number;
+  } | null>(null);
   const [selectedId, setSelectedId] = useState(report.findings[0]?.record.finding_id ?? "");
   const [status, setStatus] = useState("");
   const [questionSeed, setQuestionSeed] = useState("");
@@ -145,7 +153,8 @@ export function ReportWorkspace({
   const consumeQuestionSeed = useCallback(() => setQuestionSeed(""), []);
 
   function showOnArchitecture(findingId: string) {
-    setStatus(`${formatFindingId(findingId)} is represented in the architecture-impact section.`);
+    setArchitectureFocus({ findingId, at: Date.now() });
+    setStatus(`${formatFindingId(findingId)} is shown in the architecture section.`);
     document.getElementById("architecture-impact")?.scrollIntoView({ block: "start" });
   }
 
@@ -435,7 +444,7 @@ export function ReportWorkspace({
                   finding={selected}
                   reviewerNote={reviewerNotes.get(selected.record.finding_id) ?? null}
                   onAsk={askAboutFinding}
-                  onShowArchitecture={showOnArchitecture}
+                  onShowArchitecture={architecture ? showOnArchitecture : undefined}
                   onGoDeeper={goDeeper}
                 />
               </div>
@@ -484,9 +493,16 @@ export function ReportWorkspace({
         )}
       </div>
 
-      <div className="report-content">
-        <ArchitectureView onOpenFinding={openTechnicalFinding} />
-      </div>
+      {architecture && (
+        <div className="report-content">
+          <ArchitectureView
+            graph={architecture}
+            findings={findings}
+            focus={architectureFocus}
+            onOpenFinding={openTechnicalFinding}
+          />
+        </div>
+      )}
 
       <div className="report-content">
         <ReportQuestions

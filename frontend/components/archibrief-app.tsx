@@ -24,6 +24,7 @@ import {
 import { loadAdminKey, saveAdminKey } from "@/lib/admin-key";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
 import type { DemoChat, PreflightField, ReviewReport, ReviewStatusPointer } from "@/lib/contracts";
+import type { ArchitectureGraph } from "@/lib/architecture";
 import { FEATURED_DEMO_ID, fetchDemo, fetchDemoIndex, type DemoEntry } from "@/lib/demos";
 import {
   REVIEW_DEADLINE_MS,
@@ -68,6 +69,7 @@ export function ArchiBriefApp() {
   // Set only while a demo review is open (reportSource "demo").
   const [demo, setDemo] = useState<DemoEntry | null>(null);
   const [demoChat, setDemoChat] = useState<DemoChat | null>(null);
+  const [demoArchitecture, setDemoArchitecture] = useState<ArchitectureGraph | null>(null);
   const [openingDemoId, setOpeningDemoId] = useState<string | null>(null);
   const [failureMessage, setFailureMessage] = useState(
     "The fixture failure state shows how ArchiBrief responds when a pipeline stage cannot complete.",
@@ -262,6 +264,7 @@ export function ArchiBriefApp() {
   function clearDemo() {
     setDemo(null);
     setDemoChat(null);
+    setDemoArchitecture(null);
   }
 
   // Opens a finished demo review from its saved files (lib/demos.ts).
@@ -271,6 +274,7 @@ export function ArchiBriefApp() {
     setReportSource("demo");
     setDemo(loaded.entry);
     setDemoChat(loaded.chat);
+    setDemoArchitecture(loaded.architecture);
     setScreen("report");
   }
 
@@ -451,6 +455,7 @@ export function ArchiBriefApp() {
             adminKey={adminKey}
             demo={demo}
             demoChat={demoChat}
+            architecture={demoArchitecture}
             onNewReview={() => setScreen("submission")}
           />
         )}

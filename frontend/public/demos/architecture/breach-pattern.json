@@ -1,0 +1,226 @@
+{
+  "account_findings": [
+    "cb07d6a3-579d-4501-a42c-1b344acbc411"
+  ],
+  "edges": [
+    {
+      "from": "aws_instance.ec2-vulnerable-proxy-server",
+      "to": "aws_key_pair.cg-ec2-key-pair"
+    },
+    {
+      "from": "aws_instance.ec2-vulnerable-proxy-server",
+      "to": "aws_security_group.cg-ec2-http-security-group"
+    },
+    {
+      "from": "aws_instance.ec2-vulnerable-proxy-server",
+      "to": "aws_security_group.cg-ec2-ssh-security-group"
+    },
+    {
+      "from": "aws_instance.ec2-vulnerable-proxy-server",
+      "to": "aws_subnet.cg-public-subnet-1"
+    },
+    {
+      "from": "aws_internet_gateway.cg-internet-gateway",
+      "to": "aws_vpc.cg-vpc"
+    },
+    {
+      "from": "aws_route_table.cg-public-subnet-route-table",
+      "to": "aws_internet_gateway.cg-internet-gateway"
+    },
+    {
+      "from": "aws_route_table.cg-public-subnet-route-table",
+      "to": "aws_vpc.cg-vpc"
+    },
+    {
+      "from": "aws_security_group.cg-ec2-http-security-group",
+      "to": "aws_vpc.cg-vpc"
+    },
+    {
+      "from": "aws_security_group.cg-ec2-ssh-security-group",
+      "to": "aws_vpc.cg-vpc"
+    },
+    {
+      "from": "aws_subnet.cg-public-subnet-1",
+      "to": "aws_route_table.cg-public-subnet-route-table"
+    },
+    {
+      "from": "aws_subnet.cg-public-subnet-1",
+      "to": "aws_vpc.cg-vpc"
+    },
+    {
+      "from": "aws_subnet.cg-public-subnet-2",
+      "to": "aws_route_table.cg-public-subnet-route-table"
+    },
+    {
+      "from": "aws_subnet.cg-public-subnet-2",
+      "to": "aws_vpc.cg-vpc"
+    },
+    {
+      "from": "internet",
+      "to": "aws_internet_gateway.cg-internet-gateway"
+    }
+  ],
+  "lanes": [
+    "internet",
+    "network",
+    "compute",
+    "data",
+    "security"
+  ],
+  "nodes": [
+    {
+      "details": [],
+      "findings": [],
+      "id": "internet",
+      "label": "internet",
+      "lane": "internet",
+      "module": "",
+      "name": "Internet",
+      "type": "internet"
+    },
+    {
+      "details": [
+        "iam instance profile"
+      ],
+      "findings": [
+        "cd120b0c-9d10-438e-ad83-4f61af51567c",
+        "e0eff08e-bd54-4d2f-bb01-ac17890eb13d"
+      ],
+      "id": "aws_iam_role.cg-banking-WAF-Role",
+      "label": "iam role",
+      "lane": "security",
+      "module": "",
+      "name": "cg-banking-WAF-Role",
+      "type": "aws_iam_role"
+    },
+    {
+      "details": [],
+      "findings": [
+        "e0eff08e-bd54-4d2f-bb01-ac17890eb13d",
+        "a5c4e002-aa8f-4088-a26e-3ba59830ba84",
+        "d4831d89-2615-442e-bf98-81d30627e116",
+        "624a4c66-8f2d-4c22-96af-0702aa6274ac",
+        "02675180-cc09-4d57-aa33-1ee0e351d591"
+      ],
+      "id": "aws_instance.ec2-vulnerable-proxy-server",
+      "label": "instance",
+      "lane": "compute",
+      "module": "",
+      "name": "ec2-vulnerable-proxy-server",
+      "type": "aws_instance"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_internet_gateway.cg-internet-gateway",
+      "label": "internet gateway",
+      "lane": "network",
+      "module": "",
+      "name": "cg-internet-gateway",
+      "type": "aws_internet_gateway"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_key_pair.cg-ec2-key-pair",
+      "label": "key pair",
+      "lane": "security",
+      "module": "",
+      "name": "cg-ec2-key-pair",
+      "type": "aws_key_pair"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_route_table.cg-public-subnet-route-table",
+      "label": "route table",
+      "lane": "network",
+      "module": "",
+      "name": "cg-public-subnet-route-table",
+      "type": "aws_route_table"
+    },
+    {
+      "details": [
+        "s3 object"
+      ],
+      "findings": [
+        "600b9ca4-c98e-4386-a9d6-de27672b7067",
+        "e61e6701-93c0-48e9-ba2a-db6097224bdd",
+        "e82d002f-ed0d-4a93-bb2e-d5cb5b3514ad"
+      ],
+      "id": "aws_s3_bucket.cg-cardholder-data-bucket",
+      "label": "s3 bucket",
+      "lane": "data",
+      "module": "",
+      "name": "cg-cardholder-data-bucket",
+      "type": "aws_s3_bucket"
+    },
+    {
+      "details": [],
+      "findings": [
+        "e7983266-071a-48d5-9208-3b7cac99e75a"
+      ],
+      "id": "aws_security_group.cg-ec2-http-security-group",
+      "label": "security group",
+      "lane": "network",
+      "module": "",
+      "name": "cg-ec2-http-security-group",
+      "type": "aws_security_group"
+    },
+    {
+      "details": [],
+      "findings": [
+        "e7983266-071a-48d5-9208-3b7cac99e75a"
+      ],
+      "id": "aws_security_group.cg-ec2-ssh-security-group",
+      "label": "security group",
+      "lane": "network",
+      "module": "",
+      "name": "cg-ec2-ssh-security-group",
+      "type": "aws_security_group"
+    },
+    {
+      "details": [
+        "route table association"
+      ],
+      "findings": [
+        "624a4c66-8f2d-4c22-96af-0702aa6274ac"
+      ],
+      "id": "aws_subnet.cg-public-subnet-1",
+      "label": "subnet",
+      "lane": "network",
+      "module": "",
+      "name": "cg-public-subnet-1",
+      "type": "aws_subnet"
+    },
+    {
+      "details": [
+        "route table association"
+      ],
+      "findings": [
+        "624a4c66-8f2d-4c22-96af-0702aa6274ac"
+      ],
+      "id": "aws_subnet.cg-public-subnet-2",
+      "label": "subnet",
+      "lane": "network",
+      "module": "",
+      "name": "cg-public-subnet-2",
+      "type": "aws_subnet"
+    },
+    {
+      "details": [],
+      "findings": [
+        "458d3366-73cc-4245-bc41-bb9f75077e80"
+      ],
+      "id": "aws_vpc.cg-vpc",
+      "label": "vpc",
+      "lane": "network",
+      "module": "",
+      "name": "cg-vpc",
+      "type": "aws_vpc"
+    }
+  ],
+  "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+  "truncated": false,
+  "version": 1
+}

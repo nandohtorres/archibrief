@@ -57,4 +57,37 @@ test.describe("demo reviews from saved files", () => {
     await expect(page.getByRole("heading", { name: "What this review means" })).toBeVisible();
     expect(apiCalls).toEqual([]);
   });
+
+  test("the architecture diagram is drawn from the demo's code and links to its findings", async ({
+    page,
+  }) => {
+    await page.goto(LIVE_URL);
+    await page.getByRole("button", { name: /The 2019 bank breach pattern/ }).click();
+    const diagram = page.locator("#architecture-impact");
+    await expect(diagram.getByRole("heading", { name: "Architecture", exact: true })).toBeVisible();
+    // Real resources from the CloudGoat code, not a stock picture.
+    const bucket = diagram.getByRole("button", {
+      name: /^s3 bucket cg-cardholder-data-bucket, 3 findings$/,
+    });
+    await expect(bucket).toBeVisible();
+    await expect(diagram.getByRole("button", { name: /^internet Internet/ })).toBeVisible();
+
+    await bucket.click();
+    await expect(bucket).toHaveAttribute("aria-pressed", "true");
+    const panel = diagram.locator(".architecture-panel");
+    await expect(panel).toContainText("Configured by: s3 object");
+    await panel.getByRole("button", { name: /does not have versioning enabled/ }).click();
+    await expect(page.locator("#finding-detail h3")).toContainText(
+      "does not have versioning enabled",
+    );
+
+    // A finding about something missing is listed apart, not pinned anywhere.
+    await expect(diagram.locator(".architecture-account")).toContainText(
+      "No aws_cloudtrail resource",
+    );
+
+    // From a finding back to the diagram.
+    await page.getByRole("button", { name: "Show on architecture" }).click();
+    await expect(bucket).toHaveAttribute("aria-pressed", "true");
+  });
 });

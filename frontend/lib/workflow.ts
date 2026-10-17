@@ -9,7 +9,7 @@ export type ReportSource = "sample" | "demo" | "live" | "fixture";
 export type FindingFilter = "all" | FindingPriority;
 export type FindingSort = "priority" | "confidence" | "title";
 
-const priorityRank: Record<FindingPriority, number> = {
+export const priorityRank: Record<FindingPriority, number> = {
   high: 4,
   review: 3,
   unknown: 2,

@@ -1,3 +1,4 @@
+import { isArchitectureGraph, type ArchitectureGraph } from "./architecture";
 import { isChatTurn, type DemoChat, type ReviewReport } from "./contracts";
 
 // Free demo reviews of real, public Terraform (docs/demos.md). Everything
@@ -5,6 +6,8 @@ import { isChatTurn, type DemoChat, type ReviewReport } from "./contracts";
 //   public/demos/demos.json          the index, briefs and reviewer notes
 //   public/demos/reports/<id>.json   the saved review (unedited output)
 //   public/demos/chats/<id>.json     pregenerated suggested answers
+//   public/demos/architecture/<id>.json  the diagram, built from the code
+//                                    (scripts/build_demo_architectures.py)
 
 export interface ReviewerNote {
   findingId: string;
@@ -30,6 +33,7 @@ export interface LoadedDemo {
   entry: DemoEntry;
   report: ReviewReport;
   chat: DemoChat | null;
+  architecture: ArchitectureGraph | null;
 }
 
 const DEMOS_BASE = "/demos";
@@ -104,7 +108,15 @@ export async function fetchDemo(entry: DemoEntry): Promise<LoadedDemo> {
   } catch {
     chat = null;
   }
-  return { entry, report, chat };
+  let architecture: ArchitectureGraph | null = null;
+  try {
+    const candidate = await getJson(`architecture/${entry.id}.json`);
+    architecture =
+      isArchitectureGraph(candidate) && candidate.review_id === report.review_id ? candidate : null;
+  } catch {
+    architecture = null;
+  }
+  return { entry, report, chat, architecture };
 }
 
 export function reviewerNotesById(entry: DemoEntry | null): Map<string, ReviewerNote> {

@@ -275,7 +275,7 @@ def _safe_value(value: object, path: str) -> object:
     return UNKNOWN
 
 
-def _copies(body: dict, parsed: dict, module: str) -> int | str | None:
+def copies_of(body: dict, parsed: dict, module: str) -> int | str | None:
     """How many instances count/for_each creates; None when neither is set.
 
     The FEC demo run (2026-10-15) stated as fact that each Aurora cluster
@@ -385,7 +385,7 @@ def build_resource_summary(parsed: dict) -> dict:
                 for path in SETTINGS.get(resource_type, ())
             }
             entry = {"type": resource_type, "name": display_name(key), "settings": settings}
-            copies = _copies(body, parsed, module) if isinstance(body, dict) else None
+            copies = copies_of(body, parsed, module) if isinstance(body, dict) else None
             if copies is not None:
                 entry["copies"] = copies
             if resource_type == "aws_backup_plan" and isinstance(body, dict):

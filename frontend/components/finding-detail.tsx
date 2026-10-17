@@ -5,7 +5,8 @@ import type { ReviewerNote } from "@/lib/demos";
 interface FindingDetailProps {
   finding: ReportFinding;
   onAsk: (finding: ReportFinding) => void;
-  onShowArchitecture: (findingId: string) => void;
+  // Absent when the report has no architecture diagram.
+  onShowArchitecture?: (findingId: string) => void;
   onGoDeeper: (findingId: string) => Promise<void>;
   // A demo's hand-check note on this finding (lib/demos.ts), if any.
   reviewerNote?: ReviewerNote | null;
@@ -208,7 +209,7 @@ export function FindingDetail({
             Go deeper
           </button>
         )}
-        {record.finding_id !== "finding-005" && record.finding_id !== "finding-006" && (
+        {onShowArchitecture && (
           <button
             className="button secondary"
             type="button"
