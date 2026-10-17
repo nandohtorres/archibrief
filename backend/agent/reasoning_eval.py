@@ -7,13 +7,8 @@ citation real (the chunk_id was actually retrieved, the quote actually
 appears in that chunk's text)? It says nothing about QUALITY: did the
 model find the issues a competent human reviewer would expect from a given
 workload brief, did it invent anything, and is a technically-real citation
-actually good support for the claim it's attached to (the "citation-shaped
-hallucination" pattern flagged in Work-Project-Issues-Log.md's 2026-09-16
-entries — a citation can be real and still not fully support the finding's
-prose). The first real end-to-end run (2026-09-16) surfaced exactly this
-gap: the model returned only 1 finding for a workload brief that plausibly
-supports at least 3, and nothing measured whether that was a real
-completeness problem or just that one brief.
+actually good support for the claim it's attached to (a citation can be
+real and still not fully support the finding's prose).
 
 Mirrors backend/corpus/eval.py's dev-set/held-out-set convention (see that
 file's module docstring for why two sets exist) and its scoring-precision
@@ -30,8 +25,8 @@ differences from the retrieval eval, each deliberate:
   evidence + risk_impact), not against corpus chunk content — this
   project's established structural-test pattern (see
   tests/backend/corpus/test_eval.py's _QUERY_KEYWORDS convention) applied
-  to a different artifact. Deliberately NOT an LLM-judge: grading Claude's
-  output with another Claude call adds real cost, a second unverified
+  to a different artifact. Deliberately NOT an LLM-judge: grading the
+  model's output with another model call adds real cost, a second unverified
   trust boundary, and meta-eval circularity (the same failure modes this
   project is trying to catch in the judged model could just as easily
   affect the judge). Keyword matching is coarser but cheap, deterministic,
@@ -55,88 +50,41 @@ differences from the retrieval eval, each deliberate:
   as an automatic failure, since a model citing a different-but-still-
   valid source is legitimate, just worth a second look.
 
-Revised 2026-09-16 after an independent Codex review (every claim
-personally re-verified against this file before acting, per
-[[feedback_verify_codex_and_subagent_claims]] — full detail in
-Work-Project-Issues-Log.md's 2026-09-16 entries). Confirmed real issues
-fixed in this revision:
-- Pure substring matching couldn't tell "root MFA is not configured"
-  from "root MFA is enabled" apart — both contain "root"+"mfa". Added
-  `negative_phrases` per topic (an explicit, auditable list, not a
-  generic NLP negation heuristic — matches this project's structural-
-  test-over-ML-judge philosophy) and excluded `not-observable`-type
-  findings from ever counting as coverage (an "X cannot be verified"
-  finding should never satisfy a topic requiring X to be a confirmed
-  problem).
-- The citation-relevance flag collapsed "no citation present" and
-  "citation present but from an implausible document" into the same
-  `False` value, printing a misleading "unexpected document" message
-  when there was no document at all. Now a 3-way
-  `"plausible" | "implausible" | "missing" | None` state.
-- `topic_hits`/`unmatched_findings` only stored finding IDs or bare
-  finding text — a human reviewing the JSON report couldn't verify a
-  positive match or read full evidence/citation. Now preserves the full
-  `Finding.model_dump()` alongside a `precision_label: null` slot left
-  for manual supported/unsupported/unclear annotation after a real run
-  (see PRECISION note below — this doesn't try to automate precision).
-- Brief r01's retrieval_query only targeted 1 of its 3 expected topics
-  (root-mfa) — the other two would never get relevant retrieved
-  evidence, so a miss on them would measure a retrieval gap, not a
-  reasoning gap. Broadened. Same confound found independently in r02
-  (query never mentioned commitment discounts at all) — also fixed.
-  r03/h01/h02/h03 checked against the same class of problem and found
-  clean (each query's terms plausibly cover all of that brief's expected
-  topics) — NOT independently verified against real embeddings (no live
-  corpus data exists in this offline worktree to check against), so
-  broadened queries are reasoned-through, not empirically confirmed;
-  flagged here rather than presented as verified.
-- Ground-truth wording fixes: r02's no-commitment-discounts description
-  claimed "despite steady-state workloads" — the brief never establishes
-  that. r01's no-cloudtrail description overclaimed "no audit log of
-  API/data access" — CloudTrail Event History provides a default 90-day
-  management-event lookback even with zero trails configured; the real
-  gaps are persistent/long-term logging and S3 data-event (object-level)
-  logging specifically. r01's lambda-broad-access description asserted
-  broad permissions as fact when the brief only omits any mention of
-  scoping — reworded to reflect this is properly an ASSUMPTION-type
-  finding a competent reviewer would flag as an open question, not a
-  confirmed defect (kept as an expected topic rather than dropped,
-  since it's exactly the completeness gap this eval exists to track —
-  the original real run missed it too). h01's brief described an S3
-  bucket POLICY naming an IAM user GROUP as its principal — IAM groups
-  cannot be principals in a resource-based policy (AWS's own IAM
-  documentation: groups relate to permissions, not authentication, and
-  principals must be authenticated entities) — an invalid scenario as
-  written. Fixed to an identity-based policy attached to the group
-  instead (fully valid — identity policies attach to groups; only
-  resource-based policies can't name one as principal), preserving the
-  same underlying wildcard-access issue the topic tests.
-- Every `negative_phrases` entry across all topics had the same latent
-  substring-collision bug, found while running this revision's own test
-  suite (not by Codex, not previously flagged): a phrase like
-  "mfa configured" is a substring of the exact real-gap finding text it
-  was meant to exclude a false match from — "no MFA configured" contains
-  "mfa configured" too, so the negative-phrase check fired on genuinely
-  correct findings and silently zeroed their recall. The general
-  pattern: "no X is/are/has Y" keeps "is/are/has Y" contiguous, so any
-  negative phrase of the form "X is Y" (without a marker word) collides
-  with its own negated form, while "X is NOT Y" does not (the "not"
-  breaks contiguity) — meaning the bug only bites on the exact natural
-  phrasing ("no ... is/are/has ...") a model is likely to actually use.
-  Fixed by adding "already" as a consistent disambiguating marker to
-  every affected phrase (e.g. "mfa is enabled" -> "mfa is already
-  enabled"), which does not appear in the natural "no X is Y" negated
-  form. Caught by running pytest, not by static review — this file's own
-  offline test suite is a real verification step, not a formality.
+Further design details:
+- Pure substring matching can't tell "root MFA is not configured" from
+  "root MFA is enabled" apart, since both contain "root"+"mfa". Each topic
+  has an explicit, auditable `negative_phrases` list (not a generic NLP
+  negation heuristic), and `not-observable` findings never count as
+  coverage: an "X cannot be verified" finding should not satisfy a topic
+  requiring X to be a confirmed problem.
+- Negative phrases use "already" as a disambiguating marker (e.g. "mfa is
+  already enabled", not "mfa is enabled"). Without it, a phrase like "mfa
+  configured" is a substring of the real-gap text "no MFA configured" and
+  would wrongly zero the recall of correct findings; "no X is Y" keeps "is
+  Y" contiguous, so any "X is Y" phrase collides with its own negation.
+  The offline test suite covers this.
+- Citation relevance is a 3-way state, `"plausible" | "implausible" |
+  "missing" | None`, so "no citation present" isn't reported as "citation
+  from an unexpected document".
+- `topic_hits`/`unmatched_findings` keep the full `Finding.model_dump()`
+  so a human reviewing the JSON report can verify a match and read the
+  evidence and citation.
+- Each brief's retrieval_query must cover all of its expected topics;
+  otherwise a miss measures a retrieval gap, not a reasoning gap. Queries
+  were checked by reasoning, not empirically against real embeddings.
+- Ground-truth descriptions claim only what the brief establishes. For
+  example, CloudTrail Event History provides a default 90-day
+  management-event lookback even with zero trails configured, so the
+  no-cloudtrail topic is about persistent logging and S3 data events, not
+  "no audit log at all". IAM groups cannot be principals in a
+  resource-based policy, so h01 uses an identity-based policy attached to
+  the group.
 
-PRECISION note: still deliberately not auto-scored (the "unmatched
-findings are surfaced, never penalized" design above is unchanged and
-still correct) — but Codex's pushback that manual precision labeling of
-a handful of briefs' real findings is a small, tractable task (not an
-exhaustive-ground-truth problem) is accepted. `precision_label` fields
-are provisioned throughout so a human can fill them in
-("supported"/"unsupported"/"unclear") after the first real run, rather
-than needing a second pass to add that structure later.
+PRECISION note: precision is not auto-scored (unmatched findings are
+surfaced, never penalized), but manually labeling a handful of briefs'
+findings is tractable. `precision_label` fields are provisioned throughout
+so a human can fill them in ("supported"/"unsupported"/"unclear") after a
+real run.
 """
 
 from __future__ import annotations
@@ -166,7 +114,7 @@ class ExpectedFinding(BaseModel):
     # coverage even when keyword_groups otherwise match. Explicit and
     # hand-audited per topic rather than a generic negation heuristic;
     # deliberately short/conservative lists, not exhaustive synonym
-    # coverage (see module docstring, 2026-09-16 revision).
+    # coverage (see module docstring).
     negative_phrases: list[str] = Field(default_factory=list)
     # document_id(s) a citation for this topic would plausibly come from —
     # used only for the soft citation-relevance flag, never to reject a
@@ -201,9 +149,7 @@ def _normalize(text: str) -> str:
 
 def _finding_covers_topic(finding: Finding, expected: ExpectedFinding) -> bool:
     # A "the status of X cannot be verified" finding must never satisfy a
-    # topic that requires X to be a confirmed problem — confirmed real gap
-    # (Codex review 2026-09-16): the old matcher had no way to distinguish
-    # this from a genuine hit.
+    # topic that requires X to be a confirmed problem.
     if finding.type == FindingType.NOT_OBSERVABLE:
         return False
     haystack = _normalize(f"{finding.finding} {finding.evidence} {finding.risk_impact}")
@@ -243,11 +189,7 @@ def score_reasoning(
             matched_finding_ids.update(f.finding_id for f in covering)
             cited = [f for f in covering if f.citation is not None]
             if not cited:
-                # Genuinely different from "wrong document" — no citation
-                # exists to judge at all. Previously collapsed into the
-                # same False value as "implausible", producing a
-                # misleading "citation from an unexpected document"
-                # report message (Codex review 2026-09-16, confirmed).
+                # Distinct from "wrong document": no citation exists to judge at all.
                 citation_relevance = "missing"
             elif any(f.citation.document_id in expected.plausible_source_documents for f in cited):
                 citation_relevance = "plausible"
@@ -293,15 +235,8 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
             "configured. There is no CloudTrail trail in the account. The application "
             "backend is a single Lambda function reading/writing directly to this bucket."
         ),
-        # Broadened 2026-09-16 (was: "S3 bucket versioning for critical
-        # data recovery and root user MFA best practices") — the original
-        # only targeted 1 of 3 expected topics (root-mfa); no-cloudtrail
-        # and lambda-broad-access would never have gotten relevant
-        # retrieved evidence, so a miss on either measured a retrieval
-        # gap, not a reasoning gap (confirmed real confound, Codex review
-        # 2026-09-16). Not empirically re-verified against real
-        # embeddings — no live corpus exists in this offline worktree —
-        # reasoned-through, flagged as such.
+        # Covers all three expected topics, so a miss measures reasoning, not
+        # retrieval.
         retrieval_query=(
             "S3 bucket versioning for data recovery, AWS account root user MFA best "
             "practices, CloudTrail logging for API and data-access auditing, and "
@@ -356,13 +291,10 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
             ExpectedFinding(
                 topic_id="no-cloudtrail",
                 category="observability",
-                # Reworded 2026-09-16: the original "no audit log of
-                # API/data access" overclaimed — CloudTrail Event History
-                # provides a default 90-day management-event lookback even
-                # with zero trails configured (confirmed against AWS's own
-                # CloudTrail docs). The real gap is persistent/long-term
-                # logging plus S3 object-level (data event) logging, which
-                # a trail is specifically required for.
+                # CloudTrail Event History provides a default 90-day management-event
+                # lookback even with zero trails configured. The real gap is
+                # persistent/long-term logging plus S3 object-level (data event)
+                # logging, which a trail is required for.
                 description=(
                     "No CloudTrail trail is configured — beyond the default 90-day "
                     "management-event history, there's no persistent audit log and no "
@@ -385,15 +317,9 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
             ExpectedFinding(
                 topic_id="lambda-broad-access",
                 category="iam",
-                # Reworded 2026-09-16: the brief never actually establishes
-                # broad permissions (Codex review 2026-09-16, confirmed by
-                # re-reading the brief text) — it only omits any mention of
-                # scoping. Kept as an expected topic (dropping it would
-                # remove exactly the completeness gap this eval exists to
-                # track — the original real run missed this too), but
-                # reworded to what the brief actually supports: an
-                # ASSUMPTION-type open question a competent reviewer would
-                # raise, not an asserted defect.
+                # The brief never establishes broad permissions; it only omits any
+                # mention of scoping. So this is an ASSUMPTION-type open question a
+                # competent reviewer would raise, not an asserted defect.
                 description=(
                     "The single Lambda's IAM permission scope is unstated — a competent "
                     "reviewer should flag this as an open question/assumption given no "
@@ -428,13 +354,8 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
             "available instance type 'just in case' with no monitoring of actual "
             "utilization, and Savings Plans / Reserved Instances are not used anywhere."
         ),
-        # Broadened 2026-09-16 (was: "establishing cost ownership across
-        # accounts and rightsizing EC2 instances based on utilization") —
-        # same confound class as r01: this query never mentioned
-        # commitment discounts at all, so no-commitment-discounts would
-        # never get relevant retrieved evidence. Found independently while
-        # applying the same scrutiny Codex used on r01. Not empirically
-        # re-verified against real embeddings, reasoned-through.
+        # Mentions commitment discounts so no-commitment-discounts can get
+        # relevant retrieved evidence.
         retrieval_query=(
             "establishing cost ownership and tagging policies across accounts, "
             "rightsizing EC2 instances based on utilization, and using Savings Plans "
@@ -469,12 +390,8 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
             ExpectedFinding(
                 topic_id="no-commitment-discounts",
                 category="cost",
-                # Reworded 2026-09-16: "despite steady-state workloads"
-                # overclaimed — the brief never establishes steady-state
-                # usage (Codex review 2026-09-16, confirmed by re-reading
-                # the brief text). The underlying topic (evaluating
-                # commitment discounts given no Savings Plans/RIs are used
-                # anywhere) is still legitimate; only the wording changed.
+                # The brief never establishes steady-state usage, so the description
+                # doesn't claim it; it only says no Savings Plans/RIs are used.
                 description="No Savings Plans/Reserved Instances used anywhere — worth evaluating for commitment-based discounts.",
                 keyword_groups=[["savings plan", "reserved instance", "commitment"]],
                 negative_phrases=[
@@ -512,14 +429,11 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
                 topic_id="backups-disabled",
                 category="recovery",
                 description="Automated RDS backups are disabled — no point-in-time recovery.",
-                # Codex-flagged loose match confirmed: "backup restore
-                # testing is disabled" would previously pass this topic
-                # wrongly (it's about untested-restore, not
-                # backups-disabled). negative_phrases doesn't fully solve
-                # cross-topic bleed by itself, but combined with requiring
-                # "backup" AND a disabled-state word, a restore-testing
-                # sentence without an explicit backup-disabled statement
-                # is meaningfully less likely to match both groups.
+                # Guards against cross-topic bleed: "backup restore testing is
+                # disabled" is about untested restores, not disabled backups.
+                # negative_phrases alone doesn't fully solve this, but combined with
+                # requiring "backup" AND a disabled-state word, a restore-testing
+                # sentence is much less likely to match both groups.
                 keyword_groups=[
                     ["backup"],
                     ["disabled", "not enabled", "no automated", "turned off"],
@@ -557,16 +471,9 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
 HOLDOUT_BRIEFS: list[ReasoningEvalBrief] = [
     ReasoningEvalBrief(
         brief_id="h01",
-        # Fixed 2026-09-16: the original brief described a bucket POLICY
-        # naming an IAM user GROUP as its principal — IAM groups cannot be
-        # principals in any resource-based policy (AWS's own IAM
-        # documentation: groups relate to permissions, not authentication,
-        # and a principal must be an authenticated entity). An invalid
-        # scenario as written (Codex review 2026-09-16, confirmed
-        # independently, not taken on trust). Fixed to an identity-based
-        # policy attached to the group instead — fully valid (identity
-        # policies do attach to groups), preserving the same underlying
-        # wildcard-access issue the topic tests.
+        # Uses an identity-based policy attached to the group: IAM groups
+        # cannot be principals in a resource-based policy (a principal must be
+        # an authenticated entity).
         workload_brief=(
             "Our data science team spins up EC2 instances for training jobs directly from "
             "personal IAM user access keys that don't expire, shared across the team via a "
@@ -676,12 +583,8 @@ HOLDOUT_BRIEFS: list[ReasoningEvalBrief] = [
                     "Team assumes AWS alone owns sustainability impact — misunderstands the "
                     "shared responsibility split between 'of the cloud' and 'in the cloud'."
                 ),
-                # Loosened the first group slightly 2026-09-16 (Codex
-                # review: requiring the exact phrase "shared
-                # responsibility" was too strict — a correct explanation
-                # of the AWS/customer split could use different wording
-                # entirely) — not making the match MORE brittle, the
-                # opposite direction.
+                # Doesn't require the exact phrase "shared responsibility": a correct
+                # explanation of the AWS/customer split can use different wording.
                 keyword_groups=[
                     ["shared responsibility", "responsibility model", "shared-responsibility"],
                     ["sustainab", "carbon", "of the cloud", "in the cloud"],

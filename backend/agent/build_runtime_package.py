@@ -1,46 +1,35 @@
 """Builds the ZIP deployment package for AgentCore Runtime's ZIP/
 code_configuration deployment path (infra/modules/agentcore-runtime).
 
-Scoped and verified 2026-09-16 (Codex-reviewed, every claim independently
-checked before acting — see Work-Project-Issues-Log.md):
+Design notes:
 - Only pydantic/boto3/langgraph/bedrock-agentcore are actually imported by
-  anything reachable from runtime_entrypoint.py (confirmed by grepping the
-  real import graph) — NOT beautifulsoup4/pypdf/python-hcl2, which are
-  ingestion-only and never touched by this entrypoint.
-- AgentCore Runtime is ARM64-only (AWS's own docs, confirmed directly) and
-  validates every native .so's ELF header — a Windows or x86_64-built
-  wheel fails deployment outright. Dependencies are installed via `uv pip
-  install --python-platform aarch64-manylinux2014`, not plain `pip`,
-  because `pip download --platform` has a real, currently-open bug
+  anything reachable from runtime_entrypoint.py. beautifulsoup4, pypdf and
+  python-hcl2 are ingestion-only and are not packaged.
+- AgentCore Runtime is ARM64-only and validates every native .so's ELF
+  header, so a Windows or x86_64-built wheel fails deployment outright.
+  Dependencies are installed via `uv pip install --python-platform
+  aarch64-manylinux2014`, not plain `pip`, because `pip download
+  --platform` has an open bug
   (pypa/pip#13442/#11664/#6117): it filters wheel tags for the target
   platform but evaluates dependency environment markers against the HOST
   machine, so a Linux-only conditional dependency could silently be
-  skipped when resolving from Windows. Verified directly: a `uv`-based
-  resolution and a plain `pip download`-based resolution produced the
-  identical 48-package set for this project's specific dependencies (no
-  actual divergence found) — but `uv` is what AWS's own docs use and
-  carries no known version of this bug, so it's what this script uses
-  going forward.
-- Only backend/corpus/data/chunks/ (5.7MB) is read at runtime
-  (lexical_index.py's actual disk access, confirmed by reading the code) —
-  NOT backend/corpus/data/raw/ (17MB, ingestion-only fetched source
-  content) or embed_checkpoint.json.
+  skipped when resolving from Windows. `uv` is what AWS's docs use and does
+  not have this bug.
+- Only backend/corpus/data/chunks/ (5.7MB, read by lexical_index.py) is
+  needed at runtime, not backend/corpus/data/raw/ (17MB of ingestion-only
+  source content) or embed_checkpoint.json.
 - Only .py files are copied from backend/agent, backend/shared,
   backend/corpus — NOT a blind directory copy, because backend/build/
   (staging + vendor artifacts for the OTHER lambda zips) sits right next
   to backend/agent as a sibling directory and would otherwise get swept
-  in. Python doesn't execute an ingestion module's imports merely because
-  the file is present in the zip and never imported, so including
-  ingestion .py files here (normalize_pdf.py etc.) is harmless even
-  though they're unused — only their own unmet dependencies would matter
-  if something tried to import them, which nothing does.
+  in. Ingestion .py files (normalize_pdf.py etc.) are included but never
+  imported, so their unmet dependencies don't matter.
 - ZIP entries get explicit Unix metadata (create_system=3, S_IFREG|0o644
   for files, S_IFDIR|0o755 for directories with a trailing "/", explicit
   ZIP_DEFLATED compression) because (a) a manually-constructed ZipInfo
-  defaults to ZIP_STORED, confirmed directly by testing zipfile's real
-  behavior, and (b) AWS's docs are explicit that AgentCore Runtime needs
-  644/755 Unix permissions on extraction, which a Windows-built zip does
-  not set by default.
+  defaults to ZIP_STORED, and (b) AgentCore Runtime needs 644/755 Unix
+  permissions on extraction, which a Windows-built zip does not set by
+  default.
 - Dependencies are pinned via runtime_requirements.lock.txt (compiled with
   `uv pip compile --python-platform aarch64-manylinux2014 --python-version
   3.12`), not a bare `uv pip install <package names>`, for build
@@ -79,10 +68,8 @@ _OUTPUT_ZIP = _BUILD_ROOT / "agentcore-runtime.zip"
 # Staging MUST live outside backend/ entirely — backend/agent is one of the
 # trees _copy_source_tree scans with rglob("*.py"), so a staging dir nested
 # anywhere under backend/ gets picked up mid-scan by its own source walk
-# and recursively copies itself into itself (hit this for real: a
-# backend/agent/build/runtime_staging staging dir produced
-# .../runtime_staging/backend/agent/build/runtime_staging/backend/... three
-# levels deep before Windows' path-length limit stopped it).
+# and recursively copies itself into itself until Windows' path-length limit
+# stops it.
 _STAGING_DIR = Path(tempfile.mkdtemp(prefix="archibrief-agentcore-build-"))
 
 _ENTRY_POINT = "backend/agent/runtime_entrypoint.py"
@@ -160,13 +147,10 @@ def _strip_install_artifacts(target_dir: Path) -> None:
     """`uv pip install --target` drops host-platform build/launcher
     artifacts alongside the actual packages — a .lock marker file and a
     bin/ directory of Windows .exe console-script launchers (httpx.exe,
-    uvicorn.exe, etc.), confirmed by inspecting a real build. Neither is
-    ever imported by our code; the .exe files are the wrong architecture
-    for the Linux ARM64 target regardless. Strip both so they don't ride
-    along as dead weight (or risk tripping AgentCore's native-binary
-    validation, which AWS's docs say scans every .so — unclear if it's
-    stricter than that, so there's no reason to leave wrong-platform
-    binaries in to find out)."""
+    uvicorn.exe, etc.). Neither is imported by our code, and the .exe files
+    are the wrong architecture for the Linux ARM64 target. Strip both so they
+    don't add dead weight or risk tripping AgentCore's native-binary
+    validation."""
     lock_file = target_dir / ".lock"
     if lock_file.exists():
         lock_file.unlink()

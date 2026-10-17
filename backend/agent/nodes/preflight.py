@@ -8,10 +8,9 @@ cannot-infer -> unknown/not-observable; can-model-conservatively -> named
 versioned default, tag dependent findings 'assumption'; required -> pause
 via Step Functions task-token callback.
 
-The task-token pause/resume call itself needs a deployed Step Functions
-state machine (Work-Project-Deployment-Roadmap.md AWS-account blocker) —
-that one AWS call is isolated behind `TaskTokenGateway` below so the
-field-policy logic is real and testable without it.
+The task-token pause/resume call is the only part that needs a deployed
+Step Functions state machine, so it is isolated behind `TaskTokenGateway`
+below and the field-policy logic is testable without AWS.
 """
 
 from __future__ import annotations
@@ -36,9 +35,7 @@ class FieldOutcome(str, Enum):
     STOPPED = "stopped"
 
 
-# Per-field policy assignment — implementation detail per System-Design's
-# "Open / implementation-level TBDs"; this mapping is the first real pass,
-# revisit as scenarios are added.
+# Per-field policy assignment. Revisit as scenarios are added.
 BASELINE_FIELD_POLICIES: dict[str, FieldPolicy] = {
     "regulatory_data_residency": FieldPolicy.REQUIRED_FOR_REVIEW,
     "expected_traffic_scale": FieldPolicy.CAN_MODEL_CONSERVATIVELY,
@@ -50,8 +47,8 @@ CONSERVATIVE_DEFAULTS: dict[str, str] = {
     "availability_criticality": "standard (not mission-critical, no multi-region requirement assumed)",
 }
 
-# Human-readable labels for the frontend's BaselineAnswer.label (2026-10-01)
-# — finalize.handler reads this to assemble the per-field outcomes it
+# Human-readable labels for the frontend's BaselineAnswer.label.
+# finalize.handler reads this to assemble the per-field outcomes it
 # writes into the evidence ledger (see assemble_baseline_answers there).
 # Kept here, not duplicated in finalize.py, since a field's label is a
 # property of the field itself, same ownership as BASELINE_FIELD_POLICIES.

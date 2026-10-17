@@ -9,8 +9,8 @@ authored separately, deliberately avoiding any query/fact already covered by
 EVAL_QUERIES, to catch failure modes a real held-out set would catch and the
 dev set wouldn't.
 
-Design goals for this set (see backend/corpus/README or ADR-0036 for the
-original eval design rationale):
+Design goals for this set (see ADR-0036 for the original eval design
+rationale):
   - Cover all 10 ingested sources, not just the easy 4 HTML pages.
   - Include several queries in the same failure-prone shape as the original
     set's q12: a specific named best practice/control buried inside one of
@@ -22,23 +22,13 @@ original eval design rationale):
     document, where only one specific chunk (or chunk pair) is actually
     correct.
 
-Chunk IDs below were re-verified directly against
-backend/corpus/data/chunks/ on 2026-09-15, against the final
-corpus_version="v3", 4,463-chunk corpus (after the chunk-typing fix and the
-follow-on procedure-splitting/table/code-detection/absorption-bug fix grew
-the corpus 1,073 -> 3,327 -> 4,463 chunks). Every WAF-PDF-sourced query
-(h07-h14) had drifted since the original 2026-09-15 authoring pass earlier
-the same day (before the second rechunk) and was re-pointed at the chunks
-that now actually contain the answer text — see each query's notes for
-specifics. The short-document queries (h01-h05) were unaffected. If the
-corpus is re-chunked again, re-verify before reusing this set.
+Chunk IDs below were verified against backend/corpus/data/chunks/ (the
+corpus_version="v3", 4,463-chunk corpus); see each query's notes for
+specifics. If the corpus is re-chunked, re-verify before reusing this set.
 
-This set has NOT been run against the live S3 Vectors index yet — the corpus
-was about to be re-embedded by in-flight chunking work at authoring time, so
-scoring against it then would have scored a soon-to-be-stale index. Score it
-once the corpus is stable, using score_retrieval() from eval.py (it accepts
-a `queries` override, so pass HOLDOUT_QUERIES to score this set separately
-from EVAL_QUERIES).
+Score it with score_retrieval() from eval.py, which accepts a `queries`
+override: pass HOLDOUT_QUERIES to score this set separately from
+EVAL_QUERIES.
 """
 
 from backend.corpus.eval import EvalQuery
