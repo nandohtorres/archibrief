@@ -59,16 +59,18 @@ Without `NEXT_PUBLIC_API_BASE_URL`, the UI uses the local fixture path. Playwrig
 
 Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo reviews without an account.
 
-![Opening a demo review: landing, demo cards, report, reviewer note, stakeholder view and chat](docs/screenshots/demo.gif)
+![Opening a demo review: landing, demo cards, report, architecture diagram, reviewer note, guided report and chat](docs/screenshots/demo.gif)
 
 | | |
 |---|---|
-| ![Landing page](docs/screenshots/01-landing.png) | ![Finished demo reviews and example architectures](docs/screenshots/02-demo-cards.png) |
-| **Landing.** A second opinion on your Terraform, with the receipts. | **Try it.** Three finished reviews of real public Terraform, or start from an example. |
-| ![A finding with a reviewer note](docs/screenshots/04-reviewer-note.png) | ![Stakeholder view with demo provenance](docs/screenshots/05-stakeholder.png) |
-| **Evidence.** Each finding shows its evidence, confidence and source; the hand check's note marks one the model got wrong. | **Provenance.** Source, license and disclaimer, then the stakeholder view of the same evidence. |
-| ![Report chat with cited answers](docs/screenshots/06-chat.png) | ![Phone layout, dark theme](docs/screenshots/07-phone.png) |
-| **Chat.** Answers cite this review's findings or AWS guidance. | **Phone, dark theme.** |
+| ![Landing page](docs/screenshots/01-landing.png) | ![Three demo reviews of real public code](docs/screenshots/02-demo-cards.png) |
+| **Landing.** Know what's wrong with your AWS design, and why it matters. | **Real demos.** Three reviews of real public Terraform, checked by hand. |
+| ![Architecture diagram drawn from the code](docs/screenshots/03-diagram.png) | ![A finding with a reviewer note](docs/screenshots/04-reviewer-note.png) |
+| **Diagram.** Drawn from the code without a model; each finding sits on the resource it names. | **Evidence.** Each finding shows its evidence, confidence and source; the hand check's note marks one the model got wrong. |
+| ![Guided report for non-engineers](docs/screenshots/05-stakeholder.png) | ![Report chat with cited answers](docs/screenshots/06-chat.png) |
+| **Guided report.** The same evidence in plain language, for the person who has to say yes. | **Chat.** Answers cite this review's findings or AWS guidance. |
+| ![Phone layout, dark theme](docs/screenshots/07-phone.png) | |
+| **Phone, dark theme.** | |
 
 ## Repository map
 
