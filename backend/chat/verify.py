@@ -77,8 +77,8 @@ _URL = re.compile(
     r"|\bwww\.\S+|\S*\[\.\]\S*|\S*\(dot\)\S*)",
     re.IGNORECASE,
 )
-# A code block may show a fix, never fetch and run something (security
-# review 2026-10-15): lines that download or pipe into a shell are dropped.
+# A code block may show a fix, never fetch and run something: lines that
+# download or pipe into a shell are dropped.
 _FETCH_OR_EXEC = re.compile(
     r"\b(?:curl|wget|iwr|Invoke-WebRequest|Invoke-Expression|iex|certutil|bitsadmin)\b"
     r"|\|\s*(?:ba|z|k)?sh\b|\|\s*python\d*\b|\bbase64\s+-d",
@@ -232,7 +232,7 @@ def _clean_code(body: str, code_budget: list[int]) -> str:
 def _clean_text(text: str, ctx: ReviewContext, code_budget: list[int], chunk_refs: set[str]) -> str:
     """Split out code blocks first, so link stripping and ref rewriting
     only touch prose and a code block's own characters and indentation are
-    kept (code review 2026-10-15). Code only loses fetch/exec and URL lines."""
+    kept. Code only loses fetch/exec and URL lines."""
     text = remove_invisible(text)
     parts = []
     last = 0
@@ -295,7 +295,7 @@ def verify_answer(
 
     # Checked again on the cleaned text: cleaning removes invisible
     # characters, which could have hidden a split-up canary from the raw
-    # check (security review 2026-10-15).
+    # check.
     if _leaks(canary, " ".join(p["text"] for p in kept)):
         return _canary_refusal()
 
@@ -313,8 +313,7 @@ def verify_answer(
 
     # Cap the whole answer; the last kept paragraph is cut if needed. The
     # partial-answer note's room is set aside first, so a long answer can
-    # never push out the line saying it's incomplete (code review
-    # 2026-10-16).
+    # never push out the line saying it's incomplete.
     budget = MAX_ANSWER_CHARS - (len(suffix["text"]) + 1 if suffix else 0)
     capped: list[dict[str, Any]] = []
     for paragraph in kept:

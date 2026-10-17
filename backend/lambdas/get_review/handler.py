@@ -1,28 +1,15 @@
 """ArchiBrief Lambda: get_review.
 
-GET /reviews/{reviewId} — HTTP API v2 payload format, AWS_PROXY Lambda
-integration. Required because API Gateway v2's native AWS_PROXY
-quick-create integrations only support a fixed enum of services
-(Step Functions, EventBridge, SQS, AppConfig, Kinesis) — DynamoDB is not
-among them (confirmed directly against AWS's HTTP API integration
-subtype reference, 2026-09-17), so a plain DynamoDB read cannot be a
-no-compute integration on this API type.
+GET /reviews/{reviewId}: HTTP API v2 payload format, AWS_PROXY Lambda
+integration. A Lambda is needed because HTTP API's native service
+integrations cover only Step Functions, EventBridge, SQS, AppConfig and
+Kinesis, not DynamoDB.
 
-**Corrected 2026-10-01** (see Work-Project-Issues-Log.md): this
-originally returned a thin, ad-hoc subset of the reviews-table item
-(reviewId/status/findingCount/reportS3Key/...) that did NOT match the
-frontend's actual `ReviewReport` contract (frontend/lib/contracts.ts,
-frontend/lib/api.ts's `fetchReview`) — missing `findings`
-(record+presentation), `baseline_answers`, `owner_id`, etc. entirely.
-Once a review is complete, this now fetches the S3 evidence ledger and
-assembles the real contract shape via backend.shared.report
-(build_review_report) — the same assembly deeper_review.handler's own
-ledger-reading logic is modeled on. Still returns the thin pointer
-subset for a review that isn't complete yet (no `ReviewReport` exists
-to build — the frontend's own `fetchReview` return type is always
-`ReviewReport`, but nothing in this codebase actually calls it before a
-review completes yet; polling pending/needs_clarification state through
-this same endpoint is unstarted frontend-side design, not solved here).
+For a complete review, fetches the S3 evidence ledger and assembles the
+frontend's `ReviewReport` contract (frontend/lib/contracts.ts) via
+backend.shared.report.build_review_report. For a review that is not
+complete yet, returns only an allowlisted subset of the reviews-table
+item (status, progress, clarification and failure fields).
 """
 
 from __future__ import annotations
@@ -43,15 +30,12 @@ _PENDING_ALLOWED_FIELDS = (
     "createdAt",
     "needsClarification",
     "preflightFields",
-    # Set by mark_review_failed (Codex F05): a short public code, never the
-    # raw Step Functions error/cause.
+    # Set by mark_review_failed: a short public code, never the raw Step
+    # Functions error/cause.
     "failureCode",
     "failedAt",
-    # Added 2026-10-13 — the new per-stage progress tracker
-    # (infra/modules/step-functions-lambda's RecordStage* states) writes
-    # this directly onto the review's DynamoDB item; without it here,
-    # GET /reviews/{reviewId} would silently drop the field even though
-    # it's actually being written.
+    # Per-stage progress, written by the RecordStage* states in
+    # infra/modules/step-functions-lambda.
     "currentStage",
 )
 

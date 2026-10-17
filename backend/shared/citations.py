@@ -1,8 +1,8 @@
 """Tolerant quote matching for citations, shared by reviews and chat.
 
-Moved out of backend/agent/nodes/reason.py (2026-10-15, ADR-0050) so the
-chat Lambda verifies a quoted span exactly the way the review pipeline
-does, without importing the agent package. Behaviour is unchanged.
+Lives here rather than in backend/agent/nodes/reason.py so the chat
+Lambda verifies a quoted span exactly the way the review pipeline does,
+without importing the agent package (ADR-0050).
 """
 
 from __future__ import annotations
@@ -10,20 +10,15 @@ from __future__ import annotations
 import itertools
 import re
 
-# Builds a regex that tolerates whitespace-run and unicode-punctuation-
-# variant drift between the model's re-typed quote and the corpus's raw
-# extracted text, then searches the ORIGINAL (non-normalized) chunk text
-# and keeps the real matched substring — not the model's version — as
-# exact_text_span. Two real, independent reasons this matters, not one:
-# (1) this corpus's PDF-derived chunks have documented whitespace/
-# boilerplate quirks (see the 2026-09-14/15 PDF-parsing entries in
-# Work-Project-Issues-Log.md) and Claude commonly "cleans up" punctuation/
-# whitespace when copying a quote, so a byte-exact match would reject
-# genuinely correct citations; (2) Citation.exact_text_span is meant to be
-# independently reproducible against the real corpus (ADR-0027/ADR-0036) —
-# storing the model's possibly-altered version instead of the source's
-# actual characters would silently break that reproducibility guarantee
-# (Codex review 2026-09-16).
+# Builds a regex that tolerates whitespace-run and unicode-punctuation
+# drift between the model's re-typed quote and the corpus's raw extracted
+# text, then searches the original (non-normalized) chunk text and keeps
+# the real matched substring, not the model's version, as exact_text_span.
+# Two reasons: (1) PDF-derived chunks have whitespace and boilerplate
+# quirks, and the model often "cleans up" punctuation or whitespace when
+# copying a quote, so a byte-exact match would reject correct citations;
+# (2) Citation.exact_text_span must be reproducible against the corpus
+# (ADR-0027/ADR-0036), so it has to hold the source's actual characters.
 _PUNCTUATION_NORMALIZE_MAP = str.maketrans(
     {
         "‘": "'",
@@ -110,8 +105,7 @@ def find_quote(quote: object, text: str) -> str | None:
     """The source's own matched span for `quote` in `text`, or None.
 
     Non-string and whitespace-only quotes never match: a whitespace-only
-    quote's pattern would match at the start of any text (Codex review
-    2026-09-16).
+    quote's pattern would match at the start of any text.
     """
     if not isinstance(quote, str) or not quote.strip():
         return None

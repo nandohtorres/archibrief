@@ -1,10 +1,9 @@
 """ArchiBrief Lambda: finalize.
 
-Assembles the structured HTML/JSON evidence ledger from validated
-findings and writes pointers to DynamoDB + payload to S3 (400 KB item
-cap — ADR-0034). The S3/DynamoDB writes go through the shared client
-adapters and cannot succeed without deployed resources, but the ledger
-assembly logic itself is real and independently testable.
+Assembles the JSON evidence ledger from validated findings, writes it to
+S3, and merges a small pointer item into the review's DynamoDB record.
+The full payload stays in S3 because of DynamoDB's 400 KB item cap
+(ADR-0034).
 """
 
 from __future__ import annotations
@@ -20,14 +19,11 @@ from backend.shared.models.finding import Finding
 
 MAX_DYNAMODB_ITEM_BYTES = 400 * 1024
 
-# preflight.py's FieldOutcome enum has two values (UNKNOWN, PAUSED) the
-# frontend's BaselineAnswer.outcome type doesn't model (only "answered" |
-# "assumption" | "not-observable" | "stopped" — see frontend/lib/contracts.ts).
-# Neither should actually reach a COMPLETED review in practice today
-# (BASELINE_FIELD_POLICIES never assigns CANNOT_INFER, so "unknown" never
-# occurs; "paused" implies needs_clarification, which routes the graph to
-# END before Reason/Finalize ever run) — mapped defensively rather than
-# left to KeyError if that ever changes.
+# preflight.py's FieldOutcome has two values (UNKNOWN, PAUSED) that the
+# frontend's BaselineAnswer.outcome (frontend/lib/contracts.ts) doesn't
+# model. Neither should reach a completed review (no policy assigns
+# CANNOT_INFER, and "paused" ends the graph before Reason/Finalize), but
+# they are mapped defensively rather than left to raise KeyError.
 _OUTCOME_TO_CONTRACT = {
     "answered": "answered",
     "assumption": "assumption",
@@ -42,9 +38,7 @@ def assemble_baseline_answers(
 ) -> list[dict[str, Any]]:
     """Converts preflight_node's internal field_state shape
     (backend/agent/nodes/preflight.py) into the frontend's BaselineAnswer
-    contract shape (frontend/lib/contracts.ts) — found missing entirely
-    2026-10-01 while fixing get_review's response to actually match that
-    contract (see Work-Project-Issues-Log.md)."""
+    contract shape (frontend/lib/contracts.ts)."""
     answers = []
     for field_name, field_state in preflight_fields.items():
         answers.append(
@@ -59,16 +53,11 @@ def assemble_baseline_answers(
     return answers
 
 
-# First-pass heuristic (2026-10-12), not yet reviewed against real cost
-# data — same caveat as backend/shared/report.py's compute_presentation()
-# (no fixture/production precedent to validate bucket edges against).
-# Counts total resource instances across every type Ingest parsed
-# (ignores remote-module-internal resources, which are correctly absent
-# from `resources` since Ingest never resolves remote module sources —
-# ADR-0027). Thresholds are a starting point, deliberately conservative
-# (a handful of resources is "low," dozens is "medium"), meant to be
-# revisited once there's real submitted-Terraform size data to calibrate
-# against, not treated as a calibrated product decision.
+# A rough size heuristic, not a dollar estimate: counts resource instances
+# across every type Ingest parsed (resources inside remote modules are
+# absent because Ingest never resolves remote sources, ADR-0027). The
+# thresholds are conservative starting points (a handful is "low", dozens
+# "medium"), not yet calibrated against real submissions.
 _COST_TIER_LOW_MAX = 5
 _COST_TIER_MEDIUM_MAX = 20
 
@@ -98,23 +87,15 @@ def assemble_evidence_ledger(
 
     return {
         "review_id": review_id,
-        # Persisted here (2026-10-01), not anywhere in DynamoDB — no
-        # Reviews-table item field carries it either (see
-        # Work-Project-Issues-Log.md, same entry this fix is documented
-        # in), and deeper_review.handler needs the original brief to
-        # re-invoke Reason for a "go deeper" pass. S3 is already this
-        # project's source of truth for full review content
-        # (ADR-0007/0042), so the evidence ledger is the natural place,
-        # not a new DynamoDB field.
+        # deeper_review.handler needs the original brief to re-invoke
+        # Reason. S3 is the source of truth for full review content
+        # (ADR-0007/0042), so it lives in the ledger, not in DynamoDB.
         "workload_brief": workload_brief,
-        # Also added 2026-10-01, same reasoning — the frontend's
-        # ReviewReport.baseline_answers had no backend source at all
-        # before this (runtime_entrypoint.py dropped preflight_fields on
-        # every path except needs_clarification).
+        # Source of the frontend's ReviewReport.baseline_answers.
         "baseline_answers": baseline_answers or [],
         # RuleEngine's sanitized resource summary (ADR-0049), kept so the
         # report chat can answer from the same facts Reason saw (ADR-0050).
-        # None for reviews finalized before 2026-10-15; the chat says so.
+        # None in older ledgers; the chat says so.
         "terraform_resources": terraform_resources,
         "generated_at": datetime.now(UTC).isoformat(),
         "finding_count": len(findings),
@@ -149,8 +130,7 @@ def handler(event, context):
         baseline_answers,
         event.get("terraform_resources"),
     )
-    # The report's diagram (rule_engine/architecture.py). Absent for
-    # reviews finalized before 2026-10-17.
+    # The report's diagram (rule_engine/architecture.py), when there is one.
     architecture = place_findings(event.get("architecture"), findings)
     if architecture is not None:
         ledger["architecture"] = architecture
@@ -164,13 +144,9 @@ def handler(event, context):
             key=payload_key, body=json.dumps(ledger).encode("utf-8")
         )
 
-    # Found 2026-10-01 while wiring terraformRepoRef persistence: DynamoDB's
-    # PutItem REPLACES the whole item, unlike UpdateItem — writing a
-    # pointer_item built from scratch here would silently wipe out every
-    # field IdempotencyGate wrote earlier in the same execution
-    # (terraformRepoRef, idempotencyKey, createdAt), since this is the
-    # second put_item call against the same reviewId. Fetch-and-merge
-    # instead of blind overwrite.
+    # PutItem replaces the whole item, so a pointer item built from scratch
+    # would wipe the fields IdempotencyGate wrote earlier in the execution
+    # (terraformRepoRef, idempotencyKey, createdAt). Fetch and merge instead.
     dynamodb_client = DynamoDBClient(table_name=reviews_table) if reviews_table else None
     existing_item = dynamodb_client.get_item({"reviewId": review_id}) if dynamodb_client else None
 

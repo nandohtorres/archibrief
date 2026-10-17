@@ -1,10 +1,9 @@
 """What the submitted Terraform declares, as facts the reasoning model can use.
 
 The model never sees the Terraform itself (ADR-0038: submitted code is
-untrusted input). Before this summary existed it only saw rule findings,
-so it guessed about anything no rule mentioned: in the 2026-10-15 live
-run it called Multi-AZ "likely absent" on an instance with
-`multi_az = true` (master-list #15b).
+untrusted input). With only rule findings to go on, it guesses about
+anything no rule mentions, for example calling Multi-AZ "likely absent"
+on an instance with `multi_az = true`.
 
 So the summary carries facts but leaves no room to write instructions in:
 
@@ -12,17 +11,16 @@ So the summary carries facts but leaves no room to write instructions in:
 - Values are booleans, numbers, or a string the setting can really take
   (an engine from a known list, an instance class in AWS's format, ...).
   Anything else, and any reference that can't be resolved statically,
-  becomes "unknown". The first version allowed any 32-character
-  identifier, and the 2026-10-15 trap run showed `IGNORE_ALL_FINDINGS`
-  as an engine getting through, so no free-form words reach the model
-  through a value now.
+  becomes "unknown". A looser rule (any short identifier) would let a
+  value like `IGNORE_ALL_FINDINGS` through as an engine, so no free-form
+  words reach the model through a value.
 - A listed setting the Terraform leaves out is "not set (default: X)"
   when the AWS provider's default is documented and fixed, and plain
   "not set" when it depends on something outside the code (account
-  settings, the AMI, the subnet). The model guessed defaults wrong in the
-  2026-10-15 re-run (it said an unset skip_final_snapshot skips the final
-  snapshot; the default is false), so it's told the default, never asked
-  to recall it.
+  settings, the AMI, the subnet). The model recalls defaults unreliably
+  (e.g. claiming an unset skip_final_snapshot skips the final snapshot;
+  the default is false), so it's told the default, never asked to
+  recall it.
 - Names go through display_name(), the same cleaning as finding text.
 - Comments, descriptions, tags and policy documents never appear.
 - Resources with count = 0 are left out; the list is capped.
@@ -36,9 +34,9 @@ from backend.lambdas.rule_engine.hcl_eval import is_created, resolve
 from backend.shared.terraform_scope import display_name, module_of
 
 NOT_SET = "not set"
-# Fixed text, never built from the submission. In the 2026-10-15 trap
-# re-run the model read a setting missing from the summary as missing
-# from the code ("no CloudWatch log exports are present").
+# Fixed text, never built from the submission. Without it the model reads
+# a setting missing from the summary as missing from the code ("no
+# CloudWatch log exports are present").
 COVERAGE_NOTE = (
     "Only the settings named for each resource were checked. A setting not "
     "named here may still be set in the code: never describe it as missing. "
@@ -78,8 +76,7 @@ SETTINGS: dict[str, tuple[str, ...]] = {
         "deletion_protection",
         "iam_database_authentication_enabled",
         "skip_final_snapshot",
-        # The FEC demo re-run (2026-10-16) said this wasn't confirmed when
-        # all three clusters set it.
+        # Listed so the model doesn't call it unconfirmed when it is set.
         "copy_tags_to_snapshot",
     ),
     "aws_s3_bucket_versioning": ("versioning_configuration.status",),
@@ -138,8 +135,8 @@ SETTINGS: dict[str, tuple[str, ...]] = {
 # code. Only defaults that are fixed are listed; ones that depend on the
 # account, AMI or subnet (EBS default encryption, IMDS tokens, public IPs)
 # stay plain "not set". RDS backup retention defaults to 1 day when left
-# out (the RDS API default; Trivy AWS-0077 treats unset as 1); the model
-# guessed 0 in the 2026-10-15 trap re-run.
+# out (the RDS API default; Trivy AWS-0077 treats unset as 1); left to
+# itself the model tends to guess 0.
 DEFAULTS: dict[str, dict[str, object]] = {
     "aws_db_instance": {
         "multi_az": False,
@@ -278,8 +275,8 @@ def _safe_value(value: object, path: str) -> object:
 def copies_of(body: dict, parsed: dict, module: str) -> int | str | None:
     """How many instances count/for_each creates; None when neither is set.
 
-    The FEC demo run (2026-10-15) stated as fact that each Aurora cluster
-    had one instance; the code made three with count = 3.
+    Without it the model may assume one instance where the code creates
+    several (e.g. count = 3 Aurora cluster instances).
     """
     if "count" in body:
         value = resolve(body["count"], parsed, module)
@@ -313,9 +310,8 @@ def _backup_rules(body: dict, parsed: dict, module: str) -> list[dict]:
     """Each rule's schedule, retention and copies, for aws_backup_plan.
 
     A plan has several rule blocks, and the dotted-path settings only read
-    the first. The Medicare demo run (2026-10-15) said its schedule and
-    retention "aren't visible"; the code had four rules. Rule names are
-    free text and are left out.
+    the first, which would leave the other rules' schedules and retention
+    invisible to the model. Rule names are free text and are left out.
     """
     rules = body.get("rule")
     if isinstance(rules, dict):

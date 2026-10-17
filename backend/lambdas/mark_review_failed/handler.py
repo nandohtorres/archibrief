@@ -1,11 +1,10 @@
 """ArchiBrief Lambda: mark-review-failed.
 
 Triggered by EventBridge on the review state machine's "Execution Status
-Change" events (FAILED / TIMED_OUT / ABORTED). Before this, no failure
-path updated the review's record, so a dead run stayed "pending" forever
-and the browser couldn't tell it from a slow one (Codex F05). One
-listener covers every failure path — Fail states, uncaught Lambda errors,
-timeouts, and manual aborts — without a Catch on every state.
+Change" events (FAILED / TIMED_OUT / ABORTED), so a dead run doesn't stay
+"pending" forever, indistinguishable from a slow one. One listener covers
+every failure path (Fail states, uncaught Lambda errors, timeouts, manual
+aborts) without a Catch on every state.
 
 Writes only a short public failure code, never the raw error or cause
 (those can carry internal stage names, paths, or input fragments; they
