@@ -65,8 +65,8 @@ class DynamoDBClient:
     def put_item(self, item: dict[str, Any]) -> None:
         self._table.put_item(Item=_dynamodb_safe(item))
 
-    def get_item(self, key: dict[str, Any]) -> dict[str, Any] | None:
-        response = self._table.get_item(Key=key)
+    def get_item(self, key: dict[str, Any], *, consistent: bool = False) -> dict[str, Any] | None:
+        response = self._table.get_item(Key=key, **({"ConsistentRead": True} if consistent else {}))
         return response.get("Item")
 
     def query(self, **kwargs: Any) -> list[dict[str, Any]]:
@@ -97,11 +97,26 @@ class S3Client:
             config=Config(signature_version="s3v4"),
         )
 
-    def put_object(self, key: str, body: bytes, content_type: str = "application/json") -> None:
-        self._client.put_object(Bucket=self.bucket, Key=key, Body=body, ContentType=content_type)
+    def put_object(
+        self,
+        key: str,
+        body: bytes,
+        content_type: str = "application/json",
+        *,
+        if_absent: bool = False,
+    ) -> None:
+        self._client.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=body,
+            ContentType=content_type,
+            **({"IfNoneMatch": "*"} if if_absent else {}),
+        )
 
-    def get_object(self, key: str) -> bytes:
-        response = self._client.get_object(Bucket=self.bucket, Key=key)
+    def get_object(self, key: str, *, version_id: str | None = None) -> bytes:
+        response = self._client.get_object(
+            Bucket=self.bucket, Key=key, **({"VersionId": version_id} if version_id else {})
+        )
         return response["Body"].read()
 
     def generate_presigned_post(

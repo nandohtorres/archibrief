@@ -27,6 +27,8 @@ from backend.chat.access import (
 from backend.chat.context import build_review_context
 from backend.chat.suggested import suggested_questions
 from backend.shared.clients import DynamoDBClient, S3Client
+from backend.shared.http import api_handler
+from backend.shared.public_access import capability_allowed
 from backend.shared.retention import review_is_live
 
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -40,6 +42,7 @@ def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@api_handler
 def handler(event: dict, _context: object) -> dict:
     admin = is_admin(event)
     if not caller_allowed(admin):
@@ -51,7 +54,7 @@ def handler(event: dict, _context: object) -> dict:
     review = DynamoDBClient(table_name=os.environ["REVIEWS_TABLE_NAME"]).get_item(
         {"reviewId": review_id}
     )
-    if review is None or not review_is_live(review):
+    if review is None or not review_is_live(review) or not capability_allowed(event, review):
         return _response(404, {"error": "review_not_found"})
     if review.get("status") != "complete" or not review.get("reportS3Key"):
         return _response(409, {"error": "review_not_complete"})

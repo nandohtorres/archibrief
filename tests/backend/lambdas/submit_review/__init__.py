@@ -1,0 +1,1 @@
+"""Submission admission tests."""

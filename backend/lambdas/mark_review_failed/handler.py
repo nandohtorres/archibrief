@@ -71,7 +71,7 @@ def handler(event: dict, _context: object, table: Any | None = None) -> dict:
         table.update_item(
             Key={"reviewId": review_id},
             UpdateExpression="SET #status = :failed, failureCode = :code, failedAt = :at",
-            ConditionExpression="attribute_exists(reviewId) AND #status <> :complete",
+            ConditionExpression="attribute_exists(reviewId) AND #status <> :complete AND #status <> :failed",
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":failed": "failed",

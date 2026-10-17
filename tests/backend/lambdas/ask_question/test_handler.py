@@ -19,6 +19,7 @@ import backend.lambdas.ask_question.handler as handler_module
 from backend.chat.answer import ChatClients
 from backend.chat.verify import REFUSAL_TEXTS
 from backend.shared.clients import GuardrailVerdict, ModelOutputTruncated
+from backend.shared.public_access import token_hash, visitor_key
 from tests.backend.chat.conftest import LEDGER, RULE_FINDING_ID
 
 ADMIN_KEY = "admin-secret"
@@ -141,8 +142,20 @@ def env(monkeypatch):
             "CHAT_CANARY": CANARY,
             "CHAT_PUBLIC_ENABLED": "false",
             "AWS_DEFAULT_REGION": "us-east-1",
+            "PUBLIC_ACCESS_ENABLED": "true",
+            "VISITOR_HASH_KEY": "test-visitor-hash-key-32-characters-long",
         }.items():
             monkeypatch.setenv(name, value)
+
+        reviews.update_item(
+            Key={"reviewId": "r1"},
+            UpdateExpression="SET visitorKey = :v, readTokenHash = :r, writeTokenHash = :w",
+            ExpressionAttributeValues={
+                ":v": visitor_key(_event({}, admin=False)),
+                ":r": token_hash("r" * 43),
+                ":w": token_hash("w" * 43),
+            },
+        )
 
         reasoning = FakeReasoning()
         monkeypatch.setattr(
@@ -168,12 +181,17 @@ def env(monkeypatch):
 
 
 def _event(body, admin=True, review_id="r1", raw=None):
-    headers = {"content-type": "application/json"}
+    headers = {
+        "content-type": "application/json",
+        "x-review-read-token": "r" * 43,
+        "x-review-write-token": "w" * 43,
+    }
     if admin:
         headers["x-admin-key"] = ADMIN_KEY
     return {
         "pathParameters": {"reviewId": review_id},
         "headers": headers,
+        "requestContext": {"http": {"sourceIp": "192.0.2.10"}},
         "body": raw if raw is not None else json.dumps(body),
     }
 
@@ -416,6 +434,21 @@ def test_new_question_cannot_outlive_its_review(env):
     assert _call(_ask())[0] == 200
     question = env.questions.scan()["Items"][0]
     assert question["ttl"] == _review(env)["ttl"]
+
+
+def test_changed_question_cannot_reuse_an_admitted_request_id(env):
+    request = _ask()
+    assert _call(request)[0] == 200
+    status, body = _call({**request, "question": "Different question?"})
+    assert (status, body["error"]) == (409, "request_conflict")
+    assert len(env.reasoning.calls) == 1
+
+
+def test_shared_budget_blocks_chat_before_screening(env, monkeypatch):
+    monkeypatch.setenv("PAID_DAILY_BUDGET_MICRO_USD", "1")
+    assert _call(_ask())[0] == 429
+    assert FakeGuardrails.calls == 0
+    assert env.reasoning.calls == []
 
 
 def test_history_comes_from_the_server_and_only_verified_text(env):

@@ -26,6 +26,7 @@ class _FakeSfnClient:
 
 def _event(review_id: str | None, body: dict | None) -> dict:
     return {
+        "headers": {"x-admin-key": "admin-secret"},
         "pathParameters": {"reviewId": review_id} if review_id else {},
         "body": json.dumps(body) if body is not None else None,
     }
@@ -45,6 +46,16 @@ def table(monkeypatch):
     # Real DynamoDB semantics (moto) so the conditional claim is exercised,
     # not a permissive fake. boto3.client is patched only for Step Functions.
     with mock_aws():
+        monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+        monkeypatch.setenv("USAGE_COUNTERS_TABLE_NAME", "counters")
+        boto3.resource("dynamodb", region_name="us-east-1").create_table(
+            TableName="counters",
+            KeySchema=[{"AttributeName": "counterKey", "KeyType": "HASH"}],
+            AttributeDefinitions=[
+                {"AttributeName": "counterKey", "AttributeType": "S"}
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
         t = boto3.resource("dynamodb", region_name="us-east-1").create_table(
             TableName=TABLE,
             KeySchema=[{"AttributeName": "reviewId", "KeyType": "HASH"}],
@@ -55,8 +66,15 @@ def table(monkeypatch):
         monkeypatch.setattr(handler_module, "paid_work_allowed", lambda: True)
         _FakeSfnClient.calls = []
         _FakeSfnClient.error_code = None
+        original_client = boto3.client
         monkeypatch.setattr(
-            handler_module.boto3, "client", lambda *a, **kw: _FakeSfnClient()
+            handler_module.boto3,
+            "client",
+            lambda service, *a, **kw: (
+                _FakeSfnClient()
+                if service == "stepfunctions"
+                else original_client(service, *a, **kw)
+            ),
         )
         yield t
 

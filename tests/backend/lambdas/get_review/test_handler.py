@@ -26,10 +26,14 @@ class _FakeS3Client:
 
 
 def _event(review_id: str | None) -> dict:
-    return {"pathParameters": {"reviewId": review_id} if review_id else {}}
+    return {
+        "headers": {"x-admin-key": "admin-secret"},
+        "pathParameters": {"reviewId": review_id} if review_id else {},
+    }
 
 
 def _setup(monkeypatch, items: dict, objects: dict | None = None):
+    monkeypatch.setenv("ADMIN_KEY", "admin-secret")
     monkeypatch.setenv("REVIEWS_TABLE_NAME", "archibrief-dev-reviews")
     monkeypatch.setenv("REPORTS_BUCKET_NAME", "archibrief-dev-reports")
     monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)

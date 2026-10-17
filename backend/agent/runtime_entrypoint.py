@@ -63,15 +63,18 @@ _GRAPH = compiled_graph()
 # only a different wiring of the same nodes (build_deeper_graph's own
 # docstring explains why).
 _DEEPER_GRAPH = compiled_deeper_graph()
-_EMBEDDING_CLIENT = BedrockEmbeddingClient(region_name=_REGION)
+_EMBEDDING_CLIENT = BedrockEmbeddingClient(region_name=_REGION, no_retries=True)
 _VECTORS_CLIENT = S3VectorsClient(
     bucket_name=_VECTOR_BUCKET_NAME, index_name=_VECTOR_INDEX_NAME, region_name=_REGION
 )
 _LEXICAL_CORPUS_INDEX = build_lexical_corpus_index_from_disk()
 _GUARDRAILS_CLIENT = GuardrailsClient(
-    guardrail_id=_GUARDRAIL_ID, guardrail_version=_GUARDRAIL_VERSION, region_name=_REGION
+    guardrail_id=_GUARDRAIL_ID,
+    guardrail_version=_GUARDRAIL_VERSION,
+    region_name=_REGION,
+    no_retries=True,
 )
-_REASONING_CLIENT = BedrockReasoningClient(model_id=_MODEL_ID, region_name=_REGION)
+_REASONING_CLIENT = BedrockReasoningClient(model_id=_MODEL_ID, region_name=_REGION, no_retries=True)
 
 
 def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:

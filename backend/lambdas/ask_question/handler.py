@@ -69,6 +69,7 @@ from backend.chat.pricing import GUARDRAIL_INPUT_MICRO_USD_PER_UNIT, reserve_mic
 from backend.chat.prompt import MAX_OUTPUT_TOKENS, PROMPT_VERSION, build_system_prompt
 from backend.chat.suggested import find_suggestion
 from backend.chat.verify import REFUSAL_TEXTS, MalformedAnswer, VerifiedAnswer
+from backend.shared.admission import AdmissionDenied, budget_actions, request_digest
 from backend.shared.clients import (
     BedrockEmbeddingClient,
     BedrockReasoningClient,
@@ -82,7 +83,9 @@ from backend.shared.clients import (
     TransactionCanceled,
     UnexpectedStopReason,
 )
+from backend.shared.http import api_handler
 from backend.shared.kill_switch import paid_work_allowed
+from backend.shared.public_access import capability_allowed
 from backend.shared.retention import review_expires_at, review_is_live
 from backend.shared.sanitize import QuestionRejected, check_question
 
@@ -126,6 +129,7 @@ ERROR_MESSAGES = {
     "review_not_complete": "Questions open once the review is finished.",
     "request_in_progress": "That question is still being answered. Try again in a moment.",
     "request_expired": "That saved answer has expired. Start a new question.",
+    "request_conflict": "That request ID belongs to a different question. Start a new question.",
     "review_quota_exhausted": "You've used this review's questions.",
     "daily_cap_reached": "Today's free questions are used up. Try again tomorrow.",
     "too_many_blocked": "Too many questions on this review couldn't be processed.",
@@ -435,6 +439,7 @@ def _admit(
     admin: bool,
     reserve: int,
     now: float,
+    review: dict,
 ) -> str | None:
     """The admission transaction. None on success, else an error code."""
     limit = questions_per_review()
@@ -547,6 +552,18 @@ def _admit(
         )
         roles.append("daily_count")
     try:
+        shared = budget_actions(
+            review,
+            reserve,
+            count_request=not screened,
+            now=now,
+            table_name=tables.counters_name,
+        )
+    except AdmissionDenied:
+        return "daily_cap_reached"
+    actions.extend(shared)
+    roles.extend(["daily_budget"] * len(shared))
+    try:
         tables.transactions.transact_write(actions)
     except TransactionCanceled as exc:
         # Only a failed condition means a limit was hit. Anything else
@@ -584,6 +601,7 @@ def _answer_fields(answer: VerifiedAnswer) -> dict[str, Any]:
     }
 
 
+@api_handler
 def handler(event: dict, context: object) -> dict:
     started = time.monotonic()
     deadline = _deadline(context, started)
@@ -614,7 +632,11 @@ def handler(event: dict, context: object) -> dict:
 
     tables = _Tables()
     review = tables.reviews.get_item({"reviewId": review_id})
-    if review is None or not review_is_live(review, now):
+    if (
+        review is None
+        or not review_is_live(review, now)
+        or not capability_allowed(event, review, write=True)
+    ):
         return finish(_error(404, "review_not_found"), "rejected", error="review_not_found")
     if review.get("status") != "complete" or not review.get("reportS3Key"):
         return finish(_error(409, "review_not_complete"), "rejected", error="review_not_complete")
@@ -629,7 +651,15 @@ def handler(event: dict, context: object) -> dict:
     ):
         return finish(_error(410, "request_expired"), "rejected", error="request_expired")
     if existing and existing.get("status") in FINAL_STATUSES:
+        if existing.get("requestDigest") and existing["requestDigest"] != request_digest(body):
+            return finish(_error(409, "request_conflict"), "rejected", error="request_conflict")
         return finish(_success(existing, _remaining(review, limit), limit, admin), "replayed")
+    if (
+        existing
+        and existing.get("requestDigest")
+        and existing["requestDigest"] != request_digest(body)
+    ):
+        return finish(_error(409, "request_conflict"), "rejected", error="request_conflict")
     if (
         existing
         and existing.get("status") == "in_flight"
@@ -647,6 +677,7 @@ def handler(event: dict, context: object) -> dict:
         "questionKey": question_key,
         "createdAt": int(now),
         "askedAt": asked_at,
+        "requestDigest": request_digest(body),
         "ttl": min(int(now) + QUESTION_TTL_SECONDS, review_expires_at(review)),
     }
 
@@ -716,7 +747,9 @@ def handler(event: dict, context: object) -> dict:
             "status": "screening",
             "screeningClaim": screening_claim,
         }
-        refused = _admit(tables, review_id, screening_item, None, False, admin, screening_cost, now)
+        refused = _admit(
+            tables, review_id, screening_item, None, False, admin, screening_cost, now, review
+        )
         if refused:
             code = {"request_in_progress": 409, "chat_busy": 503}.get(refused, 429)
             return finish(_error(code, refused), "rejected", error=refused)
@@ -778,6 +811,7 @@ def handler(event: dict, context: object) -> dict:
         admin,
         reserve - screening_cost,
         now,
+        review,
     )
     if refused == "request_in_progress":
         again = tables.questions.get_item({"reviewId": review_id, "questionKey": question_key})

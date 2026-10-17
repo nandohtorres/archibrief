@@ -8,31 +8,53 @@ from backend.lambdas.create_upload.handler import handler
 
 
 def _event(body: dict | None) -> dict:
-    return {"body": json.dumps(body) if body is not None else None}
+    return {
+        "headers": {"x-admin-key": "admin-secret"},
+        "body": json.dumps(body) if body is not None else None,
+    }
+
+
+def _configure(monkeypatch):
+    monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    monkeypatch.setenv("REVIEWS_TABLE_NAME", "reviews")
+    monkeypatch.setenv("USAGE_COUNTERS_TABLE_NAME", "counters")
+    monkeypatch.setenv("REPORTS_BUCKET_NAME", "archibrief-dev-reports")
+    for table, key in (("reviews", "reviewId"), ("counters", "counterKey")):
+        boto3.client("dynamodb", region_name="us-east-1").create_table(
+            TableName=table,
+            KeySchema=[{"AttributeName": key, "KeyType": "HASH"}],
+            AttributeDefinitions=[{"AttributeName": key, "AttributeType": "S"}],
+            BillingMode="PAY_PER_REQUEST",
+        )
 
 
 @mock_aws
-def test_handler_returns_presigned_upload_for_a_valid_review_id(monkeypatch):
+def test_handler_issues_its_own_id_and_conditional_checksum_bound_upload(monkeypatch):
     boto3.client("s3", region_name="us-east-1").create_bucket(
         Bucket="archibrief-dev-reports"
     )
-    monkeypatch.setenv("REPORTS_BUCKET_NAME", "archibrief-dev-reports")
+    _configure(monkeypatch)
 
-    result = handler(
-        _event({"review_id": "9f8e7d6c-1234-4abc-9def-0123456789ab"}), None
-    )
+    result = handler(_event({"archive_size": 100, "archive_sha256": "a" * 64}), None)
 
     assert result["statusCode"] == 200
     body = json.loads(result["body"])
-    assert (
-        body["archiveKey"] == "uploads/9f8e7d6c-1234-4abc-9def-0123456789ab/archive.tar"
-    )
+    assert body["archiveKey"] == f"uploads/{body['reviewId']}/archive.tar"
     assert "uploadUrl" in body
-    assert body["uploadFields"]["key"] == body["archiveKey"]
+    assert body["uploadMethod"] == "PUT"
+    assert body["uploadHeaders"]["If-None-Match"] == "*"
+    stored = (
+        boto3.resource("dynamodb")
+        .Table("reviews")
+        .get_item(Key={"reviewId": body["reviewId"]})["Item"]
+    )
+    assert "readToken" not in stored and "writeToken" not in stored
+    assert stored["readTokenHash"] != body["readToken"]
 
 
 @mock_aws
-def test_handler_accepts_the_non_uuid_fallback_review_id_format(monkeypatch):
+def test_handler_rejects_caller_selected_review_ids(monkeypatch):
     boto3.client("s3", region_name="us-east-1").create_bucket(
         Bucket="archibrief-dev-reports"
     )
@@ -40,7 +62,7 @@ def test_handler_accepts_the_non_uuid_fallback_review_id_format(monkeypatch):
 
     result = handler(_event({"review_id": "review-1760123456789-a1b2c3"}), None)
 
-    assert result["statusCode"] == 200
+    assert result["statusCode"] == 400
 
 
 def test_handler_rejects_missing_review_id():

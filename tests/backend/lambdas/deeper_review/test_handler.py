@@ -68,10 +68,11 @@ _LEDGER = {
 
 def _event(review_id: str | None, finding_id: str | None) -> dict:
     return {
+        "headers": {"x-admin-key": "admin-secret"},
         "pathParameters": {
             **({"reviewId": review_id} if review_id else {}),
             **({"findingId": finding_id} if finding_id else {}),
-        }
+        },
     }
 
 
@@ -103,7 +104,17 @@ def env(monkeypatch):
     # moto, not permissive fakes, so key schemas and the conditional
     # in-flight claim are really evaluated.
     with mock_aws():
+        monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+        monkeypatch.setenv("USAGE_COUNTERS_TABLE_NAME", "counters")
         ddb = boto3.resource("dynamodb", region_name="us-east-1")
+        ddb.create_table(
+            TableName="counters",
+            KeySchema=[{"AttributeName": "counterKey", "KeyType": "HASH"}],
+            AttributeDefinitions=[
+                {"AttributeName": "counterKey", "AttributeType": "S"}
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
         reviews = ddb.create_table(
             TableName=REVIEWS,
             KeySchema=[{"AttributeName": "reviewId", "KeyType": "HASH"}],

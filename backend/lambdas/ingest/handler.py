@@ -167,7 +167,12 @@ def _resolve_archive_path(event: dict, dest_dir: str, s3_client: S3Client | None
 
     report_bucket = event["report_bucket"]
     client = s3_client or S3Client(bucket=report_bucket)
-    archive_bytes = client.get_object(archive_s3_key)
+    version = event.get("archive_s3_version")
+    archive_bytes = (
+        client.get_object(archive_s3_key, version_id=version)
+        if version
+        else client.get_object(archive_s3_key)
+    )
 
     local_path = os.path.join(dest_dir, "archive.tar")
     with open(local_path, "wb") as f:
