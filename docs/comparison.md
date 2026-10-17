@@ -49,8 +49,9 @@ was fabricated or fetched from AWS.
 
 The trusted-set column is an ID membership count, not a prediction of final
 rule findings: ArchiBrief filters, maps and groups scanner output, then adds
-custom rules. In particular, the S3 missing-access-block check AWS-0094 is
-expanded into related Trivy failures; final report counts use a different unit.
+custom rules. Trivy reports AWS-0094 alongside related access-block failures;
+ArchiBrief keeps selected check IDs and groups concerns per resource. Final
+report counts use a different unit.
 
 ## Breach pattern
 
