@@ -37,7 +37,7 @@ export function AppHeader({
           </span>
           <div>
             <strong>ArchiBrief</strong>
-            <span>Auditable AWS architecture review</span>
+            <span>Evidence-backed AWS architecture review</span>
           </div>
         </div>
         <div className="header-controls">

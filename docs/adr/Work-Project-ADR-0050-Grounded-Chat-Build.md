@@ -3,7 +3,7 @@ title: "ADR 0050: How the Grounded Report Chat Is Built"
 type: decision
 tags: [adr, project, work-project, archibrief, chat, security, cost]
 created: "2026-10-15"
-updated: "2026-10-15"
+updated: "2026-10-17"
 status: accepted
 ---
 
@@ -170,6 +170,17 @@ public paid route without it would only be bounded by the global cap.
 scripts, a print stylesheet so Print → PDF works) with the findings and
 the conversation. Every value is escaped; no model text is ever inserted
 as HTML. The JSON export gains `chat_transcript`.
+
+## Amendment (2026-10-17, after the first live deploy)
+
+Running it live changed four things:
+
+- **Model (§8): Sonnet 4.6, not Haiku 4.5.** The Haiku 4.5 Marketplace subscription can't be completed for this account, so `CHAT_MODEL_ID` defaults to Sonnet 4.6, which the reviews already use (`b99f50c`). The model call's timeout is now sized after retrieval, up to 24 s, so a slow retrieval can't push the whole call past the Lambda limit.
+- **Output cap: 1,500 tokens, not 700.** The first live question failed with `answer_failed`: 700 tokens cut answers off mid-citation. Failed answers now log their failure type (`b36c251`).
+- **Budget (§5): $1.00/day, counted as spend.** The daily counter used to store the *remaining* budget, fixed at the first question of the day, so a budget change only took effect the next day. It now stores what was spent (`global#{day}#chat_spent_micro_usd`) and compares it with the current budget (`d3063b2`). Measured cost with Sonnet 4.6: 1.1–4.1 cents per question, about 1.9 cents typical with the review cached; 9–18 s per answer.
+- **Alarms (§9): deferred to public launch.** Fernando decided they aren't worth the IAM change while the chat is admin-only; the daily budget and kill switch still bound cost.
+
+Also live: boto3 bundled into `ask_question` for S3 Vectors, `chat_busy` on transaction conflicts, every paid-path call time-bounded (`8299a43`), and clearer suggested-question wording (`c8cb3e6`). The paid chat eval has not been run yet.
 
 ## Alternatives considered
 

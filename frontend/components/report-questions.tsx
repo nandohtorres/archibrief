@@ -259,7 +259,7 @@ export function ReportQuestions({
             ? "Cited answers"
             : mode === "sample"
               ? "Sample answers"
-              : "Preview feature"}
+              : "Offline preview"}
         </span>
       </div>
 
@@ -433,7 +433,7 @@ function introText(mode: Mode, hasStored: boolean, loadError: string): string {
       ? "These answers were generated once from this sample review. Pick a question to read its cited answer. Live questions open with public reviews."
       : "Questions work on your own reviews. Live questions on sample reviews open with public reviews.";
   }
-  return "I can explain this report or translate its evidence. No model is connected yet; every preview answer stays linked to a typed finding.";
+  return "This is the offline preview: answers are written in advance and linked to this report's findings. On the live site, questions you ask are answered with citations.";
 }
 
 function ChatExchange({

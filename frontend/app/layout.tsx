@@ -26,14 +26,11 @@ const sourceSerif = Source_Serif_4({
   display: "swap",
 });
 
-// Intended public domain (archibrief.dev, registered 2026-09-08) - used
-// here even though DNS isn't wired to it yet (Work-Project-Issues-Log.md,
-// 2026-10-14) so OG/Twitter image URLs resolve correctly once it is,
-// without needing another metadata pass at publish time.
+// The public domain; OG/Twitter image URLs resolve against it.
 const SITE_URL = "https://archibrief.dev";
-const TITLE = "ArchiBrief · AWS architecture review";
+const TITLE = "ArchiBrief · AWS architecture review that explains why";
 const DESCRIPTION =
-  "Typed, cited, confidence-scored review of submitted AWS Terraform architectures.";
+  "Upload AWS Terraform and get a plain-language architecture review: what's exposed, what could fail and why it matters, with every claim cited to the code and AWS guidance.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -44,7 +41,14 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     url: SITE_URL,
     siteName: "ArchiBrief",
-    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "ArchiBrief" }],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "ArchiBrief: know what's wrong with your AWS design, and why it matters.",
+      },
+    ],
     type: "website",
   },
   twitter: {
