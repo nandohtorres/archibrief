@@ -1,9 +1,9 @@
-"""Packaging regression tests (Codex F23).
+"""Packaging regression tests.
 
 scripts/package_lambdas.py lists each Lambda's source files by hand. A
-handler that gained a `backend.*` import without the spec being updated
-deployed fine and then failed at cold start with ModuleNotFoundError
-(kill_switch, then report.py for deeper_review). These tests walk each
+handler that gains a `backend.*` import without the spec being updated
+deploys fine and then fails at cold start with ModuleNotFoundError.
+These tests walk each
 handler's imports transitively and require every reached module — and
 every package __init__ on the way — to be in that Lambda's sources.
 """
@@ -92,7 +92,7 @@ def test_every_lambda_handler_has_a_packaging_spec():
     assert handlers - set(LAMBDA_SPECS) == set()
 
 
-# Reproducible builds (2026-10-15): unchanged code must give a
+# Reproducible builds: unchanged code must give a
 # byte-identical zip, or `terraform plan` reports every Lambda as changed.
 
 
@@ -162,7 +162,7 @@ def test_wrong_version_fails_the_build(tmp_path):
 
 def test_ask_question_bundles_its_own_pinned_boto3():
     # It calls S3 Vectors, which an older runtime boto3 doesn't know
-    # (code review 2026-10-16). No other Lambda bundles boto3.
+    # No other Lambda bundles boto3.
     assert LAMBDA_SPECS["ask_question"]["packages"] == ["boto3"]
     others = [
         n

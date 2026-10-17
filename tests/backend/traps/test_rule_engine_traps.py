@@ -19,9 +19,6 @@ Every scenario runs in two modes (ADR-0048):
 - "trivy": the deployed path, Trivy's trusted checks plus ArchiBrief's
   rules. Skipped when no Trivy binary is found (set TRIVY_PATH); CI
   installs it, so CI always runs this mode.
-
-First run 2026-10-15: 14/14 t-traps missed, 3/4 red herrings wrongly
-flagged. All closed the same day (master-list #12-#15).
 """
 
 from __future__ import annotations
@@ -278,7 +275,7 @@ def test_comment_injection_does_not_suppress_real_finding(
 
 @pytest.mark.parametrize("mode", MODES)
 def test_resource_name_injection_is_truncated(mode: str, tmp_path: Path) -> None:
-    # Master-list #14: resource names reach the model inside rule findings.
+    # Resource names reach the model inside rule findings.
     # They are restricted to identifier characters and capped, so a name
     # can't carry a full instruction; the prompt also frames findings as
     # untrusted data, and the model-side trap set covers the rest.

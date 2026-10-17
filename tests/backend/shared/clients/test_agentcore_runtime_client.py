@@ -46,7 +46,7 @@ def test_invoke_sends_payload_and_parses_response():
 
 
 def test_read_timeout_is_applied_and_invocations_are_never_retried():
-    # Regression (Codex F19): botocore's default 60s read timeout and
+    # botocore's default 60s read timeout and
     # automatic retries could outlive the API's 30s limit and start a
     # second paid run for the same request.
     client = AgentCoreRuntimeClient(

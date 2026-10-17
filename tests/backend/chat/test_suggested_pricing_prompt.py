@@ -129,8 +129,8 @@ def test_answer_schema_is_strict_compatible():
 
 
 def test_suggestion_titles_are_cut_at_a_word_and_verbs_read_naturally():
-    # 2026-10-17: demo suggestions read 'Explain "...configurati…"' and
-    # "Why not Accept IMDSv1...?".
+    # Titles must not be cut mid-word ('Explain "...configurati…"') or
+    # produce awkward verbs ("Why not Accept IMDSv1...?").
     from backend.chat.suggested import _as_option, _clip_words
 
     title = "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration"

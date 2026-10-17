@@ -86,8 +86,8 @@ def test_topic_covered_when_all_keyword_groups_match():
 
 def test_topic_not_covered_when_negative_phrase_present():
     # contains both "root" and "mfa" but asserts the OPPOSITE state —
-    # must not count as coverage (Codex review 2026-09-16: pure substring
-    # matching couldn't tell this apart from a real gap before this fix)
+    # must not count as coverage (pure substring matching can't tell this
+    # apart from a real gap)
     finding = _make_finding("Root user's MFA is already enabled and enforced.")
     result = score_reasoning([finding], _BRIEF)
     assert result["topic_hits"][0]["covered"] is False
@@ -144,10 +144,8 @@ def test_fact_type_finding_without_citation_is_rejected_by_finding_schema():
     # can ever cover a topic (not-observable is explicitly excluded in
     # _finding_covers_topic; deterministic-rule-result findings are never
     # passed into score_reasoning at all — see this file's module
-    # docstring). Found while fixing the negative_phrases substring bug,
-    # not by Codex — the original test attempted exactly this impossible
-    # construction and failed with a ValidationError, not an assertion
-    # failure.
+    # docstring). So the construction itself must fail with a
+    # ValidationError.
     with pytest.raises(ValidationError):
         _make_finding("Root user has no MFA.", citation=False)
 
@@ -227,8 +225,8 @@ def test_every_expected_finding_has_plausible_source_documents(briefs):
 
 @pytest.mark.parametrize("briefs", [EVAL_BRIEFS, HOLDOUT_BRIEFS])
 def test_retrieval_query_plausibly_targets_every_expected_topic(briefs):
-    """Regression guard for the r01/r02 retrieval/reasoning confound found
-    via Codex review 2026-09-16: a brief's retrieval_query should mention
+    """Regression guard for the r01/r02 retrieval/reasoning confound: a
+    brief's retrieval_query should mention
     at least one keyword from EVERY expected topic's first keyword group,
     so a miss on that topic can plausibly be attributed to reasoning, not
     retrieval never having a chance to surface relevant evidence at all.

@@ -77,8 +77,8 @@ def test_handler_merges_pointer_item_instead_of_replacing_it(monkeypatch):
     # DynamoDB's PutItem replaces the whole item, unlike UpdateItem — a
     # pointer_item built from scratch here would wipe out whatever
     # IdempotencyGate already wrote earlier in the same execution
-    # (terraformRepoRef, idempotencyKey, createdAt). Pin the fetch-and-merge
-    # fix down explicitly (found 2026-10-01, see Work-Project-Issues-Log.md).
+    # (terraformRepoRef, idempotencyKey, createdAt), so the handler must
+    # fetch and merge.
     monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
     _FakeDynamoDBClient.ITEMS = {
         "r1": {

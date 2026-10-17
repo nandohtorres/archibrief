@@ -8,9 +8,8 @@ from backend.agent.nodes.retrieve import (
 
 
 def test_extract_lexical_terms_matches_waf_best_practice_ids():
-    """Regression test for the 2026-09-14 bug: these real WAF pillar ID
-    formats all failed to match before the fix (letters-only-before-hyphen
-    requirement excluded the digits in "SEC01", "COST01", etc.)."""
+    """Real WAF pillar ID formats carry digits before the hyphen ("SEC01",
+    "COST01"), so a letters-only prefix pattern would miss all of them."""
     query = "What does SEC01-BP01 say, and how does it relate to COST01-BP01, OPS01-BP01, and PERF01-BP01?"
     terms = extract_lexical_terms(query)
     assert terms == ["COST01-BP01", "OPS01-BP01", "PERF01-BP01", "SEC01-BP01"]
@@ -50,8 +49,7 @@ def test_lexical_companion_lookup_returns_a_chunk_per_matching_term():
 
 
 def test_lexical_companion_lookup_defaults_content_type_to_prose_for_old_data():
-    """Regression test for finding #6 (2026-09-15 Codex review): older
-    corpus data written before content_type existed must not crash or
+    """Older corpus data written before content_type existed must not crash or
     silently surface as an empty/missing field downstream."""
     corpus_index = {
         "SEC01-BP01": [
@@ -131,9 +129,8 @@ class _StubVectorsClient:
 
 
 def test_vector_search_reads_content_type_from_metadata():
-    """Regression test for finding #6 (2026-09-15 Codex review):
-    to_vector_record already stores content_type in every vector's
-    metadata, but vector_search wasn't reading it back out."""
+    """to_vector_record stores content_type in every vector's metadata,
+    so vector_search must read it back out."""
     vectors_client = _StubVectorsClient(
         [
             {

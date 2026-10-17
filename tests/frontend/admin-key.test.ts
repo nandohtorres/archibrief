@@ -29,7 +29,7 @@ describe("admin key storage", () => {
   });
 
   it("moves a key persisted by older builds out of local storage", () => {
-    // Regression (Codex F18): the key used to live in localStorage.
+    // Older builds kept the key in localStorage.
     const session = memoryStore();
     const legacy = memoryStore({ [ADMIN_KEY_STORAGE_KEY]: "old-secret" });
     expect(loadAdminKey(session, legacy)).toBe("old-secret");
