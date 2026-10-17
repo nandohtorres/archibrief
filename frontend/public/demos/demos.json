@@ -1,5 +1,6 @@
 {
   "note": "Free demo reviews of real, public Terraform. Each archive holds the reviewed .tf files unchanged, plus SOURCE.md (repository, commit, license) and the project's license file. Briefs are written by ArchiBrief from each project's public README; the projects' owners did not write them or review these results. Reports are generated once, by the site owner, and served as saved files: visiting never starts a paid review.",
+  "reviewerNotesNote": "reviewerNotes: the site owner's hand check of each finding against the reviewed code (docs/demos.md). Kept apart from the saved reports, which are the pipeline's unedited output.",
   "demos": [
     {
       "id": "breach-pattern",
@@ -11,7 +12,24 @@
       "disclaimer": "A security firm's vulnerable-by-design lab. Its attack path matches the one publicly reported for the 2019 Capital One breach. It is not Capital One's code, and Capital One has no part in this demo.",
       "archive": "/demos/breach-pattern.tar",
       "repoLabel": "github.com/RhinoSecurityLabs/cloudgoat@63c65bd",
-      "brief": "A bank's card platform on AWS. A reverse proxy (nginx on one EC2 instance) is the only internet-facing piece and forwards requests to internal services. An S3 bucket holds cardholder data, so PCI-DSS applies and the bucket must never be reachable from the internet, directly or through the proxy. Target availability is 99.9%. Treat any path from the internet to the card data as the top risk."
+      "brief": "A bank's card platform on AWS. A reverse proxy (nginx on one EC2 instance) is the only internet-facing piece and forwards requests to internal services. An S3 bucket holds cardholder data, so PCI-DSS applies and the bucket must never be reachable from the internet, directly or through the proxy. Target availability is 99.9%. Treat any path from the internet to the card data as the top risk.",
+      "reviewerNotes": [
+        {
+          "findingId": "458d3366-73cc-4245-bc41-bb9f75077e80",
+          "verdict": "wrong",
+          "note": "S3-to-EC2 transfer in the same region is free, and there is no NAT gateway, so this cost doesn't exist."
+        },
+        {
+          "findingId": "a5c4e002-aa8f-4088-a26e-3ba59830ba84",
+          "verdict": "overstated",
+          "note": "The missing S3 VPC endpoint is real. The traffic uses S3's public endpoints but stays on AWS's network; it doesn't cross the public internet."
+        },
+        {
+          "findingId": "d4831d89-2615-442e-bf98-81d30627e116",
+          "verdict": "weak citation",
+          "note": "The attack chain is correct and is the key finding, but the quoted guidance is about traffic staying on the AWS network, not about credential theft."
+        }
+      ]
     },
     {
       "id": "medicare-platform",
@@ -23,7 +41,14 @@
       "disclaimer": "Real public Terraform from a US federal agency (public domain). Reviewed slice: network, firewall, encryption keys, backups and access logs. A shared module pulled from another repository isn't included and shows up as a gap.",
       "archive": "/demos/medicare-platform.tar",
       "repoLabel": "github.com/CMSgov/cdap@e3b2849",
-      "brief": "A shared AWS platform for three CMS APIs that deliver Medicare claims data: BCDA to Accountable Care Organizations, AB2D to Part D plan sponsors, and DPC to healthcare providers. The data is protected health information, so HIPAA and federal FISMA controls apply. The APIs are internet-facing but only for allowlisted partner IP ranges. This slice covers the network, web firewall, encryption keys, backups and access logs. Downtime delays partners' data pulls but isn't life-critical; target 99.9%."
+      "brief": "A shared AWS platform for three CMS APIs that deliver Medicare claims data: BCDA to Accountable Care Organizations, AB2D to Part D plan sponsors, and DPC to healthcare providers. The data is protected health information, so HIPAA and federal FISMA controls apply. The APIs are internet-facing but only for allowlisted partner IP ranges. This slice covers the network, web firewall, encryption keys, backups and access logs. Downtime delays partners' data pulls but isn't life-critical; target 99.9%.",
+      "reviewerNotes": [
+        {
+          "findingId": "4454b72d-f729-41d7-b273-0667fc1ee571",
+          "verdict": "incomplete",
+          "note": "The code sets four backup rules (every 4 hours kept 1 day and copied to a second vault; daily kept 7; weekly kept 35; monthly kept 90). The model couldn't see them because backup plans weren't in its resource summary then; they are now."
+        }
+      ]
     },
     {
       "id": "fec-database",

@@ -81,6 +81,11 @@ The projects' owners did not write them or review these results.
 Each model finding was checked by hand against the reviewed Terraform.
 Rule findings are deterministic and were checked the same way.
 
+Findings marked wrong, overstated, incomplete or weakly cited carry a
+visible reviewer note on the site: `reviewerNotes` in
+`frontend/public/demos/demos.json`, kept apart from the saved reports so
+those stay the pipeline's unedited output.
+
 ### breach-pattern
 
 | Finding | Verdict |
