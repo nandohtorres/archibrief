@@ -15,6 +15,7 @@ def _event(body: dict | None) -> dict:
 
 
 def _configure(monkeypatch):
+    monkeypatch.setenv("RESERVATION_KEY", "test-" + "r" * 48)
     monkeypatch.setenv("ADMIN_KEY", "admin-secret")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
     monkeypatch.setenv("REVIEWS_TABLE_NAME", "reviews")
@@ -94,3 +95,58 @@ def test_handler_rejects_review_id_with_slash():
 def test_handler_rejects_non_string_review_id():
     result = handler(_event({"review_id": 12345}), None)
     assert result["statusCode"] == 400
+
+
+@mock_aws
+def test_retry_recovers_same_grant_without_another_quota(monkeypatch):
+    import uuid
+
+    _configure(monkeypatch)
+    s3 = boto3.client("s3")
+    s3.create_bucket(Bucket="archibrief-dev-reports")
+    payload = {
+        "archive_size": 100,
+        "archive_sha256": "a" * 64,
+        "client_request_id": str(uuid.uuid4()),
+    }
+    first = json.loads(handler(_event(payload), None)["body"])
+    second_result = handler(_event(payload), None)
+    assert second_result["statusCode"] == 200, second_result
+    second = json.loads(second_result["body"])
+    for key in ("reviewId", "readToken", "writeToken", "uploadExpiresAt", "expiresAt"):
+        assert first[key] == second[key]
+    counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    assert all(item["requests"] == 1 for item in counters if "requests" in item)
+    conflict = handler(_event({**payload, "archive_size": 101}), None)
+    assert conflict["statusCode"] == 409
+
+
+@mock_aws
+def test_retry_recovers_uploaded_version_after_lost_s3_response(monkeypatch):
+    import base64
+    import uuid
+
+    _configure(monkeypatch)
+    s3 = boto3.client("s3")
+    bucket = "archibrief-dev-reports"
+    s3.create_bucket(Bucket=bucket)
+    s3.put_bucket_versioning(
+        Bucket=bucket, VersioningConfiguration={"Status": "Enabled"}
+    )
+    payload = {
+        "archive_size": 100,
+        "archive_sha256": "a" * 64,
+        "client_request_id": str(uuid.uuid4()),
+    }
+    first = json.loads(handler(_event(payload), None)["body"])
+    version = s3.put_object(
+        Bucket=bucket,
+        Key=first["archiveKey"],
+        Body=b"x" * 100,
+        ChecksumSHA256=base64.b64encode(bytes.fromhex("a" * 64)).decode(),
+        ChecksumAlgorithm="SHA256",
+    )["VersionId"]
+    recovered = handler(_event(payload), None)
+    assert recovered["statusCode"] == 200, recovered
+    assert json.loads(recovered["body"])["uploadedVersionId"] == version
+    assert json.loads(recovered["body"])["uploadUrl"] == ""

@@ -100,6 +100,11 @@ def handler(event: dict, _context: object) -> dict:
     digest = request_digest(payload)
     if review.get("inputDigest") and review["inputDigest"] != digest:
         return response(409, {"error": "operation_conflict"})
+    if review.get("inputDigest") == digest and (
+        review.get("pipelineStarted")
+        or review.get("status") in {"complete", "failed", "needs_clarification"}
+    ):
+        return response(202, {"reviewId": review_id, "status": "pending"})
     bucket = os.environ["REPORTS_BUCKET_NAME"]
     s3 = boto3.client(
         "s3", config=Config(connect_timeout=1, read_timeout=3, retries={"total_max_attempts": 1})
@@ -140,9 +145,9 @@ def handler(event: dict, _context: object) -> dict:
             Key={"reviewId": review_id},
             UpdateExpression="SET inputKey = :key, inputDigest = :digest, archiveVersionId = :version, "
             "terraformRepoRef = :label, #s = :pending",
-            ConditionExpression="(attribute_not_exists(inputDigest) AND #s = :reserved AND uploadExpiresAt > :now) "
-            "OR (inputDigest = :digest AND #s = :pending)",
-            ExpressionAttributeNames={"#s": "status"},
+            ConditionExpression="(#ttl > :now) AND ((attribute_not_exists(inputDigest) AND #s = :reserved AND uploadExpiresAt > :now) "
+            "OR (inputDigest = :digest AND #s = :pending))",
+            ExpressionAttributeNames={"#s": "status", "#ttl": "ttl"},
             ExpressionAttributeValues={
                 ":key": key,
                 ":digest": digest,
@@ -150,13 +155,15 @@ def handler(event: dict, _context: object) -> dict:
                 ":label": label,
                 ":pending": "pending",
                 ":reserved": "upload_reserved",
-                ":now": now,
+                ":now": int(time.time()),
             },
         )
     except ClientError as exc:
         if exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            # A matching finished/in-progress review is already dispatched.
-            return response(202, {"reviewId": review_id, "status": "pending"})
+            latest = table.get_item({"reviewId": review_id}, consistent=True)
+            if latest and review_is_live(latest) and latest.get("inputDigest") == digest:
+                return response(202, {"reviewId": review_id, "status": "pending"})
+            return response(409, {"error": "operation_conflict"})
         return response(503, {"error": "dispatch_unavailable"})
     try:
         boto3.client(

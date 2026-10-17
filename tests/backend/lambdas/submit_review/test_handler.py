@@ -15,6 +15,7 @@ def env(monkeypatch):
     with mock_aws():
         for key, value in {
             "ADMIN_KEY": "admin-secret",
+            "RESERVATION_KEY": "test-" + "r" * 48,
             "AWS_DEFAULT_REGION": "us-east-1",
             "REPORTS_BUCKET_NAME": "reports",
             "REVIEWS_TABLE_NAME": "reviews",
