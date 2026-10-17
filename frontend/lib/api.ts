@@ -141,12 +141,8 @@ export async function requestUpload(
   return upload;
 }
 
-// The second half: POSTs the file straight to S3 using the presigned
-// fields from requestUpload() — deliberately NOT routed through this
-// API or through requestHeaders()/x-admin-key at all. S3's own presigned
-// POST policy is the only authorization this request carries; adding an
-// unrelated admin-key header here would do nothing but could confuse a
-// future reader into thinking it's required.
+// Upload directly to S3 with its signed headers, without application credentials.
+// A recovered grant can return an already-uploaded version after response loss.
 export async function uploadArchiveToS3(
   upload: CreateUploadResponse,
   file: File,

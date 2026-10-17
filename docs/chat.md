@@ -6,18 +6,24 @@ Well-Architected guidance, or that say plainly it can't tell. Decisions
 and their reasons are in ADR-0046 §4–§5 and ADR-0050; the threat model's
 trust boundary 6 covers the attack surface.
 
+The next release is prepared locally with separate read/write capabilities,
+visitor binding and shared atomic paid admission. Public access is disabled;
+see [implementation and release evidence](public-access-implementation.md).
+The flow below describes that local source, not a new deployment.
+
 ## How a question is answered
 
 ```
 POST /reviews/{reviewId}/questions
-  1. admin key, or CHAT_PUBLIC_ENABLED (off until public access opens)
+  1. admin key, or public flags plus live write capability/visitor binding
   2. body shape (unknown fields → 400), kill switch (fails closed)
   3. review exists and is complete
   4. same client_request_id already answered → stored answer, no cost
   5. suggested question already answered → stored answer, free
-  6. normalize + bound the question; chat Guardrail (fails closed)
-  7. one DynamoDB transaction: review's slot (typed questions only),
-     question record, the day's worst-case $ reservation and count
+  6. normalize + bound; atomically claim question and screening allowance
+     across chat and shared global/visitor/review scopes before Guardrails
+  7. fail-closed Guardrail; then reserve remaining model allowance and
+     the review slot (typed questions only) before retrieval/model work
   8. retrieve 3 WAF chunks; one Converse call (Sonnet 4.6 in the Terraform
      configuration, cached review block, forced strict tool, deadline-sized
      read timeout up to 24 s, no retry)
