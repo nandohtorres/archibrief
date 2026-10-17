@@ -1,0 +1,95 @@
+{
+  "trivy_version": "Version: 0.76.0\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-10-15 01:13:01.189995254 +0000 UTC\n  NextUpdate: 2026-10-16 01:13:01.189994923 +0000 UTC\n  DownloadedAt: 2026-10-15 06:02:44.9821454 +0000 UTC\nCheck Bundle:\n  Digest: sha256:b591e9190cff4aa4e385b1a25bccfd9ecf178d3c77fd194e1410b7ce7e1df058\n  DownloadedAt: 2026-10-15 06:02:46.5593858 +0000 UTC",
+  "demos": {
+    "breach-pattern": {
+      "archive_sha256": "1f8421a6d32c6d98604b5c3fbf4a3cd11fd935d7fd09106ce4147e7c2fbff7ba",
+      "terraform_files": 8,
+      "remote_sources_neutralized": 1,
+      "trivy_failures": 16,
+      "severity": {
+        "CRITICAL": 2,
+        "HIGH": 6,
+        "LOW": 6,
+        "MEDIUM": 2
+      },
+      "check_ids": {
+        "AWS-0028": 1,
+        "AWS-0086": 1,
+        "AWS-0087": 1,
+        "AWS-0089": 1,
+        "AWS-0090": 1,
+        "AWS-0091": 1,
+        "AWS-0093": 1,
+        "AWS-0094": 1,
+        "AWS-0104": 2,
+        "AWS-0124": 4,
+        "AWS-0131": 1,
+        "AWS-0178": 1
+      },
+      "trusted_check_failures": 5,
+      "saved_report": "frontend/public/demos/reports/breach-pattern.json",
+      "saved_finding_types": {
+        "deterministic-rule-result": 6,
+        "fact": 2,
+        "inference": 3,
+        "recommendation": 1
+      }
+    },
+    "fec-database": {
+      "archive_sha256": "455209f8f11ee15ef2787ce2372ffb79668d08a2ee947031534145fd05b5e8b9",
+      "terraform_files": 1,
+      "remote_sources_neutralized": 0,
+      "trivy_failures": 23,
+      "severity": {
+        "CRITICAL": 1,
+        "HIGH": 11,
+        "LOW": 10,
+        "MEDIUM": 1
+      },
+      "check_ids": {
+        "AWS-0079": 3,
+        "AWS-0099": 1,
+        "AWS-0104": 1,
+        "AWS-0107": 1,
+        "AWS-0124": 2,
+        "AWS-0133": 7,
+        "AWS-0178": 1,
+        "AWS-0180": 7
+      },
+      "trusted_check_failures": 8,
+      "saved_report": "frontend/public/demos/reports/fec-database.json",
+      "saved_finding_types": {
+        "deterministic-rule-result": 6,
+        "fact": 3,
+        "inference": 3,
+        "recommendation": 2
+      }
+    },
+    "medicare-platform": {
+      "archive_sha256": "a3e9adc09be0244abcb64239b78afa19060878bbe04e53432bb56e6193728678",
+      "terraform_files": 31,
+      "remote_sources_neutralized": 5,
+      "trivy_failures": 7,
+      "severity": {
+        "CRITICAL": 2,
+        "HIGH": 4,
+        "LOW": 1
+      },
+      "check_ids": {
+        "AWS-0086": 1,
+        "AWS-0087": 1,
+        "AWS-0091": 1,
+        "AWS-0093": 1,
+        "AWS-0094": 1,
+        "AWS-0104": 2
+      },
+      "trusted_check_failures": 4,
+      "saved_report": "frontend/public/demos/reports/medicare-platform.json",
+      "saved_finding_types": {
+        "deterministic-rule-result": 2,
+        "fact": 2,
+        "inference": 5
+      }
+    }
+  }
+}
