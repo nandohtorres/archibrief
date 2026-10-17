@@ -9,7 +9,73 @@ text, so the same review always gets the same suggestions and ids.
 from __future__ import annotations
 
 from backend.chat.context import ReviewContext
-from backend.shared.sanitize import clip
+
+# Alternatives are stored as sentences ("Accept IMDSv1 because..."). After
+# "Why not", a leading imperative verb reads better lowercased; anything
+# else (AWS, Aurora, CloudFront) keeps its capital.
+_LEADING_VERBS = frozenset(
+    [
+        "accept",
+        "add",
+        "adopt",
+        "allow",
+        "apply",
+        "avoid",
+        "block",
+        "build",
+        "choose",
+        "consolidate",
+        "deploy",
+        "disable",
+        "drop",
+        "enable",
+        "expose",
+        "keep",
+        "leave",
+        "limit",
+        "make",
+        "merge",
+        "migrate",
+        "move",
+        "open",
+        "put",
+        "rely",
+        "remove",
+        "replace",
+        "restrict",
+        "reuse",
+        "run",
+        "share",
+        "skip",
+        "split",
+        "store",
+        "switch",
+        "trust",
+        "turn",
+        "use",
+    ]
+)
+
+
+def _clip_words(text: str, limit: int) -> str:
+    """Cut at a word boundary, marking the cut, so a title never ends in
+    the middle of a word ("configurati…")."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1]
+    space = cut.rfind(" ")
+    if space > limit // 2:
+        cut = cut[:space]
+    return cut.rstrip(" ,;:-") + "…"
+
+
+def _as_option(text: str) -> str:
+    option = _clip_words(text.rstrip(". "), 60)
+    first, _, rest = option.partition(" ")
+    if first.lower() in _LEADING_VERBS and first[:1].isupper():
+        option = first.lower() + (" " + rest if rest else "")
+    return option
 
 
 def suggested_questions(ctx: ReviewContext) -> list[dict[str, str | None]]:
@@ -18,7 +84,7 @@ def suggested_questions(ctx: ReviewContext) -> list[dict[str, str | None]]:
         {"id": "s1", "question": "Which issues should I fix first, and why?", "focus": None}
     ]
     if "F1" in ctx.finding_titles:
-        top = clip(ctx.finding_titles["F1"], 80)
+        top = _clip_words(ctx.finding_titles["F1"], 80)
         suggestions.append(
             {
                 "id": "s2",
@@ -37,7 +103,9 @@ def suggested_questions(ctx: ReviewContext) -> list[dict[str, str | None]]:
         )
     if ctx.alternatives:
         alias, option = ctx.alternatives[0]
-        suggestions.append({"id": "s6", "question": f"Why not {clip(option, 60)}?", "focus": alias})
+        suggestions.append(
+            {"id": "s6", "question": f"Why not {_as_option(option)}?", "focus": alias}
+        )
     return suggestions
 
 

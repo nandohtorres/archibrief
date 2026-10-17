@@ -276,7 +276,7 @@
     },
     {
       "suggested_id": "s6",
-      "question": "Why not Rely on CloudFront geo-restriction alone?",
+      "question": "Why not rely on CloudFront geo-restriction alone?",
       "status": "answered",
       "refusal_reason": null,
       "answer": [

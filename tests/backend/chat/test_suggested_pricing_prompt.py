@@ -126,3 +126,23 @@ def test_answer_schema_is_strict_compatible():
             check(schema["items"])
 
     check(ANSWER_SCHEMA)
+
+
+def test_suggestion_titles_are_cut_at_a_word_and_verbs_read_naturally():
+    # 2026-10-17: demo suggestions read 'Explain "...configurati…"' and
+    # "Why not Accept IMDSv1...?".
+    from backend.chat.suggested import _as_option, _clip_words
+
+    title = "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration"
+    clipped = _clip_words(title, 80)
+    assert clipped.endswith("encryption…")
+    assert len(clipped) <= 80
+    assert _clip_words("Short title", 80) == "Short title"
+    assert _as_option("Accept IMDSv1 because the proxy is internal.") == (
+        "accept IMDSv1 because the proxy is internal"
+    )
+    assert _as_option("Rely on CloudFront geo-restriction alone") == (
+        "rely on CloudFront geo-restriction alone"
+    )
+    assert _as_option("AWS managed ReadOnlyAccess") == "AWS managed ReadOnlyAccess"
+    assert _as_option("Aurora Serverless instead") == "Aurora Serverless instead"

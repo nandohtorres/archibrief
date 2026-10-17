@@ -69,7 +69,7 @@
     },
     {
       "suggested_id": "s2",
-      "question": "Explain \"S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configurati…\" for a non-technical stakeholder.",
+      "question": "Explain \"S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption…\" for a non-technical stakeholder.",
       "status": "answered",
       "refusal_reason": null,
       "answer": [
@@ -114,7 +114,7 @@
     },
     {
       "suggested_id": "s3",
-      "question": "How do I fix \"S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configurati…\"?",
+      "question": "How do I fix \"S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption…\"?",
       "status": "answered",
       "refusal_reason": null,
       "answer": [
@@ -250,7 +250,7 @@
     },
     {
       "suggested_id": "s6",
-      "question": "Why not Accept IMDSv1 because the proxy is internal?",
+      "question": "Why not accept IMDSv1 because the proxy is internal?",
       "status": "answered",
       "refusal_reason": null,
       "answer": [

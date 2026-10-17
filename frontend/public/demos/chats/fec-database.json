@@ -100,7 +100,7 @@
     },
     {
       "suggested_id": "s2",
-      "question": "Explain \"Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433,…\" for a non-technical stakeholder.",
+      "question": "Explain \"Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433…\" for a non-technical stakeholder.",
       "status": "answered",
       "refusal_reason": null,
       "answer": [
@@ -170,7 +170,7 @@
     },
     {
       "suggested_id": "s3",
-      "question": "How do I fix \"Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433,…\"?",
+      "question": "How do I fix \"Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433…\"?",
       "status": "answered",
       "refusal_reason": null,
       "answer": [
@@ -321,7 +321,7 @@
     },
     {
       "suggested_id": "s6",
-      "question": "Why not Use existing single-instance cluster reads?",
+      "question": "Why not use existing single-instance cluster reads?",
       "status": "answered",
       "refusal_reason": null,
       "answer": [
