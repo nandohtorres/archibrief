@@ -1,14 +1,9 @@
 """Shared AWS client adapters (Bedrock, DynamoDB, S3, S3 Vectors).
 
 Thin wrappers around boto3 so call sites depend on a narrow interface
-instead of raw boto3 clients — makes unit tests swap in a stub/mock
-without patching boto3 globally, and gives each AWS surface one place to
-add retry/error handling later.
-
-None of these can be exercised against real AWS until account/IAM
-bootstrap (see Work-Project-Deployment-Roadmap.md) — that's an account
-problem, not a code problem, so the adapters are implemented for real and
-tested against botocore.stub.Stubber / moto.
+instead of raw boto3 clients. Unit tests swap in a stub without patching
+boto3 globally (they run against botocore.stub.Stubber and moto), and
+each AWS surface has one place for retry and error handling.
 """
 
 from __future__ import annotations
@@ -26,14 +21,10 @@ from botocore.exceptions import ClientError
 
 
 def _dynamodb_safe(value: Any) -> Any:
-    """boto3's DynamoDB resource layer (Table.put_item) rejects a native
-    Python float outright (`TypeError: Float types are not supported`) —
-    found 2026-10-01 writing deeper_review.handler, the first call site in
-    this codebase to ever put_item a Finding dict (every prior put_item
-    call — Reviews pointer items, AuditLog records — happened to have no
-    float fields, so this never surfaced before). DynamoDB's own Number
-    type is exact/arbitrary-precision, which boto3 models as Decimal, not
-    float — `Decimal(str(value))` avoids float's own binary-representation
+    """boto3's DynamoDB resource layer rejects native Python floats
+    (`TypeError: Float types are not supported`), and Finding dicts carry
+    float confidence scores. DynamoDB's Number type is exact, which boto3
+    models as Decimal; `Decimal(str(value))` avoids float's binary
     imprecision (`Decimal(0.1) != Decimal("0.1")`)."""
     if isinstance(value, float):
         return Decimal(str(value))
@@ -49,8 +40,7 @@ def _timeouts(
 ) -> dict[str, Any]:
     """boto3.client kwargs for a bounded call. All unset = botocore's
     defaults (60 s timeouts, retries), which is what the review pipeline
-    uses. The chat bounds every call so the sum fits its 28 s Lambda
-    (code review 2026-10-16)."""
+    uses. The chat bounds every call so the sum fits its 28 s Lambda."""
     config_kwargs: dict[str, Any] = {}
     if read_timeout_seconds is not None:
         config_kwargs["read_timeout"] = read_timeout_seconds
@@ -96,15 +86,11 @@ class S3Client:
     region_name: str = "us-east-1"
 
     def __post_init__(self) -> None:
-        # Explicit SigV4 — found 2026-10-12 live-testing ADR-0045's upload
-        # flow: without it, boto3 generated a presigned POST against the
-        # legacy global s3.amazonaws.com endpoint, which S3 rejected with
-        # "Requests specifying Server Side Encryption with AWS KMS managed
-        # keys require AWS Signature Version 4" (this bucket's default
-        # encryption is aws:kms — infra/modules/s3/main.tf). SigV4 is
-        # required unconditionally for any presigned request against a
-        # KMS-encrypted bucket, so this isn't optional even though boto3
-        # doesn't default to it here.
+        # Explicit SigV4: the bucket's default encryption is aws:kms
+        # (infra/modules/s3/main.tf), and S3 rejects presigned requests to a
+        # KMS-encrypted bucket unless they use Signature Version 4. Without
+        # this, boto3 can sign a presigned POST for the legacy global
+        # endpoint with an older signature.
         self._client = boto3.client(
             "s3",
             region_name=self.region_name,
@@ -125,16 +111,11 @@ class S3Client:
         expires_in: int = 900,
         content_type: str = "application/x-tar",
     ) -> dict[str, Any]:
-        """Used by create_upload.handler (2026-10-12, archive_path/upload
-        design) — a presigned POST, not a bare presigned PUT, specifically
-        because a POST's `Conditions` let S3 itself enforce a byte-size
-        ceiling (`content-length-range`) and content type before accepting
-        the object, instead of trusting the client to send a reasonably
-        sized file. Matches this project's established pattern of bounding
-        untrusted input at the earliest possible point (extract_archive's
-        own member-count/path-traversal/symlink checks, the 400 KB
-        DynamoDB item cap) rather than relying on a later stage to reject
-        an oversized upload after it's already landed in S3."""
+        """Used by create_upload.handler. A presigned POST rather than a
+        presigned PUT because the POST's `Conditions` let S3 itself enforce
+        a size ceiling (`content-length-range`) and content type before
+        accepting the object, so untrusted input is bounded before it ever
+        lands in S3."""
         return self._client.generate_presigned_post(
             Bucket=self.bucket,
             Key=key,
@@ -253,11 +234,8 @@ class UnexpectedStopReason(Exception):
     """Raised when Bedrock's stopReason is anything other than the one
     successful value this call expected — e.g. guardrail_intervened,
     content_filtered, malformed_model_output, malformed_tool_use, or
-    model_context_window_exceeded. Codex review 2026-09-16 confirmed (via
-    AWS's own Converse docs) that stopReason has 9 possible values and the
-    original _check_stop_reason only ever checked for one of them
-    (max_tokens) — every other abnormal value fell through and got treated
-    as if the response were trustworthy."""
+    model_context_window_exceeded. None of those responses can be
+    trusted."""
 
     def __init__(self, stop_reason: str | None, expected: str) -> None:
         self.stop_reason = stop_reason
@@ -267,9 +245,9 @@ class UnexpectedStopReason(Exception):
 
 class ToolCallMissing(Exception):
     """Raised when a forced tool-use Converse call didn't come back with
-    exactly one matching toolUse content block — none (e.g. the model
-    text-answered instead) or more than one (ambiguous which call is the
-    real answer; the original code silently used whichever came first)."""
+    exactly one matching toolUse content block: none (e.g. the model
+    answered in text instead) or more than one (ambiguous which call is
+    the real answer)."""
 
 
 @dataclass
@@ -294,14 +272,12 @@ class BedrockReasoningClient:
 
     @staticmethod
     def _check_stop_reason(response: dict[str, Any], expected: str) -> None:
-        # Fails closed unless stopReason is exactly the one value this call
-        # expected on success, rather than only ever checking for
-        # max_tokens (Codex review 2026-09-16, confirmed against AWS's
-        # Converse docs: the real value set is end_turn, tool_use,
-        # max_tokens, stop_sequence, guardrail_intervened,
-        # content_filtered, malformed_model_output, malformed_tool_use,
-        # model_context_window_exceeded — 5 of those 9 previously fell
-        # through unchecked and got treated as a trustworthy response).
+        # Fails closed unless stopReason is exactly the value this call
+        # expects on success. Converse can return end_turn, tool_use,
+        # max_tokens, stop_sequence, guardrail_intervened, content_filtered,
+        # malformed_model_output, malformed_tool_use or
+        # model_context_window_exceeded; checking only for max_tokens would
+        # let the abnormal ones through as trustworthy.
         stop_reason = response.get("stopReason")
         if stop_reason == expected:
             return
@@ -336,28 +312,18 @@ class BedrockReasoningClient:
         must match `input_schema`, instead of free-form text.
 
         This is the standard Anthropic tool-use pattern, not Bedrock's
-        native/version-specific "structured output" flag — Converse's
-        toolChoice can force a specific tool on every Claude model Bedrock
-        exposes via this API, so this path isn't tied to what Sonnet
-        version happens to be configured (relevant while Sonnet 4.6 is a
-        documented temporary stand-in for Sonnet 5, see
-        validate_reason_node.py). It also means the model's answer is
-        boto3's already-parsed dict/list, not a JSON string — no more
-        stripping a ```json fence, since tool input is never markdown.
+        version-specific "structured output" flag: Converse's toolChoice
+        can force a specific tool on every Claude model Bedrock exposes, so
+        this path isn't tied to the configured model version. The answer
+        arrives as boto3's already-parsed dict/list, never a JSON string
+        wrapped in a markdown fence.
 
-        `strict: True` is a real, documented ToolSpecification field
-        (confirmed 2026-09-16 against AWS's own API reference, not just
-        Codex's claim) that enforces the tool input actually matches
-        `input_schema` server-side, instead of relying on the model's
-        prompt compliance — this is what stops a previously-seen
-        alternative-shape variant (e.g. {alternative, rationale} instead
-        of {option, reason_rejected}) from ever reaching application code.
-        Not confirmed which exact models honor it on Bedrock yet (AWS's
-        own blog post names a "select providers" list including Anthropic
-        but doesn't enumerate Sonnet 4.6 specifically) — if a live call
-        ever 400s citing `strict` as unsupported for this model_id, that's
-        the signal to make this conditional per-model, not a reason to
-        guess now and add untested conditional logic.
+        `strict: True` (a documented ToolSpecification field) makes Bedrock
+        enforce `input_schema` server-side instead of relying on prompt
+        compliance, so a variant shape (e.g. {alternative, rationale}
+        instead of {option, reason_rejected}) never reaches application
+        code. AWS doesn't list exactly which models honor it; if a model
+        rejects `strict` with a 400, make it conditional per model.
         """
         response = self._client.converse(
             modelId=self.model_id,
@@ -389,9 +355,8 @@ class BedrockReasoningClient:
             return matches[0]["input"]
         if len(matches) == 0:
             raise ToolCallMissing(f"no {tool_name!r} tool call in response: {response!r}")
-        # More than one matching call is ambiguous — the original code
-        # silently returned whichever came first, discarding the rest
-        # (Codex review 2026-09-16). Fail loud instead of guessing.
+        # More than one matching call is ambiguous; fail loudly instead of
+        # guessing which one is the answer.
         raise ToolCallMissing(
             f"expected exactly one {tool_name!r} tool call, got {len(matches)}: {response!r}"
         )
@@ -617,25 +582,23 @@ def _cancellation_reasons(exc: Any, count: int) -> list[str]:
 
 @dataclass
 class AgentCoreRuntimeClient:
-    """Invokes a deployed Bedrock AgentCore Runtime directly over boto3 —
-    used by deeper_review.handler (2026-10-01) for the "go deeper" path,
-    which bypasses Step Functions entirely (ADR-0023/ADR-0039: a scoped
-    per-finding re-run, not a full pipeline execution). The outer review
-    pipeline instead goes through Step Functions' own SDK integration
-    (`arn:aws:states:::aws-sdk:bedrockagentcore:invokeAgentRuntime`,
-    infra/modules/step-functions-lambda) — this wrapper is for callers
-    that need the same operation from a Lambda, not from ASL.
+    """Invokes a deployed Bedrock AgentCore Runtime directly over boto3.
 
-    boto3's `bedrock-agentcore` client and its `invoke_agent_runtime`
-    operation were confirmed to exist against the installed botocore
-    service model 2026-10-01 (not guessed): required params
-    `agentRuntimeArn` (string) and `payload` (blob); the response's
-    `response` field is a blob (a `StreamingBody`, read once)."""
+    Used by deeper_review.handler for the "go deeper" path, which bypasses
+    Step Functions (ADR-0023/ADR-0039: a scoped per-finding re-run, not a
+    full pipeline execution). The review pipeline itself uses Step
+    Functions' SDK integration
+    (`arn:aws:states:::aws-sdk:bedrockagentcore:invokeAgentRuntime`,
+    infra/modules/step-functions-lambda).
+
+    `invoke_agent_runtime` takes `agentRuntimeArn` (string) and `payload`
+    (blob); the response's `response` field is a `StreamingBody`, read
+    once."""
 
     agent_runtime_arn: str
     region_name: str = "us-east-1"
     # None = botocore's default. Callers behind a synchronous API set this
-    # below their gateway's timeout (Codex F19).
+    # below their gateway's timeout.
     read_timeout_seconds: int | None = None
 
     def __post_init__(self) -> None:

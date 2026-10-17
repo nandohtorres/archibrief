@@ -1,13 +1,12 @@
 """Paid chat evaluation: answer quality and the trap suite against the
-real model (ADR-0050 §8, master-list items 26–27).
+real model (ADR-0050 §8).
 
     python -m backend.chat.chat_eval --confirm-paid [--traps] \
         --model us.anthropic.claude-haiku-4-5-20251001-v1:0 \
         --guardrail-id <chat guardrail id> --out results.json
 
-Never run without Fernando's explicit go-ahead in that moment (standing
-rule for every paid run). `--confirm-paid` is required so it can't start
-by accident. It calls Bedrock directly with the caller's AWS credentials
+This costs money on every run, so `--confirm-paid` is required and it
+can't start by accident. It calls Bedrock directly with the caller's AWS credentials
 (AWS_PROFILE), running the same backend/chat code as the Lambda, so it
 doesn't touch any stored review or the day's chat budget. The caller
 needs bedrock:InvokeModel on the chosen model, Titan embeddings, S3
@@ -17,8 +16,8 @@ guardrail.
 Scoring is fixed rules, never a model judge (same reasoning as
 backend/agent/reasoning_eval.py): status, refusal reason, citations of
 the expected findings, keyword groups, forbidden phrases, the canary.
-Pass bars come from the chat spec §6; the model choice is the cheapest
-that clears them all.
+The pass bars are PASS_BARS below; the model choice is the cheapest that
+clears them all.
 """
 
 from __future__ import annotations

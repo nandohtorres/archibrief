@@ -1,32 +1,21 @@
 """ArchiBrief Lambda: deeper_review.
 
-Backs `POST /reviews/{reviewId}/findings/{findingId}/deeper`
-(Work-Project-System-Design.md's "API contracts" section) — a scoped
+Backs `POST /reviews/{reviewId}/findings/{findingId}/deeper`: a scoped
 per-finding re-run (Retrieve -> Reason(deep) -> Validate), never the full
-pipeline (ADR-0023/ADR-0039). Deliberately bypasses Step Functions
-entirely: this is a short, synchronous Lambda-to-AgentCore-to-Lambda call
-chain, not a new state machine execution, since nothing here needs
-Ingest/RuleEngine/PreflightGate/Audit/Finalize to run again (see
-backend/agent/graph.py's build_deeper_graph docstring for the full
-reasoning).
+pipeline (ADR-0023/ADR-0039). It bypasses Step Functions: nothing here
+needs Ingest/RuleEngine/PreflightGate/Audit/Finalize to run again, so it
+is a short synchronous call to AgentCore rather than a new execution (see
+build_deeper_graph in backend/agent/graph.py).
 
 Flow:
-1. Look up the review's `reportS3Key` from the reviews table (same
-   allowlisted-field pattern as get_review.handler).
-2. Fetch the evidence ledger JSON from S3 and find the target finding by
-   `finding_id` — there's no per-finding DynamoDB row to query directly
-   yet (the Findings table exists in Terraform but nothing has ever
-   written to it before this handler; see Work-Project-Issues-Log.md,
-   2026-10-01 entry), so the ledger is the only source of the original
-   finding's content and of `workload_brief` (only ever persisted there,
-   per finalize.handler's 2026-10-01 fix — no Reviews-table field carries
-   it).
-3. Call the deployed AgentCore Runtime directly (AgentCoreRuntimeClient,
-   not the Step Functions SDK integration) with `mode: "deeper"`.
-4. Validate the returned finding(s) (backend.lambdas.validate's own
-   validate_findings, imported in-process — not a second Lambda
-   invocation) and write each one to the Findings table, finally
-   populating it.
+1. Look up the review's `reportS3Key` in the reviews table.
+2. Fetch the evidence ledger from S3 and find the target finding by
+   `finding_id`. The ledger is the only source of the original finding
+   and of `workload_brief`.
+3. Call the AgentCore Runtime directly (AgentCoreRuntimeClient) with
+   `mode: "deeper"`.
+4. Validate the returned findings in-process (validate_findings from
+   backend.lambdas.validate) and write each one to the Findings table.
 """
 
 from __future__ import annotations
@@ -68,7 +57,7 @@ def _findings_table_item(finding: Any) -> dict[str, Any]:
     return {"reviewId": item["review_id"], "findingId": item["finding_id"], **item}
 
 
-# Synchronous time budget (Codex F19). HTTP API caps a Lambda integration
+# Synchronous time budget. HTTP API caps a Lambda integration
 # at 30s, so the API integration is set to 29s, the Lambda to 28s, and the
 # AgentCore read timeout below both, leaving time to answer cleanly instead
 # of the gateway cutting the connection while the Lambda keeps spending.
@@ -134,10 +123,8 @@ def _findings_response(review_id: str, finding_id: str, findings: list[Finding])
             "reviewId": review_id,
             "parentFindingId": finding_id,
             # Same {record, presentation} shape build_review_report uses
-            # (backend/shared/report.py) — lets the frontend render a
-            # returned deeper finding through the exact same ReportFinding
-            # components as every other finding, instead of needing its
-            # own fabricated priority/label logic.
+            # (backend/shared/report.py), so the frontend renders a deeper
+            # finding with the same components as every other finding.
             "findings": [
                 {"record": f.model_dump(mode="json"), "presentation": compute_presentation(f)}
                 for f in findings
@@ -176,10 +163,8 @@ def handler(event: dict, _context: object) -> dict:
 
     workload_brief = ledger.get("workload_brief")
     if not workload_brief:
-        # A real, known gap for any review finalized before 2026-10-01
-        # (finalize.handler only started persisting this then) — not a
-        # bug in this handler, flagged rather than silently sending an
-        # empty brief to the model.
+        # Older ledgers may lack the brief; refuse rather than send the
+        # model an empty one.
         return _response(
             409,
             {"error": "this review's original workload brief was not persisted; cannot go deeper"},
@@ -187,7 +172,7 @@ def handler(event: dict, _context: object) -> dict:
 
     retrieval_query = f"{parent_finding.get('category', '')}: {parent_finding.get('finding', '')}"
 
-    # Idempotency (Codex F19): a finding that was already taken deeper
+    # Idempotency: a finding that was already taken deeper
     # returns its stored result instead of paying for another run, and a
     # per-finding in-flight claim stops a double-click or a client retry
     # after a gateway timeout from starting a second concurrent paid run.
@@ -207,12 +192,9 @@ def handler(event: dict, _context: object) -> dict:
         agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
         read_timeout_seconds=AGENT_READ_TIMEOUT_SECONDS,
     )
-    # Fixed-literal prefix guarantees the >=33-char floor AWS enforces on
-    # runtimeSessionId regardless of how short review_id/finding_id are —
-    # same reasoning as the outer state machine's own RuntimeSessionId
-    # (infra/modules/step-functions-lambda's InvokeAgent state), confirmed
-    # directly against the real botocore service model while building
-    # AgentCoreRuntimeClient's test (not just "commonly cited" anymore).
+    # The fixed prefix guarantees the 33-character minimum AWS enforces on
+    # runtimeSessionId however short review_id/finding_id are (the state
+    # machine's InvokeAgent state does the same).
     runtime_session_id = f"archibrief-deeper-review-session-{review_id}-{finding_id}"
     try:
         agent_response = agent_client.invoke(

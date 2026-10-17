@@ -17,9 +17,9 @@ from backend.shared.sanitize import clip
 PROMPT_VERSION = "chat_prompt@2026-10-15a"
 TOOL_NAME = "answer_question"
 TOOL_DESCRIPTION = "Answer the visitor's question about this one architecture review."
-# 700 was too few: the first live question (2026-10-16) stopped at
-# max_tokens part-way through the tool input, since every citation carries
-# a verbatim quote on top of the ~1,200 characters of answer text.
+# Every citation carries a verbatim quote on top of the ~1,200 characters
+# of answer text; a much lower limit (700) cut answers off at max_tokens
+# part-way through the tool input.
 MAX_OUTPUT_TOKENS = 1500
 HISTORY_TURNS = 4
 HISTORY_ANSWER_CHARS = 1200
