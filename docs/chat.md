@@ -18,8 +18,9 @@ POST /reviews/{reviewId}/questions
   6. normalize + bound the question; chat Guardrail (fails closed)
   7. one DynamoDB transaction: review's slot (typed questions only),
      question record, the day's worst-case $ reservation and count
-  8. retrieve 3 WAF chunks; one Converse call (Haiku 4.5, cached review
-     block, forced strict tool, 20 s, no retry)
+  8. retrieve 3 WAF chunks; one Converse call (Sonnet 4.6 in the Terraform
+     configuration, cached review block, forced strict tool, deadline-sized
+     read timeout up to 24 s, no retry)
   9. verify every citation; fixed text for refusals; hygiene; canary
  10. store, settle the $ reservation to the estimated real cost, log
 ```
@@ -36,7 +37,7 @@ count. No model call.
 | 409 | `review_not_complete`, `request_in_progress` | No |
 | 429 | `review_quota_exhausted`, `daily_cap_reached`, `too_many_blocked`, `too_many_failed` | No |
 | 502 | `answer_failed` | Refunded (first 3 failures per review) |
-| 503 | `chat_paused`, `guardrails_unavailable`; `answer_failed` on Bedrock throttling | No / refunded |
+| 503 | `chat_paused`, `guardrails_unavailable`, `chat_busy`; `answer_failed` on Bedrock throttling | No / refunded |
 | 504 | `answer_timeout` | Refunded (first 3 failures per review) |
 
 Hardening from the pre-deploy code and security reviews: only answered
@@ -69,9 +70,9 @@ the Lambda, so they change without a code deploy):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `chat_model_id` | Haiku 4.5 (US profile) | The answering model; must be in `chat_model_ids` |
+| `chat_model_id` | Sonnet 4.6 (US profile) | The answering model; must be in `chat_model_ids` |
 | `chat_questions_per_review` | 5 | Typed questions per review (suggested ones are free) |
-| `chat_daily_budget_micro_usd` | 400000 ($0.40) | Estimated spend per UTC day; the hard stop |
+| `chat_daily_budget_micro_usd` | 1000000 ($1.00) | Estimated spend per UTC day; admission checks reserved spend against this configured limit |
 | `chat_daily_max_questions` | 100 | Count backstop per UTC day |
 | `chat_blocked_per_review` | 5 | Guardrail-blocked questions before a 429 |
 | `chat_grounding_check_enabled` | true | Log grounding scores (detect-only) |
@@ -92,31 +93,41 @@ the Lambda, so they change without a code deploy):
   against the real model, scored by fixed rules. The model choice is
   the cheapest that clears the bars in `PASS_BARS`.
 
-## Going live, in order
+## Deployment status and remaining validation
 
-Paid steps are run deliberately, one at a time.
+The recorded admin-only deployment and its model, timeout and budget changes
+are documented in ADR-0050's first-live-deploy amendment. Demo suggested answers
+are committed in `frontend/public/demos/chats/`. This documentation cleanup did
+not inspect AWS or repeat those paid runs.
 
-1. `python scripts/package_lambdas.py`, then `terraform apply` (two new
-   Lambdas, two routes, the questions table, two guardrails, Haiku in
-   the boundary, Finalize's new parameter, and code updates to the
-   Lambdas that share `backend/shared/clients`).
-2. One live question on a real review (paid, about a cent) to check the
-   path, prompt caching on the second question, and the log line.
-3. Optional, free: `python scripts/backfill_resource_summary.py
-   <review ids>` (dry run), then `--apply`, so older reviews, the demos
-   among them, get the resource summary the chat reads.
-4. The chat eval (paid, a few dollars across models), then set the model
-   and, from the logged grounding scores, whether to block on grounding.
-5. `python scripts/pregenerate_demo_chats.py --confirm-paid` (paid) to
-   store the demos' suggested answers in `frontend/public/demos/chats/`.
-6. Measure real per-question cost and set the daily cap.
-7. Public-access controls (Turnstile, visitor limits), then
-   `chat_public_enabled`.
-   Before that, require review ids to be random UUIDs server-side: a
-   review id is the only key to its conversation, and today only the
-   frontend generates UUIDs (the API accepts any id matching its pattern).
+Remaining before public access:
+
+1. Run the paid chat quality/trap evaluation with explicit approval, then choose
+   the model and decide whether grounding scores should block an answer.
+2. Complete atomic accounting across all paid paths, including input screening,
+   rather than treating the preliminary quota read as an atomic budget check.
+3. Implement Turnstile, visitor limits, retention enforcement and server-issued
+   review IDs/upload binding before enabling `chat_public_enabled`.
+4. Reconcile measured charges with the configured estimates and set explicit
+   operational limits. The model/guardrail reservation is not a total AWS bill cap.
+
+Deployment packaging is `python scripts/package_lambdas.py`; infrastructure
+application and live smoke tests are separate operator actions. The backfill
+script defaults to dry run, and its `--apply` writes S3. The demo-chat generator
+requires `--confirm-paid`. None of these commands is part of an offline test run.
 
 ## Known limits
+
+- Terraform configures Sonnet 4.6 and a $1.00/day allowance, but the handler's
+  unset-environment fallbacks remain Haiku 4.5 and $0.40/day. Deployments should
+  supply both settings explicitly; these fallbacks were not changed in this
+  documentation-only pass.
+- Input Guardrails runs before the atomic admission transaction. Blocked input
+  is logged with an estimated screening cost but does not reserve the daily
+  spend counter. Concurrent checks can spend beyond the preliminary read.
+- Transcript listing filters expired questions, but POST replay and the direct
+  stored-suggestion path do not consistently check expiry before returning data.
+  Public retention must be enforced on every access path.
 
 - A Lambda killed at its 28 s timeout refunds nothing; a retry with the
   same id after 90 s is admitted and charged again. The model read

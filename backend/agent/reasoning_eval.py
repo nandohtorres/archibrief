@@ -338,11 +338,7 @@ EVAL_BRIEFS: list[ReasoningEvalBrief] = [
             ),
         ],
         notes=(
-            "Same brief as validate_reason_node.py's scripted run (2026-09-16 first "
-            "success) — root-mfa was the one topic that run actually covered; "
-            "no-cloudtrail and lambda-broad-access were the two it did NOT surface, "
-            "which is the exact completeness gap this eval exists to measure going "
-            "forward, not just observe once."
+            "Uses the scripted validate_reason_node.py brief. Measures completeness across root MFA, absent CloudTrail and broad Lambda permissions, rather than accepting coverage of only one topic."
         ),
     ),
     ReasoningEvalBrief(

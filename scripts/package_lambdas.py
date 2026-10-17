@@ -1,51 +1,19 @@
-"""Builds the deployment zip for each Lambda listed in LAMBDA_SPECS.
+"""Build the deployment ZIP for each Lambda listed in LAMBDA_SPECS.
 
-Found missing 2026-10-12 (see Work-Project-Issues-Log.md): six Lambdas
-built across recent sessions — create_upload, clarify_review,
-deeper_review, get_demo, get_review, store_clarification_token — had no
-build/*.zip at all, which `terraform apply` needs to exist at plan time
-(aws_lambda_function's `filename` must point at a real file). No
-packaging script existed anywhere in this repo to produce one; the
-earlier Lambdas' zips (admin_authorizer, finalize, ingest, etc.) were
-apparently built some other, non-reproducible way, and turned out to be
-a kitchen-sink bundle (finalize's old zip carried a full hcl2 install it
-never imports) rather than scoped per-Lambda deps — this script fixes
-that too, bundling only each Lambda's actual (transitive) imports.
+Run from the repository root:
+    python scripts/package_lambdas.py [name ...]
+With no arguments, package every Lambda. Each package contains its handler
+and the shared modules and third-party dependencies it imports.
 
-Also found while building this (2026-10-12): `finalize` and `ingest`'s
-*existing* zips were stale — both handlers (and backend/shared/clients,
-which several Lambdas depend on) genuinely changed across this and
-earlier sessions (`git status` confirms real diffs, not just a touched
-mtime) after their last zip was built back on 2026-09-08. Deploying the
-old zips would have silently run outdated code — the
-cost_estimate_tier/DynamoDB-merge fix (finalize) and the S3-archive-
-download path (ingest) would never have actually taken effect. Added
-both here so `python scripts/package_lambdas.py` (no args) rebuilds
-every Lambda whose source could plausibly have drifted from its zip,
-not just the ones that never had one.
+Dependencies are downloaded as manylinux/cp312 wheels using pip's explicit
+target platform; the build does not execute target-platform code. The
+deployed Lambda runtime is Python 3.12 on Linux x86_64. boto3/botocore are
+bundled into ask_question; other Lambdas use the runtime-provided SDK.
 
-Run from the repo root:  python scripts/package_lambdas.py [name ...]
-With no arguments, packages every Lambda in LAMBDA_SPECS.
-
-Third-party dependencies are downloaded as manylinux/cp312 wheels via
-`pip install --platform ... --only-binary=:all: --target`, NOT installed
-normally — this machine's Python is 3.14 on Windows, but the deployed
-Lambda runtime is python3.12 on Linux x86_64 (see
-infra/modules/step-functions-lambda/main.tf's `runtime = "python3.12"`,
-no `architectures` override, so the default x86_64 applies). pip
-supports downloading wheels for a different target platform without
-executing any of that platform's code, which is what makes this safe to
-run from here at all. boto3/botocore are bundled only into ask_question
-(see its spec); every other Lambda uses the runtime's own copy, matching
-every existing zip in this repo (confirmed by inspecting
-admin_authorizer's/finalize's zips directly, not assumed).
-
-Reproducible builds (2026-10-15): third-party versions are pinned in
-scripts/lambda_constraints.txt, and the zip is written with fixed
-timestamps and permissions in a fixed order. Rebuilding unchanged code
-gives a byte-identical zip, so `terraform plan` only shows Lambdas whose
-code or dependencies really changed. Before this, every rebuild changed
-every zip's hash, even when the code inside was identical.
+Third-party versions are pinned in scripts/lambda_constraints.txt. ZIPs
+use fixed timestamps, permissions and entry order, so rebuilding unchanged
+source and dependencies produces identical bytes. Any source change,
+including comments or docstrings, can still change the deployment ZIP hash.
 """
 
 from __future__ import annotations

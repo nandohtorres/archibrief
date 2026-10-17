@@ -146,7 +146,7 @@ def normalize_pdf(
                 f"({span} pages) — beyond the plausible span for this document "
                 "type, which usually means an outline destination is still "
                 "resolving incorrectly. Investigate rather than silently "
-                "truncating (see Work-Project-Issues-Log, 2026-09-14)."
+                "truncating the section."
             )
         text = _extract_text(reader, start_page, end_page)
         if not text:

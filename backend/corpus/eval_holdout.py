@@ -57,24 +57,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
             "aws-cis-foundations-mapping-0019",
         ],
         notes=(
-            "Different CIS version and control (IAM.18, v1.4.0) than q08 "
-            "(v5.0.0 support question) and q09 (IAM.6, v1.2.0). Re-verified "
-            "2026-09-15 against the 4,463-chunk corpus: chunk 0012 (the "
-            "v1.4.0-specific controls list) still directly answers this "
-            "query. Codex also found that aws-cis-foundations-mapping-0019 "
-            "— a cross-version control-mapping table — contains the same "
-            "IAM.18 row (and, separately, the IAM.6 row that answers q09 in "
-            "eval.py), which is genuine cross-set overlap: a retriever "
-            "surfacing 0019 for this query would be giving a correct "
-            "answer and should get credit, so 0019 was added here rather "
-            "than narrowing the query. q09's own expected_chunk_id "
-            "(aws-cis-foundations-mapping-0016) was left as-is since it's "
-            "still a valid, more version-specific answer to that query and "
-            "the overlap doesn't make it wrong — it just means 0019 is a "
-            "second correct answer to both q09 and h03 that isn't listed "
-            "under q09. Documented here rather than 'fixed' further since "
-            "a comparison table inherently answers many single-version "
-            "queries."
+            "CIS IAM.18 v1.4.0 is covered by the version-specific list in 0012 and the cross-version mapping table in 0019. The latter also contains the IAM.6 answer for development query q09; this cross-set overlap is intentional and limits independence."
         ),
     ),
     EvalQuery(
@@ -127,11 +110,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-reliability-pillar",
         expected_chunk_ids=["waf-reliability-pillar-0216", "waf-reliability-pillar-0218"],
         notes=(
-            "Re-verified 2026-09-15 against the 4,463-chunk corpus: the "
-            "previously-listed chunk (0050) now contains unrelated "
-            "REL01-BP01 service-quota anti-pattern content. The actual "
-            "REL02-BP04 recommendation-plus-rationale and benefits text "
-            "now live at 0216 and 0218."
+            "REL02-BP04's recommendation, rationale and benefits are in chunks 0216 and 0218. Service-quota anti-patterns do not answer this query."
         ),
     ),
     EvalQuery(
@@ -140,14 +119,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-security-pillar",
         expected_chunk_ids=["waf-security-pillar-0275"],
         notes=(
-            "SEC03-BP03, unused by the original set (which covers SEC01 "
-            "only in this document). Re-verified 2026-09-15 twice — first "
-            "against the 4,463-chunk corpus (0279), then again against the "
-            "4,481-chunk corpus after a further chunking-fragmentation fix "
-            "shifted boundaries again: SEC03-BP03's own definition-plus-"
-            "rationale text ('Create a process that allows for emergency "
-            "access to your workloads in the unlikely event of an issue "
-            "with your centralized identity provider') now lives at 0275."
+            "SEC03-BP03 covers emergency workload access when the centralized identity provider is unavailable. Its definition and rationale are in chunk 0275 of the 4,481-chunk corpus."
         ),
     ),
     EvalQuery(
@@ -159,11 +131,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
             "waf-operational-excellence-pillar-0252",
         ],
         notes=(
-            "Re-verified 2026-09-15: the previously-listed chunks "
-            "(0063-0064) now contain unrelated OPS01-BP04 compliance "
-            "content. OPS03-BP03's own definition (0251) and anti-pattern "
-            "example, which continues into the next chunk (0252), now live "
-            "there — same q12-shaped split as before, just at new IDs."
+            "OPS03-BP03's definition is in 0251 and its anti-pattern example continues into 0252. Compliance-related guidance is not the expected topic."
         ),
     ),
     EvalQuery(
@@ -172,14 +140,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-performance-efficiency-pillar",
         expected_chunk_ids=["waf-performance-efficiency-pillar-0258"],
         notes=(
-            "Unused best practice from the performance pillar; only "
-            "PERF01-BP01 (q16) was covered originally. Re-verified "
-            "2026-09-15 twice — first against the 4,463-chunk corpus "
-            "(0269-0270, the intro), then again after a further chunking-"
-            "fragmentation fix shifted boundaries again: PERF03-BP05's "
-            "actual anti-pattern list ('You cache data that changes "
-            "frequently... You don't monitor the efficiency of your "
-            "caching implementation') now lives at 0258 alone."
+            "PERF03-BP05's caching anti-pattern list is in 0258. It covers caching frequently changing data and failing to monitor cache efficiency, distinct from development query q16."
         ),
     ),
     EvalQuery(
@@ -188,11 +149,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-cost-optimization-pillar",
         expected_chunk_ids=["waf-cost-optimization-pillar-0260"],
         notes=(
-            "q12-shaped: still sandwiched between generic Resources-section "
-            "link boilerplate on both sides. Re-verified 2026-09-15: the "
-            "previously-listed chunk (0073) now contains unrelated "
-            "COST01-BP06 content. COST04-BP05's own recommendation text "
-            "now lives at 0260."
+            "COST04-BP05's recommendation is in 0260, between generic Resources links. Neighboring cost-control practices are not the expected answer."
         ),
     ),
     EvalQuery(
@@ -201,18 +158,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-sustainability-pillar",
         expected_chunk_ids=["waf-sustainability-pillar-0274", "waf-sustainability-pillar-0276"],
         notes=(
-            "Deliberately adversarial: SUS04-BP08 actually recommends the "
-            "opposite of the naive reading ('back up ONLY when difficult to "
-            "recreate', avoiding backup of non-critical data to reduce "
-            "storage footprint). A retriever matching on generic "
-            "'backup'+'data' vocabulary could easily surface "
-            "waf-reliability-pillar's REL09-BP01 'Identify and back up all "
-            "data that needs to be backed up', which is topically related "
-            "but a wrong-document match for this query. Re-verified "
-            "2026-09-15 against the 4,463-chunk corpus: the previously-"
-            "listed chunk (0065) now contains unrelated SUS01-BP01 Region-"
-            "selection content. SUS04-BP08's own definition and "
-            "benefits/rationale text now live at 0274 and 0276."
+            "SUS04-BP08 recommends backing up data only when difficult to recreate, to avoid unnecessary storage. Its own definition/rationale is the expected source; the Reliability Pillar's generic backup guidance is a deliberate wrong-document decoy."
         ),
     ),
     EvalQuery(
@@ -221,14 +167,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-reliability-pillar",
         expected_chunk_ids=["waf-reliability-pillar-0156"],
         notes=(
-            "Re-verified 2026-09-15 against the 4,463-chunk corpus: the "
-            "previously-listed chunk (0036) now contains unrelated "
-            "availability-percentage-table content from the Definitions "
-            "section. REL01-BP06's literal list of failover scenarios to "
-            "consider (disrupted VPC, inaccessible subnet, degraded AZ, "
-            "etc.) now lives at chunk 0156, surrounded by the same kind of "
-            "generic Resources-section boilerplate as before, just at new "
-            "chunk IDs."
+            "REL01-BP06's failover-scenario list is in 0156: disrupted VPC, inaccessible subnet, degraded Availability Zone and related cases. Generic availability definitions and Resources links do not count."
         ),
     ),
     EvalQuery(
@@ -237,10 +176,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-cost-optimization-pillar",
         expected_chunk_ids=["waf-cost-optimization-pillar-0080"],
         notes=(
-            "Distinct best practice from q17 (COST01-BP01, cost ownership). "
-            "Re-verified 2026-09-15: the previously-listed chunk (0027) "
-            "now contains unrelated COST01-BP01 KPI-tracking content. "
-            "COST01-BP07's own recommendation text now lives at 0080."
+            "COST01-BP07's recommendation is in 0080. This is distinct from development query q17's COST01-BP01 cost-ownership practice."
         ),
     ),
 ]

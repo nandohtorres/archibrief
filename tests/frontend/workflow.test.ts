@@ -96,7 +96,7 @@ describe("failureMessageFor", () => {
   });
 });
 
-describe("stakeholder summary (master-list 15c)", () => {
+describe("stakeholder summary", () => {
   const finding = (
     priority: "high" | "review" | "confirmed" | "unknown",
     title: string,

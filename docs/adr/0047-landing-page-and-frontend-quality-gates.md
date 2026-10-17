@@ -10,8 +10,8 @@ straight onto an admin-only submission form, and the one public route,
 needed a real front door, a way into the sample review, and repeatable
 checks for phone layout, contrast and Lighthouse scores.
 
-Three landing designs were mocked up as static pages
-(`frontend/design/landing-options/` in the archibrief repo):
+Three landing designs were compared as static prototypes. The prototype
+files are no longer included in the published repository:
 
 - **A, editorial:** a large headline ("A second opinion on your AWS
   architecture, *with the receipts.*"), one primary action, sample cards,
@@ -25,9 +25,9 @@ Three landing designs were mocked up as static pages
 1. **Option A is the landing page**, built into the app above the
    existing review flow: hero, then samples, then how it works, then
    limits, and finally the "Review your own Terraform" section, which
-   holds the existing submission form. B and C stay in the repo; their
-   supporting sections (B's finding preview and "what it checks" grid,
-   C's step-by-step flow) may be folded in later.
+   holds the existing submission form. Supporting ideas from B and C
+   (the finding preview, checks grid and step-by-step flow) may be
+   incorporated without retaining the prototype files.
 2. **The full submission form is on the public page, but only the
    owner can submit, until public submissions open** (ADR-0046, Phase 3).
    - The admin key field stays in the header until explicitly removed.

@@ -10,7 +10,7 @@ saved next to the demo reports. Visitors then read them for free:
 
 Paid (one model call per suggestion the first time; a suggestion already
 answered is served from storage for free), so never run without
-Fernando's go-ahead in that moment. The admin key is read from Secrets
+explicit approval for that run. The admin key is read from Secrets
 Manager (AWS_PROFILE) and never printed. Suggested questions don't use
 any of a review's five questions.
 
@@ -70,7 +70,7 @@ def main() -> int:
     args = parser.parse_args()
     if not args.confirm_paid:
         print(
-            "Refusing to run: pass --confirm-paid (needs Fernando's go-ahead).",
+            "Refusing to run: pass --confirm-paid (requires explicit approval).",
             file=sys.stderr,
         )
         return 2

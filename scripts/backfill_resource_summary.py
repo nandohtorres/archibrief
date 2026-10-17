@@ -1,6 +1,6 @@
 """Add the resource summary to reviews stored before Finalize kept it.
 
-From 2026-10-15 Finalize writes RuleEngine's resource summary (ADR-0049)
+Finalize writes RuleEngine's resource summary (ADR-0049)
 into each review's evidence ledger, so the report chat answers from the
 same facts the review saw (ADR-0050). Reviews stored before that, the
 demos among them, have none, and the chat says settings aren't
@@ -13,8 +13,8 @@ ledger changes.
     python scripts/backfill_resource_summary.py --apply <review_id> ...  # writes S3
 
 Dry run by default: it prints what it would add. --apply overwrites the
-ledger object in the reports bucket, so it needs Fernando's OK. Free (S3
-reads and writes only, no model).
+ledger object in the reports bucket and requires explicit approval. Only
+S3 reads and writes are made; no model is called.
 """
 
 from __future__ import annotations

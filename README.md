@@ -8,7 +8,7 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 **Deployed and admin-gated; public self-service is not open yet.** Anyone can open three finished demo reviews of real public Terraform (a security firm's breach lab, a Medicare data platform, and FEC databases). They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
 
-**Report chat is live, admin-only.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, quotas and a hard daily spend cap. The demos' suggested questions were answered once and are served free. The paid chat evaluation is still pending.
+**Report chat is live, admin-only.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails and admission quotas based on estimated reserved spend; input-screening accounting still needs work before public access. The demos' suggested questions were answered once and are served free. The paid chat evaluation is still pending.
 
 ## How it works
 

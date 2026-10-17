@@ -109,13 +109,7 @@ EVAL_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-security-pillar",
         expected_chunk_ids=["waf-security-pillar-0048", "waf-security-pillar-0052"],
         notes=(
-            "Deliberately ambiguous with q05 (IAM best practices root-user "
-            "guidance) — same underlying topic, two different sources. "
-            "Re-verified 2026-09-15 against the 4,463-chunk corpus: the "
-            "previously-listed chunks (0015-0019) now contain unrelated "
-            "'Shared responsibility' content — SEC01-BP02's actual "
-            "definition/desired-outcome and benefits/risk text now live at "
-            "0048 and 0052."
+            "Shares a topic with q05 but expects the Security Pillar source. Chunks 0048 and 0052 contain SEC01-BP02's definition and benefits; unrelated shared-responsibility chunks do not count."
         ),
     ),
     EvalQuery(
@@ -124,19 +118,7 @@ EVAL_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-security-pillar",
         expected_chunk_ids=["waf-security-pillar-0012", "waf-security-pillar-0015"],
         notes=(
-            "Re-verified 2026-09-15 against the 4,463-chunk corpus: the "
-            "intro sentence ('Security in the cloud is composed of seven "
-            "areas:') and the seven-item list are now split into separate "
-            "chunks, and the whole intro+list pair is duplicated twice in a "
-            "row in this document (0011/0012 under heading 'Definition', "
-            "then 0014/0015 under heading 'Shared responsibility' — same "
-            "text, different heading_path, a PDF-parsing artifact). Listed "
-            "here are the two list chunks (0012 and 0015) that actually "
-            "contain the seven-item list verbatim; the intro-only chunks "
-            "(0011, 0014) were not included since they don't contain the "
-            "list itself. Supersedes the 2026-09-14 finding about 0005/0006 "
-            "being duplicate siblings — those chunk IDs no longer contain "
-            "this content at all after the follow-on rechunk."
+            "The seven-item list appears in duplicate PDF sections. Chunks 0012 and 0015 contain the actual list; intro-only chunks 0011 and 0014 do not count."
         ),
     ),
     EvalQuery(
@@ -145,10 +127,7 @@ EVAL_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-security-pillar",
         expected_chunk_ids=["waf-security-pillar-0031", "waf-security-pillar-0038"],
         notes=(
-            "Re-verified 2026-09-15: the previously-listed chunks "
-            "(0012-0014) now contain the duplicated 'seven areas' content "
-            "(see q12), not SEC01-BP01. The actual recommendation and "
-            "implementation guidance now live at 0031 and 0038."
+            "SEC01-BP01's recommendation and implementation guidance are in chunks 0031 and 0038. The duplicated seven-areas list does not answer this query."
         ),
     ),
     EvalQuery(
@@ -160,11 +139,7 @@ EVAL_QUERIES: list[EvalQuery] = [
             "waf-operational-excellence-pillar-0025",
         ],
         notes=(
-            "Re-verified 2026-09-15: the previously-listed chunks "
-            "(0010-0012) now contain the 'four best practice areas' "
-            "definition content, not OPS01-BP01. The actual recommendation "
-            "and benefits/implementation-guidance text now live at 0020 "
-            "and 0025."
+            "OPS01-BP01's recommendation and benefits/implementation guidance are in chunks 0020 and 0025, rather than the generic best-practice-area definition."
         ),
     ),
     EvalQuery(
@@ -173,11 +148,7 @@ EVAL_QUERIES: list[EvalQuery] = [
         expected_document_id="waf-reliability-pillar",
         expected_chunk_ids=["waf-reliability-pillar-0029", "waf-reliability-pillar-0031"],
         notes=(
-            "Re-verified 2026-09-15: the previously-listed chunks "
-            "(0009-0010) now contain unrelated Shared-Responsibility-for-"
-            "Resiliency content. The actual resiliency/reliability "
-            "definition and the availability definition now live at 0029 "
-            "and 0031."
+            "Chunks 0029 and 0031 contain the reliability/resiliency and availability definitions; generic shared-responsibility content does not answer the query."
         ),
     ),
     EvalQuery(
@@ -189,13 +160,7 @@ EVAL_QUERIES: list[EvalQuery] = [
             "waf-performance-efficiency-pillar-0021",
         ],
         notes=(
-            "Re-verified 2026-09-15: the previously-listed chunk (0005) "
-            "now contains an unrelated topic list. The anti-patterns are "
-            "split across two list chunks under PERF01-BP01 (0018 and "
-            "0021 — the latter's heading_path is mislabeled 'Implementation "
-            "guidance/Implementation steps' by the chunker but its content "
-            "is still 'You...' anti-pattern bullets continuing the same "
-            "list)."
+            "PERF01-BP01's anti-pattern list spans chunks 0018 and 0021. Chunk 0021 has a misleading implementation-guidance heading but contains continuing anti-pattern bullets."
         ),
     ),
     EvalQuery(
@@ -208,11 +173,7 @@ EVAL_QUERIES: list[EvalQuery] = [
             "waf-cost-optimization-pillar-0024",
         ],
         notes=(
-            "Re-verified 2026-09-15: the previously-listed chunks "
-            "(0009-0011) now contain unrelated paper-introduction/design-"
-            "principles content. The actual recommendation, team-structure "
-            "options, and executive-sponsorship guidance now live at 0021, "
-            "0023, and 0024."
+            "Chunks 0021, 0023 and 0024 cover the recommendation, team-structure options and executive sponsorship. Generic cost design principles do not suffice."
         ),
     ),
     EvalQuery(
@@ -225,12 +186,7 @@ EVAL_QUERIES: list[EvalQuery] = [
             "waf-sustainability-pillar-0014",
         ],
         notes=(
-            "Re-verified 2026-09-15: the previously-listed chunks (0005, "
-            "0007) now contain unrelated paper-introduction and Scope "
-            "1/2/3 emissions content. The actual shared-responsibility "
-            "split (0009-0010: AWS is responsible for sustainability OF "
-            "the cloud, customers for sustainability IN the cloud) plus "
-            "the 'in the cloud' elaboration (0014) now live there."
+            "Chunks 0009 and 0010 distinguish AWS's sustainability OF the cloud from customers' sustainability IN the cloud; chunk 0014 elaborates the customer responsibility."
         ),
     ),
 ]
