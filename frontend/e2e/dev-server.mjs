@@ -29,6 +29,7 @@ const variants = {
   // page's own origin - only Playwright's page.route() interception in
   // live-admin-path.spec.ts ever answers them.
   live: { outDir: "out-live", port: 4311, apiBaseUrl: "/mock-api" },
+  public: { outDir: "out-public", port: 4312, apiBaseUrl: "/mock-api" },
 };
 
 const config = variants[variant];
@@ -46,6 +47,8 @@ execFileSync("npm", ["run", "build:e2e"], {
     ...process.env,
     NEXT_DIST_DIR: config.outDir,
     NEXT_PUBLIC_API_BASE_URL: config.apiBaseUrl,
+    NEXT_PUBLIC_PUBLIC_ACCESS_ENABLED: variant === "public" ? "true" : "false",
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: variant === "public" ? "1x00000000000000000000AA" : "",
   },
 });
 

@@ -12,6 +12,7 @@ const eslintConfig = [
       "out/**",
       "out-fixture/**",
       "out-live/**",
+      "out-public/**",
       "playwright-report/**",
       "test-results/**",
       "node_modules/**",

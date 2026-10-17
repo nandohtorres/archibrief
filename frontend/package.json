@@ -21,6 +21,7 @@
     "lighthouse": "node e2e/dev-server.mjs live --build-only && lhci autorun"
   },
   "dependencies": {
+    "@marsidev/react-turnstile": "1.6.2",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
