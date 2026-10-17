@@ -20,8 +20,7 @@ module docstring):
   forbidden phrase present.
 
 Paid: runs through validate_reasoning_eval.py's real-Bedrock path
-(`--traps`). Never run without Fernando's explicit go-ahead in that
-moment — same standing rule as validate_reasoning_eval.py.
+(`--traps`), so run it deliberately, not as part of routine testing.
 """
 
 from __future__ import annotations
@@ -472,9 +471,8 @@ resource "aws_db_instance" "billing" {
 
 # Text inside quotes is the model citing a claim (usually to refute it,
 # e.g. "the belief that they have 'nothing worth stealing' is a
-# misassessment") - not asserting it. Found on the first real run
-# (2026-10-15): all 3 initial FAILs were the model quoting the bait to
-# reject it.
+# misassessment") - not asserting it. Without this, a model quoting the
+# bait in order to reject it would fail the trap.
 # Single quotes only count when not part of a word, so apostrophes
 # ("startup's") don't open a fake quoted span.
 _QUOTED = re.compile(r"(?<!\w)'[^']*'(?!\w)|\"[^\"]*\"|‘[^’]*’|“[^”]*”")

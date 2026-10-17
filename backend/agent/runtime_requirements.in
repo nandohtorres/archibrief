@@ -1,9 +1,9 @@
 # Direct runtime dependencies for backend/agent/runtime_entrypoint.py, the
 # AgentCore Runtime deployment package's entry point. Scoped to exactly
 # what's imported by the real code path (graph.py -> preflight/retrieve/
-# reason nodes -> shared/clients, shared/models, corpus/lexical_index) —
-# confirmed by grep, not copied from backend/pyproject.toml's full dependency
-# list. beautifulsoup4/pypdf/python-hcl2 are ingestion-only and deliberately
+# reason nodes -> shared/clients, shared/models, corpus/lexical_index), not
+# copied from backend/pyproject.toml's full dependency list.
+# beautifulsoup4/pypdf/python-hcl2 are ingestion-only and deliberately
 # excluded; they are never imported by anything reachable from this
 # entrypoint.
 #

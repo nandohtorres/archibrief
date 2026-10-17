@@ -1,15 +1,13 @@
 """Embed the ingested corpus via Titan V2 and populate S3 Vectors (ADR-0035).
 
-Offline/build-time batch job — run locally, once, on Fernando's explicit
-go-ahead (this calls Bedrock for real and spends real money). Not a
-Lambda, not run per-request. Reads chunks written by `ingest.py` under
-backend/corpus/data/chunks/, embeds each chunk's text, and writes the
-resulting vector + full citation metadata into the S3 Vectors index
-created by infra/modules/s3-vectors (dimension/distance metric locked at
-creation time — must match Titan V2's 1024-dim output exactly).
+Offline/build-time batch job, run locally and deliberately (it calls Bedrock
+for real and costs money). Not a Lambda, not run per-request. Reads chunks
+written by `ingest.py` under backend/corpus/data/chunks/, embeds each chunk's
+text, and writes the resulting vector + full citation metadata into the S3
+Vectors index created by infra/modules/s3-vectors (dimension/distance metric
+locked at creation time — must match Titan V2's 1024-dim output exactly).
 
-Failure-mode design (Codex-reviewed 2026-09-14, independently verified —
-see Work-Project-Deployment-Roadmap.md RAG foundation section):
+Failure-mode design:
 
 - Chunks are processed in bounded waves of _PUT_VECTORS_BATCH_SIZE, not
   submitted all at once. A ThreadPoolExecutor's context manager only
@@ -100,18 +98,15 @@ def load_checkpoint() -> dict[str, str]:
     """Returns {chunk_id: embedding_hash} for chunks already embedded and
     written under the CURRENT manifest (bucket/index/model). Keyed by
     `_embedding_hash(chunk)` — embedding_input (heading + text) plus
-    content_type and the parser/chunker/corpus version fields — not just
-    the chunk's own `content_hash` (body text only). Two real gaps found
-    via Codex review: since heading_path is prepended before embedding
-    but wasn't part of the invalidation key (2026-09-14), a chunk whose
-    heading_path changed while its body text stayed the same would have
-    been silently skipped on resume; since content_type/version fields
-    weren't part of the key either (2026-09-15), a chunk reclassified by a
-    parser fix (e.g. prose -> table) with byte-identical text would have
-    been silently skipped too, leaving a stale embedding paired with new
-    metadata. A checkpoint written against a different target is refused,
-    not silently reused — a stale checkpoint against a recreated/different
-    index would otherwise make the script silently skip every chunk."""
+    content_type and the parser/chunker/corpus version fields — not just the
+    chunk's own `content_hash` (body text only). Otherwise a chunk whose
+    heading_path changed (it is prepended before embedding), or that was
+    reclassified by a parser fix (e.g. prose -> table) with byte-identical
+    text, would be silently skipped on resume, leaving a stale embedding paired
+    with new metadata. A checkpoint written against a different target is
+    refused, not silently reused — a stale checkpoint against a
+    recreated/different index would otherwise make the script silently skip
+    every chunk."""
     if not _CHECKPOINT_PATH.exists():
         return {}
     data = json.loads(_CHECKPOINT_PATH.read_text(encoding="utf-8"))
@@ -155,12 +150,10 @@ def embed_with_retry(embedder: BedrockEmbeddingClient, text: str) -> list[float]
 
 def compute_boilerplate_lines(chunks: list[dict]) -> dict[str | None, frozenset[str]]:
     """Per-document_id set of running-header/footer lines to strip before
-    embedding. Real gap found 2026-09-15 (independent Codex review of q12,
-    "seven areas that make up security in the cloud"): every WAF pillar
-    PDF repeats its title as a running header (e.g. "Security Pillar AWS
-    Well-Architected Framework") on nearly every page, so it ends up
-    baked into a third or more of that document's chunks — diluting the
-    genuine semantic signal Titan embeds for those chunks. See the module
+    embedding. Every WAF pillar PDF repeats its title as a running header (e.g.
+    "Security Pillar AWS Well-Architected Framework") on nearly every page, so
+    it ends up baked into a third or more of that document's chunks — diluting
+    the genuine semantic signal Titan embeds for those chunks. See the module
     constants for why both a count and a fraction gate are required."""
     by_document: dict[str | None, list[dict]] = {}
     for chunk in chunks:
@@ -170,14 +163,13 @@ def compute_boilerplate_lines(chunks: list[dict]) -> dict[str | None, frozenset[
     for document_id, doc_chunks in by_document.items():
         line_counts: dict[str, int] = {}
         for chunk in doc_chunks:
-            # Real gap found 2026-09-15 (Codex review): count each line at
-            # most once per chunk. A malformed TOC/index chunk can repeat
-            # a line (e.g. "Implementation guidance ... 8") many times
-            # internally — waf-cost-optimization-pillar-0000 repeats one
-            # such line 9 times by itself — which must not let 1-2
-            # pathological chunks satisfy the >=15-occurrence gate on
-            # their own. The numerator has to be distinct chunks to be
-            # comparable with the >=15% chunk-fraction gate below.
+            # Count each line at most once per chunk. A malformed TOC/index
+            # chunk can repeat a line (e.g. "Implementation guidance ... 8")
+            # many times internally — waf-cost-optimization-pillar-0000 repeats
+            # one such line 9 times by itself — which must not let 1-2
+            # pathological chunks satisfy the >=15-occurrence gate on their
+            # own. The numerator has to be distinct chunks to be comparable
+            # with the >=15% chunk-fraction gate below.
             lines_in_chunk = {line.strip() for line in chunk["text"].split("\n") if line.strip()}
             for line in lines_in_chunk:
                 line_counts[line] = line_counts.get(line, 0) + 1
@@ -200,30 +192,22 @@ def _strip_boilerplate(text: str, boilerplate_lines: frozenset[str]) -> str:
 
 
 def embedding_input(chunk: dict, boilerplate_lines: frozenset[str] = frozenset()) -> str:
-    """What actually gets sent to Titan — heading context prepended to
-    the chunk text, with per-document boilerplate lines (see
-    compute_boilerplate_lines) stripped out first. Real gap found
-    2026-09-14 (Codex review of the first retrieval validation,
-    independently confirmed): labels like "COST01-BP01" usually live in
-    the heading, not the body text, so embedding text alone made those
-    chunks hard to find by their own label. The stored citation text
-    (metadata["text"], via to_vector_record) is untouched — this only
+    """What actually gets sent to Titan — heading context prepended to the
+    chunk text, with per-document boilerplate lines (see
+    compute_boilerplate_lines) stripped out first. Labels like "COST01-BP01"
+    usually live in the heading, not the body text, so embedding the text alone
+    makes those chunks hard to find by their own label. The stored citation
+    text (metadata["text"], via to_vector_record) is untouched — this only
     changes what the embedding model sees, not what gets cited.
 
-    Real gap found 2026-09-15 (Codex review): a chunk whose entire body
-    is nothing but a repeated boilerplate header (137 such chunks in the
-    current corpus, e.g. waf-cost-optimization-pillar-0019 — a
+    A chunk whose entire body is a repeated boilerplate header (137 such
+    chunks in the current corpus, e.g. waf-cost-optimization-pillar-0019, a
     "COST01-BP01 Establish ownership..." Implementation guidance section
-    whose body is just the running pillar-title header) used to fall back
-    to the ORIGINAL unstripped text, i.e. embedding the boilerplate itself
-    — even though heading_path already carries real, specific signal for
-    these chunks and embedding_input prepends it anyway. Falling back to
-    heading_path alone (no boilerplate, no empty body) is strictly better.
-    heading_path is empty for none of the 137 real header-only chunks
-    found, but a chunk with neither real body text nor heading_path would
-    have nothing else to embed, so as a last resort it keeps the original
-    (boilerplate-including) text — embedding boilerplate beats embedding
-    nothing."""
+    whose body is just the running pillar-title header) falls back to
+    heading_path alone, which carries the real, specific signal. A chunk
+    with neither body text nor heading_path keeps its original
+    (boilerplate-including) text as a last resort: embedding boilerplate
+    beats embedding nothing."""
     heading_path = chunk.get("heading_path") or []
     heading_prefix = " > ".join(heading_path)
     stripped = _strip_boilerplate(chunk["text"], boilerplate_lines)
@@ -235,18 +219,15 @@ def embedding_input(chunk: dict, boilerplate_lines: frozenset[str] = frozenset()
 
 
 def _embedding_hash(chunk: dict, boilerplate_lines: frozenset[str] = frozenset()) -> str:
-    """Hash used for checkpoint invalidation — see load_checkpoint's
-    docstring for why this must NOT be chunk["content_hash"] (body text
-    only). Also NOT just a hash of embedding_input: a real gap found via
-    Codex review 2026-09-15, on top of the earlier heading_path gap this
-    function already fixed — a chunk whose parser/chunker/corpus_version
-    or content_type changed (e.g. prose -> table, from a segmentation
-    fix) while its heading+text stayed byte-identical would otherwise be
-    silently skipped on a resumed/rerun embed, leaving a stale embedding
-    paired with new metadata. content_type and the three version fields
-    are included alongside embedding_input (what's actually sent to
-    Titan) so any of those changing forces re-embedding even when the
-    text itself didn't move."""
+    """Hash used for checkpoint invalidation — see load_checkpoint's docstring
+    for why this must NOT be chunk["content_hash"] (body text only). Also NOT
+    just a hash of embedding_input: a chunk whose parser/chunker/corpus_version
+    or content_type changed (e.g. prose -> table, from a segmentation fix)
+    while its heading+text stayed byte-identical would otherwise be silently
+    skipped on a resumed/rerun embed, leaving a stale embedding paired with new
+    metadata. content_type and the three version fields are included alongside
+    embedding_input (what's actually sent to Titan) so any of those changing
+    forces re-embedding even when the text itself didn't move."""
     payload = "\x1f".join(
         [
             embedding_input(chunk, boilerplate_lines),
@@ -261,18 +242,16 @@ def _embedding_hash(chunk: dict, boilerplate_lines: frozenset[str] = frozenset()
 
 def to_vector_record(chunk: dict, embedding: list[float]) -> dict:
     """S3 Vectors metadata is a free-form JSON document — the whole chunk
-    (minus chunk_id, which becomes the vector key) travels as metadata,
-    giving every retrieved vector full citation info with no second
-    lookup. `text` is one of the index's locked non-filterable keys
+    (minus chunk_id, which becomes the vector key) travels as metadata, giving
+    every retrieved vector full citation info with no second lookup. `text` is
+    one of the index's locked non-filterable keys
     (infra/modules/s3-vectors/variables.tf), so it's excluded from the
-    filterable-metadata size limit. None values are stripped — AWS's
-    documented metadata value types are string/number/boolean/list; null
-    isn't clearly guaranteed, and some HTML-source chunks have
-    source_edition=None (no dated edition to record). Empty lists are
-    also stripped — confirmed live against the real index (2026-09-14):
-    S3 Vectors rejects `PutVectors` outright with "Empty arrays are not
-    allowed in metadata" for the 4 front-matter chunks whose
-    heading_path is []."""
+    filterable-metadata size limit. None values are stripped — AWS's documented
+    metadata value types are string/number/boolean/list; null isn't clearly
+    guaranteed, and some HTML-source chunks have source_edition=None (no dated
+    edition to record). Empty lists are also stripped: S3 Vectors rejects
+    `PutVectors` outright with "Empty arrays are not allowed in metadata" for
+    the 4 front-matter chunks whose heading_path is []."""
     metadata = {
         key: value
         for key, value in chunk.items()

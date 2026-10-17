@@ -5,8 +5,8 @@ per-request. Writes raw fetched source + resulting chunks to
 backend/corpus/data/ for inspection before any embedding/S3 Vectors
 upload step, which is separate and not triggered by this script.
 
-Source list is locked in Research-Work-RAG-Corpus-Sources.md (approved
-2026-09-09) — do not add a source here that isn't in that list.
+The source list is a curated, reviewed set: add a source only after
+checking its license and relevance, not ad hoc.
 """
 
 import json
@@ -21,10 +21,9 @@ from .normalize_pdf import normalize_pdf
 
 _USER_AGENT = "Mozilla/5.0 (ArchiBrief corpus ingest; portfolio project)"
 _DATA_DIR = Path(__file__).parent / "data"
-_CORPUS_VERSION = "v3"  # bumped 2026-09-15: PDF content_type fixes — real table/code detection plus
-# blank-line/heading-continuation segmentation fixes (see normalize_pdf.py's _PARSER_VERSION comment
-# and chunking.py's _CHUNKER_VERSION comment) — v2 was 1,073 chunks pre-boilerplate-stripping,
-# 3,327 chunks post; this round changes content_type labels and some block boundaries on top of that.
+# Bump whenever re-ingestion can change chunk content, boundaries or content_type
+# labels (see normalize_pdf.py's _PARSER_VERSION and chunking.py's _CHUNKER_VERSION).
+_CORPUS_VERSION = "v3"
 
 
 @dataclass(frozen=True)
@@ -33,12 +32,10 @@ class Source:
     url: str
     kind: str  # "html" | "pdf"
     source_edition: str | None = None
-    # Verified 2026-09-11 against AWS's own Site Terms
-    # (aws.amazon.com/terms/, "LICENSE AND SITE ACCESS" section):
-    # docs.aws.amazon.com documentation is CC-BY-SA-4.0. All current
-    # sources are docs.aws.amazon.com pages/PDFs, so this is a safe
-    # default — override per-source if a future addition uses a
-    # different host/license.
+    # Per AWS's Site Terms (aws.amazon.com/terms/, "LICENSE AND SITE ACCESS"
+    # section): docs.aws.amazon.com documentation is CC-BY-SA-4.0. All current
+    # sources are docs.aws.amazon.com pages/PDFs, so this is a safe default —
+    # override per-source if a future addition uses a different host/license.
     license: str = "CC-BY-SA-4.0"
 
 
