@@ -42,8 +42,8 @@ def _settings(summary: dict, resource_type: str) -> dict:
 
 
 def test_the_live_run_case_multi_az_true_is_stated_not_guessed():
-    # The 2026-10-15 live review: the model called Multi-AZ "likely
-    # absent" on this exact instance.
+    # Unstated, the model called Multi-AZ "likely absent" on this exact
+    # instance.
     settings = _settings(
         build_resource_summary(
             _parse_fixture("t13_rds_encryption_via_var_default_false")
@@ -55,7 +55,7 @@ def test_the_live_run_case_multi_az_true_is_stated_not_guessed():
     assert settings["engine"] == "postgres"
     # The RDS API default; the model guessed 0 when it wasn't stated.
     assert settings["backup_retention_period"] == "not set (default: 1)"
-    # The 2026-10-15 re-run: the model guessed these defaults wrong.
+    # Unstated, the model guessed these defaults wrong.
     assert settings["skip_final_snapshot"] == "not set (default: false)"
     assert settings["publicly_accessible"] == "not set (default: false)"
     assert settings["auto_minor_version_upgrade"] == "not set (default: true)"
@@ -191,8 +191,8 @@ def test_every_default_is_for_an_allowlisted_setting():
 
 
 def test_short_instruction_words_in_a_value_are_unknown(tmp_path):
-    # Got through the first version (2026-10-15 trap09): 19 identifier
-    # characters, so it passed a plain length/charset check.
+    # 19 identifier characters, so it passes a plain length/charset check
+    # (trap09).
     parsed = _parse_text(
         tmp_path,
         """
@@ -223,8 +223,8 @@ def test_every_string_format_is_for_an_allowlisted_setting():
 
 
 def test_count_and_for_each_copies_are_stated(tmp_path):
-    # The FEC demo run (2026-10-15): with three instances made by
-    # count = 3, the model stated as fact that each cluster had one.
+    # Unstated, with three instances made by count = 3, the model said
+    # as fact that each cluster had one.
     parsed = _parse_text(
         tmp_path,
         """
@@ -266,8 +266,8 @@ resource "aws_s3_bucket" "single" {}
 
 
 def test_backup_plan_rules_are_stated(tmp_path):
-    # The Medicare demo run (2026-10-15): the model said schedule and
-    # retention "aren't visible"; the plan had four rules.
+    # Unstated, the model said schedule and retention "aren't visible"
+    # when the plan had four rules.
     parsed = _parse_text(
         tmp_path,
         """
@@ -335,8 +335,8 @@ resource "aws_backup_plan" "this" {
 
 
 def test_rds_cluster_snapshot_settings_are_stated(tmp_path):
-    # The FEC demo re-run (2026-10-16) claimed copy_tags_to_snapshot wasn't
-    # confirmed; the code set it on every cluster.
+    # Unstated, the model claimed copy_tags_to_snapshot wasn't confirmed
+    # when the code set it on every cluster.
     parsed = _parse_text(
         tmp_path,
         """

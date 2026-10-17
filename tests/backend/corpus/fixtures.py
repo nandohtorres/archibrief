@@ -36,7 +36,7 @@ def build_sample_pdf_bytes_with_shared_page() -> bytes:
     """Two outline entries pointing at the same page (a heading and its
     own first sub-heading both landing on the same printed page) — the
     real-world pattern that caused massive chunk duplication in the WAF
-    pillar PDFs (2026-09-14, see Work-Project-Issues-Log)."""
+    pillar PDFs."""
     from io import BytesIO
 
     from pypdf import PdfReader, PdfWriter
@@ -103,11 +103,10 @@ def build_sample_pdf_bytes_with_a_far_apart_gap(gap_pages: int = 7) -> bytes:
 
 def build_sample_pdf_bytes_with_same_depth_siblings_sharing_a_page() -> bytes:
     """Two same-depth siblings (not a parent/child pair) both resolving to
-    the same page — the real pattern behind a 2026-09-14 finding: real
-    WAF pillar PDFs have cases like "COST04-BP03 Decommission resources"
+    the same page. Real WAF pillar PDFs have cases like "COST04-BP03 Decommission resources"
     and "COST04-BP04 Decommission resources automatically" both landing
-    on page 75. Collapsing same-page entries indiscriminately (as an
-    earlier fix did) drops one sibling's heading entirely and mislabels
+    on page 75. Collapsing same-page entries indiscriminately drops one
+    sibling's heading entirely and mislabels
     its content under the other's — confirmed in 5 of 6 real pillar
     PDFs. Both siblings must keep their own section here, even though
     that means near-identical text, because a correct citation under
@@ -146,7 +145,7 @@ def build_sample_pdf_bytes_with_same_depth_siblings_sharing_a_page() -> bytes:
 
 
 def build_sample_pdf_bytes_with_a_broken_entry_between_valid_siblings() -> bytes:
-    """Reproduces a real 2026-09-14 finding on the WAF Operational
+    """Reproduces a real case in the WAF Operational
     Excellence pillar PDF: a broken outline entry (resolving before its
     own parent's page, so it gets dropped) sits between two valid sibling
     subtrees at the same depth. A naive "track the last page seen at each

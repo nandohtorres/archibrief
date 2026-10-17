@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Until 2026-10-15 a Google Fonts @import in globals.css used "&amp;"
-// between families (HTML escaping, wrong in CSS), so only the first family
-// loaded and the site fell back to system fonts unnoticed. Fonts now come
-// from next/font in layout.tsx; these checks keep it that way.
+// A Google Fonts @import with "&amp;" between families (HTML escaping,
+// wrong in CSS) loads only the first family, and the site silently falls
+// back to system fonts. Fonts come from next/font in layout.tsx; these
+// checks keep it that way.
 const frontend = join(__dirname, "../../../frontend/app");
 const css = readFileSync(join(frontend, "globals.css"), "utf8");
 const layout = readFileSync(join(frontend, "layout.tsx"), "utf8");

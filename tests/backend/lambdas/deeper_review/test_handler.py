@@ -100,8 +100,8 @@ class _Env:
 
 @pytest.fixture
 def env(monkeypatch):
-    # moto, not permissive fakes, so key schemas (Codex F02) and the
-    # conditional in-flight claim (Codex F19) are really evaluated.
+    # moto, not permissive fakes, so key schemas and the conditional
+    # in-flight claim are really evaluated.
     with mock_aws():
         ddb = boto3.resource("dynamodb", region_name="us-east-1")
         reviews = ddb.create_table(
@@ -171,7 +171,7 @@ def test_runs_deeper_pass_and_persists_new_finding(env):
 
 
 def test_agent_read_timeout_is_under_the_gateway_limit(env):
-    # Regression (Codex F19): HTTP API cuts a Lambda integration at 30s.
+    # HTTP API cuts a Lambda integration at 30s.
     env.seed()
     handler(_event("r1", "f1"), None)
     assert _FakeAgentCoreRuntimeClient.inits == [
@@ -181,7 +181,7 @@ def test_agent_read_timeout_is_under_the_gateway_limit(env):
 
 
 def test_repeat_request_returns_stored_result_without_a_second_paid_run(env):
-    # Regression (Codex F19): a retry or double-click re-invoked the agent.
+    # A retry or double-click must not re-invoke the agent.
     env.seed()
     first = handler(_event("r1", "f1"), None)
 
@@ -277,8 +277,8 @@ def test_returns_502_when_agent_produces_no_valid_findings(env):
 
 
 def test_kill_switch_blocks_deeper_before_any_paid_call(env, monkeypatch):
-    # Regression (Codex F08): deeper review invoked AgentCore directly,
-    # never passing the state machine's kill-switch check.
+    # Deeper review invokes AgentCore directly, outside the state machine's
+    # kill-switch check, so it must check the kill switch itself.
     env.seed()
     monkeypatch.setattr(handler_module, "paid_work_allowed", lambda: False)
 

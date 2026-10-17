@@ -75,8 +75,8 @@ def test_resumes_paused_execution_and_clears_token(table):
 
 
 def test_does_not_overwrite_fields_written_by_others(table):
-    # Regression (Codex F20): the old handler wrote back a whole-item
-    # snapshot read before resuming, wiping fields written in between.
+    # Writing back a whole-item snapshot read before resuming would wipe
+    # fields written in between.
     table.put_item(Item={**_waiting(), "currentStage": "reasoning", "terraformRepoRef": "repo"})
 
     handler(_event("r1", {"answers": {"budget_ceiling": "50000"}}), None)
@@ -179,7 +179,7 @@ def test_returns_400_for_invalid_json_body(table):
 
 
 def test_kill_switch_blocks_resume_and_keeps_token(table, monkeypatch):
-    # Regression (Codex F08): resuming skipped the kill switch.
+    # Resuming must still honor the kill switch.
     table.put_item(Item=_waiting())
     monkeypatch.setattr(handler_module, "paid_work_allowed", lambda: False)
 
