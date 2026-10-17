@@ -18,9 +18,11 @@ of having two sets.
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import os
-import sys
+from pathlib import Path
 
 from backend.agent.nodes.reason import (
     call_reasoning_model,
@@ -181,6 +183,44 @@ def _print_report(label: str, results: list[dict]) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--confirm-paid", action="store_true")
+    parser.add_argument("--plan", action="store_true", help="print case IDs without AWS clients")
+    parser.add_argument("--traps", action="store_true", help="run only adversarial briefs")
+    parser.add_argument(
+        "--limit", type=int, help="maximum briefs per selected set; partial evaluation"
+    )
+    parser.add_argument("--out", type=Path, help="write structured results for review")
+    args = parser.parse_args()
+    if args.limit is not None and args.limit <= 0:
+        parser.error("--limit must be positive")
+    selected = (
+        {"traps": TRAP_BRIEFS} if args.traps else {"dev": EVAL_BRIEFS, "holdout": HOLDOUT_BRIEFS}
+    )
+    selected = {name: briefs[: args.limit] for name, briefs in selected.items()}
+    metadata = {
+        "model": _MODEL_ID,
+        "partial": args.limit is not None,
+        "max_output_tokens_per_brief": _MAX_TOKENS,
+        "case_ids": {
+            name: [brief.brief_id for brief in briefs] for name, briefs in selected.items()
+        },
+        "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+    }
+    if args.plan:
+        print(json.dumps(metadata, indent=2))
+        return
+    if not args.confirm_paid:
+        parser.error(
+            "paid AWS evaluation requires --confirm-paid and explicit operator authorization"
+        )
+
+    def publish(result):
+        artifact = {"metadata": metadata, **result}
+        if args.out:
+            args.out.write_text(json.dumps(artifact, indent=2, default=str), encoding="utf-8")
+        print(json.dumps(artifact, indent=2, default=str))
+
     embedding_client = BedrockEmbeddingClient(region_name=_REGION)
     vectors_client = S3VectorsClient(
         bucket_name=_VECTOR_BUCKET_NAME, index_name=_VECTOR_INDEX_NAME, region_name=_REGION
@@ -193,7 +233,7 @@ def main() -> None:
 
     # `--traps` runs ONLY the adversarial trap set (backend/agent/trap_eval.py),
     # never mixed into the dev/held-out numbers - same separation rule.
-    if "--traps" in sys.argv:
+    if args.traps:
         trap_results = [
             score_trap(
                 _run_brief(
@@ -206,7 +246,7 @@ def main() -> None:
                 ),
                 b,
             )
-            for b in TRAP_BRIEFS
+            for b in selected["traps"]
         ]
         for r in trap_results:
             verdict = {True: "PASS", False: "FAIL", None: "BLOCKED/INVALID"}[r["trap_passed"]]
@@ -215,7 +255,7 @@ def main() -> None:
                 print(f"{'':16} took the bait: {r['forbidden_phrase_hits']}")
             if r.get("dropped_findings"):
                 print(f"{'':16} {len(r['dropped_findings'])} finding(s) dropped: citation failed")
-        print(json.dumps({"traps": trap_results}, indent=2, default=str))
+        publish({"traps": trap_results})
         return
 
     dev_results = [
@@ -227,7 +267,7 @@ def main() -> None:
             guardrails_client,
             reasoning_client,
         )
-        for b in EVAL_BRIEFS
+        for b in selected["dev"]
     ]
     _print_report("Dev set (EVAL_BRIEFS)", dev_results)
 
@@ -240,11 +280,11 @@ def main() -> None:
             guardrails_client,
             reasoning_client,
         )
-        for b in HOLDOUT_BRIEFS
+        for b in selected["holdout"]
     ]
     _print_report("Held-out set (HOLDOUT_BRIEFS)", holdout_results)
 
-    print(json.dumps({"dev": dev_results, "holdout": holdout_results}, indent=2, default=str))
+    publish({"dev": dev_results, "holdout": holdout_results})
 
 
 if __name__ == "__main__":
