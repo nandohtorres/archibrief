@@ -1,14 +1,12 @@
 # Terraform module: step-functions-lambda
-# Step Functions (Standard) owns only the durable outer job lifecycle —
+# Step Functions (Standard) owns only the durable outer job lifecycle:
 # accept, validate, persist input, invoke the agent stage once,
-# validate/persist result, publish status (ADR-0028). Each bounded
-# stateless Lambda (Ingest, RuleEngine, Validate, Audit, Finalize) gets
-# its own least-privilege execution role defined right here, in the same
-# module as the Lambda itself (ADR-0021) — never a shared/generic role.
-# The one reasoning/retrieval subworkflow runs in AgentCore Runtime, not
-# duplicated here — the state machine below calls it once via an AWS SDK
-# integration task, referencing an already-deployed AgentCore Runtime
-# (agentcore_runtime_arn) that doesn't exist until account bootstrap.
+# validate/persist the result, publish status (ADR-0028). Each stateless
+# Lambda (Ingest, RuleEngine, Validate, Audit, Finalize) gets its own
+# least-privilege execution role, defined in this module next to the
+# Lambda itself (ADR-0021), never a shared role. The reasoning/retrieval
+# subworkflow runs in AgentCore Runtime; the state machine calls it once
+# through an AWS SDK integration task (agentcore_runtime_arn).
 
 locals {
   lambda_environment = {
@@ -27,41 +25,17 @@ locals {
     }
   }
 
-  # `timeout` added 2026-10-12, live-tested: none of these Lambdas ever
-  # had an explicit timeout, so every one of them silently ran on AWS
-  # Lambda's bare 3-second default (confirmed directly — Ingest's
-  # CloudWatch log showed "Status: timeout" at exactly 3000.00 ms, with
-  # no exception/traceback, because it was genuinely still working: S3
-  # download + inline Guardrails check + hcl2 parsing all take longer
-  # than 3s). The api-gateway module's Lambdas already set this
-  # explicitly per function (create_upload=5, deeper_review=60, etc.) —
-  # this module just never did. Ingest gets the most generous value
-  # (network + Bedrock call); rule_engine/validate are pure in-memory
-  # compute; audit/finalize/store_clarification_token each do one or two
-  # DynamoDB/S3 calls.
+  # Every Lambda sets timeout and memory_size explicitly; the AWS defaults
+  # (3 seconds, 128 MB) are too small. Lambda CPU scales with memory, and
+  # at 128 MB HCL parsing with lark (an Earley parser) is CPU-starved
+  # enough to time out on small inputs that parse in milliseconds locally.
   #
-  # `memory_size` added 2026-10-12, same live-testing session, same root
-  # cause as the timeout gap above: nobody ever set it either, so every
-  # one of these ran on AWS Lambda's bare 128 MB default. Lambda's CPU
-  # allocation scales with configured memory — at 128 MB a function gets
-  # a small fraction of one vCPU. Confirmed by direct reproduction: the
-  # exact 317-byte main.tf that hung Ingest for the full 30s timeout
-  # (stage-tracing showed it got stuck inside parse_terraform_files's
-  # hcl2.load() call, right after extraction) parses in ~38ms on a normal
-  # dev machine with the identical hcl2/lark versions — the code and
-  # input were never the problem, Ingest was just CPU-starved running
-  # lark's Earley-parser grammar at 128 MB. Ingest gets the most (HCL
-  # parsing via lark is real CPU work, on top of the S3 download and
-  # Bedrock Guardrails call); the rest get a moderate bump over the
-  # 128 MB default since none of them had ever been sized deliberately.
-  #
-  # rule_engine raised to Ingest's sizing 2026-10-15: since the trap work
-  # it also parses HCL (hcl_eval resolves jsonencode() policies with
-  # hcl2.loads), and the first call in a process builds lark's parser
-  # (~1.1s on a dev machine, no cache file ships in the zip). At 256 MB
-  # that blew the 10s timeout on every review whose IAM policies use
-  # jsonencode() (the CloudGoat demo, twice); other inputs never built
-  # the parser, which is why it went unnoticed.
+  # Ingest and RuleEngine get the most: Ingest downloads the archive,
+  # calls Guardrails and parses HCL; RuleEngine also parses HCL (hcl_eval
+  # resolves jsonencode() policies with hcl2.loads), and the first call in
+  # a process builds lark's parser, which takes over a second. Validate is
+  # pure in-memory compute; Audit, Finalize and StoreClarificationToken
+  # each make one or two DynamoDB/S3 calls.
   lambda_specs = {
     ingest      = { handler = "backend.lambdas.ingest.handler.handler", zip = var.lambda_zip_paths.ingest, timeout = 30, memory_size = 1024 }
     rule_engine = { handler = "backend.lambdas.rule_engine.handler.handler", zip = var.lambda_zip_paths.rule_engine, timeout = 30, memory_size = 1024 }
@@ -121,9 +95,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_logs" {
 # Validate is pure compute on its event payload. RuleEngine only reads
 # the parsed Terraform Ingest stored under parsed/ (see below).
 #
-# Audit and Finalize used to share one policy (reviews + audit tables,
-# PutObject on the whole reports bucket). Split per Lambda to what each
-# handler actually calls (Codex F16):
+# Audit and Finalize each get only what their handler calls:
 # - Audit: one PutItem on the audit table. Nothing else.
 # - Finalize: GetItem (fetch-and-merge) + PutItem on the reviews table,
 #   and PutObject only under reports/, where the evidence ledger lives
@@ -162,9 +134,10 @@ resource "aws_iam_role_policy" "finalize_data_access" {
   policy = data.aws_iam_policy_document.finalize_data_access.json
 }
 
-# Same inline policy names as before, so move rather than destroy+create:
-# with separate addresses Terraform could create the new policy and then
-# delete the old one of the same name, leaving the role with none.
+# These were previously one for_each policy with the same inline policy
+# names. Move rather than destroy+create: with separate addresses
+# Terraform could create the new policy and then delete the old one of
+# the same name, leaving the role with none.
 moved {
   from = aws_iam_role_policy.audit_finalize_data_access["audit"]
   to   = aws_iam_role_policy.audit_data_access
@@ -192,14 +165,11 @@ resource "aws_iam_role_policy" "store_clarification_token_data_access" {
   policy = data.aws_iam_policy_document.store_clarification_token_data_access.json
 }
 
-# Ingest calls Guardrails inline (ADR-0033) — see the Ingest Lambda's
-# handler and its GUARDRAIL_ID/GUARDRAIL_VERSION environment variables
-# above. Always created: this module's caller (infra/environments/dev)
-# always wires a real module.guardrails output here, so guardrail_id is
-# never actually optional in practice — a count/for_each conditioned on
-# it would depend on a value unknown until apply (the guardrail doesn't
-# exist yet on a fresh account) and Terraform can't plan a resource
-# count from an unknown value. See Work-Project-Issues-Log.md, 2026-09-09.
+# Ingest calls Guardrails inline (ADR-0033) using the GUARDRAIL_ID and
+# GUARDRAIL_VERSION environment variables above. Always created, not
+# conditioned on guardrail_id: on a fresh account the guardrail ID is
+# unknown until apply, and Terraform can't plan a count from an unknown
+# value.
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "ingest_guardrails_apply" {
@@ -218,21 +188,18 @@ resource "aws_iam_role_policy" "ingest_guardrails_apply" {
   policy = data.aws_iam_policy_document.ingest_guardrails_apply.json
 }
 
-# Added 2026-10-12 (ADR-0045, direct-upload archive_path design) —
-# Ingest now downloads the client's already-uploaded archive from S3
-# (backend/lambdas/ingest/handler.py's _resolve_archive_path) instead of
-# requiring a local archive_path the client could never actually supply.
-# Scoped to the "uploads/" prefix only — the same prefix create_upload's
-# presigned POST (infra/modules/api-gateway) is scoped to write into,
-# never the whole reports bucket (which also holds Finalize's trusted
-# evidence ledgers, a different trust level of content entirely).
+# Ingest downloads the client's uploaded archive from S3 (ADR-0045;
+# _resolve_archive_path in backend/lambdas/ingest/handler.py). Scoped to
+# the uploads/ prefix that create_upload's presigned POST writes into,
+# never the whole reports bucket, which also holds Finalize's trusted
+# evidence ledgers.
 data "aws_iam_policy_document" "ingest_s3_download" {
   statement {
     effect    = "Allow"
     actions   = ["s3:GetObject"]
     resources = ["${var.reports_bucket_arn}/uploads/*"]
   }
-  # Parsed Terraform handed to RuleEngine by reference (Codex F07).
+  # Parsed Terraform is handed to RuleEngine by S3 reference.
   statement {
     effect    = "Allow"
     actions   = ["s3:PutObject"]
@@ -352,8 +319,7 @@ resource "aws_lambda_function" "this" {
 
   # Per-function environment (see local.lambda_environment). Only Ingest
   # calls Guardrails directly (ADR-0033) — Reason's own call happens inside
-  # AgentCore Runtime. Audit needs its table name, or it would have nowhere
-  # to write (Codex F13).
+  # AgentCore Runtime. Audit needs its table name to know where to write.
   dynamic "environment" {
     for_each = contains(keys(local.lambda_environment), each.key) ? [1] : []
     content {
@@ -401,20 +367,11 @@ data "aws_iam_policy_document" "state_machine_invoke" {
     resources = [var.kill_switch_parameter_arn]
   }
 
-  # For the new leading IdempotencyGate Task (2026-09-17 fix) — a
-  # conditional PutItem, called directly by the state machine's own SDK
-  # integration (not by any Lambda), so this permission belongs on the
-  # state machine's role, not the Finalize Lambda's own
-  # finalize_data_access policy (which covers Finalize's separate, later
-  # PutItem call).
-  #
-  # dynamodb:UpdateItem added 2026-10-13 for the new RecordStage* states
-  # (below) — a direct SDK UpdateItem call before each real pipeline
-  # stage, writing "currentStage" onto the review's existing item so
-  # GET /reviews/{reviewId} can report real progress instead of just
-  # "pending"/"needs_clarification"/"complete". Same resource as the
-  # PutItem grant above — one table, two different direct-SDK write
-  # patterns from the state machine's own role.
+  # The state machine writes to the reviews table directly through SDK
+  # integrations, so these grants belong on its role, not a Lambda's:
+  # PutItem for the IdempotencyGate conditional write, and UpdateItem for
+  # the RecordStage* states that set currentStage before each pipeline
+  # stage so GET /reviews/{reviewId} can report progress.
   statement {
     effect    = "Allow"
     actions   = ["dynamodb:PutItem", "dynamodb:UpdateItem"]
@@ -426,17 +383,11 @@ data "aws_iam_policy_document" "state_machine_invoke" {
     content {
       effect  = "Allow"
       actions = ["bedrock-agentcore:InvokeAgentRuntime"]
-      # Found 2026-10-12, live-tested: a real InvokeAgentRuntime call is
-      # authorized against the RUNTIME-ENDPOINT resource
-      # ("runtime/<id>/runtime-endpoint/DEFAULT" — confirmed via the
-      # actual AccessDeniedException's resource ARN), not the bare
-      # runtime ARN this statement granted on exact-match alone. The
-      # permissions boundary's own AllowAgentCoreInvoke statement already
-      # used a wildcard ("runtime/*") and would have allowed this; it was
-      # this identity policy's own exact-match Resource that was too
-      # narrow. Granting both forms since AWS's docs don't pin down
-      # whether a bare-ARN invocation (no explicit endpoint) is ever
-      # authorized against the unsuffixed ARN directly.
+      # InvokeAgentRuntime is authorized against the runtime-endpoint
+      # resource ("runtime/<id>/runtime-endpoint/DEFAULT"), not the bare
+      # runtime ARN. Both forms are granted because AWS's docs don't say
+      # whether an invocation without an explicit endpoint is ever
+      # authorized against the unsuffixed ARN.
       resources = [var.agentcore_runtime_arn, "${var.agentcore_runtime_arn}/runtime-endpoint/*"]
     }
   }
@@ -463,57 +414,39 @@ resource "aws_iam_role_policy" "state_machine_invoke" {
   policy = data.aws_iam_policy_document.state_machine_invoke.json
 }
 
-# Outer job lifecycle only (ADR-0028) — accept/validate/persist input,
+# Outer job lifecycle only (ADR-0028): accept/validate/persist input,
 # invoke Ingest -> RuleEngine -> the Agent subworkflow once -> Validate ->
 # Audit -> Finalize, publish status. The PreflightGate pause/resume and
-# Retrieve/Reason loop live inside AgentCore, not duplicated as states
-# here — "InvokeAgent" is a single opaque task from this state machine's
-# perspective.
+# Retrieve/Reason loop live inside AgentCore; "InvokeAgent" is a single
+# opaque task from this state machine's perspective.
 #
-# REQUIRED StartExecution Input shape (2026-09-17 fix — every field below
-# is read via a bare "$.xxx" JSONPath somewhere in this definition, and
-# Step Functions raises a States.Runtime error if a referenced path is
-# absent, so none of these are truly optional at the ASL layer even where
-# the Lambda handler itself would tolerate a missing key via .get()):
+# Required StartExecution input. Every field is read through a bare
+# "$.xxx" JSONPath somewhere below, and Step Functions raises
+# States.Runtime if a referenced path is absent, so none of them are
+# optional at the ASL layer even where a handler would tolerate a
+# missing key:
 #   {
-#     "review_id": "...",           # client-generated (a UUID the client
-#                                    # already needs, to poll GET
-#                                    # /reviews/{review_id} afterward — see
-#                                    # api-gateway module's TODO for that
-#                                    # route). Doubles as the idempotency
-#                                    # token: IdempotencyGate below rejects
-#                                    # a second execution for the same
-#                                    # review_id before any paid work runs.
-#     "archive_s3_key": "...",       # Ingest downloads this from the
-#                                    # reports bucket's "uploads/" prefix
-#                                    # (ADR-0045, 2026-10-12) — the client
-#                                    # gets this key from POST /uploads'
-#                                    # presigned-POST response after
-#                                    # uploading its own archive directly
-#                                    # to S3, never through this API.
-#                                    # Replaces the old "archive_path"
-#                                    # field, which no client could ever
-#                                    # have correctly supplied (no path on
-#                                    # this Lambda's own ephemeral
-#                                    # filesystem is meaningful to a
-#                                    # remote caller).
-#     "terraform_repo_ref": "...",  # IdempotencyGate only, persisted
-#                                    # verbatim for display — informational
-#                                    # only, not consumed by Ingest; the
-#                                    # real archive content is always
-#                                    # archive_s3_key, regardless of what
-#                                    # this string says.
+#     "review_id": "...",           # Client-generated UUID, used to poll
+#                                    # GET /reviews/{review_id}. Doubles as
+#                                    # the idempotency token: IdempotencyGate
+#                                    # rejects a second execution for the
+#                                    # same review_id before any paid work.
+#     "archive_s3_key": "...",       # Key under the reports bucket's
+#                                    # uploads/ prefix (ADR-0045). The client
+#                                    # gets it from POST /uploads and uploads
+#                                    # the archive directly to S3.
+#     "terraform_repo_ref": "...",  # Persisted verbatim for display only;
+#                                    # the reviewed content is always
+#                                    # archive_s3_key.
 #     "workload_brief": "...",      # Ingest, then re-used by InvokeAgent
 #     "retrieval_query": "...",     # InvokeAgent -> runtime_entrypoint.invoke()
 #     "baseline_answers": {}        # InvokeAgent + Audit (pass {} if none)
 #   }
-# report_bucket/reviews_table_name are DELIBERATELY NOT part of this
-# contract (removed 2026-09-17, see Work-Project-Issues-Log.md) — they're
-# Terraform-known infra constants (var.reports_bucket_name/
-# reviews_table_name), not caller-supplied input; requiring the client to
-# know real internal AWS resource names was a real bug, not a design
-# choice. The Audit table name likewise comes from the Lambda's
-# AUDIT_TABLE_NAME environment variable, not the execution input.
+# Bucket and table names are not part of this contract: they are
+# Terraform-known constants (var.reports_bucket_name, reviews_table_name)
+# injected below, so clients never need internal AWS resource names. The
+# Audit table name comes from the Lambda's AUDIT_TABLE_NAME environment
+# variable.
 resource "aws_sfn_state_machine" "review" {
   name     = "${var.name_prefix}-review"
   role_arn = aws_iam_role.state_machine.arn
@@ -529,19 +462,15 @@ resource "aws_sfn_state_machine" "review" {
     Comment = "ArchiBrief review pipeline outer job lifecycle (ADR-0028)"
     StartAt = "IdempotencyGate"
     States = {
-      # New state (2026-09-17 fix): a retried/duplicated POST /reviews for
-      # the same client-supplied review_id must not re-run paid work
-      # (Bedrock calls in particular) a second time. A conditional PutItem
-      # is the standard pure-ASL idempotency pattern for a direct API
-      # Gateway -> Step Functions integration with no BFF Lambda
-      # (ADR-0016/0042) — first execution to claim a given review_id wins,
-      # any later one for the same ID fails the condition and short-
-      # circuits before CheckKillSwitch/Ingest/RuleEngine/InvokeAgent ever
-      # run. Note this can't change the original HTTP response (StartExecution
-      # itself already returned 200 with an execution ARN before this task
-      # runs — that's inherent to the async AWS_PROXY integration, not a
-      # gap in this fix) — its value is purely cost/duplicate-work
-      # protection, not client-visible dedup signaling.
+      # A retried or duplicated POST /reviews for the same review_id must
+      # not re-run paid work (Bedrock calls in particular). A conditional
+      # PutItem is the standard pure-ASL idempotency pattern for a direct
+      # API Gateway -> Step Functions integration with no BFF Lambda
+      # (ADR-0016/0042): the first execution to claim a review_id wins, and
+      # any later one fails the condition and stops before any paid work.
+      # It can't change the HTTP response (StartExecution has already
+      # returned 200 by the time this runs); it only prevents duplicate
+      # work and cost.
       IdempotencyGate = {
         Type     = "Task"
         Resource = "arn:aws:states:::aws-sdk:dynamodb:putItem"
@@ -552,12 +481,9 @@ resource "aws_sfn_state_machine" "review" {
             idempotencyKey = { "S.$" = "$.review_id" }
             status         = { S = "pending" }
             createdAt      = { "S.$" = "$$.State.EnteredTime" }
-            # Persisted 2026-10-01 so get_review/build_review_report can
-            # return the client's real submitted value instead of a
-            # flagged placeholder (see backend/shared/report.py and
-            # Work-Project-Issues-Log.md). terraform_repo_ref is now a
-            # required field in the StartExecution Input contract (see
-            # comment block above), so this reference is always present.
+            # Persisted so get_review/build_review_report can return the
+            # submitted value (backend/shared/report.py). Always present:
+            # terraform_repo_ref is a required input field (see above).
             terraformRepoRef = { "S.$" = "$.terraform_repo_ref" }
           }
           ConditionExpression = "attribute_not_exists(reviewId)"
@@ -572,16 +498,14 @@ resource "aws_sfn_state_machine" "review" {
         ]
         Next = "CheckKillSwitch"
       }
-      # Succeeds (not Fails) — a duplicate submission isn't an error
-      # condition for the ALREADY-RETURNED HTTP response, it's this
-      # second execution correctly declining to redo paid work. Real
-      # status (from the first, real execution) is only ever visible via
-      # GET /reviews/{review_id}, never this execution's own outcome.
+      # Succeed, not Fail: this execution is correctly declining to redo
+      # paid work. The review's real status comes from the first execution
+      # and is visible through GET /reviews/{review_id}.
       DuplicateReviewSubmission = {
         Type = "Succeed"
       }
       # ADR-0030's "fast application kill switch checked before paid work
-      # starts" — fails immediately, before Ingest/RuleEngine/Bedrock, so
+      # starts": fails immediately, before Ingest/RuleEngine/Bedrock, so
       # a real incident stops new billed work without waiting on AWS
       # Budgets (which has no native action to halt Bedrock spend).
       CheckKillSwitch = {
@@ -609,27 +533,15 @@ resource "aws_sfn_state_machine" "review" {
         Error = "KillSwitchActive"
         Cause = "ADR-0030 application kill switch is set to true — no new paid work starts until it's reset."
       }
-      # RecordStage* states (added 2026-10-13) — a direct DynamoDB
-      # UpdateItem SDK call immediately before each real pipeline stage,
-      # writing "currentStage" onto the review's existing item.
-      # Deliberately a separate Task per stage rather than folding this
-      # into each stage's own Lambda: Ingest/RuleEngine/Validate don't
-      # currently receive review_id/reviews_table_name in their event
-      # (only Audit/Finalize/StoreClarificationToken do), and review_id
-      # is already present at the top level of state throughout this
-      # whole execution (every real Task's ResultPath merges its result
-      # under a namespaced key, never replacing top-level state — see
-      # Ingest's own ResultPath comment below) — so a stage-agnostic
-      # UpdateItem keyed on $.review_id works identically everywhere
-      # without threading a new field through every Lambda's Parameters.
-      # ResultPath = null discards the UpdateItem response entirely
-      # rather than merging it into state (ASL's documented meaning for
-      # a null ResultPath), since nothing downstream ever needs it.
-      # currentStage values are internal stage names, not user-facing
-      # copy — the frontend (lib/progress.ts) maps each one to a small
-      # set of generic macro-stage labels plus a friendlier micro-step
-      # description, deliberately not exposing these literal names or
-      # this project's internal pipeline structure to the browser.
+      # RecordStage* states: a direct DynamoDB UpdateItem before each
+      # pipeline stage, writing currentStage onto the review's item. A
+      # separate Task per stage rather than a write inside each Lambda,
+      # because Ingest/RuleEngine/Validate don't receive review_id or the
+      # table name, while review_id stays at the top level of state for
+      # the whole execution (every Task merges its result under a
+      # namespaced ResultPath). ResultPath = null discards the UpdateItem
+      # response. currentStage values are internal names; the frontend
+      # (lib/progress.ts) maps them to generic user-facing labels.
       RecordStageIngest = {
         Type     = "Task"
         Resource = "arn:aws:states:::aws-sdk:dynamodb:updateItem"
@@ -646,23 +558,12 @@ resource "aws_sfn_state_machine" "review" {
         ResultPath = null
         Next       = "Ingest"
       }
-      # Fixed 2026-09-16 (Codex review, re-verified directly against
-      # backend/lambdas/ingest/handler.py): Ingest's raw return
-      # ({status, resources, variables, files_parsed, not_observable,
-      # workload_brief, guardrails_decisions}) used to REPLACE state
-      # entirely (no ResultPath) — losing review_id and everything else
-      # the original execution input carried before RuleEngine even ran.
-      # ResultPath merges it under $.ingestResult instead, alongside the
-      # untouched original input.
-      # Added an explicit Parameters block 2026-10-12 (ADR-0045) — Ingest
-      # previously received the whole state implicitly (no Parameters at
-      # all), which worked only because archive_path was never a real,
-      # client-suppliable field in the first place (no client can know a
-      # path meaningful inside this Lambda's own ephemeral filesystem).
-      # report_bucket is a Terraform-known infra constant injected as a
-      # literal, same reasoning as Finalize's own report_bucket Parameter
-      # below — never caller-supplied (see that Parameters block's own
-      # comment for the 2026-09-17 fix this mirrors).
+      # ResultPath merges Ingest's return ({status, resources, variables,
+      # files_parsed, not_observable, workload_brief,
+      # guardrails_decisions}) under $.ingestResult. Without it the result
+      # would replace state and drop review_id and the rest of the input.
+      # report_bucket is a Terraform-known constant injected as a literal,
+      # never caller-supplied (ADR-0045).
       Ingest = {
         Type     = "Task"
         Resource = aws_lambda_function.this["ingest"].arn
@@ -671,22 +572,17 @@ resource "aws_sfn_state_machine" "review" {
           "workload_brief.$" = "$.workload_brief"
           "report_bucket"    = var.reports_bucket_name
           # Ingest writes the parsed tree to parsed/<review_id>.json and
-          # returns only a reference (Codex F07: state caps at 256 KiB).
+          # returns only a reference, since workflow state caps at 256 KiB.
           "review_id.$" = "$.review_id"
         }
         ResultPath = "$.ingestResult"
         Next       = "IngestResponseGate"
       }
-      # New state (2026-10-01 fix): this was the exact follow-up flagged
-      # by name in the 2026-09-16 comment this replaces — Ingest returning
-      # status "rejected" (IngestRejected: path traversal, symlink, too
+      # Halts on Ingest status "rejected" (path traversal, symlink, too
       # many members, or no parseable .tf files) or "blocked" (a
-      # Guardrails hit on the workload brief, ADR-0033) used to fall
-      # through to RuleEngine silently, which just produced zero findings
-      # from a now-empty $.ingestResult.resources rather than halting with
-      # a clear reason — a real review would complete "successfully" with
-      # no findings and no indication why. Mirrors AgentResponseGate's own
-      # Choice-state pattern below.
+      # Guardrails hit on the workload brief, ADR-0033). Otherwise
+      # RuleEngine would run on empty resources and the review would
+      # "succeed" with zero findings and no explanation.
       IngestResponseGate = {
         Type = "Choice"
         Choices = [
@@ -773,24 +669,17 @@ resource "aws_sfn_state_machine" "review" {
         ResultPath = "$.ruleEngineResult"
         Next       = "InitEffectiveInput"
       }
-      # New state (2026-09-16 fix): backend/agent/runtime_entrypoint.py's
-      # invoke() reads payload["review_id"], payload["workload_brief"],
-      # payload["retrieval_query"] (all required — bare dict indexing,
-      # not .get()), plus optional baseline_answers and rule_findings
-      # (payload.get("rule_findings", [])). None of those survive as a
-      # flat object after RuleEngine's own ResultPath merge above (its
-      # findings live at $.ruleEngineResult.findings, named "findings"
-      # not "rule_findings"). This Pass state assembles exactly the
-      # object InvokeAgent's Payload needs into $.agentInput, pulling
-      # review_id/workload_brief/retrieval_query/baseline_answers from
-      # the original execution input (see the required-input contract
-      # comment above aws_sfn_state_machine.review) and rule_findings/
-      # deterministic_rule_version from RuleEngine's output.
+      # backend/agent/runtime_entrypoint.py's invoke() requires review_id,
+      # workload_brief and retrieval_query, and optionally takes
+      # baseline_answers and rule_findings. PrepareAgentInput assembles
+      # exactly that object into $.agentInput from the execution input and
+      # RuleEngine's output (whose findings live at
+      # $.ruleEngineResult.findings).
       # $.effective holds the review's current brief + answers, folded
       # forward across clarification rounds (ApplyClarification below), so
       # Reason, Audit, and Finalize all see the same context and a second
-      # round keeps the first round's answers (Codex F06). rounds bounds
-      # how many times a review may pause for clarification.
+      # round keeps the first round's answers. rounds bounds how many times
+      # a review may pause for clarification.
       InitEffectiveInput = {
         Type = "Pass"
         Parameters = {
@@ -810,7 +699,7 @@ resource "aws_sfn_state_machine" "review" {
           "retrieval_query.$"            = "$.retrieval_query"
           "rule_findings.$"              = "$.ruleEngineResult.findings"
           "deterministic_rule_version.$" = "$.ruleEngineResult.rule_version"
-          # What the Terraform declares, so Reason doesn't guess (#15b).
+          # What the Terraform declares, so Reason doesn't guess.
           "terraform_resources.$" = "$.ruleEngineResult.resource_summary"
         }
         ResultPath = "$.agentInput"
@@ -839,49 +728,27 @@ resource "aws_sfn_state_machine" "review" {
         Resource = "arn:aws:states:::aws-sdk:bedrockagentcore:invokeAgentRuntime"
         Parameters = {
           # Amazon States Language requires a string here, not null.
-          # AgentCore Runtime isn't deployed yet (agentcore_runtime_arn
-          # defaults to null in tfvars) — a real apply against a null
-          # value would fail ASL schema validation at CreateStateMachine.
-          # This placeholder lets the state machine itself be created
-          # now; the InvokeAgent task will fail at actual execution time
-          # until a real AgentCore Runtime ARN is supplied — deliberate,
-          # documented deferral, see Work-Project-Issues-Log.md.
+          # agentcore_runtime_arn defaults to null, which would fail ASL
+          # validation at CreateStateMachine, so a placeholder lets the
+          # state machine be created; InvokeAgent fails at execution time
+          # until a real AgentCore Runtime ARN is supplied.
           "AgentRuntimeArn" = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
-          # Payload is a raw byte/string field, not a nested JSON
-          # structure — States.JsonToString serializes PrepareAgentInput's
-          # curated $.agentInput object (not the whole state, which would
-          # include boto3-unrelated Step Functions bookkeeping keys like
-          # killSwitch/ingestResult that runtime_entrypoint.py neither
-          # needs nor expects).
+          # Payload is a raw string field. States.JsonToString serializes
+          # only the curated $.agentInput object, not the whole state with
+          # its workflow bookkeeping keys (killSwitch, ingestResult).
           "Payload.$" = "States.JsonToString($.agentInput)"
-          # AgentCore requires a stable session ID for correlation; AWS's
-          # docs (checked, not just Codex's claim) specify a minimum
-          # length (commonly cited as 33 characters) that a short
-          # review_id alone might not satisfy — States.Format prepends a
-          # fixed literal to guarantee a floor length regardless of the
-          # real review_id format, which isn't fully pinned down yet
-          # (validate_reason_node.py's test id is ~30 chars; production
-          # review_id's real format isn't confirmed in this codebase).
+          # AgentCore requires a session ID with a minimum length (33
+          # characters) that a short review_id might not meet, so a fixed
+          # prefix guarantees the floor whatever the review_id format.
           "RuntimeSessionId.$" = "States.Format('archibrief-review-session-{}', $.review_id)"
         }
-        # ResultPath merges the task's Result under $.agentResult rather
-        # than replacing state — same reasoning as every other Task fix
-        # in this definition.
+        # Merged under $.agentResult rather than replacing state.
         ResultPath = "$.agentResult"
-        # Added 2026-10-12 — closes part of Phase 6's "AgentCore
-        # max-iteration/wall-clock/retrieval/token limits" gap
-        # (Work-Project-Build-Plan.md). Without TimeoutSeconds, a Task
-        # state's default is effectively unbounded (ASL's own default
-        # ceiling, 99999999 seconds) — a hung Bedrock call or a stuck
-        # AgentCore Runtime would hold this Standard-type execution open
-        # indefinitely rather than failing visibly. 300s (5 minutes) is a
-        # first-pass, deliberately generous ceiling given max_tokens=8192
-        # and retrieval both already bound the call's real work — not
-        # calibrated against a real execution's actual latency (no live
-        # AgentCore+LangGraph execution exists yet to measure against),
-        # so revisit once one does. Retrieval/token limits themselves are
-        # the application-layer's job (max_tokens is already threaded
-        # through runtime_entrypoint.py) — this only bounds the outer
+        # Without TimeoutSeconds a Task state is effectively unbounded
+        # (99999999 seconds), so a hung Bedrock call or stuck runtime would
+        # hold the execution open indefinitely. 300 seconds is a generous
+        # ceiling; max_tokens and retrieval limits already bound the work
+        # inside runtime_entrypoint.py, and this only bounds the outer
         # wall-clock wait.
         TimeoutSeconds = 300
         Catch = [
@@ -893,28 +760,19 @@ resource "aws_sfn_state_machine" "review" {
         ]
         Next = "ParseAgentResponse"
       }
-      # Mirrors IngestRejected/IngestBlocked/ClarificationTimedOut's own
-      # pattern: a bounded wait that's exceeded is a real, expected
-      # terminal outcome, not a transient fault worth blind Retry.
+      # An exceeded bounded wait is an expected terminal outcome, not a
+      # transient fault worth retrying.
       AgentInvocationTimedOut = {
         Type  = "Fail"
         Error = "AgentInvocationTimedOut"
         Cause = "InvokeAgent did not complete within 300 seconds — see this execution's history in CloudWatch for where the AgentCore Runtime invocation stalled."
       }
-      # Fixed 2026-09-16 (Codex review, citing AWS's own direct
-      # Step-Functions-to-Bedrock-Agent integration sample): the SDK
-      # integration's response body lands at $.agentResult.Response
-      # (capital R) as a raw JSON STRING, not at $.agentResult.response
-      # (lowercase) or any nested .findings path — it must be parsed with
-      # States.StringToJson before any field on it is reachable. ASL
-      # doesn't allow chaining a further ".findings" property access onto
-      # an intrinsic function's result in the same expression, so parsing
-      # happens here in its own Pass state; AgentResponseGate and Validate
-      # below both read from the resulting $.agentParsed.parsed object.
-      # Still genuinely unverified against a real execution (no live
-      # AgentCore+LangGraph+ZIP example exists to confirm the exact
-      # envelope) — the first real CloudWatch execution history is the
-      # authoritative check, same caveat as before.
+      # The SDK integration returns the response body at
+      # $.agentResult.Response (capital R) as a raw JSON string, which must
+      # be parsed with States.StringToJson before its fields are reachable.
+      # ASL can't chain a property access onto an intrinsic's result, so
+      # parsing gets its own Pass state; AgentResponseGate and Validate read
+      # the resulting $.agentParsed.parsed object.
       ParseAgentResponse = {
         Type = "Pass"
         Parameters = {
@@ -923,13 +781,10 @@ resource "aws_sfn_state_machine" "review" {
         ResultPath = "$.agentParsed"
         Next       = "AgentResponseGate"
       }
-      # New state (2026-09-16 fix): runtime_entrypoint.py's invoke() can
-      # return {"status": "needs_clarification", ...} with no "findings"
-      # key at all (PreflightGate pausing for a required field) — before
-      # this fix, InvokeAgent unconditionally went to Validate, whose
-      # handler does event["findings"] directly and would KeyError.
-      # needs_clarification is a real, expected, non-failure outcome per
-      # runtime_entrypoint.py's own docstring, not an error to Fail on.
+      # invoke() can return {"status": "needs_clarification", ...} with no
+      # "findings" key when PreflightGate pauses for a required field.
+      # That is an expected, non-failure outcome, and Validate needs
+      # findings, so it routes to the clarification pause instead.
       AgentResponseGate = {
         Type = "Choice"
         Choices = [
@@ -957,27 +812,17 @@ resource "aws_sfn_state_machine" "review" {
         ResultPath = null
         Next       = "Validate"
       }
-      # Replaced 2026-10-01 (was a bare Succeed — stopped the execution
-      # permanently with no way to ever actually resume it once a human
-      # answered). Pauses via the lambda:invoke.waitForTaskToken service
-      # integration pattern: store_clarification_token.handler persists
-      # the task token on the review's DynamoDB item and returns
-      # immediately, but THIS STATE does not complete until something
-      # else calls SendTaskSuccess/SendTaskFailure with that same token —
-      # which only happens later, out-of-band, when clarify_review.handler
-      # (behind POST /reviews/{reviewId}/clarify) receives a human's answer. Corrected design
-      # per Work-Project-Build-Plan.md's 2026-09-17 entry: Codex originally
-      # proposed `dynamodb:updateItem.waitForTaskToken`, independently
-      # verified against AWS's own integration-pattern-support table as
-      # NOT supported for DynamoDB (or Bedrock AgentCore) — only a small
-      # number of services (notably Lambda, ECS, SQS, SNS, Glue,
-      # SageMaker, EMR) support waitForTaskToken at all.
+      # Pauses through the lambda:invoke.waitForTaskToken pattern:
+      # store_clarification_token.handler persists the task token on the
+      # review's DynamoDB item and returns immediately, but this state
+      # doesn't complete until clarify_review.handler (behind
+      # POST /reviews/{reviewId}/clarify) calls SendTaskSuccess with that
+      # token once a human answers. A Lambda is used because DynamoDB and
+      # Bedrock AgentCore integrations don't support waitForTaskToken.
       #
-      # TimeoutSeconds bounds how long a review can sit waiting on a human
-      # — 7 days, chosen as a generous but non-infinite default (ASL's own
-      # default would otherwise let this wait essentially forever). A
-      # timed-out clarification is a legitimate terminal outcome, not a
-      # transient fault worth Retrying.
+      # TimeoutSeconds bounds the wait at 7 days; ASL's default would let
+      # it wait essentially forever. A timed-out clarification is a
+      # terminal outcome, not a transient fault worth retrying.
       StoreClarificationToken = {
         Type           = "Task"
         Resource       = "arn:aws:states:::lambda:invoke.waitForTaskToken"
@@ -989,12 +834,8 @@ resource "aws_sfn_state_machine" "review" {
             "taskToken.$"           = "$$.Task.Token"
             "needs_clarification.$" = "$.agentParsed.parsed.needs_clarification"
             "preflight_fields.$"    = "$.agentParsed.parsed.preflight_fields"
-            # Found 2026-10-12, live-tested: this Lambda previously read
-            # os.environ["REVIEWS_TABLE_NAME"], never set anywhere — a
-            # real KeyError the first time this branch (needs
-            # clarification) was ever exercised live. Matches the same
-            # literal-Parameter convention Audit/Finalize already use
-            # for this exact value, below.
+            # Passed as a literal Parameter, the same convention
+            # Audit/Finalize use below.
             "reviews_table_name" = var.reviews_table_name
           }
         }
@@ -1045,17 +886,13 @@ resource "aws_sfn_state_machine" "review" {
       Validate = {
         Type     = "Task"
         Resource = aws_lambda_function.this["validate"].arn
-        # Validate's handler (backend/lambdas/validate/handler.py) reads
-        # event["findings"] directly — sourced from ParseAgentResponse's
-        # parsed object above, now that its real field path (.Response,
-        # parsed, capital-R) is confirmed rather than guessed.
+        # backend/lambdas/validate/handler.py reads event["findings"],
+        # taken from ParseAgentResponse's parsed object.
         Parameters = {
           "findings.$" = "$.agentParsed.parsed.findings"
         }
-        # Fixed 2026-09-16: Validate previously had no ResultPath either
-        # — its return ({status, valid_findings, rejected_count,
-        # rejected}) replaced state wholesale, same bare-replacement bug
-        # as every other task in this chain before this pass.
+        # Merges {status, valid_findings, rejected_count, rejected} under
+        # $.validateResult rather than replacing state.
         ResultPath = "$.validateResult"
         Next       = "RecordStageAudit"
       }
@@ -1075,20 +912,13 @@ resource "aws_sfn_state_machine" "review" {
         ResultPath = null
         Next       = "Audit"
       }
-      # Fixed 2026-09-16: backend/lambdas/audit/handler.py's
-      # AuditLogEntry needs review_id (required) plus optional
-      # baseline_answers/guardrails_decisions/deterministic_rule_version/
-      # corpus_version/model_id (all read via event.get(...), so omitting
-      # a key here is a safe no-op on the handler side, unlike omitting
-      # one of the required-input-contract fields above). Sourced from
-      # wherever each has actually accumulated in state so far:
-      # review_id from the execution input, baseline_answers from
-      # $.effective (including any clarification rounds),
-      # guardrails_decisions from Ingest's own inline Guardrails check,
-      # deterministic_rule_version from RuleEngine's rule_version output.
-      # corpus_version and model_id have no equivalent source anywhere in
-      # this state machine (runtime_entrypoint.py never returns either)
-      # and are left absent rather than guessed.
+      # backend/lambdas/audit/handler.py's AuditLogEntry requires
+      # review_id; the other fields are optional (read with event.get).
+      # baseline_answers comes from $.effective (including clarification
+      # rounds), guardrails_decisions from Ingest's inline check, and
+      # deterministic_rule_version from RuleEngine. corpus_version and
+      # model_id have no source in this state machine and are left absent
+      # rather than guessed.
       Audit = {
         Type     = "Task"
         Resource = aws_lambda_function.this["audit"].arn
@@ -1117,36 +947,18 @@ resource "aws_sfn_state_machine" "review" {
         ResultPath = null
         Next       = "Finalize"
       }
-      # Fixed 2026-09-16: backend/lambdas/finalize/handler.py needs
-      # event["review_id"] and event["findings"] (both required — bare
-      # indexing) plus optional report_bucket/reviews_table_name.
-      # Audit's own return ({"status": "recorded", "audit_id": ...})
-      # carried neither review_id nor findings, so Finalize previously
-      # received an incompatible event regardless of every upstream fix.
-      # findings comes from Validate's valid_findings (the Finding-schema-
-      # validated list, not the agent's raw unvalidated output) — matches
-      # ADR-0022's layer 3/4 ordering (Validate gates what Audit/Finalize
-      # ever see). report_bucket/reviews_table_name (fixed 2026-09-17):
-      # plain literal Terraform values now, not "$.xxx" JSONPath — these
-      # are infra constants known at apply time, never part of the
-      # caller's request (see the required-input-contract comment above).
-      # workload_brief added 2026-10-01: no DynamoDB item anywhere
-      # persists the original brief, and deeper_review.handler (the "go
-      # deeper" endpoint) needs it to re-invoke Reason later — the
-      # evidence ledger in S3 is this project's source of truth for full
-      # review content (ADR-0007/0042), so Finalize writes it there
-      # rather than adding a new DynamoDB field.
-      # preflight_fields/defaults_version also added 2026-10-01: found
-      # while fixing get_review's response shape to actually match the
-      # frontend's ReviewReport contract — runtime_entrypoint.py's invoke()
-      # previously dropped preflight_fields on every path except the
-      # needs_clarification early exit, so a COMPLETED review's baseline
-      # answers (per-field answered/assumption/not-observable outcomes,
-      # ADR-0031) were never persisted anywhere. $.agentParsed.parsed is
-      # whichever InvokeAgent response actually completed the review — the
-      # first one, or (after a needs_clarification round trip) the retry
-      # after ApplyClarification — either way it's
-      # the right, final preflight outcome to persist.
+      # backend/lambdas/finalize/handler.py requires review_id and
+      # findings. findings is Validate's valid_findings (the
+      # schema-validated list, not the agent's raw output), per ADR-0022's
+      # layer ordering. report_bucket and reviews_table_name are literal
+      # Terraform values, never part of the caller's request.
+      # workload_brief is written to the evidence ledger in S3, the source
+      # of truth for full review content (ADR-0007/0042), because
+      # deeper_review.handler (the "go deeper" endpoint) needs it later to
+      # re-invoke Reason. preflight_fields and defaults_version persist the
+      # completed review's baseline answers (ADR-0031);
+      # $.agentParsed.parsed is whichever InvokeAgent response completed
+      # the review, including a retry after a clarification round.
       Finalize = {
         Type     = "Task"
         Resource = aws_lambda_function.this["finalize"].arn
@@ -1154,7 +966,7 @@ resource "aws_sfn_state_machine" "review" {
           "review_id.$" = "$.review_id"
           "findings.$"  = "$.validateResult.valid_findings"
           # Effective brief: includes any clarification notes, so "go
-          # deeper" later reasons over the same context (Codex F06).
+          # deeper" later reasons over the same context.
           "workload_brief.$"   = "$.effective.workload_brief"
           "preflight_fields.$" = "$.agentParsed.parsed.preflight_fields"
           "defaults_version.$" = "$.agentParsed.parsed.defaults_version"
@@ -1178,11 +990,11 @@ resource "aws_sfn_state_machine" "review" {
   tags = var.tags
 }
 
-# --- Mark failed reviews (Codex F05) -------------------------------------
-# No failure path updated the review record, so a dead run stayed
-# "pending" forever. Step Functions emits an EventBridge event on every
-# terminal status; one listener marks the review failed for all of them
-# (Fail states, uncaught Lambda errors, timeouts, aborts).
+# --- Mark failed reviews -------------------------------------------------
+# Without this, a failed run would leave the review "pending" forever.
+# Step Functions emits an EventBridge event on every terminal status; one
+# listener marks the review failed for all of them (Fail states, uncaught
+# Lambda errors, timeouts, aborts).
 
 data "aws_iam_policy_document" "mark_review_failed_access" {
   statement {

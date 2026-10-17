@@ -1,25 +1,21 @@
 # Terraform module: frontend-hosting
-# Phase A of the frontend deploy (Work-Project-Deployment-Roadmap.md):
 # S3 + CloudFront static hosting for frontend/out (Next.js static export,
 # ADR-0016). Reachable at CloudFront's default *.cloudfront.net domain
-# and, since Phase B (2026-10-14), optionally at custom domains via
-# var.aliases + var.certificate_arn (an ACM cert in us-east-1). Both
-# default to off, which keeps the default certificate and domain.
+# and optionally at custom domains via var.aliases + var.certificate_arn
+# (an ACM cert in us-east-1). Both default to off, which keeps the
+# default certificate and domain.
 #
 # The bucket is private; CloudFront reaches it only via Origin Access
 # Control (OAC), not the older OAI or a public bucket policy. This module
 # does not upload frontend/out's contents — see the module README for the
 # `aws s3 sync` command to run manually after `terraform apply`.
 #
-# `frontend/out` (checked against a real `npm run build` during this
-# module's implementation, 2026-09-15) is per-route static HTML from the
-# app router's static export, not a single SPA index — currently just
-# index.html + 404.html + a hashed-filename index.txt (RSC payload) at
-# the root, plus content-hashed, effectively-immutable assets under
-# _next/static/. That split (hashed vs unhashed) drives the two cache
-# behaviors below: unhashed root files must never be edge-cached (no
-# invalidation step exists yet — see README), hashed assets can be
-# cached aggressively.
+# `frontend/out` is per-route static HTML from the app router's static
+# export, not a single SPA index: unhashed files at the root (index.html,
+# 404.html, index.txt RSC payloads) plus content-hashed, immutable assets
+# under _next/static/. That split drives the two cache behaviors below:
+# unhashed root files are never edge-cached, hashed assets are cached
+# aggressively.
 
 resource "aws_s3_bucket" "frontend" {
   bucket = var.bucket_name
@@ -51,24 +47,17 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 }
 
 # script-src/style-src allow 'unsafe-inline' because Next's static export
-# injects an inline hydration bootstrap script and the app has no
-# server to mint per-request CSP nonces — still blocks third-party script
-#/iframe injection, which is the actual XSS/clickjacking exposure this
-# closes. Phase B (2026-10-12): connect-src now allows the API Gateway
-# origin — a wildcard subdomain pattern on *.execute-api.<region>.
-# amazonaws.com rather than the literal api_id, specifically to avoid a
-# circular module dependency (api_gateway already depends on this
-# module's cloudfront_domain_name for its own CORS config) — and the S3
-# global endpoint (*.s3.amazonaws.com), since ADR-0045's direct-upload
-# flow has the browser POST the archive straight to a presigned S3 URL,
-# a third origin the frontend talks to beyond API Gateway and itself.
-# Found by actually walking the live submission flow one blocked
-# connect-src entry at a time (API Gateway, then this), not by auditing
-# the frontend's full fetch-call surface upfront — worth a final check
-# there isn't a fourth. style-src/font-src allow Google Fonts
-# (app/globals.css's @import) — found missing the same session
-# connect-src was, both blocked by this same CSP with no console-visible
-# connection to the earlier CORS fix.
+# injects an inline hydration bootstrap script and there is no server to
+# mint per-request CSP nonces; the policy still blocks third-party
+# script/iframe injection, the real XSS/clickjacking exposure.
+# connect-src allows the API Gateway origin as a wildcard
+# *.execute-api.<region>.amazonaws.com pattern rather than the literal
+# api_id, which would create a circular module dependency (api_gateway
+# depends on this module's cloudfront_domain_name for CORS). It also
+# allows the S3 global endpoint (*.s3.amazonaws.com), because ADR-0045's
+# direct-upload flow has the browser POST the archive straight to a
+# presigned S3 URL. style-src/font-src allow Google Fonts
+# (app/globals.css's @import).
 resource "aws_cloudfront_response_headers_policy" "frontend_security" {
   name = "${var.name_prefix}-frontend-security-headers"
 
@@ -112,9 +101,8 @@ resource "aws_cloudfront_distribution" "frontend" {
 
   # Default behavior covers index.html, 404.html, and any other unhashed
   # per-route HTML/RSC file the app router's static export produces at
-  # the root — none of those have a content hash in their filename, so
-  # they must not be edge-cached (nothing invalidates the edge cache on
-  # deploy yet, see README).
+  # the root. None of those have a content hash in their filename, so
+  # they must not be edge-cached.
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
@@ -127,7 +115,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   # frontend/out/_next/static/** is content-hashed by Next's build and
-  # therefore immutable — safe (and the whole point) to cache hard.
+  # therefore immutable, so it is safe to cache hard.
   ordered_cache_behavior {
     path_pattern           = "/_next/static/*"
     allowed_methods        = ["GET", "HEAD"]
@@ -141,8 +129,8 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   # Next static export (app router) prerenders every real route to its
-  # own .html file at build time — there's no client-side-only route
-  # that's missing a static file, so a true 404 is a real 404. Map both
+  # own .html file at build time; there is no client-side-only route
+  # without a static file, so a 404 is a real 404. Map both
   # S3's OAC-denied "no such key" (403) and CloudFront's own 404 to the
   # exported 404.html, serving it as an actual 404 rather than faking a
   # 200 SPA fallback.
@@ -167,8 +155,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   # var.certificate_arn null keeps CloudFront's default certificate, and
-  # var.aliases must then be empty — CloudFront itself enforces that
-  # pairing. Set both to serve the custom domain(s).
+  # var.aliases must then be empty; CloudFront enforces that pairing. Set both to serve the custom domain(s).
   viewer_certificate {
     cloudfront_default_certificate = var.certificate_arn == null
     acm_certificate_arn            = var.certificate_arn
@@ -209,8 +196,8 @@ locals {
   origin_id = "${var.name_prefix}-frontend-s3"
 
   # AWS-managed cache policies (stable IDs, same in every account/region)
-  # rather than hand-rolled aws_cloudfront_cache_policy resources — no
-  # reason to reinvent "cache nothing" / "cache hashed assets forever".
+  # rather than hand-rolled aws_cloudfront_cache_policy resources for
+  # "cache nothing" and "cache hashed assets forever".
   managed_cache_policy_disabled  = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
   managed_cache_policy_optimized = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
 }

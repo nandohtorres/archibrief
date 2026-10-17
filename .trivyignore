@@ -12,6 +12,6 @@ AWS-0132
 # key, and the topic only carries budget threshold alerts.
 AWS-0095
 
-# No AWS WAF on the CloudFront distribution yet. Planned with the public
-# submission quotas (master list Phase 3, item 17, ADR-0046).
+# No AWS WAF on the CloudFront distribution yet. Planned together with
+# the public submission quotas (ADR-0046).
 AWS-0011

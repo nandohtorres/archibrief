@@ -3,12 +3,8 @@
 # source of truth itself (ADR-0007, ADR-0042). Index dimension, distance
 # metric, and non-filterable metadata keys are exposed as required
 # variables with no default, since they are immutable after index
-# creation — see variables.tf for the reasoning on each.
-#
-# Requires AWS provider >= 6.24 (s3vectors resources). Verify exact
-# argument names against `terraform providers schema` at first `terraform
-# init` — this resource type is new (GA'd 2026) and evolved during
-# provider development.
+# creation (see variables.tf for each). Requires AWS provider >= 6.24
+# for the s3vectors resources.
 
 resource "aws_s3vectors_vector_bucket" "knowledge_base" {
   vector_bucket_name = var.vector_bucket_name
@@ -26,12 +22,10 @@ resource "aws_s3vectors_index" "knowledge_base" {
     non_filterable_metadata_keys = var.non_filterable_metadata_keys
   }
 
-  # AWS itself refuses to edit dimension/distance_metric in place, but
-  # Terraform's own default behavior for an unsatisfiable in-place update
-  # is destroy-and-recreate — silently wiping the whole embedded corpus.
-  # This turns "immutable by decision" (ADR-0007/0042) into "Terraform
-  # will refuse to do this even by accident" — found during the
-  # 2026-09-08 audit sweep, see Work-Project-Issues-Log.
+  # AWS refuses to edit dimension/distance_metric in place, so Terraform
+  # would destroy and recreate the index, silently wiping the embedded
+  # corpus. prevent_destroy makes "immutable by decision" (ADR-0007/0042)
+  # something Terraform enforces.
   lifecycle {
     prevent_destroy = true
   }

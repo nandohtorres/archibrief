@@ -35,12 +35,9 @@ resource "aws_s3_bucket_public_access_block" "source_of_truth" {
 }
 
 # ADR-0045's direct-upload flow has the browser POST straight to this
-# bucket via a presigned URL (create_upload's generate_presigned_post) —
-# that still needs the bucket's own CORS configuration, separate from
-# and in addition to API Gateway's CORS and CloudFront's CSP, both of
-# which were fixed first without this one (found 2026-10-12: the browser
-# got as far as attempting the real cross-origin POST and only then hit
-# "No 'Access-Control-Allow-Origin' header is present").
+# bucket via a presigned URL (create_upload's generate_presigned_post).
+# That needs the bucket's own CORS configuration, in addition to API
+# Gateway's CORS and CloudFront's CSP.
 resource "aws_s3_bucket_cors_configuration" "source_of_truth" {
   bucket = aws_s3_bucket.source_of_truth.id
 

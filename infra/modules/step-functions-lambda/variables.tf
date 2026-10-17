@@ -12,7 +12,7 @@ variable "lambda_zip_paths" {
     finalize                  = string
     store_clarification_token = string
   })
-  description = "Path to each Lambda's deployment package — TODO(account-setup): real build artifacts don't exist until a packaging step runs in CI."
+  description = "Path to each Lambda's deployment package (built by scripts/package_lambdas.py)."
 }
 
 variable "reports_bucket_arn" {
@@ -21,7 +21,7 @@ variable "reports_bucket_arn" {
 
 variable "reports_bucket_name" {
   type        = string
-  description = "S3 bucket name (not ARN) for Finalize's Parameters and the state machine's own literal reference — a Terraform-known infra constant, never caller-supplied input (see 2026-09-17 fix: this used to be sourced from the StartExecution request body, which leaked an internal resource name into the public API contract)."
+  description = "S3 bucket name (not ARN) injected as a literal into the state machine's task Parameters. A Terraform-known constant, never caller-supplied, so internal resource names stay out of the public API contract."
 }
 
 variable "reviews_table_arn" {
@@ -30,7 +30,7 @@ variable "reviews_table_arn" {
 
 variable "reviews_table_name" {
   type        = string
-  description = "DynamoDB table name (not ARN) for Finalize's Parameters and the leading idempotency-check Task — same Terraform-known-constant reasoning as reports_bucket_name."
+  description = "DynamoDB table name (not ARN) for Finalize's Parameters and the leading idempotency-check Task; a Terraform-known constant like reports_bucket_name."
 }
 
 variable "audit_table_arn" {
@@ -39,31 +39,27 @@ variable "audit_table_arn" {
 
 variable "agentcore_runtime_arn" {
   type        = string
-  description = "ARN of the deployed AgentCore Runtime hosting the PreflightGate/Retrieve/Reason subworkflow — TODO(account-setup): does not exist until AgentCore is deployed."
+  description = "ARN of the deployed AgentCore Runtime hosting the PreflightGate/Retrieve/Reason subworkflow. While null, InvokeAgent uses a placeholder ARN and fails at execution time."
   default     = null
 }
 
 variable "lambda_reserved_concurrency" {
   type = number
-  # -1 = unreserved (no PutFunctionConcurrency call at all) — this
-  # account's actual Lambda concurrency ceiling is below 15 (confirmed
-  # 2026-09-10: even 5 reserved total, 1 per function, still violated
-  # the mandatory 10-unreserved minimum), almost certainly the default
-  # throttle on a brand-new AWS account. The admin-authorizer Lambda has
-  # used -1 from the start and never hit this error. Revisit with an explicit cap
-  # once the account's real limit is known (needs lambda:GetAccountSettings,
-  # not currently granted) or after AWS raises it with usage history.
+  # -1 = unreserved (no PutFunctionConcurrency call). New AWS accounts can
+  # have a Lambda concurrency limit so low that reserving even one unit per
+  # function violates the mandatory 10-unreserved minimum. Set an explicit
+  # cap once the account's limit allows it.
   default = -1
 }
 
 variable "permissions_boundary_arn" {
   type        = string
-  description = "IAM permissions boundary applied to every role this module creates and passes to lambda.amazonaws.com/states.amazonaws.com — see modules/iam's runtime_permissions_boundary_arn output and Work-Project-Issues-Log.md, 2026-09-09."
+  description = "IAM permissions boundary applied to every role this module creates and passes to lambda.amazonaws.com/states.amazonaws.com (modules/iam's runtime_permissions_boundary_arn output)."
 }
 
 variable "guardrail_id" {
   type        = string
-  description = "Deployed Bedrock Guardrail ID (ADR-0033) — see modules/guardrails. Always supplied by the calling environment; a resource whose count depends on this being null can't be planned, since it's unknown until the guardrail is actually created."
+  description = "Deployed Bedrock Guardrail ID (ADR-0033) from modules/guardrails. Always required: a resource count conditioned on it can't be planned, since it is unknown until the guardrail is created."
 }
 
 variable "guardrail_version" {

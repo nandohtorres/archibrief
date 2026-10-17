@@ -1,13 +1,12 @@
 # Proposed deploy-role permissions for the report chat (ADR-0050)
 
-**Not applied. Fernando makes every IAM edit.** The chat deploys without
-any of this: the alarms are off by default (`chat_alarms_enabled =
+**Not applied automatically; deploy-role IAM changes are made by hand.**
+The chat deploys without any of this: the alarms are off by default (`chat_alarms_enabled =
 false`), and the Lambdas, routes, table and guardrails only need
 permissions the deploy role already has.
 
 The inline policy on the `ArchiBriefDeploy` permission set is at AWS's
-10,240-character limit (see `deploy-role-policies-proposed/README.md`),
-so these are written as one small customer-managed policy to attach to
+10,240-character limit, so these are written as one small customer-managed policy to attach to
 the same permission set rather than more inline statements.
 
 ## What each statement is for
