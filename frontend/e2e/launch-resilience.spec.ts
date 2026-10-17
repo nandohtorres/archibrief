@@ -2,6 +2,13 @@ import { expect, test } from "@playwright/test";
 import { LIVE_URL } from "../playwright.config";
 import { fixtureReport } from "../lib/fixtures";
 
+// "View sample review" now opens the featured demo from static files; these
+// tests cover the GET /demo sample it falls back to, so the demo index is
+// made unavailable first.
+test.beforeEach(async ({ page }) => {
+  await page.route("**/demos/demos.json", (route) => route.fulfill({ status: 404, body: "" }));
+});
+
 test("slow sample request stays pending, sends once, then renders", async ({ page }) => {
   let release!: () => void;
   const held = new Promise<void>((resolve) => {

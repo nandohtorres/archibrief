@@ -5,7 +5,14 @@ import { expect, test } from "@playwright/test";
 import { LIVE_URL } from "../playwright.config";
 import { fixtureReport } from "../lib/fixtures";
 
-test.describe("sample review from GET /demo (mocked network)", () => {
+// "View sample review" now opens the featured demo from static files; these
+// tests cover the GET /demo sample it falls back to, so the demo index is
+// made unavailable first.
+test.beforeEach(async ({ page }) => {
+  await page.route("**/demos/demos.json", (route) => route.fulfill({ status: 404, body: "" }));
+});
+
+test.describe("fallback sample review from GET /demo (mocked network)", () => {
   test("opens the sample without an admin key and labels it hypothetical", async ({ page }) => {
     let sentKey: string | undefined = "unset";
     await page.route("**/mock-api/demo", async (route) => {

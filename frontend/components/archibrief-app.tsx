@@ -24,7 +24,7 @@ import {
 import { loadAdminKey, saveAdminKey } from "@/lib/admin-key";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
 import type { DemoChat, PreflightField, ReviewReport, ReviewStatusPointer } from "@/lib/contracts";
-import { fetchDemo, type DemoEntry } from "@/lib/demos";
+import { FEATURED_DEMO_ID, fetchDemo, fetchDemoIndex, type DemoEntry } from "@/lib/demos";
 import {
   REVIEW_DEADLINE_MS,
   failureMessageFor,
@@ -265,15 +265,19 @@ export function ArchiBriefApp() {
   }
 
   // Opens a finished demo review from its saved files (lib/demos.ts).
+  async function showDemo(entry: DemoEntry) {
+    const loaded = await fetchDemo(entry);
+    setReport(loaded.report);
+    setReportSource("demo");
+    setDemo(loaded.entry);
+    setDemoChat(loaded.chat);
+    setScreen("report");
+  }
+
   async function openDemo(entry: DemoEntry) {
     setOpeningDemoId(entry.id);
     try {
-      const loaded = await fetchDemo(entry);
-      setReport(loaded.report);
-      setReportSource("demo");
-      setDemo(loaded.entry);
-      setDemoChat(loaded.chat);
-      setScreen("report");
+      await showDemo(entry);
     } catch (error) {
       console.error("demo review could not be loaded", error);
       setFailureMessage(
@@ -285,17 +289,31 @@ export function ArchiBriefApp() {
     }
   }
 
-  // Opens the public sample review: the real GET /demo response in a
-  // build pointed at the API, the bundled fixture otherwise.
+  // "View sample review" opens the featured demo: a real, hand-checked
+  // review rather than the hypothetical sample. Only if the demo files
+  // can't load does it fall back to that sample: GET /demo in a build
+  // pointed at the API, the bundled fixture otherwise.
   async function openSample() {
+    setSampleLoading(true);
+    try {
+      const demos = await fetchDemoIndex();
+      const featured = demos.find(({ id }) => id === FEATURED_DEMO_ID) ?? demos[0];
+      if (featured) {
+        await showDemo(featured);
+        setSampleLoading(false);
+        return;
+      }
+    } catch (error) {
+      console.error("featured demo could not be loaded; falling back", error);
+    }
     if (!apiConfigured) {
       setReport(fixtureReport);
       setReportSource("fixture");
       clearDemo();
       setScreen("report");
+      setSampleLoading(false);
       return;
     }
-    setSampleLoading(true);
     try {
       setReport(await fetchDemoReport());
       setReportSource("sample");

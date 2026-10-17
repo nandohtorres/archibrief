@@ -51,6 +51,8 @@ export function ReportWorkspace({
   onNewReview,
 }: ReportWorkspaceProps) {
   const reviewerNotes = useMemo(() => reviewerNotesById(demo), [demo]);
+  // A demo has a real title; other reports are named from their repository label.
+  const title = demo ? demo.title : reportTitle(report.terraform_repo_ref);
   const [view, setView] = useState<"technical" | "stakeholder">("technical");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FindingFilter>("all");
@@ -201,7 +203,7 @@ export function ReportWorkspace({
     // conversation; Print → PDF works from it (ADR-0050 §10).
     downloadFile(
       `${report.review_id}-report.html`,
-      buildReportHtml({ ...report, findings }, transcript, reportTitle(report.terraform_repo_ref)),
+      buildReportHtml({ ...report, findings }, transcript, title),
       "text/html",
     );
     setStatus("Report downloaded with this conversation.");
@@ -213,7 +215,7 @@ export function ReportWorkspace({
         <header className="report-header">
           <div>
             <span className="report-overline">{reportSourceLabels[source]}</span>
-            <h1 id="report-heading">{reportTitle(report.terraform_repo_ref)}</h1>
+            <h1 id="report-heading">{title}</h1>
             <p>
               {report.terraform_repo_ref} ·{" "}
               {new Date(report.created_at).toLocaleString("en-US", {
@@ -468,6 +470,7 @@ export function ReportWorkspace({
             <GuidedReport
               report={report}
               reviewerNotes={reviewerNotes}
+              titled={demo !== null}
               onOpenTechnicalFinding={openTechnicalFinding}
               onAsk={askAboutFinding}
             />

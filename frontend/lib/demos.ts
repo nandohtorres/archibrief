@@ -33,6 +33,8 @@ export interface LoadedDemo {
 }
 
 const DEMOS_BASE = "/demos";
+// What "View sample review" opens.
+export const FEATURED_DEMO_ID = "breach-pattern";
 
 function isString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;

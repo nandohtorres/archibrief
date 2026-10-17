@@ -8,6 +8,8 @@ interface GuidedReportProps {
   onAsk: (finding: ReportFinding) => void;
   // Hand-check notes when this is a demo review, keyed by finding id.
   reviewerNotes?: Map<string, ReviewerNote>;
+  // True when the page shows a real title (a demo's) above this view.
+  titled?: boolean;
 }
 
 interface FindingCardProps {
@@ -76,6 +78,7 @@ export function GuidedReport({
   onOpenTechnicalFinding,
   onAsk,
   reviewerNotes = new Map(),
+  titled = false,
 }: GuidedReportProps) {
   const decisionFindings = report.findings.filter(
     ({ presentation }) => presentation.priority !== "confirmed",
@@ -87,7 +90,7 @@ export function GuidedReport({
   const confirmedFindings = report.findings.filter(
     ({ presentation }) => presentation.priority === "confirmed",
   );
-  const summary = stakeholderSummary(report);
+  const summary = stakeholderSummary(report, titled);
   return (
     <div className="guided-report">
       <span className="guided-eyebrow">Stakeholder view · same evidence ledger</span>

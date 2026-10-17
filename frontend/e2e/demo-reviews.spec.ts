@@ -16,7 +16,7 @@ test.describe("demo reviews from saved files", () => {
     await page.goto(LIVE_URL);
     await page.getByRole("button", { name: /The 2019 bank breach pattern/ }).click();
 
-    await expect(page.locator("#report-heading")).toHaveText("cloudgoat architecture review");
+    await expect(page.locator("#report-heading")).toHaveText("The 2019 bank breach pattern");
     await expect(
       page.getByText("Demo review · real public Terraform, checked by hand"),
     ).toBeVisible();
@@ -41,6 +41,20 @@ test.describe("demo reviews from saved files", () => {
     await page.getByRole("button", { name: "Go deeper" }).first().click();
     await expect(page.getByText(/part of the saved demo review/)).toBeVisible();
 
+    expect(apiCalls).toEqual([]);
+  });
+
+  test("the landing page's main button opens the featured real demo", async ({ page }) => {
+    const apiCalls: string[] = [];
+    await page.route("**/mock-api/**", async (route) => {
+      apiCalls.push(route.request().url());
+      await route.fulfill({ status: 500, body: "" });
+    });
+    await page.goto(LIVE_URL);
+    await page.getByRole("button", { name: "View sample review" }).first().click();
+    await expect(page.locator("#report-heading")).toHaveText("The 2019 bank breach pattern");
+    await page.getByRole("tab", { name: /Guided Report/ }).click();
+    await expect(page.getByRole("heading", { name: "What this review means" })).toBeVisible();
     expect(apiCalls).toEqual([]);
   });
 });

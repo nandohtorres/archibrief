@@ -107,8 +107,10 @@ export interface StakeholderSummary {
 // gaps"), so a live review of any other system showed the sample's
 // conclusions (master-list 15c). Wording stays factual: counts, the
 // findings' own titles, and which workload answers were not supplied.
-export function stakeholderSummary(report: ReviewReport): StakeholderSummary {
-  const name = workloadName(report.terraform_repo_ref);
+// `titled`: the page already shows a real title (a demo's), so the
+// heading doesn't repeat a name derived from the repository label.
+export function stakeholderSummary(report: ReviewReport, titled = false): StakeholderSummary {
+  const name = titled ? "" : workloadName(report.terraform_repo_ref);
   const high = report.findings.filter(({ presentation }) => presentation.priority === "high");
   const review = report.findings.filter(({ presentation }) => presentation.priority === "review");
 
