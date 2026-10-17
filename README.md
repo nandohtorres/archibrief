@@ -57,14 +57,18 @@ Without `NEXT_PUBLIC_API_BASE_URL`, the UI uses the local fixture path. Playwrig
 
 ## Screenshots
 
-Screenshots are pending capture; these are placeholders, not rendered product images.
+Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo reviews without an account.
 
-| Planned capture | What it should demonstrate |
+![Opening a demo review: landing, demo cards, report, reviewer note, stakeholder view and chat](docs/screenshots/demo.gif)
+
+| | |
 |---|---|
-| Landing and sample selection | Saved demo provenance and admin-only submission notice |
-| Clarification | Explicit defaults and unanswered requirements |
-| Report with expanded evidence | Configuration evidence, guidance quote, confidence and alternatives |
-| Narrow viewport | Report reading and keyboard focus on a phone-width layout |
+| ![Landing page](docs/screenshots/01-landing.png) | ![Finished demo reviews and example architectures](docs/screenshots/02-demo-cards.png) |
+| **Landing.** A second opinion on your Terraform, with the receipts. | **Try it.** Three finished reviews of real public Terraform, or start from an example. |
+| ![A finding with a reviewer note](docs/screenshots/04-reviewer-note.png) | ![Stakeholder view with demo provenance](docs/screenshots/05-stakeholder.png) |
+| **Evidence.** Each finding shows its evidence, confidence and source; the hand check's note marks one the model got wrong. | **Provenance.** Source, license and disclaimer, then the stakeholder view of the same evidence. |
+| ![Report chat with cited answers](docs/screenshots/06-chat.png) | ![Phone layout, dark theme](docs/screenshots/07-phone.png) |
+| **Chat.** Answers cite this review's findings or AWS guidance. | **Phone, dark theme.** |
 
 ## Repository map
 
