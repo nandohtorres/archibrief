@@ -21,7 +21,7 @@ for (const viewport of [
       ).toEqual({ document: viewport.width, viewport: viewport.width });
     };
     await assertFits();
-    await page.getByRole("button", { name: "View sample review" }).first().click();
+    await page.getByRole("button", { name: "See a real review" }).first().click();
     await expect(page.locator("#report-heading")).toBeVisible();
     await assertFits();
     await page.getByRole("button", { name: "Export ledger", exact: true }).scrollIntoViewIfNeeded();

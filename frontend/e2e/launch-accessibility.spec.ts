@@ -15,7 +15,7 @@ for (const theme of ["light", "dark"] as const) {
       await page.goto(FIXTURE_URL);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       if (screen !== "landing") {
-        await page.getByRole("button", { name: "View sample review" }).first().click();
+        await page.getByRole("button", { name: "See a real review" }).first().click();
         await expect(page.locator("#report-heading")).toBeVisible();
         if (screen === "guided") {
           await page.getByRole("tab", { name: /Guided Report/ }).click();

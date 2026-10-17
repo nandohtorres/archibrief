@@ -400,7 +400,11 @@ export function ArchiBriefApp() {
       <main id="main-content">
         {screen === "submission" && (
           <>
-            <LandingIntro sampleLoading={sampleLoading} onOpenSample={openSample} />
+            <LandingIntro
+              sampleLoading={sampleLoading}
+              onOpenSample={openSample}
+              demos={<DemoCards variant="landing" openingId={openingDemoId} onOpen={openDemo} />}
+            />
             <div id="submit" className="landing-submit">
               <SubmissionStep
                 apiConfigured={apiConfigured}
@@ -410,7 +414,6 @@ export function ArchiBriefApp() {
                 adminKey={adminKey}
                 onAdminKeyChange={handleAdminKeyChange}
                 onSubmit={handleSubmission}
-                demos={<DemoCards openingId={openingDemoId} onOpen={openDemo} />}
               />
             </div>
             <LandingClosing />

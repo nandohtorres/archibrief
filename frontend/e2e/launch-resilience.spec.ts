@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { LIVE_URL } from "../playwright.config";
 import { fixtureReport } from "../lib/fixtures";
 
-// "View sample review" now opens the featured demo from static files; these
+// "See a real review" now opens the featured demo from static files; these
 // tests cover the GET /demo sample it falls back to, so the demo index is
 // made unavailable first.
 test.beforeEach(async ({ page }) => {
@@ -21,7 +21,7 @@ test("slow sample request stays pending, sends once, then renders", async ({ pag
     await route.fulfill({ json: fixtureReport });
   });
   await page.goto(LIVE_URL);
-  await page.getByRole("button", { name: "View sample review" }).first().click();
+  await page.getByRole("button", { name: "See a real review" }).first().click();
   try {
     await expect.poll(() => calls).toBe(1);
     await expect(page.locator("#report-heading")).toHaveCount(0);
@@ -53,7 +53,7 @@ for (const failure of ["offline", "malformed", "rate-limited", "unavailable"] as
       });
     });
     await page.goto(LIVE_URL);
-    await page.getByRole("button", { name: "View sample review" }).first().click();
+    await page.getByRole("button", { name: "See a real review" }).first().click();
     await expect(page.getByText(/sample review could not be loaded right now/)).toBeVisible();
     await expect(page.getByText(/private-server-launch-marker|not-json-launch-marker/)).toHaveCount(
       0,
@@ -80,7 +80,7 @@ test("long finding text and many findings remain searchable and exportable at 32
   });
   await page.route("**/mock-api/demo", (route) => route.fulfill({ json: report }));
   await page.goto(LIVE_URL);
-  await page.getByRole("button", { name: "View sample review" }).first().click();
+  await page.getByRole("button", { name: "See a real review" }).first().click();
   await expect(page.locator(".finding-list button")).toHaveCount(80);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   await page.locator("#finding-search").fill("Launch content 79");

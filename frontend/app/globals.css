@@ -3213,3 +3213,14 @@ h4 {
     flex: 1;
   }
 }
+
+/* Landing draft (2026-10-17): "one review, two readers" cards. */
+.landing-sample .landing-label {
+  margin-bottom: 0.5rem;
+}
+
+.landing-quote {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--text);
+}

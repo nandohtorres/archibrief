@@ -51,7 +51,7 @@ test.describe("demo reviews from saved files", () => {
       await route.fulfill({ status: 500, body: "" });
     });
     await page.goto(LIVE_URL);
-    await page.getByRole("button", { name: "View sample review" }).first().click();
+    await page.getByRole("button", { name: "See a real review" }).first().click();
     await expect(page.locator("#report-heading")).toHaveText("The 2019 bank breach pattern");
     await page.getByRole("tab", { name: /Guided Report/ }).click();
     await expect(page.getByRole("heading", { name: "What this review means" })).toBeVisible();

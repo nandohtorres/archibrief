@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 // Landing content: the "master" design Fernando chose on 2026-10-15
 // (frontend/design/landing-options/option-master.html), combining option A's
@@ -13,94 +13,8 @@ import { useEffect, useRef } from "react";
 interface LandingIntroProps {
   sampleLoading: boolean;
   onOpenSample: () => void;
-}
-
-interface SampleCard {
-  title: string;
-  description: string;
-  stack: string;
-  ready: boolean;
-  icon: "card" | "play" | "cart";
-}
-
-// Only the payments sample exists today (GET /demo). The others are
-// planned samples and say so.
-const samples: SampleCard[] = [
-  {
-    title: "Payments API",
-    description:
-      "A customer-facing payments service: an audit-log bucket, a Lambda with an over-broad role, and a single-AZ database.",
-    stack: "S3 · Lambda · IAM · RDS · KMS",
-    ready: true,
-    icon: "card",
-  },
-  {
-    title: "Video streaming platform",
-    description:
-      "Netflix-style: CDN-fronted media origins, a transcoding pipeline, and per-viewer watch history.",
-    stack: "CloudFront · S3 · Lambda · MediaConvert · DynamoDB",
-    ready: false,
-    icon: "play",
-  },
-  {
-    title: "Online marketplace",
-    description:
-      "eBay-style: listings and search, bidding, and a payments boundary with audit retention.",
-    stack: "ALB · ECS · RDS · OpenSearch · SQS",
-    ready: false,
-    icon: "cart",
-  },
-];
-
-function SampleIcon({ icon }: { icon: SampleCard["icon"] }) {
-  if (icon === "play") {
-    return (
-      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-        <rect
-          x="2"
-          y="4"
-          width="16"
-          height="12"
-          rx="2"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-        />
-        <path d="M8.5 7.5v5l4-2.5z" fill="currentColor" />
-      </svg>
-    );
-  }
-  if (icon === "cart") {
-    return (
-      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-        <path
-          d="M3 4h2l2 9h8l2-6H6"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-        <circle cx="8" cy="16" r="1.3" fill="currentColor" />
-        <circle cx="14" cy="16" r="1.3" fill="currentColor" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-      <rect
-        x="2.5"
-        y="5"
-        width="15"
-        height="10"
-        rx="2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path d="M2.5 8.5h15" stroke="currentColor" strokeWidth="1.7" />
-    </svg>
-  );
+  // The real demo reviews (DemoCards).
+  demos: ReactNode;
 }
 
 // Walkthrough steps fade in, and the connecting line fills, as they scroll
@@ -153,34 +67,41 @@ function useWalkthroughReveal() {
   return { flowRef, progressRef };
 }
 
-export function LandingIntro({ sampleLoading, onOpenSample }: LandingIntroProps) {
+export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntroProps) {
   const { flowRef, progressRef } = useWalkthroughReveal();
 
   return (
     <div className="landing">
       <div className="landing-hero">
-        <span className="landing-kicker">AWS Terraform · architecture review</span>
+        <span className="landing-kicker">
+          AWS Terraform · architecture review that explains itself
+        </span>
         <h1 id="landing-heading">
-          A second opinion on your Terraform, <em>with the receipts.</em>
+          Know what&apos;s wrong with your AWS design, <em>and why it matters.</em>
         </h1>
         <p className="landing-lede">
-          ArchiBrief reads your Terraform and a short brief about the workload, then writes a review
-          where every finding points to the resource it&apos;s about and the AWS guidance behind it.
-          If it can&apos;t support a claim, it says so instead of guessing.
+          ArchiBrief reads your Terraform and a short brief about the workload, then explains in
+          plain language what&apos;s exposed, what could fail, and why each fix matters. Every claim
+          points to the line of code and the AWS guidance behind it.
         </p>
         <div className="landing-cta-block">
           <div className="landing-actions">
-            <a className="button primary" href="#samples">
-              View sample review <span aria-hidden="true">→</span>
-            </a>
+            <button
+              className="button primary"
+              type="button"
+              onClick={onOpenSample}
+              disabled={sampleLoading}
+            >
+              {sampleLoading ? "Loading review…" : "See a real review"} <span aria-hidden="true">→</span>
+            </button>
             <a className="button secondary" href="#submit">
               Review your own Terraform
             </a>
           </div>
           <ul className="landing-badges">
-            <li>Static analysis only</li>
             <li>Never touches your AWS account</li>
-            <li>Every finding cites its source</li>
+            <li>Every claim cites its source</li>
+            <li>AI mistakes shown, not hidden</li>
           </ul>
         </div>
       </div>
@@ -191,59 +112,54 @@ export function LandingIntro({ sampleLoading, onOpenSample }: LandingIntroProps)
         aria-labelledby="samples-heading"
       >
         <div className="landing-section-head">
-          <h2 id="samples-heading">Sample reviews</h2>
+          <h2 id="samples-heading">Real reviews of real public code</h2>
           <p>
-            Complete reports on made-up architectures modeled on services you already know. Open one
-            to see a real review.
+            Three open-source AWS projects, reviewed by ArchiBrief and then checked by hand. Where
+            the AI got something wrong, the review says so.
           </p>
         </div>
-        <div className="landing-samples">
-          {samples.map((sample) => (
-            <article
-              key={sample.title}
-              className={`landing-sample${sample.ready ? " available" : ""}`}
-            >
-              <div className="landing-sample-top">
-                <span className="landing-sample-icon">
-                  <SampleIcon icon={sample.icon} />
-                </span>
-                <div className="landing-tags">
-                  <span className="landing-tag hypo">Hypothetical</span>
-                  <span className={`landing-tag ${sample.ready ? "ready" : "soon"}`}>
-                    {sample.ready ? "Ready" : "Coming soon"}
-                  </span>
-                </div>
-              </div>
-              <h3>{sample.title}</h3>
-              <p>{sample.description}</p>
-              <span className="landing-stack">{sample.stack}</span>
-              {sample.ready ? (
-                <button
-                  className="landing-card-cta"
-                  type="button"
-                  onClick={onOpenSample}
-                  disabled={sampleLoading}
-                >
-                  {sampleLoading ? "Loading sample…" : "View sample review"}{" "}
-                  <span aria-hidden="true">→</span>
-                </button>
-              ) : (
-                <span className="landing-card-cta disabled">Coming soon</span>
-              )}
-            </article>
-          ))}
+        {demos}
+      </section>
+
+      <section className="landing-section" id="readers" aria-labelledby="readers-heading">
+        <div className="landing-section-head">
+          <h2 id="readers-heading">One review, two readers</h2>
+          <p>Built for the engineer who fixes it and the person who has to say yes.</p>
         </div>
-        <p className="landing-disclaimer">
-          Sample architectures are invented for this site. Not affiliated with, or based on the real
-          systems of, Netflix or eBay.
-        </p>
+        <div className="landing-samples">
+          <article className="landing-sample">
+            <span className="landing-label">For engineers</span>
+            <h3>The evidence dashboard</h3>
+            <p>
+              Each finding with the resource it&apos;s about, the AWS guidance it cites, how sure it
+              is, and the exact change to make.
+            </p>
+          </article>
+          <article className="landing-sample">
+            <span className="landing-label">For everyone else</span>
+            <h3>The guided report</h3>
+            <p className="landing-quote">
+              &ldquo;Your proxy can be tricked into handing over its AWS credentials, and those
+              credentials can read every bucket. That&apos;s the pattern behind the 2019 Capital One
+              breach.&rdquo;
+            </p>
+          </article>
+          <article className="landing-sample">
+            <span className="landing-label">See it, then ask it</span>
+            <h3>Diagram and questions</h3>
+            <p>
+              A diagram drawn from your code with each finding pinned where it applies. Ask
+              follow-ups and push back; every answer cites the review.
+            </p>
+          </article>
+        </div>
       </section>
 
       <section className="landing-section" id="how" aria-labelledby="how-heading">
         <div className="landing-flow-head">
           <span className="landing-label">How it works</span>
           <h2 id="how-heading">From Terraform to a review you can check</h2>
-          <p>The same steps run for every review, including the payments sample above.</p>
+          <p>The same steps run for every review, including the real ones above.</p>
         </div>
         <div className="landing-flow" ref={flowRef}>
           <span className="landing-flow-progress" ref={progressRef} aria-hidden="true" />
@@ -256,28 +172,27 @@ export function LandingIntro({ sampleLoading, onOpenSample }: LandingIntroProps)
                   available it must be, any data rules.
                 </p>
                 <p className="landing-step-note">
-                  The brief matters. &quot;Customer-facing, can&apos;t go down&quot; turns a
-                  single-AZ database from a footnote into a finding.
+                  The brief matters. &quot;Card data must never be reachable from the internet&quot;
+                  turns a loose role from a footnote into the top risk.
                 </p>
               </div>
               <div className="landing-artifact" aria-label="Example submission">
                 <div className="landing-artifact-head">
-                  <span>payments-api.tar</span>
+                  <span>cloud_breach_s3.tar</span>
                   <span>input</span>
                 </div>
                 <div className="landing-artifact-body">
                   <ul className="landing-tree">
-                    <li className="dir">main.tf</li>
-                    <li className="dir">modules/</li>
-                    <li className="indent">audit/s3.tf</li>
-                    <li className="indent">api/lambda.tf</li>
-                    <li className="indent">api/iam.tf</li>
-                    <li className="indent">data/rds.tf</li>
+                    <li className="dir">terraform/</li>
+                    <li className="indent">ec2.tf</li>
+                    <li className="indent">s3.tf</li>
+                    <li className="indent">vpc.tf</li>
+                    <li className="indent">variables.tf</li>
                   </ul>
                   <p className="landing-brief">
-                    <span className="landing-label">Workload brief</span>
-                    Customer-facing payments API. Audit logs must be kept and never public. Moderate
-                    traffic, business-critical.
+                    <span className="landing-label">Workload brief</span>A bank&apos;s card
+                    platform. One nginx proxy faces the internet; an S3 bucket holds cardholder data
+                    and must never be reachable from it. PCI-DSS applies.
                   </p>
                 </div>
               </div>
@@ -304,15 +219,15 @@ export function LandingIntro({ sampleLoading, onOpenSample }: LandingIntroProps)
                   <ul className="landing-rules">
                     <li>
                       <span className="landing-status fail">FAIL</span>
-                      <span>Lambda execution role grants s3:* on *</span>
+                      <span>Proxy&apos;s role has AmazonS3FullAccess</span>
                     </li>
                     <li>
                       <span className="landing-status fail">FAIL</span>
-                      <span>Audit-log bucket has no public-access block</span>
+                      <span>Proxy doesn&apos;t require IMDSv2 tokens</span>
                     </li>
                     <li>
-                      <span className="landing-status pass">PASS</span>
-                      <span>RDS storage encryption is declared</span>
+                      <span className="landing-status fail">FAIL</span>
+                      <span>Card-data bucket public access not fully blocked</span>
                     </li>
                     <li>
                       <span className="landing-status gap">GAP</span>
@@ -320,8 +235,8 @@ export function LandingIntro({ sampleLoading, onOpenSample }: LandingIntroProps)
                     </li>
                   </ul>
                   <p className="landing-retrieved">
-                    Retrieved: <code>SEC03-BP02</code> · <code>SEC08-BP02</code> ·{" "}
-                    <code>REL10-BP01</code>
+                    Retrieved: <code>SEC03-BP02</code> · <code>SEC06-BP05</code> ·{" "}
+                    <code>SEC05-BP02</code>
                   </p>
                 </div>
               </div>
@@ -346,14 +261,13 @@ export function LandingIntro({ sampleLoading, onOpenSample }: LandingIntroProps)
                 </div>
                 <div className="landing-artifact-body landing-mini-finding">
                   <span className="landing-pill">High risk</span>
-                  <h4>
-                    Lambda execution role grants <code>s3:*</code> on <code>*</code>
-                  </h4>
+                  <h4>The proxy&apos;s role can read every bucket, including the card data</h4>
                   <dl>
                     <div>
                       <dt>Evidence</dt>
                       <dd className="landing-mono">
-                        The inline policy contains Action s3:* and Resource *
+                        aws_iam_role &quot;cg-banking-WAF-Role&quot; is used by the EC2 proxy and
+                        has AmazonS3FullAccess attached
                       </dd>
                     </div>
                     <div>
@@ -366,8 +280,8 @@ export function LandingIntro({ sampleLoading, onOpenSample }: LandingIntroProps)
                     <div>
                       <dt>Recommendation</dt>
                       <dd>
-                        Scope the role to the specific S3 actions the function uses, on the audit
-                        bucket only.
+                        Replace the managed policy with one that names only the actions and buckets
+                        the proxy uses.
                       </dd>
                     </div>
                   </dl>
@@ -428,8 +342,9 @@ export function LandingClosing() {
               unsubmitted modules show up as gaps, not passes or failures.
             </p>
             <p>
-              <strong>It&apos;s not a compliance audit.</strong> It&apos;s a cited second opinion to
-              help you decide what to fix first.
+              <strong>It&apos;s not an audit or a certification.</strong> It&apos;s an
+              evidence-backed architecture review that helps you decide what to fix first, and
+              explains why.
             </p>
           </aside>
         </div>

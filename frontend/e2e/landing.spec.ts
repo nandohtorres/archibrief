@@ -4,11 +4,13 @@ import { expect, test } from "@playwright/test";
 import { FIXTURE_URL, LIVE_URL } from "../playwright.config";
 
 test.describe("landing page", () => {
-  test("shows the pitch, samples and the full submission form", async ({ page }) => {
+  test("shows the pitch, the real demos and the full submission form", async ({ page }) => {
     await page.goto(LIVE_URL);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("with the receipts");
-    await expect(page.getByRole("heading", { name: "Sample reviews" })).toBeVisible();
-    await expect(page.getByText("Coming soon", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("why it matters");
+    await expect(
+      page.getByRole("heading", { name: "Real reviews of real public code" }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "One review, two readers" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
     await expect(page.getByLabel("Admin key")).toBeVisible();
 
@@ -50,9 +52,9 @@ test.describe("landing page", () => {
     await expect(page.getByText("Unauthorized")).toHaveCount(0);
   });
 
-  test("the sample card opens the sample review", async ({ page }) => {
+  test("the hero button opens a review at the top of the page", async ({ page }) => {
     await page.goto(FIXTURE_URL);
-    await page.getByRole("button", { name: "View sample review" }).click();
+    await page.getByRole("button", { name: "See a real review" }).click();
     await expect(page.locator("#report-heading")).toBeVisible();
     // Opened from far down the page, the report still starts at the top.
     await expect(page.locator("#report-heading")).toBeInViewport();

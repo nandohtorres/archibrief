@@ -15,7 +15,7 @@ async function tabTo(page: Page, target: Locator) {
 
 test("keyboard-only sample, report tabs, filtering, and return to submission", async ({ page }) => {
   await page.goto(FIXTURE_URL);
-  await tabTo(page, page.getByRole("button", { name: "View sample review" }).first());
+  await tabTo(page, page.getByRole("button", { name: "See a real review" }).first());
   await page.keyboard.press("Enter");
   await expect(page.locator("#report-heading")).toBeVisible();
 

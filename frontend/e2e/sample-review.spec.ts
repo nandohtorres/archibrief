@@ -1,11 +1,11 @@
-// Item #7: the public "View sample review" path against GET /demo.
+// Item #7: the public "See a real review" path against GET /demo.
 // Network is mocked (page.route) like the rest of the live-build suite;
 // GET /demo is free in production, but CI must not depend on AWS.
 import { expect, test } from "@playwright/test";
 import { LIVE_URL } from "../playwright.config";
 import { fixtureReport } from "../lib/fixtures";
 
-// "View sample review" now opens the featured demo from static files; these
+// "See a real review" now opens the featured demo from static files; these
 // tests cover the GET /demo sample it falls back to, so the demo index is
 // made unavailable first.
 test.beforeEach(async ({ page }) => {
@@ -28,7 +28,7 @@ test.describe("fallback sample review from GET /demo (mocked network)", () => {
     });
 
     await page.goto(LIVE_URL);
-    await page.getByRole("button", { name: "View sample review" }).first().click();
+    await page.getByRole("button", { name: "See a real review" }).first().click();
 
     await expect(page.locator("#report-heading")).toHaveText(
       "streaming-platform architecture review",
@@ -56,7 +56,7 @@ test.describe("fallback sample review from GET /demo (mocked network)", () => {
     );
 
     await page.goto(LIVE_URL);
-    await page.getByRole("button", { name: "View sample review" }).first().click();
+    await page.getByRole("button", { name: "See a real review" }).first().click();
 
     await expect(page.getByText(/sample review could not be loaded right now/)).toBeVisible();
     await expect(page.getByText("boom")).toHaveCount(0);
