@@ -222,6 +222,71 @@ def test_answers_a_question_with_resolved_citations(env, capsys):
     assert "Narrow the role" not in json.dumps(lines)
 
 
+def _daily_counters(env):
+    items = env.counters.scan()["Items"]
+    return {item["counterKey"].split("#")[-1]: item for item in items}
+
+
+def test_screening_has_an_atomic_reservation_before_the_paid_call(env, monkeypatch):
+    def assess(self, text):
+        counters = _daily_counters(env)
+        assert counters["chat_spent_micro_usd"]["spent"] == 300
+        assert counters["chat_questions"]["n"] == 1
+        assert "questionsUsed" not in _review(env)
+        return GuardrailVerdict(blocked=False, filters=[])
+
+    monkeypatch.setattr(FakeGuardrails, "assess", assess)
+    assert _call(_ask())[0] == 200
+    assert _daily_counters(env)["chat_questions"]["n"] == 1
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_blocked_and_failed_screening_remain_charged_without_a_question_slot(
+    env, failure
+):
+    FakeGuardrails.verdict = GuardrailVerdict(blocked=True, filters=["PROMPT_ATTACK"])
+    if failure:
+        FakeGuardrails.raises = RuntimeError("guardrail unavailable")
+    request = _ask()
+    assert _call(request)[0] == (503 if failure else 200)
+    counters = _daily_counters(env)
+    assert counters["chat_spent_micro_usd"]["spent"] == 300
+    assert counters["chat_questions"]["n"] == 1
+    assert env.reasoning.calls == []
+    assert "questionsUsed" not in _review(env)
+    if not failure:
+        assert _call(request)[0] == 200
+        assert FakeGuardrails.calls == 1
+        assert _daily_counters(env) == counters
+
+
+def test_losing_atomic_admission_does_not_call_guardrails(env, monkeypatch):
+    # A stale preliminary read cannot authorize a paid call.
+    monkeypatch.setattr(handler_module, "_precheck", lambda *args: None)
+    monkeypatch.setenv("CHAT_DAILY_MAX_QUESTIONS", "0")
+    assert _call(_ask())[0] == 429
+    assert FakeGuardrails.calls == 0
+    assert env.reasoning.calls == []
+    assert env.counters.scan()["Items"] == []
+
+
+def test_an_abandoned_screening_claim_can_be_retried_after_the_lease(env):
+    request = _ask()
+    now = int(time.time())
+    env.questions.put_item(
+        Item={
+            "reviewId": "r1",
+            "questionKey": "Q#" + request["client_request_id"],
+            "status": "screening",
+            "screeningClaim": "abandoned",
+            "createdAt": now - 100,
+            "ttl": now + 3600,
+        }
+    )
+    assert _call(request)[0] == 200
+    assert len(env.reasoning.calls) == 1
+
+
 def test_the_cached_prompt_holds_the_review_and_the_turn_holds_the_question(env):
     _call(_ask("What should I fix first?"))
     (call,) = env.reasoning.calls
