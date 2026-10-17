@@ -12,11 +12,17 @@ accessibility limits. It includes a machine-readable per-case result summary.
 
 | Suite | Result | Source and command |
 |---|---|---|
-| Backend | 607 passed, 1 skipped | `python -m pytest tests/backend -q --tb=short` |
-| Frontend unit | 52 passed in 9 files | `cd frontend; npm test`; tests in `tests/frontend/` |
+| Backend | 625 passed, 5 skipped | Publication-cleanup rerun: `python -m pytest tests/backend -q --tb=short -p no:cacheprovider` |
+| Frontend unit | 56 passed in 10 files | Publication-cleanup rerun: `cd frontend; npm test`; tests in `tests/frontend/` |
 | Deterministic traps | 60 collected; included in the passing backend run | `python -m pytest tests/backend/traps --collect-only -q -p no:cacheprovider` |
 | Stubbed chat trap checks | 26 collected; included in the passing backend run | Same collection command with `tests/backend/chat/test_traps_stubbed.py` |
-| Playwright | 57 passed, including the accessibility, keyboard, viewport and resilience specs | `cd frontend; npx playwright test` |
+| Playwright | 60 passed, including the accessibility, keyboard, viewport and resilience specs | Publication-cleanup rerun: `cd frontend; npx playwright test --workers=2 --reporter=json` |
+
+The 2026-10-17 publication-cleanup results and their limitations are recorded in
+[`publication-checks.json`](evidence/publication-checks.json). Four backend
+skips require the gitignored ingested corpus; one Trivy unit test is Linux-only
+and skips on Windows. The 60 deterministic trap tests still ran in both modes.
+These counts describe local validation, not a new paid or deployed evaluation.
 
 None of these is a model-quality measurement. The local frontend run used
 Node v24.14.0, outside `frontend/package.json`'s supported Node 20/22 range;
