@@ -332,3 +332,26 @@ resource "aws_backup_plan" "this" {
         },
     ]
     assert "IGNORE" not in json.dumps(build_resource_summary(parsed))
+
+
+def test_rds_cluster_snapshot_settings_are_stated(tmp_path):
+    # The FEC demo re-run (2026-10-16) claimed copy_tags_to_snapshot wasn't
+    # confirmed; the code set it on every cluster.
+    parsed = _parse_text(
+        tmp_path,
+        """
+resource "aws_rds_cluster" "prod" {
+  engine                = "aurora-postgresql"
+  copy_tags_to_snapshot = true
+  skip_final_snapshot   = true
+}
+""",
+    )
+    settings = _settings(build_resource_summary(parsed), "aws_rds_cluster")
+    assert settings["copy_tags_to_snapshot"] is True
+    assert settings["skip_final_snapshot"] is True
+    bare = _settings(
+        build_resource_summary(_parse_text(tmp_path, 'resource "aws_rds_cluster" "b" {}\n')),
+        "aws_rds_cluster",
+    )
+    assert bare["copy_tags_to_snapshot"] == "not set (default: false)"

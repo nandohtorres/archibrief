@@ -1,0 +1,739 @@
+{
+  "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+  "owner_id": "admin",
+  "status": "complete",
+  "terraform_repo_ref": "github.com/fecgov/fec-infrastructure@bd6fbd5",
+  "created_at": "2026-10-17T03:58:24.587567+00:00",
+  "cost_estimate_tier": "medium",
+  "baseline_answers": [
+    {
+      "field": "regulatory_data_residency",
+      "label": "Regulatory and data residency",
+      "outcome": "answered",
+      "value": "Public-record data with integrity requirements; US only.",
+      "policy_version": "preflight_defaults@2026-09-08"
+    },
+    {
+      "field": "expected_traffic_scale",
+      "label": "Traffic and scale",
+      "outcome": "answered",
+      "value": "Heavy reads around filing deadlines.",
+      "policy_version": "preflight_defaults@2026-09-08"
+    },
+    {
+      "field": "availability_criticality",
+      "label": "Availability target",
+      "outcome": "answered",
+      "value": "Production important; staging and development best effort.",
+      "policy_version": "preflight_defaults@2026-09-08"
+    }
+  ],
+  "findings": [
+    {
+      "record": {
+        "finding_id": "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "exposure",
+        "type": "deterministic-rule-result",
+        "finding": "Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433, 3306, 5432, 6379, 9200, 27017]",
+        "evidence": "resource \"aws_security_group\" \"rds\" allows 0.0.0.0/0 for all ports",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
+        "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC05-BP02",
+          "CIS Controls v8: 4.4"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:57:17.361657Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "a2192a0b-4448-40bf-afb3-fbb2414cf994",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "observability",
+        "type": "deterministic-rule-result",
+        "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+        "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "API activity in the account would not be recorded for audit/incident response.",
+        "recommendation": "Add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+        "framework_mapping": [
+          "AWS Well-Architected: Operational Excellence Pillar",
+          "CIS Controls v8: 8.5"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:57:17.361747Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "5b7be8d8-05f5-46f4-b216-41d31f80b57e",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "exposure",
+        "type": "deterministic-rule-result",
+        "finding": "Security group 'rds' allows SSH or RDP from anywhere",
+        "evidence": "resource \"aws_security_group\" \"rds\" at terraform/fec_rds.tf line 76: ingress from 0.0.0.0/0 or ::/0 reaches SSH (22) or RDP (3389) (Trivy AWS-0107)",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "Remote administration ports are reachable from the entire internet.",
+        "recommendation": "Restrict ingress to specific CIDR ranges, a bastion, or use SSM Session Manager.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC05-BP02",
+          "CIS Controls v8: 4.4",
+          "Trivy AWS-0107"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b+trivy@0.76.0",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:57:17.361869Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "d89d7166-f861-44af-9d84-2cd0ecc5b048",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "exposure",
+        "type": "deterministic-rule-result",
+        "finding": "RDS instance 'development_aurora_inst' is publicly accessible",
+        "evidence": "resource \"aws_rds_cluster_instance\" \"development_aurora_inst\" at terraform/fec_rds.tf line 285: publicly_accessible = true (Trivy AWS-0180)",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "The database gets a public endpoint and is one security-group mistake from the internet.",
+        "recommendation": "Set publicly_accessible = false and reach the database from inside the VPC.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC05-BP01",
+          "Trivy AWS-0180"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b+trivy@0.76.0",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:57:17.361911Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "e3ebb27e-03c8-436b-9a64-e6cae1f0b1b0",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "exposure",
+        "type": "deterministic-rule-result",
+        "finding": "RDS instance 'production_aurora_inst' is publicly accessible",
+        "evidence": "resource \"aws_rds_cluster_instance\" \"production_aurora_inst\" at terraform/fec_rds.tf line 223: publicly_accessible = true (Trivy AWS-0180)",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "The database gets a public endpoint and is one security-group mistake from the internet.",
+        "recommendation": "Set publicly_accessible = false and reach the database from inside the VPC.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC05-BP01",
+          "Trivy AWS-0180"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b+trivy@0.76.0",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:57:17.361946Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "e8e69ea5-4b46-4bf0-bb12-154e54867dca",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "exposure",
+        "type": "deterministic-rule-result",
+        "finding": "RDS instance 'staging_aurora_inst' is publicly accessible",
+        "evidence": "resource \"aws_rds_cluster_instance\" \"staging_aurora_inst\" at terraform/fec_rds.tf line 254: publicly_accessible = true (Trivy AWS-0180)",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "The database gets a public endpoint and is one security-group mistake from the internet.",
+        "recommendation": "Set publicly_accessible = false and reach the database from inside the VPC.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC05-BP01",
+          "Trivy AWS-0180"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b+trivy@0.76.0",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:57:17.361977Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "dc306f91-1060-49a8-8a13-f828085c9877",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "encryption",
+        "type": "fact",
+        "finding": "All three Aurora PostgreSQL clusters have storage encryption enabled at rest (storage_encrypted = true), aligning with AWS FSBP RDS.27 and the workload's data integrity requirements for public-record campaign finance data.",
+        "evidence": "All three Aurora clusters (production, staging, development) have storage_encrypted = true in the Terraform configuration. AWS FSBP RDS.27 requires RDS DB clusters to be encrypted at rest.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "aws-fsbp-standard",
+          "chunk_id": "aws-fsbp-standard-0009",
+          "content_hash": "875e85782dd69817f0038e620c11eec5a29b7f09e35094cbff5a5a9f37887051",
+          "heading_path": "AWS Foundational Security Best Practices standard in Security Hub CSPM > Controls that apply to the standard",
+          "exact_text_span": "[RDS.27] RDS DB clusters should be encrypted at rest",
+          "parser_version": "1.0.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.95,
+        "confidence_inputs": {
+          "evidence_directness": 0.95,
+          "source_agreement": 0.95,
+          "rule_determinism": 0.95
+        },
+        "risk_impact": "Low residual risk on encryption at rest; however, use of the default AWS-managed key limits key-policy auditability and rotation control.",
+        "recommendation": "Verify that the KMS key used for encryption is a customer-managed key (CMK) rather than the default AWS-managed key, to allow granular key rotation and access control auditing befitting public-record data with integrity requirements.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC08-BP03",
+          "AWS FSBP RDS.27"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-performance-efficiency-pillar-0202",
+          "waf-performance-efficiency-pillar-0200",
+          "aws-fsbp-standard-0009",
+          "aws-fsbp-standard-0010",
+          "waf-performance-efficiency-pillar-0222",
+          "waf-performance-efficiency-pillar-0203",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0199"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:58:20.288378Z"
+      },
+      "presentation": {
+        "priority": "confirmed",
+        "short_label": "Confirmed"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "bb7583eb-3b42-465d-8e88-118da17c6dbf",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "recovery",
+        "type": "fact",
+        "finding": "All three Aurora clusters have deletion_protection = true and a 7-day backup retention period configured. This aligns with AWS FSBP RDS.7 and RDS.50 and reduces accidental data loss risk for public-record data.",
+        "evidence": "All three clusters set backup_retention_period = 7 days and deletion_protection = true. AWS FSBP RDS.7 requires deletion protection enabled for RDS clusters and RDS.50 requires enough backup retention period.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "aws-fsbp-standard",
+          "chunk_id": "aws-fsbp-standard-0009",
+          "content_hash": "875e85782dd69817f0038e620c11eec5a29b7f09e35094cbff5a5a9f37887051",
+          "heading_path": "AWS Foundational Security Best Practices standard in Security Hub CSPM > Controls that apply to the standard",
+          "exact_text_span": "[RDS.7] RDS clusters should have deletion protection enabled",
+          "parser_version": "1.0.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.93,
+        "confidence_inputs": {
+          "evidence_directness": 0.93,
+          "source_agreement": 0.93,
+          "rule_determinism": 0.92
+        },
+        "risk_impact": "With only a 7-day retention window, a data integrity incident discovered after a week cannot be recovered from automated backups alone.",
+        "recommendation": "For the production cluster, consider increasing backup_retention_period beyond 7 days (e.g., 14–35 days) to support longer audit and recovery windows appropriate for campaign-finance public records. Also evaluate enabling Aurora Backtrack (RDS.14) for point-in-time row-level recovery on the production cluster.",
+        "framework_mapping": [
+          "AWS Well-Architected: Reliability Pillar",
+          "REL09-BP01",
+          "AWS FSBP RDS.7",
+          "AWS FSBP RDS.50"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-performance-efficiency-pillar-0202",
+          "waf-performance-efficiency-pillar-0200",
+          "aws-fsbp-standard-0009",
+          "aws-fsbp-standard-0010",
+          "waf-performance-efficiency-pillar-0222",
+          "waf-performance-efficiency-pillar-0203",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0199"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:58:20.289556Z"
+      },
+      "presentation": {
+        "priority": "confirmed",
+        "short_label": "Confirmed"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "f733eeb9-95af-4a11-a214-233823c13248",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "iam",
+        "type": "fact",
+        "finding": "IAM database authentication is not enabled on any of the three Aurora clusters (default: false). This means database access relies solely on username/password credentials, with no IAM-policy-enforced, identity-traceable access control. The workload explicitly requires that changes be traceable.",
+        "evidence": "All three clusters have iam_database_authentication_enabled = not set (default: false). AWS FSBP RDS.12 requires IAM authentication to be configured for RDS clusters.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "aws-fsbp-standard",
+          "chunk_id": "aws-fsbp-standard-0009",
+          "content_hash": "875e85782dd69817f0038e620c11eec5a29b7f09e35094cbff5a5a9f37887051",
+          "heading_path": "AWS Foundational Security Best Practices standard in Security Hub CSPM > Controls that apply to the standard",
+          "exact_text_span": "[RDS.12] IAM authentication should be configured for RDS clusters",
+          "parser_version": "1.0.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.88,
+        "confidence_inputs": {
+          "evidence_directness": 0.88,
+          "source_agreement": 0.88,
+          "rule_determinism": 0.85
+        },
+        "risk_impact": "Without IAM authentication, shared database passwords can be exfiltrated or accidentally committed, and there is no per-identity audit trail for database connections, undermining the stated traceability requirement.",
+        "recommendation": "Enable iam_database_authentication_enabled = true on all three clusters, and grant application roles IAM permissions scoped to the minimum necessary database users. This provides a cryptographically signed, CloudTrail-auditable record of every connection attempt, supporting the integrity-traceability requirement.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC02-BP02",
+          "AWS FSBP RDS.10",
+          "AWS FSBP RDS.12"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Accept default IAM database authentication (disabled)",
+            "reason_rejected": "Password-based authentication does not provide a traceable, per-identity audit trail for database access, which the workload explicitly requires."
+          }
+        ],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-performance-efficiency-pillar-0202",
+          "waf-performance-efficiency-pillar-0200",
+          "aws-fsbp-standard-0009",
+          "aws-fsbp-standard-0010",
+          "waf-performance-efficiency-pillar-0222",
+          "waf-performance-efficiency-pillar-0203",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0199"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:58:20.290865Z"
+      },
+      "presentation": {
+        "priority": "confirmed",
+        "short_label": "Confirmed"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "availability",
+        "type": "inference",
+        "finding": "The production Aurora cluster is configured with 3 instances (1 writer + 2 readers), which provides read-scaling capacity. However, the workload experiences heavy, deadline-driven read spikes. Aurora Auto Scaling for reader instances is not confirmed in the Terraform, meaning the read fleet is static and may under-provision during peak filing periods.",
+        "evidence": "The production cluster has 3 instances and staging/development have 2. The workload brief explicitly calls out heavy reads around filing deadlines. The WAF guidance states 'RDS and Aurora … support adding read replicas to offload the read portions of the workload.'",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/performance-efficiency-pillar/wellarchitected-performance-efficiency-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-performance-efficiency-pillar",
+          "chunk_id": "waf-performance-efficiency-pillar-0222",
+          "content_hash": "68551adcb14601eff2d5f4bd4b9274fdf9c7edb473865fce916ed709da80e953",
+          "heading_path": "Data management > PERF03-BP02 Evaluate available configuration options for data store",
+          "exact_text_span": "RDS and Aurora, and provisioned NoSQL \ndatabases such as Neptune and Amazon \nDocumentDB all support adding read \nreplicas to oﬄoad the read portions of the \nworkload.",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.82,
+        "confidence_inputs": {
+          "evidence_directness": 0.8,
+          "source_agreement": 0.85,
+          "rule_determinism": 0.75
+        },
+        "risk_impact": "Static reader count risks read-query latency degradation or connection exhaustion during filing deadlines, directly impacting the public-facing FEC website and API.",
+        "recommendation": "Add an aws_appautoscaling_target and aws_appautoscaling_policy for the production Aurora cluster's reader instances to automatically scale out during filing-deadline peaks and scale in afterwards, limiting both under-provisioning risk and idle over-cost. Also confirm the application uses the Aurora reader endpoint to distribute reads across all reader instances.",
+        "framework_mapping": [
+          "AWS Well-Architected: Performance Efficiency Pillar",
+          "PERF03-BP02",
+          "AWS Well-Architected: Reliability Pillar",
+          "REL06-BP02"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Use existing single-instance cluster reads",
+            "reason_rejected": "Single-instance reads cannot absorb the documented heavy read peaks around filing deadlines without degrading write performance on the primary."
+          }
+        ],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-performance-efficiency-pillar-0202",
+          "waf-performance-efficiency-pillar-0200",
+          "aws-fsbp-standard-0009",
+          "aws-fsbp-standard-0010",
+          "waf-performance-efficiency-pillar-0222",
+          "waf-performance-efficiency-pillar-0203",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0199"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:58:20.294795Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "54815d01-faa8-41f2-b9e0-9dfa33ec6d1b",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "observability",
+        "type": "inference",
+        "finding": "The Terraform configuration does not appear to configure CloudWatch Logs export (e.g., enabled_cloudwatch_logs_exports) for any of the three Aurora PostgreSQL clusters, meaning PostgreSQL logs (including slow query logs, connection logs, and DDL) are not being centrally collected.",
+        "evidence": "No aws_cloudwatch_log_group or CloudWatch Logs export configuration for the Aurora clusters is present in the Terraform resources list. AWS FSBP RDS.37 requires Aurora PostgreSQL DB clusters to publish logs to CloudWatch Logs.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "aws-fsbp-standard",
+          "chunk_id": "aws-fsbp-standard-0009",
+          "content_hash": "875e85782dd69817f0038e620c11eec5a29b7f09e35094cbff5a5a9f37887051",
+          "heading_path": "AWS Foundational Security Best Practices standard in Security Hub CSPM > Controls that apply to the standard",
+          "exact_text_span": "[RDS.37] Aurora PostgreSQL DB clusters should publish logs to CloudWatch Logs",
+          "parser_version": "1.0.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.87,
+        "confidence_inputs": {
+          "evidence_directness": 0.87,
+          "source_agreement": 0.88,
+          "rule_determinism": 0.85
+        },
+        "risk_impact": "Without log export to CloudWatch Logs, slow queries, authentication failures, and schema changes are not observable in a centralized, alertable log store, undermining both operational excellence and the workload's data-integrity traceability requirement.",
+        "recommendation": "Add enabled_cloudwatch_logs_exports = [\"postgresql\", \"upgrade\"] to each aws_rds_cluster resource. For the production cluster, also enable Performance Insights (if not already set) and Enhanced Monitoring (AWS FSBP RDS.6) to support deadline-driven load analysis and post-incident forensics.",
+        "framework_mapping": [
+          "AWS Well-Architected: Operational Excellence Pillar",
+          "OPS07-BP05",
+          "AWS FSBP RDS.37",
+          "AWS FSBP RDS.9"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-performance-efficiency-pillar-0202",
+          "waf-performance-efficiency-pillar-0200",
+          "aws-fsbp-standard-0009",
+          "aws-fsbp-standard-0010",
+          "waf-performance-efficiency-pillar-0222",
+          "waf-performance-efficiency-pillar-0203",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0199"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:58:20.296366Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "f0c95c6a-2aa1-4dec-8d6a-cc2faebf69dd",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "cost",
+        "type": "recommendation",
+        "finding": "The Terraform configuration does not confirm that copy_tags_to_snapshot is enabled on any Aurora cluster. For a government workload with multiple environments (production, staging, development), snapshot tag propagation is important for environment-level cost attribution and audit traceability.",
+        "evidence": "AWS FSBP RDS.16 requires Aurora DB clusters to copy tags to DB snapshots. The Terraform resources list does not show a copy_tags_to_snapshot setting for any cluster.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "aws-fsbp-standard",
+          "chunk_id": "aws-fsbp-standard-0009",
+          "content_hash": "875e85782dd69817f0038e620c11eec5a29b7f09e35094cbff5a5a9f37887051",
+          "heading_path": "AWS Foundational Security Best Practices standard in Security Hub CSPM > Controls that apply to the standard",
+          "exact_text_span": "[RDS.16] Aurora DB clusters should be configured to copy tags to DB snapshots",
+          "parser_version": "1.0.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.75,
+        "confidence_inputs": {
+          "evidence_directness": 0.75,
+          "source_agreement": 0.78,
+          "rule_determinism": 0.7
+        },
+        "risk_impact": "Untagged snapshots can accumulate unnoticed, causing untracked storage costs and making it harder to verify backup completeness during audits.",
+        "recommendation": "Set copy_tags_to_snapshot = true on all three aws_rds_cluster resources. This ensures automated and manual snapshots inherit environment, owner, and project tags for cost allocation reports and backup inventory audits.",
+        "framework_mapping": [
+          "AWS Well-Architected: Cost Optimization Pillar",
+          "COST04-BP03",
+          "AWS FSBP RDS.16"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Rely on snapshot-level tag copy defaults",
+            "reason_rejected": "Default behavior does not guarantee tags are propagated to automated snapshots, which can break cost attribution and compliance auditing."
+          }
+        ],
+        "depth_level": "lightweight",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-performance-efficiency-pillar-0202",
+          "waf-performance-efficiency-pillar-0200",
+          "aws-fsbp-standard-0009",
+          "aws-fsbp-standard-0010",
+          "waf-performance-efficiency-pillar-0222",
+          "waf-performance-efficiency-pillar-0203",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0199"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:58:20.298204Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "e8b1caad-d6d6-494c-bec7-775c6a9d67b7",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "availability",
+        "type": "inference",
+        "finding": "The subnet group spans two AZs (rds_az1, rds_az2), and the production cluster has 3 instances. However, only two AZs are configured in the subnet group, which limits Aurora's ability to spread instances across three AZs for maximum fault tolerance, and does not meet the AWS FSBP RDS.15 recommended multi-AZ posture for a production cluster serving a critical public government workload.",
+        "evidence": "AWS FSBP RDS.15 requires RDS DB clusters to be configured for multiple Availability Zones. The Terraform shows aws_subnet resources rds_az1 and rds_az2 (two AZs), plus 3 production instances. Aurora Multi-AZ placement depends on the subnet group and instance count but is not explicitly confirmed per instance.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "aws-fsbp-standard",
+          "chunk_id": "aws-fsbp-standard-0009",
+          "content_hash": "875e85782dd69817f0038e620c11eec5a29b7f09e35094cbff5a5a9f37887051",
+          "heading_path": "AWS Foundational Security Best Practices standard in Security Hub CSPM > Controls that apply to the standard",
+          "exact_text_span": "[RDS.15] RDS DB clusters should be configured for multiple Availability Zones",
+          "parser_version": "1.0.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.8,
+        "confidence_inputs": {
+          "evidence_directness": 0.8,
+          "source_agreement": 0.82,
+          "rule_determinism": 0.78
+        },
+        "risk_impact": "With only two AZs, loss of one AZ could place two of three production instances in the same failed zone, degrading read capacity and potentially causing a failover with higher-than-expected downtime for the production FEC database.",
+        "recommendation": "Extend the aws_db_subnet_group to include subnets in a third AZ and add a corresponding aws_subnet resource. This allows the production Aurora cluster to spread its three instances across three AZs, fully aligning with the Multi-AZ best practice and improving resilience to an AZ-level outage.",
+        "framework_mapping": [
+          "AWS Well-Architected: Reliability Pillar",
+          "REL02-BP02",
+          "AWS FSBP RDS.15"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-performance-efficiency-pillar-0202",
+          "waf-performance-efficiency-pillar-0200",
+          "aws-fsbp-standard-0009",
+          "aws-fsbp-standard-0010",
+          "waf-performance-efficiency-pillar-0222",
+          "waf-performance-efficiency-pillar-0203",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0199"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:58:20.299797Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "d65709cc-ff1a-4939-adb8-487b0e5a3fdc",
+        "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+        "category": "observability",
+        "type": "recommendation",
+        "finding": "No RDS event notification subscription (aws_db_event_subscription) is present in the Terraform configuration. Without this, critical cluster events such as failovers, maintenance windows, and backup failures will not trigger automated notifications to operations teams.",
+        "evidence": "AWS FSBP RDS.19 and RDS.20 require RDS event notification subscriptions for critical cluster and instance events. No aws_db_event_subscription resource appears in the Terraform resources list.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "aws-fsbp-standard",
+          "chunk_id": "aws-fsbp-standard-0009",
+          "content_hash": "875e85782dd69817f0038e620c11eec5a29b7f09e35094cbff5a5a9f37887051",
+          "heading_path": "AWS Foundational Security Best Practices standard in Security Hub CSPM > Controls that apply to the standard",
+          "exact_text_span": "[RDS.19] Existing RDS event notification subscriptions should be configured for critical cluster events",
+          "parser_version": "1.0.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.78,
+        "confidence_inputs": {
+          "evidence_directness": 0.78,
+          "source_agreement": 0.8,
+          "rule_determinism": 0.75
+        },
+        "risk_impact": "Without event subscriptions, undetected failovers or storage issues during peak filing periods could result in extended outages before operations staff become aware of the problem.",
+        "recommendation": "Add aws_db_event_subscription resources covering at least the production Aurora cluster for event categories: failover, failure, maintenance, and notification. Route these to an SNS topic that alerts the FEC operations team, enabling timely response particularly during filing-deadline periods when availability is most critical.",
+        "framework_mapping": [
+          "AWS Well-Architected: Operational Excellence Pillar",
+          "OPS07-BP04",
+          "AWS FSBP RDS.19",
+          "AWS FSBP RDS.20"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-performance-efficiency-pillar-0202",
+          "waf-performance-efficiency-pillar-0200",
+          "aws-fsbp-standard-0009",
+          "aws-fsbp-standard-0010",
+          "waf-performance-efficiency-pillar-0222",
+          "waf-performance-efficiency-pillar-0203",
+          "waf-sustainability-pillar-0218",
+          "waf-performance-efficiency-pillar-0199"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-17T03:58:20.303900Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    }
+  ]
+}

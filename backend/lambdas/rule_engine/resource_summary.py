@@ -69,6 +69,7 @@ SETTINGS: dict[str, tuple[str, ...]] = {
         "iam_database_authentication_enabled",
         "auto_minor_version_upgrade",
         "skip_final_snapshot",
+        "copy_tags_to_snapshot",
     ),
     "aws_rds_cluster": (
         "engine",
@@ -76,6 +77,10 @@ SETTINGS: dict[str, tuple[str, ...]] = {
         "backup_retention_period",
         "deletion_protection",
         "iam_database_authentication_enabled",
+        "skip_final_snapshot",
+        # The FEC demo re-run (2026-10-16) said this wasn't confirmed when
+        # all three clusters set it.
+        "copy_tags_to_snapshot",
     ),
     "aws_s3_bucket_versioning": ("versioning_configuration.status",),
     "aws_s3_bucket_public_access_block": (
@@ -145,10 +150,13 @@ DEFAULTS: dict[str, dict[str, object]] = {
         "auto_minor_version_upgrade": True,
         "skip_final_snapshot": False,
         "backup_retention_period": 1,
+        "copy_tags_to_snapshot": False,
     },
     "aws_rds_cluster": {
         "deletion_protection": False,
         "iam_database_authentication_enabled": False,
+        "skip_final_snapshot": False,
+        "copy_tags_to_snapshot": False,
     },
     "aws_s3_bucket_public_access_block": {
         "block_public_acls": False,

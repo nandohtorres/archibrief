@@ -62,7 +62,7 @@ one.
 
 ## How each report was produced
 
-All runs: 2026-10-15, through `https://api.archibrief.dev` (admin
+All runs through `https://api.archibrief.dev` (admin
 path), rule version `rule_engine@2026-10-15b` with Trivy 0.76.0, model
 `us.anthropic.claude-sonnet-4-6`, prompt `reason_prompt@2026-10-15d`,
 corpus v3.
@@ -71,7 +71,7 @@ corpus v3.
 |---|---|---|---|---|
 | breach-pattern | `cd4b6384-30cb-48c9-a779-714b7cb7194e` | 83s | 12 (6 rule, 6 model) | saved |
 | medicare-platform | `8d46136d-e14f-4010-aaa4-e2bf0408b06d` | 80s | 9 (2 rule, 7 model) | saved |
-| fec-database | `25ca09c8-4f2f-4be8-81be-b8c1e5c4bb02` | 63s | 10 (6 rule, 4 model) | **not published**: one false "fact" (below); re-run pending |
+| fec-database | `b7f2a3e7-641d-47a3-a579-31fc637b0cc6` | 91s | 14 (6 rule, 8 model) | saved (re-run 2026-10-16 after the count fix; first run `25ca09c8` held back over a false instance count) |
 
 The briefs are written by ArchiBrief from each project's public README.
 The projects' owners did not write them or review these results.
@@ -117,7 +117,9 @@ those stay the pipeline's unedited output.
 | Model: backup schedule, retention and copies "aren't visible" | **Incomplete**: the code sets four rules (every 4 hours kept 1 day and copied to a second vault; daily kept 7; weekly kept 35; monthly kept 90). The resource summary didn't include backup plans; it does now (bug 5) |
 | Model: WAF logging and Datadog monitoring present, no further alerting shown | Fair |
 
-### fec-database (not published)
+### fec-database
+
+Re-run 2026-10-16 (`b7f2a3e7`), after the instance-count fix.
 
 | Finding | Verdict |
 |---|---|
@@ -125,12 +127,16 @@ those stay the pipeline's unedited output.
 | Rule: security group `rds` allows SSH or RDP from anywhere | Correct (all ports) |
 | Rule: production, staging and development instances publicly accessible | Correct |
 | Rule: no `aws_cloudtrail` | Correct |
-| Model: "only a single cluster instance is provisioned per Aurora cluster" | **Wrong**: `count = 3`, `2`, `2`. The summary didn't carry counts; fixed in `ec537fe` (`copies`) |
-| Model: no read replicas or caching for deadline spikes | Wrong for the same reason (the extra instances are readers) |
+| Model: storage encryption on for all three clusters, AWS-managed key | Correct (`storage_encrypted = true`, no `kms_key_id`) |
+| Model: deletion protection on, 7-day backup retention | Correct |
+| Model: IAM database authentication off | Correct (unset; default false) |
+| Model: production has 3 instances (1 writer, 2 readers), no reader auto scaling | Correct (`count = 3`; no Application Auto Scaling). The first run's false "single instance" claim is gone |
+| Model: no CloudWatch Logs export | Correct (no `enabled_cloudwatch_logs_exports`; the parameter group's log settings stay inside RDS) |
+| Model: `copy_tags_to_snapshot` not confirmed | **Wrong**: all three clusters set it to `true`. It wasn't in the resource summary; added (bug 6) |
+| Model: subnet group spans only two AZs | Correct |
 | Model: no RDS event subscriptions | Correct |
-| Model: Aurora backtracking not configured | Correct |
 
-## Bugs the demos found (all fixed)
+## Bugs the demos found
 
 See the Issues Log entry of 2026-10-15 for detail.
 
@@ -146,6 +152,9 @@ See the Issues Log entry of 2026-10-15 for detail.
    see schedules or retention. Each rule's schedule, retention, cold
    storage, copy and continuous-backup setting is now stated; rule names
    are free text and left out.
+6. `copy_tags_to_snapshot` and, for clusters, `skip_final_snapshot`
+   weren't in the resource summary, so the FEC re-run called a setting
+   unconfirmed that the code sets (2026-10-16).
 
 ## Talking points for showing it
 
@@ -159,5 +168,5 @@ See the Issues Log entry of 2026-10-15 for detail.
 - **FEC:** three public databases open on every port, found on public
   government code.
 - **Verification:** every finding above was checked by hand, including
-  the ones the model got wrong. That check is what found four of the
-  five bugs.
+  the ones the model got wrong. That check is what found five of the
+  six bugs.

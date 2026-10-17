@@ -60,7 +60,14 @@
       "disclaimer": "Real public Terraform from a US federal agency, last changed in 2020. It may not match what runs today.",
       "archive": "/demos/fec-database.tar",
       "repoLabel": "github.com/fecgov/fec-infrastructure@bd6fbd5",
-      "brief": "Aurora PostgreSQL database clusters (production, staging and development) for the Federal Election Commission's campaign-finance data, which the public reads through the FEC website and API. The data is public record, but its integrity matters: changes must be traceable and the databases should only be reachable from the FEC's own application platform, never directly from the internet. Read traffic peaks around filing deadlines."
+      "brief": "Aurora PostgreSQL database clusters (production, staging and development) for the Federal Election Commission's campaign-finance data, which the public reads through the FEC website and API. The data is public record, but its integrity matters: changes must be traceable and the databases should only be reachable from the FEC's own application platform, never directly from the internet. Read traffic peaks around filing deadlines.",
+      "reviewerNotes": [
+        {
+          "findingId": "f0c95c6a-2aa1-4dec-8d6a-cc2faebf69dd",
+          "verdict": "wrong",
+          "note": "All three clusters set copy_tags_to_snapshot = true. The setting wasn't in the model's resource summary; it is now."
+        }
+      ]
     }
   ]
 }
