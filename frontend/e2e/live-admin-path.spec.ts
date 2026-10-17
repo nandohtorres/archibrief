@@ -44,7 +44,30 @@ test.describe("admin-gated live critical path (mocked network)", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ ...fixtureReport, review_id: capturedReviewId }),
+        // A new review carries the diagram Finalize built from its code.
+        body: JSON.stringify({
+          ...fixtureReport,
+          review_id: capturedReviewId,
+          architecture: {
+            version: 1,
+            lanes: ["data"],
+            nodes: [
+              {
+                id: "aws_s3_bucket.audit_logs",
+                type: "aws_s3_bucket",
+                label: "s3 bucket",
+                name: "audit_logs",
+                module: "",
+                lane: "data",
+                details: ["s3 bucket versioning"],
+                findings: ["finding-001"],
+              },
+            ],
+            edges: [],
+            account_findings: [],
+            truncated: false,
+          },
+        }),
       });
     });
     await page.route(/\/mock-api\/reviews\/[^/]+\/findings\/[^/]+\/deeper$/, async (route) => {
@@ -73,6 +96,11 @@ test.describe("admin-gated live critical path (mocked network)", () => {
 
     await expect(page.locator("#report-heading")).toBeVisible({ timeout: 20_000 });
     expect(capturedReviewId).not.toBe("");
+    await expect(
+      page
+        .locator("#architecture-impact")
+        .getByRole("button", { name: "s3 bucket audit_logs, 1 finding" }),
+    ).toBeVisible();
 
     await expect(page.getByRole("button", { name: "Go deeper" }).first()).toBeVisible();
     await page.getByRole("button", { name: "Go deeper" }).first().click();

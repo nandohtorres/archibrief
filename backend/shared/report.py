@@ -42,7 +42,7 @@ def compute_presentation(finding: Finding) -> dict[str, str]:
 def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> dict[str, Any]:
     findings = [Finding.model_validate(f) for f in ledger.get("findings", [])]
 
-    return {
+    report = {
         "review_id": review_item["reviewId"],
         # ADR-0044 removed user accounts entirely — there is no real
         # per-user identity to put here. Kept only because the frontend's
@@ -68,3 +68,7 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
             for f in findings
         ],
     }
+    # The architecture diagram, for reviews finalized from 2026-10-17 on.
+    if isinstance(ledger.get("architecture"), dict):
+        report["architecture"] = ledger["architecture"]
+    return report

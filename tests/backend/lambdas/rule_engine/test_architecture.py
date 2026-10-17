@@ -238,3 +238,44 @@ def test_lane_uses_the_longest_prefix():
     assert lane_of("aws_vpc_endpoint") == "network"
     assert lane_of("aws_cloudwatch_log_group") == "monitoring"
     assert lane_of("aws_something_new") == "data"
+
+
+def test_rule_engine_returns_the_graph_without_findings(tmp_path):
+    from backend.lambdas.rule_engine.handler import handler
+
+    result = handler({"review_id": "r1", "parsed": _parse(tmp_path, NETWORK)}, None)
+    graph = result["architecture"]
+    assert "aws_instance.proxy" in {n["id"] for n in graph["nodes"]}
+    # Findings are placed later, by Finalize, once the model's are in.
+    assert all(n["findings"] == [] for n in graph["nodes"])
+    assert graph["account_findings"] == []
+
+
+def test_a_graph_that_fails_to_build_drops_only_the_diagram(tmp_path, monkeypatch):
+    import backend.lambdas.rule_engine.handler as handler_module
+
+    def broken(_parsed):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(handler_module, "build_graph", broken)
+    result = handler_module.handler(
+        {"review_id": "r1", "parsed": _parse(tmp_path, NETWORK)}, None
+    )
+    assert result["architecture"] is None
+    assert result["findings"]
+
+
+def test_link_findings_replaces_earlier_placement(tmp_path):
+    from backend.shared.architecture_links import link_findings
+
+    first = build_architecture(
+        _parse(tmp_path, NETWORK),
+        [_finding("old", "Bucket 'cardholder-data' is public")],
+    )
+    relinked = link_findings(
+        first, [_finding("new", "No aws_cloudtrail resource found")]
+    )
+    assert _node(relinked, "aws_s3_bucket.cardholder-data")["findings"] == []
+    assert relinked["account_findings"] == ["new"]
+    # The input graph is left as it was.
+    assert _node(first, "aws_s3_bucket.cardholder-data")["findings"] == ["old"]

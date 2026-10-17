@@ -279,3 +279,67 @@ def test_handler_stores_the_resource_summary_from_the_event(monkeypatch):
         None,
     )
     assert written["ledger"]["terraform_resources"] == summary
+
+
+def _graph() -> dict:
+    return {
+        "version": 1,
+        "lanes": ["data"],
+        "nodes": [
+            {
+                "id": "aws_s3_bucket.card-data-bucket",
+                "type": "aws_s3_bucket",
+                "label": "s3 bucket",
+                "name": "card-data-bucket",
+                "module": "",
+                "lane": "data",
+                "details": [],
+                "findings": [],
+            }
+        ],
+        "edges": [],
+        "account_findings": [],
+        "truncated": False,
+    }
+
+
+def _run_finalize(monkeypatch, event: dict) -> dict:
+    written = {}
+
+    class FakeS3:
+        def __init__(self, bucket):
+            pass
+
+        def put_object(self, key, body):
+            written["ledger"] = json.loads(body)
+
+    monkeypatch.setattr("backend.lambdas.finalize.handler.S3Client", FakeS3)
+    handler({"review_id": "r1", "report_bucket": "reports", **event}, None)
+    return written["ledger"]
+
+
+def test_handler_places_the_final_findings_on_the_architecture(monkeypatch):
+    findings = [
+        _finding(
+            finding_id="on-bucket", finding="Bucket 'card-data-bucket' is not encrypted"
+        ),
+        _finding(finding_id="account", finding="No aws_cloudtrail resource found"),
+    ]
+    ledger = _run_finalize(
+        monkeypatch,
+        {
+            "findings": [f.model_dump(mode="json") for f in findings],
+            "architecture": _graph(),
+        },
+    )
+    graph = ledger["architecture"]
+    assert graph["nodes"][0]["findings"] == ["on-bucket"]
+    assert graph["account_findings"] == ["account"]
+
+
+def test_handler_without_a_graph_stores_no_architecture(monkeypatch):
+    for event in ({}, {"architecture": None}, {"architecture": "not a graph"}):
+        ledger = _run_finalize(
+            monkeypatch, {"findings": [_finding().model_dump(mode="json")], **event}
+        )
+        assert "architecture" not in ledger

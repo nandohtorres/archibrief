@@ -100,6 +100,9 @@ export interface ReviewReport {
   cost_estimate_tier: "low" | "medium" | "high";
   baseline_answers: BaselineAnswer[];
   findings: ReportFinding[];
+  // The diagram built from the code (lib/architecture.ts), on reviews
+  // finalized from 2026-10-17 on. Checked with isArchitectureGraph before use.
+  architecture?: unknown;
 }
 
 // GET /reviews/{reviewId}'s shape for a review that isn't complete yet

@@ -113,3 +113,17 @@ def test_build_review_report_defaults_baseline_answers_to_empty_list():
     report = build_review_report(review_item, ledger)
     assert report["baseline_answers"] == []
     assert report["findings"] == []
+
+
+def test_report_carries_the_architecture_when_the_ledger_has_one():
+    from backend.shared.report import build_review_report
+
+    graph = {"version": 1, "nodes": [], "edges": []}
+    item = {"reviewId": "r1"}
+    assert (
+        build_review_report(item, {"findings": [], "architecture": graph})[
+            "architecture"
+        ]
+        == graph
+    )
+    assert "architecture" not in build_review_report(item, {"findings": []})

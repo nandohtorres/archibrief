@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.agent.nodes.preflight import FIELD_LABELS
+from backend.shared.architecture_links import link_findings
 from backend.shared.clients import DynamoDBClient, S3Client
 from backend.shared.models.finding import Finding
 
@@ -122,6 +123,19 @@ def assemble_evidence_ledger(
     }
 
 
+def place_findings(graph: object, findings: list[Finding]) -> dict | None:
+    """RuleEngine's graph with the final findings placed on it, or None
+    when there is no graph or placing fails (the report then has no
+    diagram, nothing else changes)."""
+    if not isinstance(graph, dict):
+        return None
+    try:
+        return link_findings(graph, [f.model_dump(mode="json") for f in findings])
+    except Exception as exc:  # noqa: BLE001 - any failure just drops the diagram
+        print(json.dumps({"event": "architecture_failed", "error": type(exc).__name__}))
+        return None
+
+
 def handler(event, context):
     review_id = event["review_id"]
     findings = [Finding.model_validate(f) for f in event["findings"]]
@@ -135,6 +149,11 @@ def handler(event, context):
         baseline_answers,
         event.get("terraform_resources"),
     )
+    # The report's diagram (rule_engine/architecture.py). Absent for
+    # reviews finalized before 2026-10-17.
+    architecture = place_findings(event.get("architecture"), findings)
+    if architecture is not None:
+        ledger["architecture"] = architecture
 
     report_bucket = event.get("report_bucket")
     reviews_table = event.get("reviews_table_name")

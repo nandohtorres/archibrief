@@ -10,7 +10,7 @@ import {
   type PointerEvent,
 } from "react";
 import type { ChatTurn, DemoChat, ReportFinding, ReviewReport } from "@/lib/contracts";
-import type { ArchitectureGraph } from "@/lib/architecture";
+import { isArchitectureGraph, type ArchitectureGraph } from "@/lib/architecture";
 import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
 import { reviewerNotesById, type DemoEntry } from "@/lib/demos";
 import { buildReportHtml, downloadFile } from "@/lib/chat";
@@ -36,7 +36,8 @@ interface ReportWorkspaceProps {
   // pregenerated suggested answers, when this is a demo review.
   demo?: DemoEntry | null;
   demoChat?: DemoChat | null;
-  // The diagram built from the code; reports without one show no diagram.
+  // A demo's diagram, from its saved file. Other reports carry their own
+  // (report.architecture); a report without one shows no diagram.
   architecture?: ArchitectureGraph | null;
   onNewReview: () => void;
 }
@@ -51,10 +52,12 @@ export function ReportWorkspace({
   adminKey,
   demo = null,
   demoChat = null,
-  architecture = null,
+  architecture: demoArchitecture = null,
   onNewReview,
 }: ReportWorkspaceProps) {
   const reviewerNotes = useMemo(() => reviewerNotesById(demo), [demo]);
+  const architecture =
+    demoArchitecture ?? (isArchitectureGraph(report.architecture) ? report.architecture : null);
   // A demo has a real title; other reports are named from their repository label.
   const title = demo ? demo.title : reportTitle(report.terraform_repo_ref);
   const [view, setView] = useState<"technical" | "stakeholder">("technical");

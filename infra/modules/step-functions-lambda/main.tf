@@ -1165,8 +1165,10 @@ resource "aws_sfn_state_machine" "review" {
           # ADR-0049's summary, stored in the ledger for the report chat
           # (ADR-0050). RuleEngine always runs before Finalize.
           "terraform_resources.$" = "$.ruleEngineResult.resource_summary"
-          "report_bucket"         = var.reports_bucket_name
-          "reviews_table_name"    = var.reviews_table_name
+          # The report's diagram; Finalize places the final findings on it.
+          "architecture.$"     = "$.ruleEngineResult.architecture"
+          "report_bucket"      = var.reports_bucket_name
+          "reviews_table_name" = var.reviews_table_name
         }
         End = true
       }

@@ -30,6 +30,7 @@ import re
 import uuid
 from collections.abc import Callable, Iterable
 
+from backend.lambdas.rule_engine.architecture import build_graph
 from backend.lambdas.rule_engine.hcl_eval import (
     is_created,
     policy_statements,
@@ -1065,6 +1066,16 @@ def load_parsed(event: dict) -> dict:
     return event["parsed"]
 
 
+def safe_graph(parsed: dict) -> dict | None:
+    """The report's architecture graph, or None if it can't be built: a
+    diagram is never worth failing a review over."""
+    try:
+        return build_graph(parsed)
+    except Exception as exc:  # noqa: BLE001 - any failure just drops the diagram
+        print(json.dumps({"event": "architecture_failed", "error": type(exc).__name__}))
+        return None
+
+
 def handler(event, context):
     parsed = load_parsed(event)
     review_id = event["review_id"]
@@ -1074,4 +1085,6 @@ def handler(event, context):
         "rule_version": RULE_VERSION,
         "findings": [f.model_dump(mode="json") for f in findings],
         "resource_summary": build_resource_summary(parsed),
+        # Resources and references only; Finalize places the findings.
+        "architecture": safe_graph(parsed),
     }
