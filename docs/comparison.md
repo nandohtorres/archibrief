@@ -1,6 +1,6 @@
 # Local Trivy versus saved ArchiBrief reviews
 
-Measured 2026-10-16 against the archives committed at `8d391b0`. This compares
+Measured against the archives committed at `8d391b0`. This compares
 static scanner output with historical saved reviews of the same source slices,
 not two fresh production executions or a benchmark of general accuracy.
 
@@ -14,7 +14,7 @@ run. The originals are unchanged; archive SHA-256 values are recorded in
 
 ```powershell
 $env:PYTHONPATH = (Get-Location).Path
-..\archibrief\backend\.venv\Scripts\python.exe docs/evidence/compare_demos.py
+python docs/evidence/compare_demos.py
 ```
 
 The installed Trivy is **0.76.0**, matching the version recorded for the saved
@@ -38,11 +38,11 @@ each failing check/resource occurrence, including counted resource instances.
 |---|---:|---|---:|---|
 | breach-pattern | 8 | 16 (2/6/2/6) | 5 | 12 (6/6), committed JSON |
 | medicare-platform | 31 | 7 (2/4/0/1) | 4 | 9 (2/7), committed JSON |
-| fec-database | 1 | 23 (1/11/1/10) | 8 | 14 (6/8), committed JSON (re-run 2026-10-16) |
+| fec-database | 1 | 23 (1/11/1/10) | 8 | 14 (6/8), committed JSON (re-run) |
 
 Local counts and types come from `evidence/trivy/summary.json`; saved counts
 come from the three `frontend/public/demos/reports/*.json` files. The FEC report
-is the 2026-10-16 re-run (`b7f2a3e7`); the first run was held back over a false
+is the re-run (`b7f2a3e7`); the first run was held back over a false
 instance count (see [demos.md](demos.md)).
 
 The trusted-set column is an ID membership count, not a prediction of final
@@ -93,7 +93,7 @@ ArchiBrief's rules report the public database instances, all-port ingress
 (including database ports and SSH/RDP) and absent CloudTrail. The first saved
 run's model claimed one instance per cluster and no read replicas, though the
 Terraform sets counts of 3/2/2; the resource summary didn't carry counts. After
-that fix, the 2026-10-16 re-run describes production as one writer and two
+that fix, the re-run describes production as one writer and two
 readers, and adds what Trivy doesn't frame for this workload: IAM database
 authentication off against a stated traceability requirement, no log export,
 static reader capacity for filing-deadline spikes, and a two-AZ subnet group.

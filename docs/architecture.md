@@ -1,10 +1,9 @@
 # ArchiBrief Architecture
 
-Written against the real deployed system as of 2026-10-15. Diagrams are
-Mermaid rather than `mingrammer/diagrams` (ADR-0025's stated tool) —
-that needs a local Graphviz install this machine doesn't have, and
-ADR-0025 itself calls its own choice "low-stakes, easily revisited," so
-this is a documented substitution, not a reversal.
+This describes the deployed system. Diagrams are Mermaid rather than
+`mingrammer/diagrams` (ADR-0025's stated tool), which needs a local
+Graphviz install; ADR-0025 calls its own choice "low-stakes, easily
+revisited," so this is a documented substitution, not a reversal.
 
 ## System overview
 
@@ -134,7 +133,8 @@ flowchart LR
    question with a single Bedrock call over the stored review (findings
    under aliases, the resource summary, three retrieved WAF chunks, the
    last four turns), and the server keeps only what it can verify
-   against the review. Admin-only until Phase 3; see `docs/chat.md`.
+   against the review. Admin-only until public access opens; see
+   `docs/chat.md`.
 
 `GET /demo` is the one route with no Lambda/Step Functions/Bedrock cost
 at all — a precomputed, static reference report, deliberately
@@ -142,8 +142,8 @@ unauthenticated (ADR-0029).
 
 ## Human-in-the-loop: the clarification pause
 
-A real, live-tested path (first exercised end to end 2026-10-13),
-not a hypothetical. When `Reason` can't resolve a required field under
+This path is exercised end to end against the deployed system. When
+`Reason` can't resolve a required field under
 ADR-0031's per-field missing-data policy, it returns
 `needs_clarification` instead of findings, and the state machine pauses
 — for up to 7 days — rather than guessing or failing the review:
@@ -171,10 +171,9 @@ sequenceDiagram
 ```
 
 The frontend never sees `needs_clarification` as a generic "still
-pending" state — polling explicitly branches on it (found and fixed
-2026-10-12: before that fix, a genuinely paused review looked
-indistinguishable from a dead one to the client) and renders a real
-yes/no + multi-select question UI instead of continuing to spin.
+pending" state — polling explicitly branches on it (otherwise a paused
+review would look like a dead one) and renders a yes/no + multi-select
+question UI instead of continuing to spin.
 
 ## Why Step Functions owns orchestration, not a Lambda
 
