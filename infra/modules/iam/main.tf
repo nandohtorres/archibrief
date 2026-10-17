@@ -216,7 +216,7 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
 
 resource "aws_iam_policy" "runtime_permissions_boundary" {
   name        = "${var.name_prefix}-runtime-boundary"
-  description = "Permissions boundary for archibrief-dev-* roles passed to Lambda/Step Functions/API Gateway service principals. See Work-Project-Issues-Log.md, 2026-09-09."
+  description = "Permissions boundary for ArchiBrief runtime roles passed to approved AWS service principals."
   policy      = data.aws_iam_policy_document.runtime_permissions_boundary.json
   tags        = var.tags
 }
