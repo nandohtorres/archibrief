@@ -1,6 +1,7 @@
 import json
 
 import boto3
+import pytest
 from moto import mock_aws
 
 from backend.lambdas.create_upload.handler import handler
@@ -49,6 +50,12 @@ def test_handler_rejects_missing_review_id():
 
 def test_handler_rejects_invalid_json_body():
     result = handler({"body": "not json"}, None)
+    assert result["statusCode"] == 400
+
+
+@pytest.mark.parametrize("payload", [[], [1], None, True, 42, "upload"])
+def test_handler_rejects_non_object_json_before_creating_an_upload(payload):
+    result = handler({"body": json.dumps(payload)}, None)
     assert result["statusCode"] == 400
 
 

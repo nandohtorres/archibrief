@@ -51,8 +51,11 @@ def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
 def handler(event: dict, _context: object) -> dict:
     try:
         payload = json.loads(event.get("body") or "{}")
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError):
         return _response(400, {"error": "request body must be valid JSON"})
+
+    if not isinstance(payload, dict):
+        return _response(400, {"error": "request body must be a JSON object"})
 
     review_id = payload.get("review_id")
     if not isinstance(review_id, str) or not _REVIEW_ID_PATTERN.match(review_id):

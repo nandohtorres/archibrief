@@ -40,6 +40,14 @@ def questions_per_review() -> int:
         return DEFAULT_QUESTIONS_PER_REVIEW
 
 
+def question_is_live(item: dict[str, Any], now: float) -> bool:
+    """TTL cleanup is asynchronous; malformed/missing expiry fails closed."""
+    try:
+        return int(item.get("ttl", 0)) > now
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
 def transcript_item(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "question_id": item["questionKey"].split("#", 1)[1],

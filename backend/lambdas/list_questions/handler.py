@@ -20,6 +20,7 @@ from backend.chat.access import (
     FINAL_STATUSES,
     caller_allowed,
     is_admin,
+    question_is_live,
     questions_per_review,
     transcript_item,
 )
@@ -59,7 +60,7 @@ def handler(event: dict, _context: object) -> dict:
         KeyConditionExpression="reviewId = :r",
         ExpressionAttributeValues={":r": review_id},
     )
-    live = [i for i in items if int(i.get("ttl", now + 1)) > now]
+    live = [i for i in items if question_is_live(i, now)]
     questions = sorted(
         (
             i

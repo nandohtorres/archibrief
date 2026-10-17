@@ -241,6 +241,72 @@ def test_a_repeated_request_id_replays_without_a_second_call(env):
     assert _review(env)["questionsUsed"] == 1
 
 
+@pytest.mark.parametrize("expiry", [0, "invalid", None])
+def test_an_expired_or_invalid_cached_answer_cannot_be_replayed(env, expiry):
+    request = _ask()
+    assert _call(request)[0] == 200
+    key = {"reviewId": "r1", "questionKey": f"Q#{request['client_request_id']}"}
+    if expiry is None:
+        env.questions.update_item(
+            Key=key,
+            UpdateExpression="REMOVE #expiry",
+            ExpressionAttributeNames={"#expiry": "ttl"},
+        )
+    else:
+        env.questions.update_item(
+            Key=key,
+            UpdateExpression="SET #expiry = :v",
+            ExpressionAttributeNames={"#expiry": "ttl"},
+            ExpressionAttributeValues={":v": expiry},
+        )
+    status, response = _call(request)
+    assert (status, response["error"]) == (410, "request_expired")
+    assert len(env.reasoning.calls) == 1
+    assert FakeGuardrails.calls == 1
+
+
+def test_an_expired_suggestion_is_regenerated_instead_of_serving_old_content(env):
+    env.questions.put_item(
+        Item={
+            "reviewId": "r1",
+            "questionKey": "S#s3",
+            "status": "answered",
+            "answer": [{"text": "Expired content.", "citations": []}],
+            "createdAt": 1,
+            "ttl": 2,
+        }
+    )
+    status, response = _call(
+        {"client_request_id": str(uuid.uuid4()), "suggested_id": "s3"}
+    )
+    assert status == 200
+    assert "Expired content" not in json.dumps(response)
+    assert len(env.reasoning.calls) == 1
+
+
+def test_copying_a_live_suggestion_does_not_extend_its_expiry(env):
+    expires = int(time.time()) + 3600
+    env.questions.put_item(
+        Item={
+            "reviewId": "r1",
+            "questionKey": "S#s3",
+            "status": "answered",
+            "answer": [{"text": "Stored.", "citations": []}],
+            "createdAt": 1,
+            "ttl": expires,
+        }
+    )
+    status, response = _call(
+        {"client_request_id": str(uuid.uuid4()), "suggested_id": "s3"}
+    )
+    assert status == 200
+    item = env.questions.get_item(
+        Key={"reviewId": "r1", "questionKey": "Q#" + response["question_id"]}
+    )["Item"]
+    assert item["ttl"] == expires
+    assert env.reasoning.calls == []
+
+
 def test_history_comes_from_the_server_and_only_verified_text(env):
     env.reasoning.answers = [
         {

@@ -56,6 +56,7 @@ from backend.chat.access import (
     FINAL_STATUSES,
     caller_allowed,
     is_admin,
+    question_is_live,
     questions_per_review,
     transcript_item,
 )
@@ -120,6 +121,7 @@ ERROR_MESSAGES = {
     "review_not_found": "That review doesn't exist or has expired.",
     "review_not_complete": "Questions open once the review is finished.",
     "request_in_progress": "That question is still being answered. Try again in a moment.",
+    "request_expired": "That saved answer has expired. Start a new question.",
     "review_quota_exhausted": "You've used this review's questions.",
     "daily_cap_reached": "Today's free questions are used up. Try again tomorrow.",
     "too_many_blocked": "Too many questions on this review couldn't be processed.",
@@ -268,7 +270,7 @@ def _history(tables: _Tables, review_id: str, exclude_key: str, now: float) -> l
         # Guardrails blocked, must not reach the model as history on a
         # later turn.
         and i.get("status") in ("answered", "not_determinable")
-        and int(i.get("ttl", now + 1)) > now
+        and question_is_live(i, now)
     ]
     turns.sort(key=lambda i: (int(i.get("createdAt", 0)), str(i.get("askedAt", ""))))
     return turns
@@ -289,7 +291,7 @@ def _asked_suggestion(
         for i in items
         if i.get("suggestedId") == suggested_id
         and i.get("status") in FINAL_STATUSES
-        and int(i.get("ttl", now + 1)) > now
+        and question_is_live(i, now)
     ]
     return min(asked, key=lambda i: int(i.get("createdAt", 0))) if asked else None
 
@@ -424,11 +426,12 @@ def _admit(
         return "daily_cap_reached"
     day = _day(now)
     counter_ttl = int(now) + COUNTER_TTL_SECONDS
-    record_condition = "attribute_not_exists(questionKey) OR #s = :failed OR (#s = :in_flight AND createdAt < :stale)"
+    record_condition = "attribute_not_exists(questionKey) OR attribute_not_exists(#expiry) OR #s = :failed OR #expiry <= :now OR (#s = :in_flight AND createdAt < :stale)"
     record_values = {
         ":failed": "failed",
         ":in_flight": "in_flight",
         ":stale": int(now) - IN_FLIGHT_STALE_SECONDS,
+        ":now": int(now),
     }
     actions: list[dict[str, Any]] = []
     roles: list[str] = []
@@ -452,7 +455,7 @@ def _admit(
                 "TableName": tables.questions_name,
                 "Item": question_item,
                 "ConditionExpression": record_condition,
-                "ExpressionAttributeNames": {"#s": "status"},
+                "ExpressionAttributeNames": {"#s": "status", "#expiry": "ttl"},
                 "ExpressionAttributeValues": record_values,
             }
         }
@@ -471,7 +474,7 @@ def _admit(
                         "ttl": question_item["ttl"],
                     },
                     "ConditionExpression": record_condition,
-                    "ExpressionAttributeNames": {"#s": "status"},
+                    "ExpressionAttributeNames": {"#s": "status", "#expiry": "ttl"},
                     "ExpressionAttributeValues": record_values,
                 }
             }
@@ -592,6 +595,12 @@ def handler(event: dict, context: object) -> dict:
 
     question_key = f"Q#{body['client_request_id']}"
     existing = tables.questions.get_item({"reviewId": review_id, "questionKey": question_key})
+    if (
+        existing
+        and existing.get("status") in FINAL_STATUSES
+        and not question_is_live(existing, now)
+    ):
+        return finish(_error(410, "request_expired"), "rejected", error="request_expired")
     if existing and existing.get("status") in FINAL_STATUSES:
         return finish(_success(existing, _remaining(review, limit), limit, admin), "replayed")
     if (
@@ -628,9 +637,10 @@ def handler(event: dict, context: object) -> dict:
         if prior is not None:
             return finish(_success(prior, _remaining(review, limit), limit, admin), "replayed")
         stored = tables.questions.get_item({"reviewId": review_id, "questionKey": suggestion_key})
-        if stored and stored.get("status") in FINAL_STATUSES:
+        if stored and question_is_live(stored, now) and stored.get("status") in FINAL_STATUSES:
             item = {
                 **base_item,
+                "ttl": min(base_item["ttl"], int(stored["ttl"])),
                 "question": question,
                 "status": stored["status"],
                 "refusalReason": stored.get("refusalReason"),
@@ -715,7 +725,7 @@ def handler(event: dict, context: object) -> dict:
     )
     if refused == "request_in_progress":
         again = tables.questions.get_item({"reviewId": review_id, "questionKey": question_key})
-        if again and again.get("status") in FINAL_STATUSES:
+        if again and question_is_live(again, now) and again.get("status") in FINAL_STATUSES:
             return finish(_success(again, _remaining(review, limit), limit, admin), "replayed")
     if refused:
         status_code = {"request_in_progress": 409, "chat_busy": 503}.get(refused, 429)

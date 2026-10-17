@@ -72,3 +72,20 @@ def test_access_and_missing_reviews(env, monkeypatch):
 def test_listing_never_calls_the_model(env):
     _list()
     assert env.reasoning.calls == []
+
+
+def test_listing_fails_closed_on_missing_or_malformed_expiry(env):
+    for key, expiry in [("Q#missing", None), ("Q#malformed", "invalid")]:
+        item = {
+            "reviewId": "r1",
+            "questionKey": key,
+            "status": "answered",
+            "createdAt": 1,
+            "question": "Private expired text",
+        }
+        if expiry is not None:
+            item["ttl"] = expiry
+        env.questions.put_item(Item=item)
+    status, body = _list()
+    assert status == 200
+    assert body["questions"] == []

@@ -10,6 +10,7 @@ const CHAT_ERRORS: Record<string, string> = {
   review_not_found: "This review doesn't exist or has expired.",
   review_not_complete: "Questions open once the review is finished.",
   request_in_progress: "That question is still being answered. Try again in a moment.",
+  request_expired: "That saved answer has expired. Ask it again to start a new question.",
   review_quota_exhausted: "You've used this review's questions.",
   daily_cap_reached:
     "Today's free questions are used up. Try again tomorrow. Suggested answers already given still work.",
