@@ -25,7 +25,7 @@ jobs:
       # The runtime dependencies from backend/pyproject.toml (bs4 and pypdf
       # for the corpus pipeline), plus reportlab, which only the PDF tests
       # use to build their sample files.
-      - run: pip install pydantic boto3 langgraph python-hcl2 beautifulsoup4 pypdf reportlab ruff pytest pytest-cov "moto[dynamodb,s3]"
+      - run: pip install -r backend/dev-requirements.lock.txt
       # Trivy (ADR-0048), the same pinned, checksum-verified release the
       # Lambda layer ships (scripts/build_trivy_layer.py; a test keeps the
       # two in sync). TRIVY_PATH makes the trap suite run its Trivy mode.
@@ -61,13 +61,16 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         if: steps.has_app.outputs.present == 'true'
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         if: steps.has_app.outputs.present == 'true'
         working-directory: frontend
       - run: npm run lint
+        if: steps.has_app.outputs.present == 'true'
+        working-directory: frontend
+      - run: npm run typecheck
         if: steps.has_app.outputs.present == 'true'
         working-directory: frontend
       - run: npx prettier --check .
@@ -83,7 +86,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci

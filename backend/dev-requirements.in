@@ -1,0 +1,15 @@
+# CI/test environment, resolved for CPython 3.12 on Linux.
+# Lambda constraints are applied by the resolver; the AgentCore lock is
+# separate because its currently deployed Pydantic version differs.
+pydantic
+boto3
+langgraph
+bedrock-agentcore
+python-hcl2
+beautifulsoup4
+pypdf
+reportlab
+ruff
+pytest
+pytest-cov
+moto[dynamodb,s3]

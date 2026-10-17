@@ -90,7 +90,8 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
               onClick={onOpenSample}
               disabled={sampleLoading}
             >
-              {sampleLoading ? "Loading review…" : "See a real review"} <span aria-hidden="true">→</span>
+              {sampleLoading ? "Loading review…" : "See a real review"}{" "}
+              <span aria-hidden="true">→</span>
             </button>
             <a className="button secondary" href="#submit">
               Review your own Terraform

@@ -2,9 +2,9 @@
   "name": "archibrief-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "ArchiBrief frontend \u2014 Next.js, static/client-first rendering (ADR-0016/0042)",
+  "description": "ArchiBrief frontend — Next.js, static/client-first rendering (ADR-0016/0042)",
   "engines": {
-    "node": "20.x || 22.x"
+    "node": "^22.12.0 || 24.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -14,8 +14,8 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write . ../tests/frontend",
     "format:check": "prettier --check . ../tests/frontend",
-    "test": "vitest run --globals --environment node --pool threads --maxWorkers 1 --minWorkers 1 --dir ../tests/frontend",
-    "test:watch": "vitest --globals --environment node --pool threads --maxWorkers 1 --minWorkers 1 --dir ../tests/frontend",
+    "test": "vitest run --globals --environment node --pool threads --maxWorkers 1 --dir ../tests/frontend",
+    "test:watch": "vitest --globals --environment node --pool threads --maxWorkers 1 --dir ../tests/frontend",
     "build:e2e": "next build",
     "test:e2e": "playwright test",
     "lighthouse": "node e2e/dev-server.mjs live --build-only && lhci autorun"
@@ -33,13 +33,16 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^15.0.0",
+    "eslint-config-next": "^15.5.28",
     "prettier": "^3.3.0",
     "serve": "^14.2.0",
     "typescript": "^5.6.0",
-    "vitest": "^2.0.0"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
   },
   "overrides": {
-    "postcss": "^8.5.28"
+    "postcss": "^8.5.28",
+    "compression": "^1.8.2",
+    "tmp": "^0.2.7"
   }
 }
