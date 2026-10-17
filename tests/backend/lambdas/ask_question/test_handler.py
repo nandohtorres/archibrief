@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from pathlib import Path
 
 import boto3
 import pytest
@@ -183,6 +184,25 @@ def _call(body, **kwargs):
 
 def _review(env):
     return env.reviews.get_item(Key={"reviewId": "r1"})["Item"]
+
+
+def test_handler_defaults_match_the_deployment_contract():
+    import hcl2
+    from hcl2.utils import SerializationOptions
+
+    root = Path(__file__).resolve().parents[4]
+    with (root / "infra/modules/api-gateway/variables.tf").open() as source:
+        config = hcl2.load(
+            source, serialization_options=SerializationOptions(strip_string_quotes=True)
+        )
+    variables = {
+        key: value for entry in config["variable"] for key, value in entry.items()
+    }
+    assert variables["chat_model_id"]["default"] == handler_module.DEFAULT_MODEL_ID
+    assert (
+        variables["chat_daily_budget_micro_usd"]["default"]
+        == handler_module.DEFAULT_DAILY_BUDGET_MICRO_USD
+    )
 
 
 def test_answers_a_question_with_resolved_citations(env, capsys):

@@ -99,7 +99,8 @@ QUESTION_TTL_SECONDS = 7 * 24 * 3600
 COUNTER_TTL_SECONDS = 48 * 3600
 MAX_BODY_BYTES = 4096
 DEFAULT_BLOCKED_PER_REVIEW = 5
-DEFAULT_DAILY_BUDGET_MICRO_USD = 400_000  # $0.40/day, ADR-0050 §5
+DEFAULT_DAILY_BUDGET_MICRO_USD = 1_000_000  # $1/day, matches API module defaults
+DEFAULT_MODEL_ID = "us.anthropic.claude-sonnet-4-6"
 DEFAULT_DAILY_MAX_QUESTIONS = 100
 # Failed paid calls per review: the first few give the question back, and
 # after MAX_FAILURES_PER_REVIEW the review stops accepting paid questions.
@@ -692,7 +693,7 @@ def handler(event: dict, context: object) -> dict:
         base_item.update({"kind": "custom"})
         log["kind"] = "custom"
 
-    model_id = os.environ.get("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    model_id = os.environ.get("CHAT_MODEL_ID", DEFAULT_MODEL_ID)
     canary = os.environ.get("CHAT_CANARY", "")
     log.update({"model_id": model_id, "prompt_version": PROMPT_VERSION})
     prompt_chars = len(build_system_prompt(canary)) + len(ctx.cached_text()) + 12000
