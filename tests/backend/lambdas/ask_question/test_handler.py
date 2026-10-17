@@ -208,10 +208,8 @@ def test_answers_a_question_with_resolved_citations(env, capsys):
 
     # The day's budget was settled to the real estimate, not the reservation.
     counters = {i["counterKey"]: i for i in env.counters.scan()["Items"]}
-    budget = next(
-        v for k, v in counters.items() if k.endswith("chat_remaining_micro_usd")
-    )
-    assert budget["remaining"] == 400_000 - stored["costMicroUsd"]
+    budget = next(v for k, v in counters.items() if k.endswith("chat_spent_micro_usd"))
+    assert budget["spent"] == stored["costMicroUsd"]
     count = next(v for k, v in counters.items() if k.endswith("chat_questions"))
     assert count["n"] == 1
 
@@ -694,3 +692,15 @@ def test_a_failed_answer_logs_which_check_failed(env, capsys):
     lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     failures = [e["failure"] for e in lines if e.get("outcome") == "failed"]
     assert failures == ["ModelOutputTruncated:max_tokens", "MalformedAnswer"]
+
+
+def test_a_budget_change_applies_the_same_day(env, monkeypatch):
+    # The counter used to hold what was left, fixed at the first question's
+    # budget, so raising or lowering the budget waited for the next UTC day.
+    assert _call(_ask())[0] == 200
+    monkeypatch.setenv("CHAT_DAILY_BUDGET_MICRO_USD", "10")
+    status, body = _call(_ask())
+    assert (status, body["error"]) == (429, "daily_cap_reached")
+    monkeypatch.setenv("CHAT_DAILY_BUDGET_MICRO_USD", "1000000")
+    assert _call(_ask())[0] == 200
+    assert len(env.reasoning.calls) == 2

@@ -359,6 +359,15 @@ def _record_failure(tables: _Tables, review_id: str, refund: bool) -> None:
     )
 
 
+# The day's chat spend counter. It counts what's been spent (reservations,
+# settled to the estimated real cost) and is compared with the budget in
+# force on every question, so a budget change applies at once. It used to
+# count what was left, fixed at the first question's budget: a raised (or
+# lowered) budget then waited for the next UTC day (2026-10-16).
+def _spend_key(day: str) -> dict[str, str]:
+    return {"counterKey": f"global#{day}#chat_spent_micro_usd"}
+
+
 def _precheck(
     tables: _Tables,
     review: dict[str, Any],
@@ -377,8 +386,9 @@ def _precheck(
         if int(review.get("chatFailed", 0)) >= MAX_FAILURES_PER_REVIEW:
             return "too_many_failed"
     day = _day(now)
-    budget = tables.counters.get_item({"counterKey": f"global#{day}#chat_remaining_micro_usd"})
-    if budget is not None and int(budget.get("remaining", 0)) < reserve:
+    budget = _env_int("CHAT_DAILY_BUDGET_MICRO_USD", DEFAULT_DAILY_BUDGET_MICRO_USD)
+    spent = tables.counters.get_item(_spend_key(day))
+    if int((spent or {}).get("spent", 0)) + reserve > budget:
         return "daily_cap_reached"
     count = tables.counters.get_item({"counterKey": f"global#{day}#chat_questions"})
     max_count = _env_int("CHAT_DAILY_MAX_QUESTIONS", DEFAULT_DAILY_MAX_QUESTIONS)
@@ -472,14 +482,16 @@ def _admit(
         {
             "Update": {
                 "TableName": tables.counters_name,
-                "Key": {"counterKey": f"global#{day}#chat_remaining_micro_usd"},
-                "UpdateExpression": "SET remaining = if_not_exists(remaining, :cap) - :reserve, "
+                "Key": _spend_key(day),
+                "UpdateExpression": "SET spent = if_not_exists(spent, :zero) + :reserve, "
                 "#ttl = if_not_exists(#ttl, :ttl)",
-                "ConditionExpression": "attribute_not_exists(remaining) OR remaining >= :reserve",
+                # spent + reserve <= budget, written so DynamoDB can check it.
+                "ConditionExpression": "attribute_not_exists(spent) OR spent <= :room",
                 "ExpressionAttributeNames": {"#ttl": "ttl"},
                 "ExpressionAttributeValues": {
-                    ":cap": budget,
+                    ":zero": 0,
                     ":reserve": reserve,
+                    ":room": budget - reserve,
                     ":ttl": counter_ttl,
                 },
             }
@@ -529,9 +541,9 @@ def _admit(
 
 def _settle(tables: _Tables, reserve: int, actual: int, now: float) -> None:
     tables.counters.update_item(
-        Key={"counterKey": f"global#{_day(now)}#chat_remaining_micro_usd"},
-        UpdateExpression="ADD remaining :delta",
-        ExpressionAttributeValues={":delta": reserve - actual},
+        Key=_spend_key(_day(now)),
+        UpdateExpression="ADD spent :delta",
+        ExpressionAttributeValues={":delta": actual - reserve},
     )
 
 
