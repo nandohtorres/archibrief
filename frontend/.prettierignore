@@ -9,3 +9,5 @@ test-results
 design
 .lighthouseci
 lighthouse-reports
+# Saved demo reports: the pipeline's unedited output, kept byte-for-byte.
+public/demos/reports
