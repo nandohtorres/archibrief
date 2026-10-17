@@ -2,9 +2,9 @@
 # CI fails on any other HIGH/CRITICAL finding (ADR-0048). Each entry says
 # why; remove it when the reason stops being true.
 
-# S3 buckets use SSE-S3 (AES256), not a customer-managed KMS key. The data
-# is review artifacts and a static site; a CMK adds per-request KMS cost and
-# key management for no change in who can read the objects.
+# The user-data bucket uses the AWS-managed S3 KMS key; static hosting uses
+# SSE-S3. Neither uses a customer-managed key. Object access is still private;
+# this accepts the CMK-specific finding, not missing encryption.
 AWS-0132
 
 # The budget-alert SNS topic (modules/cost-controls) is unencrypted. AWS
@@ -12,6 +12,6 @@ AWS-0132
 # key, and the topic only carries budget threshold alerts.
 AWS-0095
 
-# No AWS WAF on the CloudFront distribution yet. Planned together with
-# the public submission quotas (ADR-0046).
+# The static CloudFront distribution has no WAF. The proposed public API has
+# its own Regional REST stage/WAF; the legacy HTTP API remains admin-only.
 AWS-0011

@@ -7,7 +7,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "user_data" {
   depends_on = [aws_s3_bucket_versioning.source_of_truth]
 
   dynamic "rule" {
-    for_each = toset(["uploads/", "parsed/", "reports/"])
+    for_each = toset(["uploads/", "parsed/", "reports/", "jobs/"])
     content {
       id     = "expire-${trimsuffix(rule.value, "/")}"
       status = "Enabled"

@@ -125,14 +125,14 @@ locals {
     }
   }
 
-  chat_common_environment = {
+  chat_common_environment = merge(local.admission_environment, {
     REVIEWS_TABLE_NAME        = var.reviews_table_name
     QUESTIONS_TABLE_NAME      = var.review_questions_table_name
     REPORTS_BUCKET_NAME       = var.reports_bucket_name
     ADMIN_KEY                 = random_password.admin_key.result
     CHAT_PUBLIC_ENABLED       = var.chat_public_enabled ? "true" : "false"
     CHAT_QUESTIONS_PER_REVIEW = tostring(var.chat_questions_per_review)
-  }
+  })
 
   chat_environment = {
     ask_question = merge(local.chat_common_environment, {
