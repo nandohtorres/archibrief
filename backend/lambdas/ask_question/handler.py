@@ -737,10 +737,19 @@ def handler(event: dict, context: object) -> dict:
         if code in RETRYABLE_BEDROCK_ERRORS:
             return finish(_error(503, "answer_failed"), "failed", error=code)
         raise
-    except (ModelOutputTruncated, UnexpectedStopReason, ToolCallMissing, MalformedAnswer):
+    except (ModelOutputTruncated, UnexpectedStopReason, ToolCallMissing, MalformedAnswer) as exc:
         _mark_failed(tables, review_id, in_flight_keys, "answer_failed")
         _record_failure(tables, review_id, refund=counts_slot)
-        return finish(_error(502, "answer_failed"), "failed", error="answer_failed")
+        # Which check failed, and the stop reason when there is one; never
+        # the model's text (stage 7 logs no question or answer text).
+        failure = type(exc).__name__
+        stop_reason = getattr(exc, "stop_reason", None)
+        return finish(
+            _error(502, "answer_failed"),
+            "failed",
+            error="answer_failed",
+            failure=f"{failure}:{stop_reason}" if stop_reason else failure,
+        )
     except Exception:
         _mark_failed(tables, review_id, in_flight_keys, "internal_error")
         _record_failure(tables, review_id, refund=counts_slot)

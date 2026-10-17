@@ -231,7 +231,7 @@ def test_the_cached_prompt_holds_the_review_and_the_turn_holds_the_question(env)
     assert "What should I fix first?" not in call["cached_user_text"]
     assert json.loads(call["user_text"])["question"] == "What should I fix first?"
     assert CANARY in call["system_prompt"]
-    assert call["max_tokens"] == 700
+    assert call["max_tokens"] == 1500
 
 
 def test_a_repeated_request_id_replays_without_a_second_call(env):
@@ -685,3 +685,16 @@ def test_retrieval_fails_open_when_s3_vectors_is_unavailable(env, monkeypatch):
     built = REAL_CLIENTS("us.anthropic.claude-haiku-4-5-20251001-v1:0", 12)
     assert built.vectors is None
     assert built.embedding is not None
+
+
+def test_a_failed_answer_logs_which_check_failed(env, capsys):
+    # The first live failure (2026-10-16) logged only "answer_failed",
+    # which hid that the model had hit max_tokens.
+    env.reasoning.raises = ModelOutputTruncated("max_tokens")
+    _call(_ask())
+    env.reasoning.raises = None
+    env.reasoning.answers = [{"status": "maybe", "paragraphs": []}]
+    _call(_ask())
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    failures = [e["failure"] for e in lines if e.get("outcome") == "failed"]
+    assert failures == ["ModelOutputTruncated:max_tokens", "MalformedAnswer"]

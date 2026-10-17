@@ -23,6 +23,7 @@ LOG_FIELDS = (
     "status",
     "refusal_reason",
     "error",
+    "failure",
     "blocked_filters",
     "question_sha256",
     "citations_total",
