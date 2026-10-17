@@ -83,3 +83,7 @@ Thumbs.db
 # Lighthouse CI output (npm run lighthouse)
 frontend/lighthouse-reports/
 frontend/.lighthouseci/
+
+# Old design experiments and internal working pages: kept locally, out of
+# the public repo (decision 2026-10-16).
+docs/site/
