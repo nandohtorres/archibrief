@@ -505,6 +505,13 @@ data "aws_iam_policy_document" "create_upload_data_access" {
     actions   = ["s3:PutObject", "s3:GetObject"]
     resources = ["${var.reports_bucket_arn}/uploads/*"]
   }
+  # HEAD on a missing key returns 404 only with ListBucket. Recovery must not
+  # treat a genuine AccessDenied as an absent upload (AWS HeadObject contract).
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [var.reports_bucket_arn]
+  }
 }
 
 resource "aws_iam_role" "create_upload" {
