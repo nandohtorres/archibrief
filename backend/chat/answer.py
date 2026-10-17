@@ -36,6 +36,10 @@ from backend.shared.clients import (
 
 RETRIEVED_CHUNKS = 3
 GROUNDING_SOURCE_CHARS = 20000
+# Worst case for the grounding call (connect + read timeout the Lambda
+# sets on it). With less time than this left, the detect-only check is
+# skipped rather than risk the Lambda being killed mid-request.
+GROUNDING_WORST_SECONDS = 5.0
 
 
 @dataclass
@@ -90,7 +94,10 @@ def answer_question(
     focus_alias: str | None,
     clients: ChatClients,
     canary: str,
+    deadline: float | None = None,
 ) -> AnswerResult:
+    """`deadline` is a time.monotonic() value the request must finish by
+    (the Lambda's remaining time); None means no limit (the eval)."""
     started = time.monotonic()
     chunks = retrieve_chunks(question, ctx.finding_categories.get(focus_alias or "", ""), clients)
     raw, usage = clients.reasoning.converse_tool_cached(
@@ -106,7 +113,13 @@ def answer_question(
     cost = model_cost_micro_usd(clients.reasoning.model_id, usage)
 
     grounding: dict[str, float] = {}
-    if clients.grounding is not None and verified.status == "answered" and verified.cited_text:
+    time_left = deadline is None or deadline - time.monotonic() >= GROUNDING_WORST_SECONDS
+    if (
+        clients.grounding is not None
+        and time_left
+        and verified.status == "answered"
+        and verified.cited_text
+    ):
         source = "\n\n".join(verified.cited_text)[:GROUNDING_SOURCE_CHARS]
         answer_text = "\n\n".join(p["text"] for p in verified.paragraphs)
         try:

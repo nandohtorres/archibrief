@@ -54,9 +54,10 @@ data "aws_iam_policy_document" "ask_question_access" {
     resources = [var.review_questions_table_arn]
   }
   statement {
-    # The day's chat budget and question count.
+    # The day's chat budget and question count: read by the cheap precheck
+    # before any spend, updated by admission and settlement.
     effect    = "Allow"
-    actions   = ["dynamodb:UpdateItem"]
+    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
     resources = [var.usage_counters_table_arn]
   }
   statement {

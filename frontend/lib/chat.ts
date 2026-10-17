@@ -19,6 +19,7 @@ const CHAT_ERRORS: Record<string, string> = {
   answer_timeout: "The answer took too long. Your question wasn't counted.",
   chat_paused: "Chat is paused right now.",
   guardrails_unavailable: "Questions can't be checked right now. Try again shortly.",
+  chat_busy: "Lots of questions at once. Try again in a moment.",
 };
 
 export function chatErrorMessage(code: string): string {

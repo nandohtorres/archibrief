@@ -39,7 +39,12 @@ interface ReportQuestionsProps {
 type Mode = "live" | "sample" | "fixture";
 
 // Errors after which the same question may be sent again with the same id.
-const RETRYABLE_CODES = new Set(["answer_timeout", "answer_failed", "request_in_progress"]);
+const RETRYABLE_CODES = new Set([
+  "answer_timeout",
+  "answer_failed",
+  "request_in_progress",
+  "chat_busy",
+]);
 
 const STATUS_LABELS: Record<ChatTurn["status"], string> = {
   answered: "Cited answer",
@@ -151,7 +156,13 @@ export function ReportQuestions({
         adminKey,
       );
       attempt.current = null;
-      setTurns((current) => [...current, response]);
+      // A repeat click on an answered suggestion returns the turn already
+      // in the transcript; show it once.
+      setTurns((current) =>
+        current.some((t) => t.question_id === response.question_id)
+          ? current
+          : [...current, response],
+      );
       setRemaining(response.questions_remaining);
       setLimit(response.limit);
       setLimitApplies(response.limit_applies);

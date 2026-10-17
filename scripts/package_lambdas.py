@@ -35,10 +35,10 @@ infra/modules/step-functions-lambda/main.tf's `runtime = "python3.12"`,
 no `architectures` override, so the default x86_64 applies). pip
 supports downloading wheels for a different target platform without
 executing any of that platform's code, which is what makes this safe to
-run from here at all. boto3/botocore are never bundled — the Lambda
-runtime provides them natively, matching every existing zip in this
-repo (confirmed by inspecting admin_authorizer's/finalize's zips
-directly, not assumed).
+run from here at all. boto3/botocore are bundled only into ask_question
+(see its spec); every other Lambda uses the runtime's own copy, matching
+every existing zip in this repo (confirmed by inspecting
+admin_authorizer's/finalize's zips directly, not assumed).
 
 Reproducible builds (2026-10-15): third-party versions are pinned in
 scripts/lambda_constraints.txt, and the zip is written with fixed
@@ -239,7 +239,11 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # The report chat (ADR-0050). ask_question makes the one paid model
     # call; it reuses retrieve.vector_search, which needs only the shared
     # clients. Standard library + boto3 only: the chat code deliberately
-    # avoids the pydantic models.
+    # avoids the pydantic models. boto3 is bundled here (the same pin as
+    # the AgentCore runtime lock) because it calls S3 Vectors, and AWS no
+    # longer publishes which boto3 the python3.12 runtime carries in each
+    # Region: an older one wouldn't know the s3vectors client
+    # (code review 2026-10-16).
     "ask_question": {
         "sources": [
             "backend/__init__.py",
@@ -264,7 +268,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/kill_switch.py",
             "backend/shared/sanitize.py",
         ],
-        "packages": [],
+        "packages": ["boto3"],
     },
     # Read-only transcript; no model code bundled.
     "list_questions": {

@@ -363,3 +363,24 @@ def test_the_cap_never_leaves_a_code_fence_open(ctx):
     result = verify_answer(_answer(paragraphs), ctx, CHUNKS, CANARY)
     for paragraph in result.paragraphs:
         assert paragraph["text"].count("```") % 2 == 0
+
+
+def test_a_long_partial_answer_keeps_its_partial_note(ctx):
+    # The cap used to run out before the note saying the answer is
+    # incomplete, so a long partial answer read as complete (code review
+    # 2026-10-16).
+    paragraphs = [
+        {"text": "word " * 200, "citations": [{"ref": "F1", "exact_quote": ""}]}
+        for _ in range(5)
+    ]
+    result = verify_answer(
+        _answer(paragraphs, status="not_determinable", missing="traffic_numbers"),
+        ctx,
+        CHUNKS,
+        CANARY,
+    )
+    assert result.status == "not_determinable"
+    assert "traffic" in result.paragraphs[-1]["text"]
+    assert result.paragraphs[-1]["citations"] == []
+    joined = sum(len(p["text"]) + 1 for p in result.paragraphs) - 1
+    assert joined <= MAX_ANSWER_CHARS

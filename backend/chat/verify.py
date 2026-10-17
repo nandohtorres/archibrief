@@ -304,14 +304,18 @@ def verify_answer(
         answer.citations_total, answer.citations_dropped = total, dropped
         return answer
 
+    suffix: dict[str, Any] | None = None
     if status == "not_determinable":
-        suffix = PARTIAL_SUFFIX
+        text = PARTIAL_SUFFIX
         if missing:
-            suffix = f"{suffix} {MISSING_TEXTS[missing]}"
-        kept.append({"text": suffix, "citations": []})
+            text = f"{text} {MISSING_TEXTS[missing]}"
+        suffix = {"text": text, "citations": []}
 
-    # Cap the whole answer; the last kept paragraph is cut if needed.
-    budget = MAX_ANSWER_CHARS
+    # Cap the whole answer; the last kept paragraph is cut if needed. The
+    # partial-answer note's room is set aside first, so a long answer can
+    # never push out the line saying it's incomplete (code review
+    # 2026-10-16).
+    budget = MAX_ANSWER_CHARS - (len(suffix["text"]) + 1 if suffix else 0)
     capped: list[dict[str, Any]] = []
     for paragraph in kept:
         if budget <= 0:
@@ -321,6 +325,8 @@ def verify_answer(
         # +1 for the line break between paragraphs when they're shown joined.
         budget -= len(paragraph["text"]) + 1
         capped.append(paragraph)
+    if suffix:
+        capped.append(suffix)
 
     return VerifiedAnswer(
         status=status,

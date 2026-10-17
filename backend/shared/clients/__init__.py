@@ -44,6 +44,25 @@ def _dynamodb_safe(value: Any) -> Any:
     return value
 
 
+def _timeouts(
+    read_timeout_seconds: float | None, connect_timeout_seconds: float | None, no_retries: bool
+) -> dict[str, Any]:
+    """boto3.client kwargs for a bounded call. All unset = botocore's
+    defaults (60 s timeouts, retries), which is what the review pipeline
+    uses. The chat bounds every call so the sum fits its 28 s Lambda
+    (code review 2026-10-16)."""
+    config_kwargs: dict[str, Any] = {}
+    if read_timeout_seconds is not None:
+        config_kwargs["read_timeout"] = read_timeout_seconds
+    if connect_timeout_seconds is not None:
+        config_kwargs["connect_timeout"] = connect_timeout_seconds
+    if no_retries:
+        # botocore's "max_attempts" counts retries only; "total_max_attempts"
+        # counts the first call too.
+        config_kwargs["retries"] = {"total_max_attempts": 1, "mode": "standard"}
+    return {"config": Config(**config_kwargs)} if config_kwargs else {}
+
+
 @dataclass
 class DynamoDBClient:
     table_name: str
@@ -135,9 +154,16 @@ class S3VectorsClient:
     bucket_name: str
     index_name: str
     region_name: str = "us-east-1"
+    read_timeout_seconds: float | None = None
+    connect_timeout_seconds: float | None = None
+    no_retries: bool = False
 
     def __post_init__(self) -> None:
-        self._client = boto3.client("s3vectors", region_name=self.region_name)
+        self._client = boto3.client(
+            "s3vectors",
+            region_name=self.region_name,
+            **_timeouts(self.read_timeout_seconds, self.connect_timeout_seconds, self.no_retries),
+        )
 
     def put_vectors(self, vectors: list[dict[str, Any]]) -> None:
         self._client.put_vectors(
@@ -193,9 +219,16 @@ class BedrockEmbeddingClient:
 
     model_id: str = "amazon.titan-embed-text-v2:0"
     region_name: str = "us-east-1"
+    read_timeout_seconds: float | None = None
+    connect_timeout_seconds: float | None = None
+    no_retries: bool = False
 
     def __post_init__(self) -> None:
-        self._client = boto3.client("bedrock-runtime", region_name=self.region_name)
+        self._client = boto3.client(
+            "bedrock-runtime",
+            region_name=self.region_name,
+            **_timeouts(self.read_timeout_seconds, self.connect_timeout_seconds, self.no_retries),
+        )
 
     def embed(self, text: str) -> list[float]:
         response = self._client.invoke_model(
@@ -248,19 +281,15 @@ class BedrockReasoningClient:
     # Both None = botocore's defaults (the review runtime). The chat sets a
     # read timeout under its API's 30 s limit and no retries, since a
     # retried call after a timeout would be a second paid call (ADR-0050).
-    read_timeout_seconds: int | None = None
+    read_timeout_seconds: float | None = None
     no_retries: bool = False
+    connect_timeout_seconds: float | None = None
 
     def __post_init__(self) -> None:
-        config_kwargs: dict[str, Any] = {}
-        if self.read_timeout_seconds is not None:
-            config_kwargs["read_timeout"] = self.read_timeout_seconds
-        if self.no_retries:
-            config_kwargs["retries"] = {"total_max_attempts": 1, "mode": "standard"}
         self._client = boto3.client(
             "bedrock-runtime",
             region_name=self.region_name,
-            **({"config": Config(**config_kwargs)} if config_kwargs else {}),
+            **_timeouts(self.read_timeout_seconds, self.connect_timeout_seconds, self.no_retries),
         )
 
     @staticmethod
@@ -463,9 +492,16 @@ class GuardrailsClient:
     guardrail_id: str
     guardrail_version: str
     region_name: str = "us-east-1"
+    read_timeout_seconds: float | None = None
+    connect_timeout_seconds: float | None = None
+    no_retries: bool = False
 
     def __post_init__(self) -> None:
-        self._client = boto3.client("bedrock-runtime", region_name=self.region_name)
+        self._client = boto3.client(
+            "bedrock-runtime",
+            region_name=self.region_name,
+            **_timeouts(self.read_timeout_seconds, self.connect_timeout_seconds, self.no_retries),
+        )
 
     def check(self, text: str, source: str = "INPUT") -> bool:
         response = self._client.apply_guardrail(

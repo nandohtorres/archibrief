@@ -20,7 +20,8 @@ Order of checks, cheapest and most decisive first:
    bypass it).
 3. The review exists and is complete.
 4. Idempotency: a repeated client_request_id returns the stored answer.
-5. Suggested question already answered → served free.
+5. Suggested question already answered → served free (and a repeat
+   click returns the transcript's existing record instead of a copy).
 6. Stages 1–2 (normalize, bound), then stage 3 (Guardrails). A blocked
    question uses no slot but counts toward the review's blocked limit.
 7. Admission, one transaction: the review's question slot (custom
@@ -29,6 +30,12 @@ Order of checks, cheapest and most decisive first:
 8. The paid call (backend/chat/answer.py), then settle the reservation to
    the estimated real cost. A failed call refunds the review's slot; the
    reservation stays spent, since Bedrock may have billed.
+
+Every AWS call on the paid path is bounded (connect + read timeout, no
+retries) and the model's read timeout is sized to the time the Lambda has
+left, so a slow dependency becomes a 504 with a refund rather than the
+Lambda being killed with the question stuck in flight (code review
+2026-10-16).
 """
 
 from __future__ import annotations
@@ -42,7 +49,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from botocore.exceptions import ClientError, ReadTimeoutError
+from botocore.exceptions import ClientError, ConnectTimeoutError, ReadTimeoutError
 
 from backend.chat.access import (
     FINAL_STATUSES,
@@ -75,6 +82,16 @@ from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.sanitize import QuestionRejected, check_question
 
 MODEL_READ_TIMEOUT_SECONDS = 20
+MIN_MODEL_READ_TIMEOUT_SECONDS = 5
+# The small calls (Guardrails, embedding, S3 Vectors) normally take well
+# under a second.
+SMALL_CALL_READ_TIMEOUT_SECONDS = 2
+SMALL_CALL_CONNECT_TIMEOUT_SECONDS = 1
+# Embedding + vector query, each at its worst (connect + read).
+RETRIEVAL_WORST_SECONDS = 2 * (SMALL_CALL_READ_TIMEOUT_SECONDS + SMALL_CALL_CONNECT_TIMEOUT_SECONDS)
+LAMBDA_TIMEOUT_SECONDS = 28
+# Time kept back at the end to mark a failed question and refund it.
+DEADLINE_MARGIN_SECONDS = 1.5
 # Same reasoning as deeper_review: longer than the Lambda timeout, so a run
 # that timed out still blocks an immediate duplicate.
 IN_FLIGHT_STALE_SECONDS = 90
@@ -114,6 +131,7 @@ ERROR_MESSAGES = {
     "answer_timeout": "The answer took too long. Your question wasn't counted.",
     "chat_paused": "Chat is paused right now.",
     "guardrails_unavailable": "Questions can't be checked right now. Try again shortly.",
+    "chat_busy": "Lots of questions at once. Try again in a moment.",
 }
 
 
@@ -184,23 +202,61 @@ class _Tables:
         self.transactions = DynamoDBTransactionClient()
 
 
-def _clients(model_id: str) -> ChatClients:
+_SMALL_CALL: dict[str, Any] = {
+    "read_timeout_seconds": SMALL_CALL_READ_TIMEOUT_SECONDS,
+    "connect_timeout_seconds": SMALL_CALL_CONNECT_TIMEOUT_SECONDS,
+    "no_retries": True,
+}
+
+
+def _deadline(context: object, started: float) -> float:
+    """The time.monotonic() value this request has to finish by."""
+    try:
+        remaining = context.get_remaining_time_in_millis() / 1000  # type: ignore[attr-defined]
+    except AttributeError:
+        remaining = LAMBDA_TIMEOUT_SECONDS
+    return started + remaining - DEADLINE_MARGIN_SECONDS
+
+
+def _model_read_timeout(deadline: float) -> float:
+    """What's left after retrieval's worst case, capped at the normal 20 s."""
+    left = (
+        deadline - time.monotonic() - RETRIEVAL_WORST_SECONDS - SMALL_CALL_CONNECT_TIMEOUT_SECONDS
+    )
+    return max(MIN_MODEL_READ_TIMEOUT_SECONDS, min(MODEL_READ_TIMEOUT_SECONDS, left))
+
+
+def _vectors_client() -> S3VectorsClient | None:
+    """None when the client can't be built (for example a Lambda runtime
+    boto3 too old to know s3vectors). Retrieval then fails open: the
+    model can still cite the review itself (code review 2026-10-16)."""
+    try:
+        return S3VectorsClient(
+            bucket_name=os.environ["VECTOR_BUCKET_NAME"],
+            index_name=os.environ["VECTOR_INDEX_NAME"],
+            **_SMALL_CALL,
+        )
+    except Exception:  # noqa: BLE001 - fail open, see docstring
+        log_chat_event(event="chat_retrieval_unavailable", outcome="failed_open")
+        return None
+
+
+def _clients(model_id: str, model_read_timeout: float) -> ChatClients:
     grounding_id = os.environ.get("CHAT_GROUNDING_GUARDRAIL_ID", "")
     return ChatClients(
         reasoning=BedrockReasoningClient(
             model_id=model_id,
-            read_timeout_seconds=MODEL_READ_TIMEOUT_SECONDS,
+            read_timeout_seconds=model_read_timeout,
+            connect_timeout_seconds=SMALL_CALL_CONNECT_TIMEOUT_SECONDS,
             no_retries=True,
         ),
-        embedding=BedrockEmbeddingClient(),
-        vectors=S3VectorsClient(
-            bucket_name=os.environ["VECTOR_BUCKET_NAME"],
-            index_name=os.environ["VECTOR_INDEX_NAME"],
-        ),
+        embedding=BedrockEmbeddingClient(**_SMALL_CALL),
+        vectors=_vectors_client(),
         grounding=(
             GuardrailsClient(
                 guardrail_id=grounding_id,
                 guardrail_version=os.environ.get("CHAT_GROUNDING_GUARDRAIL_VERSION", "1"),
+                **_SMALL_CALL,
             )
             if grounding_id
             else None
@@ -225,6 +281,26 @@ def _history(tables: _Tables, review_id: str, exclude_key: str, now: float) -> l
     ]
     turns.sort(key=lambda i: (int(i.get("createdAt", 0)), str(i.get("askedAt", ""))))
     return turns
+
+
+def _asked_suggestion(
+    tables: _Tables, review_id: str, suggested_id: str, now: float
+) -> dict[str, Any] | None:
+    """The transcript's existing record for this suggestion, if it was
+    already asked on this review. A repeat click returns it instead of
+    adding a duplicate to the transcript (code review 2026-10-16)."""
+    items = tables.questions.query(
+        KeyConditionExpression="reviewId = :r AND begins_with(questionKey, :q)",
+        ExpressionAttributeValues={":r": review_id, ":q": "Q#"},
+    )
+    asked = [
+        i
+        for i in items
+        if i.get("suggestedId") == suggested_id
+        and i.get("status") in FINAL_STATUSES
+        and int(i.get("ttl", now + 1)) > now
+    ]
+    return min(asked, key=lambda i: int(i.get("createdAt", 0))) if asked else None
 
 
 def _remaining(review_item: dict[str, Any], limit: int) -> int:
@@ -442,10 +518,14 @@ def _admit(
     try:
         tables.transactions.transact_write(actions)
     except TransactionCanceled as exc:
+        # Only a failed condition means a limit was hit. Anything else
+        # (TransactionConflict on the shared daily counters when two
+        # questions land at once, throttling) is a retryable collision,
+        # not "today's questions are used up" (code review 2026-10-16).
         failed = {
             roles[i]
             for i, reason in enumerate(exc.reasons[: len(roles)])
-            if reason not in ("None", "", None)
+            if reason == "ConditionalCheckFailed"
         }
         if "question_record" in failed or "suggestion_record" in failed:
             return "request_in_progress"
@@ -453,7 +533,7 @@ def _admit(
             return "review_quota_exhausted"
         if failed & {"daily_budget", "daily_count"}:
             return "daily_cap_reached"
-        return "request_in_progress"
+        return "chat_busy"
     return None
 
 
@@ -473,8 +553,9 @@ def _answer_fields(answer: VerifiedAnswer) -> dict[str, Any]:
     }
 
 
-def handler(event: dict, _context: object) -> dict:
+def handler(event: dict, context: object) -> dict:
     started = time.monotonic()
+    deadline = _deadline(context, started)
     now = time.time()
     admin = is_admin(event)
     review_id = (event.get("pathParameters") or {}).get("reviewId", "")
@@ -542,6 +623,9 @@ def handler(event: dict, _context: object) -> dict:
         suggestion_key = f"S#{suggestion['id']}"
         base_item.update({"kind": "suggested", "suggestedId": suggestion["id"]})
         log["kind"] = "suggested"
+        prior = _asked_suggestion(tables, review_id, suggestion["id"], now)
+        if prior is not None:
+            return finish(_success(prior, _remaining(review, limit), limit, admin), "replayed")
         stored = tables.questions.get_item({"reviewId": review_id, "questionKey": suggestion_key})
         if stored and stored.get("status") in FINAL_STATUSES:
             item = {
@@ -588,6 +672,7 @@ def handler(event: dict, _context: object) -> dict:
             verdict = GuardrailsClient(
                 guardrail_id=os.environ["CHAT_GUARDRAIL_ID"],
                 guardrail_version=os.environ.get("CHAT_GUARDRAIL_VERSION", "1"),
+                **_SMALL_CALL,
             ).assess(question)
         except Exception:  # noqa: BLE001 - fail closed: no screening, no model call
             return finish(
@@ -632,13 +717,14 @@ def handler(event: dict, _context: object) -> dict:
         if again and again.get("status") in FINAL_STATUSES:
             return finish(_success(again, _remaining(review, limit), limit, admin), "replayed")
     if refused:
-        status_code = 409 if refused == "request_in_progress" else 429
+        status_code = {"request_in_progress": 409, "chat_busy": 503}.get(refused, 429)
         return finish(_error(status_code, refused), "rejected", error=refused)
 
     in_flight_keys = [question_key] + ([suggestion_key] if suggestion_key else [])
     try:
-        result = answer_question(ctx, question, history, focus_alias, _clients(model_id), canary)
-    except ReadTimeoutError:
+        clients = _clients(model_id, _model_read_timeout(deadline))
+        result = answer_question(ctx, question, history, focus_alias, clients, canary, deadline)
+    except (ReadTimeoutError, ConnectTimeoutError):
         _mark_failed(tables, review_id, in_flight_keys, "answer_timeout")
         _record_failure(tables, review_id, refund=counts_slot)
         return finish(_error(504, "answer_timeout"), "failed", error="answer_timeout")

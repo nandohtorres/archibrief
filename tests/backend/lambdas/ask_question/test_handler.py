@@ -23,6 +23,9 @@ from tests.backend.chat.conftest import LEDGER, RULE_FINDING_ID
 ADMIN_KEY = "admin-secret"
 CANARY = "canary-xyz-123"
 LEDGER_KEY = "reports/r1/evidence-ledger.json"
+# The real ones, before the fixture swaps in fakes.
+REAL_CLIENTS = handler_module._clients
+REAL_GUARDRAILS = handler_module.GuardrailsClient
 
 
 def _good_answer(text="Narrow the role to the audit bucket first."):
@@ -60,8 +63,14 @@ class FakeGuardrails:
     raises = None
     calls = 0
 
-    def __init__(self, guardrail_id, guardrail_version):
+    def __init__(self, guardrail_id, guardrail_version, **timeouts):
         assert guardrail_id == "chat-guardrail"
+        # The input check is bounded like every paid-path call.
+        assert timeouts == {
+            "read_timeout_seconds": 2,
+            "connect_timeout_seconds": 1,
+            "no_retries": True,
+        }
 
     def assess(self, text):
         FakeGuardrails.calls += 1
@@ -131,7 +140,9 @@ def env(monkeypatch):
 
         reasoning = FakeReasoning()
         monkeypatch.setattr(
-            handler_module, "_clients", lambda model_id: ChatClients(reasoning)
+            handler_module,
+            "_clients",
+            lambda model_id, _read_timeout: ChatClients(reasoning),
         )
         FakeGuardrails.verdict = GuardrailVerdict(blocked=False, filters=[])
         FakeGuardrails.raises = None
@@ -521,3 +532,156 @@ def test_a_non_ascii_admin_header_is_just_not_admin(env):
     event["headers"]["x-admin-key"] = "cl" + chr(0xE9)
     response = handler_module.handler(event, None)
     assert response["statusCode"] == 403
+
+
+# --- Code review 2026-10-16 -------------------------------------------------
+
+
+def test_the_usage_counters_policy_allows_the_precheck_read():
+    # The precheck reads the day's counters with GetItem before any spend;
+    # the role only allowed UpdateItem, so every live question would have
+    # failed with AccessDenied.
+    import re
+    from pathlib import Path
+
+    chat_tf = Path(__file__).resolve().parents[4] / "infra/modules/api-gateway/chat.tf"
+    statements = re.findall(r"statement \{(.*?)\n  \}", chat_tf.read_text(), re.DOTALL)
+    (counters,) = [s for s in statements if "usage_counters_table_arn" in s]
+    assert '"dynamodb:GetItem"' in counters
+    assert '"dynamodb:UpdateItem"' in counters
+
+
+def test_a_transaction_conflict_is_busy_not_the_daily_cap(env, monkeypatch):
+    from backend.shared.clients import TransactionCanceled
+
+    real_write = handler_module.DynamoDBTransactionClient.transact_write
+    conflicts = [1]
+
+    def conflict_once(self, actions):
+        if conflicts:
+            conflicts.pop()
+            raise TransactionCanceled(["None", "None", "TransactionConflict", "None"])
+        return real_write(self, actions)
+
+    monkeypatch.setattr(
+        handler_module.DynamoDBTransactionClient, "transact_write", conflict_once
+    )
+    body = _ask()
+    status, response = _call(body)
+    assert (status, response["error"]) == (503, "chat_busy")
+    assert env.reasoning.calls == []
+    assert "questionsUsed" not in _review(env)
+    # Nothing was written, so the same request goes through once it's quiet.
+    assert _call(body)[0] == 200
+    assert _review(env)["questionsUsed"] == 1
+
+
+def test_a_failed_cap_condition_is_still_the_daily_cap(env, monkeypatch):
+    from backend.shared.clients import TransactionCanceled
+
+    def capped(self, actions):
+        raise TransactionCanceled(["None", "None", "ConditionalCheckFailed", "None"])
+
+    monkeypatch.setattr(
+        handler_module.DynamoDBTransactionClient, "transact_write", capped
+    )
+    status, response = _call(_ask())
+    assert (status, response["error"]) == (429, "daily_cap_reached")
+
+
+def test_a_repeat_click_on_an_answered_suggestion_adds_no_duplicate(env):
+    first = _call({"client_request_id": str(uuid.uuid4()), "suggested_id": "s3"})
+    second = _call({"client_request_id": str(uuid.uuid4()), "suggested_id": "s3"})
+    third = _call({"client_request_id": str(uuid.uuid4()), "suggested_id": "s3"})
+    assert first[0] == second[0] == third[0] == 200
+    assert (
+        first[1]["question_id"] == second[1]["question_id"] == third[1]["question_id"]
+    )
+    transcript = [
+        i for i in env.questions.scan()["Items"] if i["questionKey"].startswith("Q#")
+    ]
+    assert len(transcript) == 1
+    assert len(env.reasoning.calls) == 1
+
+
+def test_a_stored_suggestion_is_copied_into_the_transcript_only_once(env):
+    # Pre-generated demo answers exist only as S# records; the first click
+    # adds them to the transcript, later clicks reuse that record.
+    env.questions.put_item(
+        Item={
+            "reviewId": "r1",
+            "questionKey": "S#s3",
+            "status": "answered",
+            "answer": [{"text": "Stored.", "citations": []}],
+            "createdAt": int(time.time()),
+            "ttl": int(time.time()) + 3600,
+        }
+    )
+    for _ in range(3):
+        status, body = _call(
+            {"client_request_id": str(uuid.uuid4()), "suggested_id": "s3"}
+        )
+        assert status == 200
+        assert body["answer"][0]["text"] == "Stored."
+    transcript = [
+        i for i in env.questions.scan()["Items"] if i["questionKey"].startswith("Q#")
+    ]
+    assert len(transcript) == 1
+    assert env.reasoning.calls == []
+
+
+def test_a_connect_timeout_is_a_504_with_a_refund(env):
+    from botocore.exceptions import ConnectTimeoutError
+
+    env.reasoning.raises = ConnectTimeoutError(endpoint_url="https://bedrock")
+    status, body = _call(_ask())
+    assert (status, body["error"]) == (504, "answer_timeout")
+    assert _review(env)["questionsUsed"] == 0
+
+
+def test_the_model_timeout_fits_the_time_the_lambda_has_left():
+    now = time.monotonic()
+    assert handler_module._model_read_timeout(now + 60) == 20
+    tight = handler_module._model_read_timeout(now + 15)
+    assert 5 < tight < 15 - handler_module.RETRIEVAL_WORST_SECONDS
+    assert handler_module._model_read_timeout(now + 1) == 5
+
+    class Context:
+        def get_remaining_time_in_millis(self):
+            return 10_000
+
+    assert handler_module._deadline(Context(), now) == pytest.approx(now + 10 - 1.5)
+    assert handler_module._deadline(None, now) == pytest.approx(now + 28 - 1.5)
+
+
+def test_every_paid_path_client_is_bounded_and_never_retries(env, monkeypatch):
+    monkeypatch.setenv("VECTOR_BUCKET_NAME", "vectors")
+    monkeypatch.setenv("VECTOR_INDEX_NAME", "index")
+    monkeypatch.setenv("CHAT_GROUNDING_GUARDRAIL_ID", "grounding")
+    monkeypatch.setattr(handler_module, "GuardrailsClient", REAL_GUARDRAILS)
+    built = REAL_CLIENTS("us.anthropic.claude-haiku-4-5-20251001-v1:0", 12)
+    for client, read in [
+        (built.reasoning, 12),
+        (built.embedding, 2),
+        (built.vectors, 2),
+        (built.grounding, 2),
+    ]:
+        config = client._client.meta.config
+        assert config.read_timeout == read
+        assert config.connect_timeout == 1
+        assert config.retries["total_max_attempts"] == 1
+
+
+def test_retrieval_fails_open_when_s3_vectors_is_unavailable(env, monkeypatch):
+    from botocore.exceptions import UnknownServiceError
+
+    monkeypatch.setenv("VECTOR_BUCKET_NAME", "vectors")
+    monkeypatch.setenv("VECTOR_INDEX_NAME", "index")
+
+    def unknown(**_kwargs):
+        raise UnknownServiceError(service_name="s3vectors", known_service_names="s3")
+
+    monkeypatch.setattr(handler_module, "S3VectorsClient", unknown)
+    built = REAL_CLIENTS("us.anthropic.claude-haiku-4-5-20251001-v1:0", 12)
+    assert built.vectors is None
+    assert built.embedding is not None

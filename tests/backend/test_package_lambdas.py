@@ -158,3 +158,16 @@ def test_wrong_version_fails_the_build(tmp_path):
     staging = _staging(tmp_path, {"pydantic-2.15.0.dist-info/METADATA": b""})
     with pytest.raises(SystemExit, match="pydantic"):
         PACKAGER.check_all_pinned(staging, constraints)
+
+
+def test_ask_question_bundles_its_own_pinned_boto3():
+    # It calls S3 Vectors, which an older runtime boto3 doesn't know
+    # (code review 2026-10-16). No other Lambda bundles boto3.
+    assert LAMBDA_SPECS["ask_question"]["packages"] == ["boto3"]
+    others = [
+        n
+        for n, s in LAMBDA_SPECS.items()
+        if n != "ask_question" and "boto3" in s["packages"]
+    ]
+    assert others == []
+    assert PACKAGER.pinned_versions()["boto3"] == "1.43.96"
