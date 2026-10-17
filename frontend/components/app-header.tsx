@@ -8,6 +8,8 @@ interface AppHeaderProps {
   theme: ThemeChoice;
   onThemeChange: (theme: ThemeChoice) => void;
   onPreview: (screen: AppScreen) => void;
+  // The logo goes back to the home page from any screen.
+  onHome: () => void;
 }
 
 const previews: Array<{ screen: AppScreen; label: string }> = [
@@ -24,6 +26,7 @@ export function AppHeader({
   theme,
   onThemeChange,
   onPreview,
+  onHome,
 }: AppHeaderProps) {
   return (
     <>
@@ -31,7 +34,12 @@ export function AppHeader({
         Skip to main content
       </a>
       <header className="site-header">
-        <div className="brand-lockup">
+        <button
+          type="button"
+          className="brand-lockup brand-home"
+          aria-label="ArchiBrief home"
+          onClick={onHome}
+        >
           <span className="brand-mark" aria-hidden="true">
             A
           </span>
@@ -39,7 +47,7 @@ export function AppHeader({
             <strong>ArchiBrief</strong>
             <span>Evidence-backed AWS architecture review</span>
           </div>
-        </div>
+        </button>
         <div className="header-controls">
           {!apiConfigured && (
             <span className="mode-badge fixture">

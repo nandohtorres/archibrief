@@ -3224,3 +3224,18 @@ h4 {
   font-style: italic;
   color: var(--text);
 }
+
+/* The logo links home (components/app-header.tsx). */
+.brand-home {
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.brand-home:hover strong {
+  color: var(--accent);
+}

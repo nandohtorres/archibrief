@@ -60,4 +60,14 @@ test.describe("landing page", () => {
     await expect(page.locator("#report-heading")).toBeInViewport();
     expect(await page.evaluate(() => window.scrollY)).toBeLessThan(50);
   });
+
+  test("the logo goes back to the home page from a report", async ({ page }) => {
+    await page.goto(LIVE_URL);
+    await page.getByRole("button", { name: "See a real review" }).click();
+    await expect(page.locator("#report-heading")).toBeVisible();
+    await page.getByRole("button", { name: "ArchiBrief home" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("why it matters");
+    await expect(page.locator("#report-heading")).toHaveCount(0);
+    expect(await page.evaluate(() => window.scrollY)).toBeLessThan(50);
+  });
 });

@@ -261,6 +261,11 @@ export function ArchiBriefApp() {
     }
   }
 
+  function goHome() {
+    setScreen("submission");
+    window.scrollTo({ top: 0 });
+  }
+
   function clearDemo() {
     setDemo(null);
     setDemoChat(null);
@@ -396,6 +401,7 @@ export function ArchiBriefApp() {
         theme={theme}
         onThemeChange={setTheme}
         onPreview={preview}
+        onHome={goHome}
       />
       <main id="main-content">
         {screen === "submission" && (
