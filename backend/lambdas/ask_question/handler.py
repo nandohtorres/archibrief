@@ -2,7 +2,7 @@
 
 POST /reviews/{reviewId}/questions — one grounded question about one
 finished review (ADR-0046 §4, ADR-0050). Synchronous: the API integration
-allows 29 s, this Lambda 28 s, the model call 20 s with no retry.
+allows 29 s, this Lambda 28 s, the model call up to 24 s with no retry.
 
 Request body (unknown fields are rejected, which is how a forged
 `history` is refused; history is always loaded server-side):
@@ -32,8 +32,8 @@ Order of checks, cheapest and most decisive first:
    reservation stays spent, since Bedrock may have billed.
 
 Every AWS call on the paid path is bounded (connect + read timeout, no
-retries) and the model's read timeout is sized to the time the Lambda has
-left, so a slow dependency becomes a 504 with a refund rather than the
+retries) and the model's read timeout is sized, after retrieval, to the
+time the Lambda has left, so a slow dependency becomes a 504 with a refund rather than the
 Lambda being killed with the question stuck in flight (code review
 2026-10-16).
 """
@@ -58,7 +58,7 @@ from backend.chat.access import (
     questions_per_review,
     transcript_item,
 )
-from backend.chat.answer import ChatClients, answer_question
+from backend.chat.answer import MODEL_CONNECT_TIMEOUT_SECONDS, ChatClients, answer_question
 from backend.chat.context import ReviewContext, build_review_context
 from backend.chat.observe import log_chat_event, question_hash
 from backend.chat.pricing import GUARDRAIL_INPUT_MICRO_USD_PER_UNIT, reserve_micro_usd
@@ -81,14 +81,10 @@ from backend.shared.clients import (
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.sanitize import QuestionRejected, check_question
 
-MODEL_READ_TIMEOUT_SECONDS = 20
-MIN_MODEL_READ_TIMEOUT_SECONDS = 5
 # The small calls (Guardrails, embedding, S3 Vectors) normally take well
 # under a second.
 SMALL_CALL_READ_TIMEOUT_SECONDS = 2
 SMALL_CALL_CONNECT_TIMEOUT_SECONDS = 1
-# Embedding + vector query, each at its worst (connect + read).
-RETRIEVAL_WORST_SECONDS = 2 * (SMALL_CALL_READ_TIMEOUT_SECONDS + SMALL_CALL_CONNECT_TIMEOUT_SECONDS)
 LAMBDA_TIMEOUT_SECONDS = 28
 # Time kept back at the end to mark a failed question and refund it.
 DEADLINE_MARGIN_SECONDS = 1.5
@@ -218,14 +214,6 @@ def _deadline(context: object, started: float) -> float:
     return started + remaining - DEADLINE_MARGIN_SECONDS
 
 
-def _model_read_timeout(deadline: float) -> float:
-    """What's left after retrieval's worst case, capped at the normal 20 s."""
-    left = (
-        deadline - time.monotonic() - RETRIEVAL_WORST_SECONDS - SMALL_CALL_CONNECT_TIMEOUT_SECONDS
-    )
-    return max(MIN_MODEL_READ_TIMEOUT_SECONDS, min(MODEL_READ_TIMEOUT_SECONDS, left))
-
-
 def _vectors_client() -> S3VectorsClient | None:
     """None when the client can't be built (for example a Lambda runtime
     boto3 too old to know s3vectors). Retrieval then fails open: the
@@ -241,13 +229,15 @@ def _vectors_client() -> S3VectorsClient | None:
         return None
 
 
-def _clients(model_id: str, model_read_timeout: float) -> ChatClients:
+def _clients(model_id: str) -> ChatClients:
     grounding_id = os.environ.get("CHAT_GROUNDING_GUARDRAIL_ID", "")
     return ChatClients(
-        reasoning=BedrockReasoningClient(
+        # Built after retrieval, with the read timeout the time left allows
+        # (answer.model_read_timeout).
+        make_reasoning=lambda read_timeout: BedrockReasoningClient(
             model_id=model_id,
-            read_timeout_seconds=model_read_timeout,
-            connect_timeout_seconds=SMALL_CALL_CONNECT_TIMEOUT_SECONDS,
+            read_timeout_seconds=read_timeout,
+            connect_timeout_seconds=MODEL_CONNECT_TIMEOUT_SECONDS,
             no_retries=True,
         ),
         embedding=BedrockEmbeddingClient(**_SMALL_CALL),
@@ -722,7 +712,7 @@ def handler(event: dict, context: object) -> dict:
 
     in_flight_keys = [question_key] + ([suggestion_key] if suggestion_key else [])
     try:
-        clients = _clients(model_id, _model_read_timeout(deadline))
+        clients = _clients(model_id)
         result = answer_question(ctx, question, history, focus_alias, clients, canary, deadline)
     except (ReadTimeoutError, ConnectTimeoutError):
         _mark_failed(tables, review_id, in_flight_keys, "answer_timeout")

@@ -61,3 +61,34 @@ def test_grounding_is_skipped_near_the_deadline(ledger):
 def test_no_deadline_means_no_skip(ledger):
     _, grounding = _ask(ledger, None)
     assert grounding.calls == 1
+
+
+def test_the_model_timeout_is_sized_after_retrieval_from_the_time_left(ledger):
+    from backend.chat.answer import model_read_timeout
+
+    now = time.monotonic()
+    assert model_read_timeout(now + 60) == 24
+    assert 12 < model_read_timeout(now + 15) < 14.5
+    assert model_read_timeout(now + 1) == 5
+
+    built: list[float] = []
+
+    def make(read_timeout):
+        built.append(read_timeout)
+        return _Reasoning()
+
+    clients = ChatClients(make_reasoning=make)
+    answer_question(
+        build_review_context(ledger), "Why?", [], None, clients, "canary", now + 20
+    )
+    (read_timeout,) = built
+    assert 17 < read_timeout <= 19
+
+
+def test_a_client_is_required_without_a_deadline(ledger):
+    import pytest
+
+    with pytest.raises(ValueError):
+        answer_question(
+            build_review_context(ledger), "Why?", [], None, ChatClients(), "c", None
+        )

@@ -217,8 +217,8 @@ variable "vector_index_name" {
 
 variable "chat_model_id" {
   type        = string
-  default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-  description = "Model for chat answers. The chat eval picks the cheapest that passes (ADR-0050 §8); must be in chat_model_ids."
+  default     = "us.anthropic.claude-sonnet-4-6"
+  description = "Model for chat answers; must be in chat_model_ids. Sonnet 4.6 since 2026-10-16: Haiku 4.5's Marketplace subscription can't complete for this account yet. The chat eval picks the cheapest that passes (ADR-0050 §8)."
 }
 
 variable "chat_model_ids" {
@@ -245,8 +245,8 @@ variable "chat_blocked_per_review" {
 
 variable "chat_daily_budget_micro_usd" {
   type        = number
-  default     = 400000
-  description = "Estimated chat spend allowed per UTC day, in millionths of a dollar ($0.40). The hard stop; master-list item 29 sets the real value from measured cost."
+  default     = 1000000
+  description = "Estimated chat spend allowed per UTC day, in millionths of a dollar ($1.00; raised from $0.40 with the switch to Sonnet, 2026-10-16). The hard stop; master-list item 29 sets the real value from measured cost."
 }
 
 variable "chat_daily_max_questions" {

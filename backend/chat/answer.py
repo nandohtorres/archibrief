@@ -11,6 +11,7 @@ review itself.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -40,15 +41,30 @@ GROUNDING_SOURCE_CHARS = 20000
 # sets on it). With less time than this left, the detect-only check is
 # skipped rather than risk the Lambda being killed mid-request.
 GROUNDING_WORST_SECONDS = 5.0
+# The model call's read timeout under a deadline: whatever time is left
+# after retrieval, up to MODEL_READ_TIMEOUT_SECONDS. Sized after retrieval,
+# not before, so the model doesn't give up seconds to retrieval's worst
+# case (Sonnet answers take 15-19 s; 2026-10-16).
+MODEL_READ_TIMEOUT_SECONDS = 24.0
+MIN_MODEL_READ_TIMEOUT_SECONDS = 5.0
+MODEL_CONNECT_TIMEOUT_SECONDS = 1.0
+
+
+def model_read_timeout(deadline: float) -> float:
+    left = deadline - time.monotonic() - MODEL_CONNECT_TIMEOUT_SECONDS
+    return max(MIN_MODEL_READ_TIMEOUT_SECONDS, min(MODEL_READ_TIMEOUT_SECONDS, left))
 
 
 @dataclass
 class ChatClients:
-    reasoning: BedrockReasoningClient
+    # A ready model client (the eval, tests), or make_reasoning, which
+    # builds one with a read timeout once the time left is known.
+    reasoning: BedrockReasoningClient | None = None
     embedding: BedrockEmbeddingClient | None = None
     vectors: S3VectorsClient | None = None
     # The contextual-grounding guardrail; None turns the check off.
     grounding: GuardrailsClient | None = None
+    make_reasoning: Callable[[float], BedrockReasoningClient] | None = None
 
 
 @dataclass
@@ -100,7 +116,13 @@ def answer_question(
     (the Lambda's remaining time); None means no limit (the eval)."""
     started = time.monotonic()
     chunks = retrieve_chunks(question, ctx.finding_categories.get(focus_alias or "", ""), clients)
-    raw, usage = clients.reasoning.converse_tool_cached(
+    if clients.make_reasoning is not None and deadline is not None:
+        reasoning = clients.make_reasoning(model_read_timeout(deadline))
+    elif clients.reasoning is not None:
+        reasoning = clients.reasoning
+    else:
+        raise ValueError("ChatClients needs reasoning, or make_reasoning and a deadline")
+    raw, usage = reasoning.converse_tool_cached(
         system_prompt=build_system_prompt(canary),
         cached_user_text=ctx.cached_text(),
         user_text=build_turn_text(question, history_for_prompt(history), chunks, focus_alias),
@@ -110,7 +132,7 @@ def answer_question(
         input_schema=ANSWER_SCHEMA,
     )
     verified = verify_answer(raw, ctx, {c["ref"]: c for c in chunks}, canary)
-    cost = model_cost_micro_usd(clients.reasoning.model_id, usage)
+    cost = model_cost_micro_usd(reasoning.model_id, usage)
 
     grounding: dict[str, float] = {}
     time_left = deadline is None or deadline - time.monotonic() >= GROUNDING_WORST_SECONDS

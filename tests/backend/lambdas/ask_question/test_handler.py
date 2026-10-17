@@ -142,7 +142,7 @@ def env(monkeypatch):
         monkeypatch.setattr(
             handler_module,
             "_clients",
-            lambda model_id, _read_timeout: ChatClients(reasoning),
+            lambda model_id: ChatClients(reasoning),
         )
         FakeGuardrails.verdict = GuardrailVerdict(blocked=False, filters=[])
         FakeGuardrails.raises = None
@@ -639,12 +639,8 @@ def test_a_connect_timeout_is_a_504_with_a_refund(env):
     assert _review(env)["questionsUsed"] == 0
 
 
-def test_the_model_timeout_fits_the_time_the_lambda_has_left():
+def test_the_deadline_comes_from_the_lambda_context():
     now = time.monotonic()
-    assert handler_module._model_read_timeout(now + 60) == 20
-    tight = handler_module._model_read_timeout(now + 15)
-    assert 5 < tight < 15 - handler_module.RETRIEVAL_WORST_SECONDS
-    assert handler_module._model_read_timeout(now + 1) == 5
 
     class Context:
         def get_remaining_time_in_millis(self):
@@ -659,9 +655,9 @@ def test_every_paid_path_client_is_bounded_and_never_retries(env, monkeypatch):
     monkeypatch.setenv("VECTOR_INDEX_NAME", "index")
     monkeypatch.setenv("CHAT_GROUNDING_GUARDRAIL_ID", "grounding")
     monkeypatch.setattr(handler_module, "GuardrailsClient", REAL_GUARDRAILS)
-    built = REAL_CLIENTS("us.anthropic.claude-haiku-4-5-20251001-v1:0", 12)
+    built = REAL_CLIENTS("us.anthropic.claude-sonnet-4-6")
     for client, read in [
-        (built.reasoning, 12),
+        (built.make_reasoning(12), 12),
         (built.embedding, 2),
         (built.vectors, 2),
         (built.grounding, 2),
@@ -682,7 +678,7 @@ def test_retrieval_fails_open_when_s3_vectors_is_unavailable(env, monkeypatch):
         raise UnknownServiceError(service_name="s3vectors", known_service_names="s3")
 
     monkeypatch.setattr(handler_module, "S3VectorsClient", unknown)
-    built = REAL_CLIENTS("us.anthropic.claude-haiku-4-5-20251001-v1:0", 12)
+    built = REAL_CLIENTS("us.anthropic.claude-sonnet-4-6")
     assert built.vectors is None
     assert built.embedding is not None
 
