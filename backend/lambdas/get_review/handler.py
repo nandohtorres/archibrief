@@ -20,6 +20,7 @@ from typing import Any
 
 from backend.shared.clients import DynamoDBClient, S3Client
 from backend.shared.report import build_review_report
+from backend.shared.retention import review_is_live
 
 _PENDING_ALLOWED_FIELDS = (
     "reviewId",
@@ -56,7 +57,7 @@ def handler(event: dict, _context: object) -> dict:
     reviews_table = os.environ["REVIEWS_TABLE_NAME"]
     item = DynamoDBClient(table_name=reviews_table).get_item({"reviewId": review_id})
 
-    if item is None:
+    if item is None or not review_is_live(item):
         return _response(404, {"error": "review not found"})
 
     report_s3_key = item.get("reportS3Key")

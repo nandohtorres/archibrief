@@ -85,7 +85,7 @@ class _Env:
         self, review_item: dict | None = _REVIEW, ledger: dict | None = _LEDGER
     ) -> None:
         if review_item:
-            self.reviews.put_item(Item=review_item)
+            self.reviews.put_item(Item={"ttl": int(time.time()) + 86400, **review_item})
         if ledger:
             self.s3.put_object(
                 Bucket=BUCKET, Key=LEDGER_KEY, Body=json.dumps(ledger).encode()
@@ -285,4 +285,10 @@ def test_kill_switch_blocks_deeper_before_any_paid_call(env, monkeypatch):
     result = handler(_event("r1", "f1"), None)
 
     assert result["statusCode"] == 503
+    assert _FakeAgentCoreRuntimeClient.calls == []
+
+
+def test_expired_review_cannot_serve_cached_or_new_deeper_findings(env):
+    env.seed(review_item={**_REVIEW, "ttl": 1})
+    assert handler(_event("r1", "f1"), None)["statusCode"] == 404
     assert _FakeAgentCoreRuntimeClient.calls == []

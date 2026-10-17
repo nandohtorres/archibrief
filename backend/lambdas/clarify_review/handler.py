@@ -39,6 +39,7 @@ from botocore.exceptions import ClientError
 
 from backend.shared.clients import DynamoDBClient
 from backend.shared.kill_switch import paid_work_allowed
+from backend.shared.retention import review_is_live
 
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
@@ -78,7 +79,7 @@ def handler(event: dict, _context: object) -> dict:
     client = DynamoDBClient(table_name=table_name)
 
     item = client.get_item({"reviewId": review_id})
-    if item is None:
+    if item is None or not review_is_live(item):
         return _response(404, {"error": "review not found"})
 
     task_token = item.get("clarificationTaskToken")

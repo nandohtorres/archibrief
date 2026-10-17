@@ -32,6 +32,7 @@ from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Cli
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.models.finding import Finding
 from backend.shared.report import compute_presentation
+from backend.shared.retention import review_is_live
 
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
@@ -147,7 +148,7 @@ def handler(event: dict, _context: object) -> dict:
 
     reviews_table = DynamoDBClient(table_name=os.environ["REVIEWS_TABLE_NAME"])
     review_item = reviews_table.get_item({"reviewId": review_id})
-    if review_item is None:
+    if review_item is None or not review_is_live(review_item):
         return _response(404, {"error": "review not found"})
 
     report_s3_key = review_item.get("reportS3Key")

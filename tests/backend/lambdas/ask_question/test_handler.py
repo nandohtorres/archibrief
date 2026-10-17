@@ -122,7 +122,12 @@ def env(monkeypatch):
         resource = boto3.resource("dynamodb", region_name=region)
         reviews = resource.Table("reviews")
         reviews.put_item(
-            Item={"reviewId": "r1", "status": "complete", "reportS3Key": LEDGER_KEY}
+            Item={
+                "reviewId": "r1",
+                "status": "complete",
+                "reportS3Key": LEDGER_KEY,
+                "ttl": int(time.time()) + 86400,
+            }
         )
 
         for name, value in {
@@ -392,6 +397,27 @@ def test_copying_a_live_suggestion_does_not_extend_its_expiry(env):
     assert env.reasoning.calls == []
 
 
+def test_expired_review_denies_replay_and_new_paid_work(env):
+    request = _ask()
+    assert _call(request)[0] == 200
+    env.reviews.update_item(
+        Key={"reviewId": "r1"},
+        UpdateExpression="SET #t = :t",
+        ExpressionAttributeNames={"#t": "ttl"},
+        ExpressionAttributeValues={":t": 1},
+    )
+    assert _call(request)[0] == 404
+    assert _call(_ask())[0] == 404
+    assert FakeGuardrails.calls == 1
+    assert len(env.reasoning.calls) == 1
+
+
+def test_new_question_cannot_outlive_its_review(env):
+    assert _call(_ask())[0] == 200
+    question = env.questions.scan()["Items"][0]
+    assert question["ttl"] == _review(env)["ttl"]
+
+
 def test_history_comes_from_the_server_and_only_verified_text(env):
     env.reasoning.answers = [
         {
@@ -466,7 +492,9 @@ def test_the_kill_switch_stops_everyone_including_admin(env):
 def test_missing_and_unfinished_reviews(env):
     status, body = _call(_ask(), review_id="nope")
     assert (status, body["error"]) == (404, "review_not_found")
-    env.reviews.put_item(Item={"reviewId": "r2", "status": "pending"})
+    env.reviews.put_item(
+        Item={"reviewId": "r2", "status": "pending", "ttl": int(time.time()) + 86400}
+    )
     status, body = _call(_ask(), review_id="r2")
     assert (status, body["error"]) == (409, "review_not_complete")
     status, body = _call(_ask(), review_id="../r1")

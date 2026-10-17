@@ -83,6 +83,7 @@ from backend.shared.clients import (
     UnexpectedStopReason,
 )
 from backend.shared.kill_switch import paid_work_allowed
+from backend.shared.retention import review_expires_at, review_is_live
 from backend.shared.sanitize import QuestionRejected, check_question
 
 # The small calls (Guardrails, embedding, S3 Vectors) normally take well
@@ -613,7 +614,7 @@ def handler(event: dict, context: object) -> dict:
 
     tables = _Tables()
     review = tables.reviews.get_item({"reviewId": review_id})
-    if review is None:
+    if review is None or not review_is_live(review, now):
         return finish(_error(404, "review_not_found"), "rejected", error="review_not_found")
     if review.get("status") != "complete" or not review.get("reportS3Key"):
         return finish(_error(409, "review_not_complete"), "rejected", error="review_not_complete")
@@ -646,7 +647,7 @@ def handler(event: dict, context: object) -> dict:
         "questionKey": question_key,
         "createdAt": int(now),
         "askedAt": asked_at,
-        "ttl": int(now) + QUESTION_TTL_SECONDS,
+        "ttl": min(int(now) + QUESTION_TTL_SECONDS, review_expires_at(review)),
     }
 
     suggestion_key: str | None = None
