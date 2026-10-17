@@ -9,5 +9,6 @@ test-results
 design
 .lighthouseci
 lighthouse-reports
-# Saved demo reports: the pipeline's unedited output, kept byte-for-byte.
+# Saved demo reports and chat answers: unedited pipeline and API output.
 public/demos/reports
+public/demos/chats
