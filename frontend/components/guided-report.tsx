@@ -7,9 +7,64 @@ interface GuidedReportProps {
   onAsk: (finding: ReportFinding) => void;
 }
 
+interface FindingCardProps {
+  finding: ReportFinding;
+  open: boolean;
+  onOpenTechnicalFinding: (findingId: string) => void;
+  onAsk: (finding: ReportFinding) => void;
+}
+
+function FindingCard({ finding, open, onOpenTechnicalFinding, onAsk }: FindingCardProps) {
+  return (
+    <details open={open}>
+      <summary>
+        <span className={`priority-pill ${finding.presentation.priority}`}>
+          {finding.presentation.short_label}
+        </span>
+        <span>
+          <small>
+            {formatFindingId(finding.record.finding_id)} · {finding.record.category}
+          </small>
+          <strong>{finding.record.finding}</strong>
+        </span>
+        <i aria-hidden="true">›</i>
+      </summary>
+      <div className="guided-finding-body">
+        <h4>Why it matters</h4>
+        <p>{finding.record.risk_impact}</p>
+        <h4>Recommended action</h4>
+        <p>{finding.record.recommendation}</p>
+        <p className="plain-confidence">
+          <strong>Confidence: {confidenceLabel(finding.record.confidence)}.</strong> Based on the
+          evidence inputs recorded in the technical view; it is not a safety guarantee.
+        </p>
+        <div className="guided-actions">
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() => onOpenTechnicalFinding(finding.record.finding_id)}
+          >
+            View technical evidence
+          </button>
+          <button className="button secondary" type="button" onClick={() => onAsk(finding)}>
+            Ask about this finding
+          </button>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedReportProps) {
-  const visibleFindings = report.findings.filter(
+  const decisionFindings = report.findings.filter(
     ({ presentation }) => presentation.priority !== "confirmed",
+  );
+  // Facts read straight from the code. Some are only context ("Multi-AZ
+  // is on"), but some are real problems ("storage encryption explicitly
+  // disabled"), so they're shown, in their own labeled section, rather
+  // than hidden (decision 2026-10-16).
+  const confirmedFindings = report.findings.filter(
+    ({ presentation }) => presentation.priority === "confirmed",
   );
   const summary = stakeholderSummary(report);
   return (
@@ -61,45 +116,37 @@ export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedRe
 
       <h3 className="guided-section-heading">Findings that affect a decision</h3>
       <div className="guided-findings">
-        {visibleFindings.map((finding, index) => (
-          <details key={finding.record.finding_id} open={index === 0}>
-            <summary>
-              <span className={`priority-pill ${finding.presentation.priority}`}>
-                {finding.presentation.short_label}
-              </span>
-              <span>
-                <small>
-                  {formatFindingId(finding.record.finding_id)} · {finding.record.category}
-                </small>
-                <strong>{finding.record.finding}</strong>
-              </span>
-              <i aria-hidden="true">›</i>
-            </summary>
-            <div className="guided-finding-body">
-              <h4>Why it matters</h4>
-              <p>{finding.record.risk_impact}</p>
-              <h4>Recommended action</h4>
-              <p>{finding.record.recommendation}</p>
-              <p className="plain-confidence">
-                <strong>Confidence: {confidenceLabel(finding.record.confidence)}.</strong> Based on
-                the evidence inputs recorded in the technical view; it is not a safety guarantee.
-              </p>
-              <div className="guided-actions">
-                <button
-                  className="button secondary"
-                  type="button"
-                  onClick={() => onOpenTechnicalFinding(finding.record.finding_id)}
-                >
-                  View technical evidence
-                </button>
-                <button className="button secondary" type="button" onClick={() => onAsk(finding)}>
-                  Ask about this finding
-                </button>
-              </div>
-            </div>
-          </details>
+        {decisionFindings.map((finding, index) => (
+          <FindingCard
+            key={finding.record.finding_id}
+            finding={finding}
+            open={index === 0}
+            onOpenTechnicalFinding={onOpenTechnicalFinding}
+            onAsk={onAsk}
+          />
         ))}
       </div>
+
+      {confirmedFindings.length > 0 && (
+        <>
+          <h3 className="guided-section-heading">Confirmed from the code</h3>
+          <p className="guided-section-note">
+            Settings read directly from the Terraform. Some are only context; check whether any of
+            them matter for your workload.
+          </p>
+          <div className="guided-findings">
+            {confirmedFindings.map((finding) => (
+              <FindingCard
+                key={finding.record.finding_id}
+                finding={finding}
+                open={false}
+                onOpenTechnicalFinding={onOpenTechnicalFinding}
+                onAsk={onAsk}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
