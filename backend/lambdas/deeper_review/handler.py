@@ -32,7 +32,7 @@ from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Cli
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.models.finding import Finding
 from backend.shared.report import compute_presentation
-from backend.shared.retention import review_is_live
+from backend.shared.retention import review_expires_at, review_is_live
 
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
@@ -231,7 +231,9 @@ def handler(event: dict, _context: object) -> dict:
         )
 
     for finding in valid_findings:
-        findings_table.put_item(_findings_table_item(finding))
+        findings_table.put_item(
+            {**_findings_table_item(finding), "ttl": review_expires_at(review_item)}
+        )
     _release_in_flight(reviews_table, review_id, finding_id, claimed_at)
 
     return _findings_response(review_id, finding_id, valid_findings)

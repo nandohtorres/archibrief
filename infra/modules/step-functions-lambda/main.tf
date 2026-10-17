@@ -454,7 +454,7 @@ resource "aws_sfn_state_machine" "review" {
 
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.state_machine.arn}:*"
-    include_execution_data = true
+    include_execution_data = false
     level                  = "ALL"
   }
 
@@ -923,6 +923,7 @@ resource "aws_sfn_state_machine" "review" {
         Type     = "Task"
         Resource = aws_lambda_function.this["audit"].arn
         Parameters = {
+          "review_created_at.$"          = "$$.Execution.StartTime"
           "review_id.$"                  = "$.review_id"
           "baseline_answers.$"           = "$.effective.baseline_answers"
           "guardrails_decisions.$"       = "$.ingestResult.guardrails_decisions"

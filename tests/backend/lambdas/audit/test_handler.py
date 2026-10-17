@@ -52,3 +52,11 @@ def test_build_audit_entry_defaults_optional_fields():
     assert entry.baseline_answers == {}
     assert entry.guardrails_decisions == []
     assert entry.to_item()["reviewId"] == "r-2"
+
+
+def test_audit_expiry_is_bound_to_the_original_workflow_creation():
+    from backend.shared.retention import review_expires_at
+
+    created = "2026-10-01T00:00:00Z"
+    entry = build_audit_entry({"review_id": "r1", "review_created_at": created})
+    assert entry.to_item()["ttl"] == review_expires_at({"createdAt": created})

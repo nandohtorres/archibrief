@@ -292,3 +292,9 @@ def test_expired_review_cannot_serve_cached_or_new_deeper_findings(env):
     env.seed(review_item={**_REVIEW, "ttl": 1})
     assert handler(_event("r1", "f1"), None)["statusCode"] == 404
     assert _FakeAgentCoreRuntimeClient.calls == []
+
+
+def test_new_deeper_findings_share_the_original_review_expiry(env):
+    env.seed()
+    assert handler(_event("r1", "f1"), None)["statusCode"] == 200
+    assert all(item["ttl"] == env.review()["ttl"] for item in env.stored_findings())

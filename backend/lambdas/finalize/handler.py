@@ -16,6 +16,7 @@ from backend.agent.nodes.preflight import FIELD_LABELS
 from backend.shared.architecture_links import link_findings
 from backend.shared.clients import DynamoDBClient, S3Client
 from backend.shared.models.finding import Finding
+from backend.shared.retention import review_expires_at
 
 MAX_DYNAMODB_ITEM_BYTES = 400 * 1024
 
@@ -161,6 +162,9 @@ def handler(event, context):
             event.get("resources"), event.get("resource_count")
         ),
     }
+    pointer_item.setdefault("createdAt", ledger["generated_at"])
+    # Preserve the original deadline; finishing or retrying never renews it.
+    pointer_item["ttl"] = review_expires_at(pointer_item)
     if len(json.dumps(pointer_item).encode("utf-8")) > MAX_DYNAMODB_ITEM_BYTES:
         raise ValueError("review pointer item exceeds DynamoDB 400 KB item cap")
 
