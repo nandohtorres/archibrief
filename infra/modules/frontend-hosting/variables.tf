@@ -9,8 +9,7 @@ variable "name_prefix" {
 }
 
 # PriceClass_100 (US/Canada/Europe edge locations only) is the cheapest
-# tier — fine for a solo portfolio demo with no global audience. Widen
-# this if that ever stops being true.
+# tier, enough for a low-traffic deployment without a global audience.
 variable "price_class" {
   type    = string
   default = "PriceClass_100"
@@ -23,13 +22,12 @@ variable "tags" {
 
 variable "api_origin_pattern" {
   type        = string
-  description = "CSP connect-src value for the API Gateway origin, e.g. https://*.execute-api.us-east-1.amazonaws.com. A wildcard subdomain pattern, not the literal api_endpoint output — using the literal would create a circular module dependency with api_gateway (which already depends on this module's cloudfront_domain_name for CORS)."
+  description = "CSP connect-src value for the API Gateway origin, e.g. https://*.execute-api.us-east-1.amazonaws.com. A wildcard subdomain pattern, not the literal api_endpoint output, which would create a circular module dependency with api_gateway (it depends on this module's cloudfront_domain_name for CORS)."
 }
 
-# Phase B (2026-10-14): custom domain support. Both default to values
-# that keep the distribution on its default *.cloudfront.net cert/domain
-# (the pre-existing behavior) when unset, so this module stays usable
-# without a domain for any environment that doesn't want one yet.
+# Custom domain support. Both default to values that keep the
+# distribution on its default *.cloudfront.net certificate and domain, so
+# the module works without a domain.
 variable "aliases" {
   type        = list(string)
   default     = []
@@ -39,5 +37,5 @@ variable "aliases" {
 variable "certificate_arn" {
   type        = string
   default     = null
-  description = "ACM certificate ARN (us-east-1 — CloudFront's own hard requirement, independent of the distribution's price_class/edge locations) covering every name in `aliases`. Leave null to keep using CloudFront's default certificate."
+  description = "ACM certificate ARN (must be in us-east-1, a CloudFront requirement independent of price_class) covering every name in `aliases`. Leave null to keep using CloudFront's default certificate."
 }

@@ -1,36 +1,20 @@
-# Dev environment root — wires infra/modules together. No user accounts
-# (ADR-0044) — no auth module; the API is gated by a single pre-shared
-# admin credential generated inside the api-gateway module. Several
-# module inputs (GitHub OIDC provider, AgentCore Runtime ARN, Lambda
-# deployment packages) are placeholders until AWS account/IAM bootstrap
-# work not yet done, marked TODO(account-setup) at their source.
+# Dev environment root: wires infra/modules together. No user accounts
+# (ADR-0044) and no auth module; the API is gated by a single pre-shared
+# admin credential generated inside the api-gateway module.
 
 provider "aws" {
   region = var.region
 }
 
-# Phase B (2026-10-14): custom domain for the live deployment. Found
-# that var.domain/the "api.${var.domain}" string had existed in this
-# file and in api-gateway's own var.domain_name default since the
-# module was first built, but nothing ever actually created a cert or
-# wired either domain to a real resource — archibrief.dev (registered
-# 2026-09-08, Work-Project-Cost-Log.md) has never resolved to anything.
-# Full story in Work-Project-Issues-Log.md, 2026-10-14.
-#
-# One cert covers all three names needed (CloudFront requires us-east-1
-# regardless of the distribution's own price_class/edge locations; this
-# environment's provider is already us-east-1 by default, and API
-# Gateway's regional custom domain just needs the cert in the API's own
-# region — same region here, so one cert does both jobs, no provider
-# alias needed). DNS validation, not email validation — Cloudflare is
-# the DNS host (NS records confirmed delegated, 2026-10-14), not
-# Route53, so there is no Terraform-managed DNS resource here; the
-# validation CNAME records (acm_validation_records output) and the
-# final CNAME targets (frontend_dns_target/api_dns_target outputs) are
-# added manually in the Cloudflare dashboard — see this environment's
-# README for the exact two-phase apply sequence this requires (the
-# validation resource below will otherwise sit waiting, up to its
-# 45-minute default timeout, for DNS records that don't exist yet).
+# Custom domain. One cert covers all three names: CloudFront requires
+# us-east-1, and API Gateway's regional custom domain needs the cert in
+# the API's region, which is also us-east-1 here, so no provider alias is
+# needed. DNS validation: Cloudflare is the DNS host, not Route53, so the
+# validation CNAMEs (acm_validation_records output) and the final CNAME
+# targets (frontend_dns_target/api_dns_target outputs) are added manually
+# in the Cloudflare dashboard. See this environment's README for the
+# two-phase apply; otherwise the validation resource below waits up to
+# its 45-minute default timeout for records that don't exist.
 resource "aws_acm_certificate" "site" {
   domain_name = var.domain
   subject_alternative_names = [
@@ -116,13 +100,8 @@ module "step_functions_lambda" {
   reviews_table_arn   = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.reviews_table_name}"
   reviews_table_name  = module.dynamodb.reviews_table_name
   audit_table_arn     = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.audit_log_table_name}"
-  # Replaced the raw placeholder var with the real module output
-  # (2026-09-16) — module.agentcore_runtime.agent_runtime_arn is only
-  # actually resolvable once modules/agentcore-runtime's own real
-  # prerequisite (a packaged ZIP artifact — see that module's
-  # agent_runtime_zip_path TODO) exists; until then this still won't
-  # apply cleanly, same documented deferral as every other TODO(account-setup)
-  # placeholder in this environment, not a new problem this change causes.
+  # Resolvable only once the AgentCore Runtime package exists (see
+  # modules/agentcore-runtime's agent_runtime_zip_path).
   agentcore_runtime_arn      = module.agentcore_runtime.agent_runtime_arn
   permissions_boundary_arn   = module.iam.runtime_permissions_boundary_arn
   guardrail_id               = module.guardrails.guardrail_id
@@ -136,11 +115,10 @@ module "frontend_hosting" {
   source      = "../../modules/frontend-hosting"
   name_prefix = "${var.name_prefix}-${var.environment}"
   bucket_name = "${var.name_prefix}-${var.environment}-frontend"
-  # Space-separated - CSP connect-src accepts multiple source
-  # expressions in one directive value. Includes the custom API domain
-  # alongside the wildcard execute-api pattern since the frontend may be
-  # built with either as NEXT_PUBLIC_API_BASE_URL depending on which
-  # deploy this is.
+  # Space-separated: CSP connect-src accepts multiple source expressions.
+  # Includes the custom API domain alongside the wildcard execute-api
+  # pattern, since the frontend may be built with either as
+  # NEXT_PUBLIC_API_BASE_URL.
   api_origin_pattern = "https://*.execute-api.${var.region}.amazonaws.com https://api.${var.domain}"
   aliases            = [var.domain, "www.${var.domain}"]
   certificate_arn    = aws_acm_certificate_validation.site.certificate_arn

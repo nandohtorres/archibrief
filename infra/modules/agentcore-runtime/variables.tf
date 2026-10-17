@@ -5,7 +5,7 @@ variable "name_prefix" {
 
 variable "agent_runtime_zip_path" {
   type        = string
-  description = "Path to the AgentCore Runtime deployment package (backend/agent/runtime_entrypoint.py + dependencies, built for Linux ARM64) — TODO(account-setup): does not exist until a real CI packaging step runs, same deferral as modules/step-functions-lambda's lambda_zip_paths."
+  description = "Path to the AgentCore Runtime deployment package (backend/agent/runtime_entrypoint.py + dependencies, built for Linux ARM64) by backend/agent/build_runtime_package.py. Must exist on disk before plan."
 }
 
 variable "permissions_boundary_arn" {
@@ -33,10 +33,9 @@ variable "vector_index_name" {
   description = "S3 Vectors index name, paired with vector_bucket_name."
 }
 
-# Same temporary Sonnet-4.6 placeholder as validate_reason_node.py and
-# runtime_entrypoint.py's own env-var default — kept in sync deliberately.
-# See Work-Project-Issues-Log.md/[[project_archibrief_rag_progress]] for
-# the Sonnet 5 access-blocker history and revert instructions.
+# Sonnet 4.6 until Sonnet 5 access is available on the account. Keep in
+# sync with the defaults in validate_reason_node.py and
+# runtime_entrypoint.py.
 variable "reasoning_model_id" {
   type    = string
   default = "us.anthropic.claude-sonnet-4-6"
