@@ -1,4 +1,4 @@
-// Item #7: the public "See a real review" path against GET /demo.
+// The public "See a real review" path against GET /demo.
 // Network is mocked (page.route) like the rest of the live-build suite;
 // GET /demo is free in production, but CI must not depend on AWS.
 import { expect, test } from "@playwright/test";

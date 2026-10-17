@@ -2,16 +2,16 @@ import { useState, type FormEvent, type ReactNode } from "react";
 
 import { createTar } from "@/lib/tar";
 
-// The "try it" section of the landing page (2026-10-15): where the story
-// turns into the product. Reuses the original testing form, plus:
-// - pre-made example architectures in plain words (Fernando: pre-made, not
+// The "try it" section of the landing page: where the story turns into
+// the product. The submission form, plus:
+// - pre-made example architectures in plain words (pre-made, not
 //   generated live), each a real bundled Terraform archive;
 // - upload a .tar, or paste Terraform (turned into a .tar in the browser,
 //   lib/tar.ts, so it takes the same upload + ingest path);
 // - the admin key next to the submit button. Submitting stays owner-only
 //   until public submissions open (ADR-0046/0047).
 
-// Bundled examples (2026-10-13): each loads a real Terraform archive
+// Bundled examples: each loads a real Terraform archive
 // (frontend/public/fixtures/*.tar) plus a matching brief. Finding counts
 // were verified against the real rule engine when they were built.
 interface ExampleArchitecture {

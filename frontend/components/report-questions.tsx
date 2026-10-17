@@ -94,8 +94,7 @@ export function ReportQuestions({
   const [loaded, setLoaded] = useState(false);
   // One request id per attempt, reused when the same question is retried
   // after a timeout or a dropped connection, so the server replays or
-  // resumes it instead of charging a second question (code review
-  // 2026-10-15).
+  // resumes it instead of charging a second question.
   const attempt = useRef<{ key: string; id: string } | null>(null);
 
   useEffect(() => {

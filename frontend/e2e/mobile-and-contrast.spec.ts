@@ -1,6 +1,5 @@
-// Item #9: basic phone layout and color contrast, in light and dark.
-// Runs against the fixture build (no network). This is the baseline
-// check, not the full mobile UI pass, which is still to come.
+// Basic phone layout and color contrast, in light and dark.
+// Runs against the fixture build (no network).
 import { expect, test, type Page } from "@playwright/test";
 import { FIXTURE_URL, LIVE_URL } from "../playwright.config";
 import { findContrastFailures } from "./support/contrast";

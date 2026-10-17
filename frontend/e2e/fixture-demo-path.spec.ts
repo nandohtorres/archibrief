@@ -1,5 +1,4 @@
-// Covers the "static guest/demo report view" critical path named in
-// Work-Project-Build-Plan.md's Phase 7 E2E item - the no-API fixture
+// Covers the "static guest/demo report view" critical path: the no-API fixture
 // walkthrough every visitor without an admin key sees (ADR-0044: no
 // user accounts). No network mocking here on purpose: this path makes
 // zero real fetch calls by design (archibrief-app.tsx's apiConfigured

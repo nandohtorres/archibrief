@@ -1,4 +1,4 @@
-// WCAG 2.x contrast check over the rendered page (item #9). Runs in the
+// WCAG 2.x contrast check over the rendered page. Runs in the
 // browser via page.evaluate, so it measures the colors actually painted
 // after theme tokens resolve. Handles HTML text (nearest opaque ancestor
 // background) and SVG <text> (fill of the shape drawn under it in the

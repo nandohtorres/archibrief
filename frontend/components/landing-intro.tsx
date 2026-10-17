@@ -2,10 +2,8 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 
-// Landing content: the "master" design Fernando chose on 2026-10-15
-// (frontend/design/landing-options/option-master.html), combining option A's
-// editorial hero, option B's sample cards and option C's check marks,
-// numbered walkthrough and checks list. Split in two so the submission form
+// Landing content: an editorial hero, sample cards, check marks, a
+// numbered walkthrough and a checks list. Split in two so the submission form
 // sits where the story turns into the product: LandingIntro (hero, samples,
 // how it works) above the form, LandingClosing (what it checks, limits)
 // below it.

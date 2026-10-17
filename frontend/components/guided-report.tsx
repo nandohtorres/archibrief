@@ -86,7 +86,7 @@ export function GuidedReport({
   // Facts read straight from the code. Some are only context ("Multi-AZ
   // is on"), but some are real problems ("storage encryption explicitly
   // disabled"), so they're shown, in their own labeled section, rather
-  // than hidden (decision 2026-10-16).
+  // than hidden.
   const confirmedFindings = report.findings.filter(
     ({ presentation }) => presentation.priority === "confirmed",
   );

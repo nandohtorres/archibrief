@@ -1,4 +1,4 @@
-// Item #8: landing page (design option A) above the submission flow, and
+// The landing page above the submission flow, and
 // owner-only submissions until public submissions open (ADR-0047).
 import { expect, test } from "@playwright/test";
 import { FIXTURE_URL, LIVE_URL } from "../playwright.config";
