@@ -173,6 +173,11 @@ export function SubmissionStep({
     <section className="flow-card submission-card" aria-labelledby="submission-heading">
       <div className="step-kicker">Try it · Step 1 of 3</div>
       <h2 id="submission-heading">Review your own Terraform</h2>
+      <p className="owner-only-note">
+        <strong>New reviews are owner-only for now.</strong> The demo reviews above are open to
+        everyone; running a new one needs the site owner&apos;s key, because each review uses a paid
+        model.
+      </p>
       <p className="lede">
         Upload or paste your Terraform, or start from an example architecture, and add a short brief
         about the workload. ArchiBrief reads the code; it never runs Terraform or touches your AWS

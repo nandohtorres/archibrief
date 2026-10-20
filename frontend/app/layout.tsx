@@ -30,7 +30,7 @@ const sourceSerif = Source_Serif_4({
 const SITE_URL = "https://archibrief.dev";
 const TITLE = "ArchiBrief · AWS architecture review that explains why";
 const DESCRIPTION =
-  "Plain-language AWS architecture reviews of real public Terraform: what's exposed, what could fail and why it matters, with every claim cited to the code and AWS guidance.";
+  "Plain-language AWS architecture reviews of real public Terraform: what's exposed, what could fail and why it matters, with the evidence for each finding shown alongside it.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

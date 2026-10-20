@@ -12,6 +12,8 @@ test.describe("landing page", () => {
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "One review, two readers" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
+    // Visitors are told new reviews are owner-only before they reach the key field.
+    await expect(page.locator(".owner-only-note")).toContainText("owner-only for now");
     await expect(page.getByLabel("Admin key")).toBeVisible();
 
     await page.getByRole("link", { name: "Review your own Terraform" }).click();

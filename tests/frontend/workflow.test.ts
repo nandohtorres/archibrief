@@ -1,6 +1,7 @@
 import { fixtureReport } from "../../frontend/lib/fixtures";
 import {
   REVIEW_DEADLINE_MS,
+  citationGap,
   confidenceLabel,
   failureMessageFor,
   filterAndSortFindings,
@@ -68,6 +69,19 @@ describe("finding workspace behavior", () => {
     expect(confidenceLabel(0.7)).toBe("Medium");
     expect(confidenceLabel(0.4)).toBe("Low");
     expect(formatFindingId("finding-7")).toBe("F-007");
+  });
+});
+
+describe("citationGap", () => {
+  it("calls only a not-observable finding an evidence gap", () => {
+    expect(citationGap("not-observable").heading).toBe("No citation by design");
+    expect(citationGap("deterministic-rule-result").heading).toBe(
+      "Configuration evidence, not a citation",
+    );
+    expect(citationGap("deterministic-rule-result").body).toContain(
+      "read the submitted configuration directly",
+    );
+    expect(citationGap("inference").heading).toBe("No source citation");
   });
 });
 

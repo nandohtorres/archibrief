@@ -1,4 +1,10 @@
-import type { BudgetSummary, FindingPriority, ReportFinding, ReviewReport } from "./contracts";
+import type {
+  BudgetSummary,
+  FindingPriority,
+  FindingType,
+  ReportFinding,
+  ReviewReport,
+} from "./contracts";
 
 export type AppScreen = "submission" | "preflight" | "progress" | "clarify" | "report" | "failure";
 // Where the report on screen came from: the public sample (GET /demo),
@@ -45,6 +51,32 @@ export function confidenceLabel(confidence: number): "High" | "Medium" | "Low" {
   if (confidence >= 0.85) return "High";
   if (confidence >= 0.6) return "Medium";
   return "Low";
+}
+
+// Why a finding has no source citation. Only a not-observable finding is an
+// evidence gap; a rule finding has configuration evidence instead.
+export function citationGap(type: FindingType): { heading: string; body: string } {
+  if (type === "not-observable") {
+    return {
+      heading: "No citation by design",
+      body:
+        "This is a typed evidence gap. A not-observable finding cannot carry a source citation " +
+        "because ArchiBrief did not have evidence from which to make the conclusion.",
+    };
+  }
+  if (type === "deterministic-rule-result") {
+    return {
+      heading: "Configuration evidence, not a citation",
+      body:
+        "A fixed rule read the submitted configuration directly; the evidence above is what it " +
+        "matched. No retrieved guidance was used, so there is no source passage. The rule sees " +
+        "only the submitted code, not the rest of the account.",
+    };
+  }
+  return {
+    heading: "No source citation",
+    body: "This finding carries no retrieved source passage. Check its evidence above before relying on it.",
+  };
 }
 
 export function formatFindingId(findingId: string): string {

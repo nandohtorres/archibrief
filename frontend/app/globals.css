@@ -470,6 +470,15 @@ h4 {
   color: var(--text);
 }
 
+.owner-only-note {
+  margin-bottom: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-s);
+  background: var(--accent-tint);
+  color: var(--text);
+}
+
 .preset-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

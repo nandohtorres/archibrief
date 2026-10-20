@@ -1,5 +1,5 @@
 import type { ReportFinding } from "@/lib/contracts";
-import { confidenceLabel, formatFindingId } from "@/lib/workflow";
+import { citationGap, confidenceLabel, formatFindingId } from "@/lib/workflow";
 import type { ReviewerNote } from "@/lib/demos";
 
 interface FindingDetailProps {
@@ -73,8 +73,10 @@ export function FindingDetail({
           />
         </div>
         <p>
-          Confidence describes the strength of evidence available to this review—not a probability
-          that the architecture is safe.
+          Confidence is a heuristic built from these three inputs. It describes how direct the
+          evidence is, not a probability that the finding is correct or that the architecture is
+          safe. A rule scores 100% because it is deterministic; that doesn&apos;t make its
+          conclusion right.
         </p>
       </section>
 
@@ -135,11 +137,8 @@ export function FindingDetail({
         </section>
       ) : (
         <section className="detail-section evidence-gap">
-          <h4>No citation by design</h4>
-          <p>
-            This is a typed evidence gap. A not-observable finding cannot carry a source citation
-            because ArchiBrief did not have evidence from which to make the conclusion.
-          </p>
+          <h4>{citationGap(record.type).heading}</h4>
+          <p>{citationGap(record.type).body}</p>
         </section>
       )}
 

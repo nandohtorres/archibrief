@@ -79,8 +79,9 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
         </h1>
         <p className="landing-lede">
           ArchiBrief reads your Terraform and a short brief about the workload, then explains in
-          plain language what&apos;s exposed, what could fail, and why each fix matters. Every claim
-          points to the line of code and the AWS guidance behind it.
+          plain language what&apos;s exposed, what could fail, and why each fix matters. Each
+          finding shows the code it&apos;s based on and, where it relies on AWS guidance, the exact
+          passage, so you can check it.
         </p>
         <div className="landing-cta-block">
           <div className="landing-actions">
@@ -99,7 +100,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
           </div>
           <ul className="landing-badges">
             <li>Never touches your AWS account</li>
-            <li>Every claim cites its source</li>
+            <li>Evidence shown with each finding</li>
             <li>AI mistakes shown, not hidden</li>
           </ul>
         </div>
