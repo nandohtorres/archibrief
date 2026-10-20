@@ -154,13 +154,17 @@ test.describe("phone layout at 390px", () => {
   });
 });
 
-test("the theme select switches the page theme", async ({ page }) => {
+test("the theme button cycles system, light and dark", async ({ page }) => {
   await page.goto(FIXTURE_URL);
   await page.waitForLoadState("networkidle");
-  await page.getByLabel("Theme").selectOption("dark");
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.getByLabel("Theme").selectOption("light");
+  const toggle = page.getByRole("button", { name: /^Theme:/ });
+  await expect(toggle).toHaveAccessibleName(/^Theme: System/);
+  await toggle.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await toggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await toggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
 });
 
 test.describe("color contrast (WCAG AA)", () => {

@@ -188,7 +188,7 @@ h4 {
   width: min(100% - 2rem, 1240px);
   min-height: 100vh;
   margin: 0 auto;
-  padding: var(--space-3) 0 var(--space-6);
+  padding: 0 0 var(--space-6);
 }
 
 .site-header {
@@ -196,7 +196,7 @@ h4 {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding-bottom: var(--space-3);
+  min-height: 64px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -212,28 +212,61 @@ h4 {
   gap: var(--space-1);
 }
 
-.brand-mark {
+.brand-lockup {
+  gap: 0.6rem;
+}
+
+.brand-emblem {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  color: var(--accent);
+}
+
+.brand-name {
+  font: 700 1.05rem/1 var(--font-mono);
+  letter-spacing: -0.01em;
+}
+
+.header-controls {
+  gap: var(--space-3);
+}
+
+.site-nav {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.site-nav a {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.site-nav a:hover {
+  color: var(--accent);
+}
+
+.theme-toggle {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font: 700 1.1rem/1 var(--font-mono);
-}
-
-.brand-lockup > div {
-  display: grid;
-}
-
-.brand-lockup strong {
-  font: 700 1rem/1.35 var(--font-mono);
-}
-
-.brand-lockup div span {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
   color: var(--text-muted);
-  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  color: var(--accent);
+}
+
+.theme-toggle svg {
+  width: 17px;
+  height: 17px;
 }
 
 .mode-badge {
@@ -253,7 +286,6 @@ h4 {
   color: var(--success);
 }
 
-.theme-control,
 .admin-key-control {
   display: flex;
   align-items: center;
@@ -262,7 +294,6 @@ h4 {
   font-size: 0.78rem;
 }
 
-.theme-control select,
 .admin-key-control input,
 .finding-toolbar select,
 .finding-toolbar input {
@@ -2273,7 +2304,7 @@ h4 {
 }
 
 .landing-hero {
-  padding: clamp(2.5rem, 8vw, 6rem) 0 clamp(2.5rem, 6vw, 4rem);
+  padding: clamp(1.75rem, 4.5vw, 3.25rem) 0 clamp(2.5rem, 6vw, 4rem);
 }
 
 .landing-kicker {
@@ -2995,11 +3026,8 @@ h4 {
 @media (max-width: 680px) {
   .app-shell {
     width: min(100% - 1rem, 1240px);
-    padding-top: var(--space-2);
   }
 
-  .site-header,
-  .header-controls,
   .section-heading-row,
   .progress-footer,
   .preflight-summary {
@@ -3007,14 +3035,11 @@ h4 {
     flex-direction: column;
   }
 
-  .header-controls,
-  .theme-control,
   .admin-key-control,
   .segmented-control {
     width: 100%;
   }
 
-  .theme-control,
   .admin-key-control {
     justify-content: space-between;
   }
@@ -3024,7 +3049,6 @@ h4 {
     flex: 1;
   }
 
-  .theme-control select,
   .segmented-control button {
     flex: 1;
   }
@@ -3137,44 +3161,17 @@ h4 {
 /* Phone layout. Kept last so it overrides the
    general 680px rules above. */
 @media (max-width: 680px) {
-  /* Header: brand and theme share the first row, the admin key gets its
-     own compact row, instead of three stacked full-width rows. */
+  /* Header: one row of logo and theme button. The section links are
+     dropped; the home page itself is short to scroll on a phone. */
   .site-header {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-1) var(--space-2);
-    padding-bottom: var(--space-2);
+    min-height: 56px;
   }
 
-  .header-controls {
-    display: contents;
+  .site-nav {
+    display: none;
   }
 
-  .theme-control {
-    order: 1;
-    width: auto;
-    margin-left: auto;
-  }
-
-  .brand-lockup {
-    flex: 1 1 0;
-    min-width: 0;
-  }
-
-  /* The select's own text says the theme; the visible word is dropped to
-     fit one row, but stays available to screen readers. */
-  .theme-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .admin-key-control,
-  .mode-badge {
+  .admin-key-control {
     order: 2;
     width: 100%;
   }

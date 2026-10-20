@@ -58,6 +58,7 @@ const emptySubmission: SubmissionValues = {
 export function ArchiBriefApp() {
   const [screen, setScreen] = useState<AppScreen>("submission");
   const [theme, setTheme] = useState<ThemeChoice>("system");
+  const [pendingSection, setPendingSection] = useState<string | null>(null);
   const [adminKey, setAdminKey] = useState("");
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -280,6 +281,24 @@ export function ArchiBriefApp() {
     window.scrollTo({ top: 0 });
   }
 
+  // Header links: scroll to a home page section, rendering home first when
+  // another screen is showing.
+  function goToSection(id: string) {
+    if (screen === "submission") {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    setScreen("submission");
+    setPendingSection(id);
+  }
+
+  useEffect(() => {
+    if (pendingSection && screen === "submission") {
+      document.getElementById(pendingSection)?.scrollIntoView();
+      setPendingSection(null);
+    }
+  }, [pendingSection, screen]);
+
   function clearDemo() {
     setDemo(null);
     setDemoChat(null);
@@ -416,6 +435,7 @@ export function ArchiBriefApp() {
         onThemeChange={setTheme}
         onPreview={preview}
         onHome={goHome}
+        onSection={goToSection}
       />
       <main id="main-content">
         {screen === "submission" && (
