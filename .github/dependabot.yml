@@ -1,11 +1,16 @@
 # Weekly dependency updates. Minor and patch bumps are grouped per ecosystem
-# so each week brings a few pull requests rather than dozens.
+# so each week brings a few pull requests rather than dozens. Major versions
+# are skipped: they can change behavior the tests don't cover, so they're
+# upgraded deliberately, one at a time.
 version: 2
 updates:
   - package-ecosystem: pip
     directory: /backend
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       python-minor-and-patch:
         update-types: [minor, patch]
@@ -14,6 +19,9 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
@@ -22,6 +30,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       actions:
         patterns: ["*"]
@@ -32,6 +43,9 @@ updates:
       - /infra/modules/*
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       terraform-providers:
         patterns: ["*"]
