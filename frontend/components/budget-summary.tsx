@@ -22,16 +22,16 @@ export function BudgetSummary({ budget, placement, onOpenFinding }: BudgetSummar
   return (
     <section className="budget-summary" aria-labelledby={headingId}>
       <h3 id={headingId}>{placement === "top" ? "What it costs to fix" : "Budget summary"}</h3>
-      <p className="budget-headline">{budgetHeadline(budget)}</p>
+      {/* At the top, the intro above already says this. */}
+      {placement === "bottom" && <p className="budget-headline">{budgetHeadline(budget)}</p>}
       <div className="budget-stats">
         <div>
           <span>Recommended fixes</span>
           <strong>
             {formatMonthly(budget.monthly_recommended, budget.recommended_has_unpriced)}
-            <small> /month</small>
           </strong>
           <p>
-            more on the AWS bill
+            a month more on the AWS bill
             {budget.monthly_optional > 0 &&
               `, plus ${formatDollars(budget.monthly_optional)}/month for optional extras`}
           </p>

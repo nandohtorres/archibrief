@@ -81,7 +81,17 @@ export function ArchiBriefApp() {
     const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
     if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
     // Tab-scoped, never localStorage — see lib/admin-key.ts.
-    setAdminKey(loadAdminKey(window.sessionStorage, window.localStorage));
+    const storedKey = loadAdminKey(window.sessionStorage, window.localStorage);
+    // A key typed or autofilled before the page's script loaded is in the
+    // field but never reached onChange; keep it rather than wiping it.
+    const typed =
+      (document.getElementById("admin-key-input") as HTMLInputElement | null)?.value ?? "";
+    if (!storedKey && typed) {
+      saveAdminKey(window.sessionStorage, typed);
+      setAdminKey(typed);
+    } else {
+      setAdminKey(storedKey);
+    }
   }, []);
 
   // Each screen starts at the top; otherwise opening the sample from far

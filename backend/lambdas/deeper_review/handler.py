@@ -29,6 +29,7 @@ from botocore.exceptions import ClientError, ReadTimeoutError
 
 from backend.lambdas.validate.handler import validate_findings
 from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
+from backend.shared.http import JSON_HEADERS
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.models.finding import Finding
 from backend.shared.report import compute_presentation
@@ -37,7 +38,7 @@ from backend.shared.report import compute_presentation
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     return {
         "statusCode": status_code,
-        "headers": {"content-type": "application/json"},
+        "headers": dict(JSON_HEADERS),
         "body": json.dumps(body),
     }
 

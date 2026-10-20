@@ -55,3 +55,49 @@ The early contrast observations are preserved rather than represented as fixed
 product bugs. Build/test runtime was Node 24.14.0, outside the declared Node
 20/22 support range; repeat on a supported runtime before release. Final new
 specs passed TypeScript, ESLint and Prettier checks.
+
+## Cross-browser run and live Lighthouse (2026-10-20)
+
+The full mocked suite was run on this branch in Playwright's Chromium,
+Firefox 157 and WebKit 27.2 (Safari's engine) builds on Windows:
+**61 passed in each browser**. Command from `frontend/`:
+`npx playwright test --browser=<chromium|firefox|webkit>`. The axe WCAG 2.2
+AA cases (landing, technical and guided views, both themes) are part of
+that suite, so they passed in all three.
+
+The first Firefox and WebKit runs found three failures. Two were test
+problems and one was a real bug:
+
+- **Firefox, keyboard test (test problem).** Past the footer's last
+  link, headless Firefox keeps focus where it is instead of cycling
+  through browser UI back to the top. The Tab helper now restarts from
+  the top of the document when focus doesn't move.
+- **WebKit, pasted-Terraform upload (test problem).** Playwright's
+  WebKit request interception drops `Blob` bodies from `FormData`. A
+  probe showed the archive was built correctly in the page, so the test
+  now also reads it in the page as it's appended.
+- **WebKit, admin key (real bug, fixed).** A key typed or autofilled
+  before the page's script finished loading showed in the field but was
+  never saved or sent. WebKit loads later, so it showed there first. The
+  app now keeps a key already in the field when it starts.
+
+Still not covered: real Safari on macOS/iOS (WebKit on Windows is the same
+engine but not the same browser), Firefox with its full UI, and a real
+screen reader.
+
+Lighthouse 12.6.1 against the live site (https://archibrief.dev/, three
+runs each, median):
+
+| | Performance | Accessibility | Best practices | SEO | LCP | TBT | CLS |
+|---|---|---|---|---|---|---|---|
+| Desktop | 100 | 100 | 100 | 100 | 0.4 s | 0 ms | 0.003 |
+| Mobile (simulated slow 4G) | 93 | 100 | 100 | 100 | 2.8 s | 17 ms | 0.001 |
+
+Lighthouse's remaining suggestions:
+- The hashed `_next/static` files had no browser cache lifetime.
+  `scripts/deploy_frontend.sh` now uploads them with a one-year immutable
+  `Cache-Control`.
+- HTML and demo JSON aren't compressed, which would save about 18 KB.
+  The default CloudFront behavior uses the CachingDisabled policy, and
+  CloudFront only compresses through a caching policy, so the fix is a
+  new cache policy. That is left as a possible change.

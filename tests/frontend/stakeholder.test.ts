@@ -7,11 +7,13 @@ import {
   type ReviewReport,
   type StakeholderView,
 } from "../../frontend/lib/contracts";
+import { buildReportHtml } from "../../frontend/lib/chat";
 import {
   budgetHeadline,
   formatDollars,
   formatMonthly,
   orderByBudget,
+  stakeholderSummary,
 } from "../../frontend/lib/workflow";
 
 const DEMOS = join(__dirname, "../../frontend/public/demos");
@@ -123,5 +125,53 @@ describe("stakeholder view: demo files", () => {
         blocks: { [firstId]: { ...view.blocks[firstId], fix: null } },
       }),
     ).toBe(false);
+  });
+});
+
+describe("stakeholder view: cost-first intro and report download", () => {
+  const report = readJson("reports/breach-pattern.json") as ReviewReport;
+  const view = readJson("stakeholder/breach-pattern.json") as StakeholderView;
+  const merged = withStakeholderView(report, view);
+
+  it("leads the intro with what the fixes cost", () => {
+    expect(stakeholderSummary(merged).intro).toBe(
+      "11 items need attention. 6 of them are free settings changes; the recommended fixes add $29.86 + usage a month to the AWS bill and take 2 to 5 working days of engineering.",
+    );
+    expect(stakeholderSummary(report).intro).toMatch(
+      /^6 high-risk configuration gaps/,
+    );
+    const allFree = { ...merged, budget: budget({ free_count: 3 }) };
+    expect(stakeholderSummary(allFree).intro).toBe(
+      "3 items need attention, and every fix is free on the AWS bill. Together they take 1 to 4 hours of engineering.",
+    );
+  });
+
+  it("puts the budget and each card's costs in the downloaded report", () => {
+    const html = buildReportHtml(merged, [], "Breach pattern");
+    expect(html).toContain("<h2>What it costs to fix</h2>");
+    expect(html).toContain("Cost of not fixing.");
+    expect(html).toContain("IBM Cost of a Data Breach Report 2026");
+    expect(buildReportHtml(report, [], "x")).not.toContain(
+      "What it costs to fix",
+    );
+  });
+
+  it("escapes stakeholder text in the downloaded report", () => {
+    const [first] = merged.findings;
+    const hostile = {
+      ...merged,
+      findings: [
+        {
+          ...first,
+          stakeholder: {
+            ...first.stakeholder!,
+            analogy: '<img src=x onerror="alert(1)">',
+          },
+        },
+      ],
+    };
+    const html = buildReportHtml(hostile, [], "x");
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
   });
 });

@@ -19,6 +19,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from backend.shared.http import JSON_HEADERS
+
 _REFERENCE_REPORT_PATH = Path(__file__).parent / "reference_report.json"
 # Read once at import time, so a warm Lambda re-reads nothing per invocation.
 _REFERENCE_REPORT = json.loads(_REFERENCE_REPORT_PATH.read_text(encoding="utf-8"))
@@ -27,6 +29,6 @@ _REFERENCE_REPORT = json.loads(_REFERENCE_REPORT_PATH.read_text(encoding="utf-8"
 def handler(_event: dict, _context: object) -> dict[str, Any]:
     return {
         "statusCode": 200,
-        "headers": {"content-type": "application/json"},
+        "headers": dict(JSON_HEADERS),
         "body": json.dumps(_REFERENCE_REPORT),
     }

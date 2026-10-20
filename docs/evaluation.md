@@ -6,17 +6,19 @@ the same suites on every pull request.
 
 The [browser evaluation](evidence/browser-results.md) records all
 Playwright counts, the initial failures, the final axe-only rerun, and automated
-accessibility limits. It includes a machine-readable per-case result summary.
+accessibility limits. It includes a machine-readable per-case result summary, the 2026-10-20
+cross-browser run and a Lighthouse audit of the live site (desktop 100 in
+all four categories; mobile 93 performance, 100 in the rest).
 
 ## Free test results
 
 | Suite | Result | Source and command |
 |---|---|---|
-| Backend | 607 passed, 1 skipped | `python -m pytest tests/backend -q --tb=short` |
-| Frontend unit | 52 passed in 9 files | `cd frontend; npm test`; tests in `tests/frontend/` |
+| Backend | 711 passed, 1 skipped | `python -m pytest tests/backend -q --tb=short` |
+| Frontend unit | 68 passed in 11 files | `cd frontend; npm test`; tests in `tests/frontend/` |
 | Deterministic traps | 60 collected; included in the passing backend run | `python -m pytest tests/backend/traps --collect-only -q -p no:cacheprovider` |
 | Stubbed chat trap checks | 26 collected; included in the passing backend run | Same collection command with `tests/backend/chat/test_traps_stubbed.py` |
-| Playwright | 57 passed, including the accessibility, keyboard, viewport and resilience specs | `cd frontend; npx playwright test` |
+| Playwright | 61 passed in each of Chromium, Firefox and WebKit, including the accessibility, keyboard, viewport and resilience specs | `cd frontend; npx playwright test` |
 
 None of these is a model-quality measurement. The local frontend run used
 Node v24.14.0, and CI repeats the suites on Node 24.

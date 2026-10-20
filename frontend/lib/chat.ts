@@ -1,4 +1,11 @@
-import type { ChatCitation, ChatTurn, ReviewReport } from "./contracts";
+import type {
+  BudgetSummary,
+  ChatCitation,
+  ChatTurn,
+  ReviewReport,
+  StakeholderCard,
+} from "./contracts";
+import { formatDollars, formatMonthly } from "./workflow";
 
 // Plain messages for the chat API's error codes (backend/lambdas/
 // ask_question ERROR_MESSAGES). The server's own text is never shown, so
@@ -101,6 +108,47 @@ function citationHtml(citation: ChatCitation): string {
   return `<li>${kind}: ${escapeHtml(citationLabel(citation))}</li>`;
 }
 
+// The budget summary as a table, the same figures as the stakeholder view.
+function budgetHtml(budget: BudgetSummary): string {
+  const rows = budget.rows
+    .map(
+      (row) =>
+        `<tr><td>${escapeHtml(row.title)}${row.subject ? ` <span class="meta">${escapeHtml(row.subject)}</span>` : ""}</td><td>${escapeHtml(formatMonthly(row.monthly_known, row.has_unpriced))}</td><td>${escapeHtml(row.effort_label)}</td><td>${escapeHtml(row.verdict_label)}</td></tr>`,
+    )
+    .join("");
+  const optional =
+    budget.monthly_optional > 0
+      ? `, plus ${escapeHtml(formatDollars(budget.monthly_optional))}/month for optional extras`
+      : "";
+  const unpriced = budget.unpriced_items.length
+    ? ` Not included because they depend on usage or size: ${escapeHtml(budget.unpriced_items.join(", "))}.`
+    : "";
+  return `
+<p><strong>${escapeHtml(formatMonthly(budget.monthly_recommended, budget.recommended_has_unpriced))}/month</strong> more on the AWS bill for the recommended fixes${optional}. Engineering time: ${escapeHtml(budget.effort_label)}. Free fixes: ${budget.free_count} of ${budget.item_count}.</p>
+<table><thead><tr><th>Fix</th><th>Monthly cost</th><th>Effort</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table>
+<p class="meta">${unpriced} ${escapeHtml(budget.note)}</p>`;
+}
+
+function stakeholderHtml(card: StakeholderCard): string {
+  const plain = `<p><strong>In plain terms.</strong> ${escapeHtml(card.title)}. ${escapeHtml(card.analogy)} ${escapeHtml(card.what_could_happen)}</p>`;
+  if (!card.fix || !card.inaction) return plain;
+  const lines = card.fix.lines
+    .map((line) =>
+      line.monthly_high === null
+        ? `${line.label}: ${line.basis}`
+        : `${line.label}: ${formatDollars(line.monthly_high)}/month (${line.basis})`,
+    )
+    .join("; ");
+  const source =
+    card.inaction.source_name && safeHref(card.inaction.source_url ?? "")
+      ? ` Source: <a href="${escapeHtml(safeHref(card.inaction.source_url ?? ""))}">${escapeHtml(card.inaction.source_name)}</a>.`
+      : "";
+  const method = card.inaction.method ? ` ${escapeHtml(card.inaction.method)}` : "";
+  return `${plain}
+      <p><strong>Cost to fix.</strong> ${escapeHtml(formatMonthly(card.fix.monthly_known, card.fix.has_unpriced))}/month: ${escapeHtml(lines)}. Engineering time: ${escapeHtml(card.fix.effort_label)}. <span class="meta">${escapeHtml(card.verdict_label)}</span></p>
+      <p><strong>Cost of not fixing.</strong> ${escapeHtml(card.inaction.headline)}. ${escapeHtml(card.inaction.detail)}${method}${source}</p>`;
+}
+
 // One self-contained HTML file: inline CSS, no scripts, print-friendly
 // (ADR-0050 §10). Every value is escaped; model text is never inserted as
 // HTML.
@@ -111,13 +159,14 @@ export function buildReportHtml(
 ): string {
   const findings = report.findings
     .map(
-      ({ record, presentation }) => `
+      ({ record, presentation, stakeholder }) => `
     <article class="finding">
       <h3>${escapeHtml(record.finding)}</h3>
       <p class="meta">${escapeHtml(presentation.short_label)} · ${escapeHtml(record.category)} · ${escapeHtml(record.type)} · confidence ${Math.round(record.confidence * 100)}%</p>
       <p><strong>Evidence.</strong> ${escapeHtml(record.evidence)}</p>
       <p><strong>Risk.</strong> ${escapeHtml(record.risk_impact)}</p>
       <p><strong>Recommendation.</strong> ${escapeHtml(record.recommendation)}</p>
+      ${stakeholder ? stakeholderHtml(stakeholder) : ""}
       ${
         record.citation
           ? `<p class="source"><strong>Source.</strong> ${escapeHtml(record.citation.heading_path)}: “${escapeHtml(record.citation.exact_text_span)}”${
@@ -172,6 +221,8 @@ export function buildReportHtml(
   .meta { color: #43596c; font: 12px/1.4 system-ui, sans-serif; }
   .q { font-family: system-ui, sans-serif; }
   .cites { font-size: 13px; color: #43596c; }
+  table { width: 100%; border-collapse: collapse; font: 13px/1.4 system-ui, sans-serif; }
+  th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #c5d0d9; vertical-align: top; }
   pre { background: #f4f7f9; padding: .6rem; border-radius: 6px; overflow-x: auto; font-size: 12px; }
   a { color: #235f7a; }
   footer { margin-top: 2rem; color: #43596c; font: 12px/1.5 system-ui, sans-serif; }
@@ -183,6 +234,7 @@ export function buildReportHtml(
 <p class="meta">${escapeHtml(report.terraform_repo_ref)} · ${escapeHtml(report.created_at)} · review ${escapeHtml(report.review_id)}</p>
 <h2>Requirements used</h2>
 <ul>${baseline || "<li>None recorded.</li>"}</ul>
+${report.budget ? `<h2>What it costs to fix</h2>${budgetHtml(report.budget)}` : ""}
 <h2>Findings (${report.findings.length})</h2>
 ${findings}
 <h2>Conversation</h2>

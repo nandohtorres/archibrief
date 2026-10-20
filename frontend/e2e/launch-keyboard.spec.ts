@@ -4,7 +4,26 @@ import { FIXTURE_URL } from "../playwright.config";
 // Follow actual Tab order: programmatic focus would hide unreachable controls.
 async function tabTo(page: Page, target: Locator) {
   for (let i = 0; i < 100; i++) {
+    await page.evaluate(() => {
+      (window as unknown as { __beforeTab?: Element | null }).__beforeTab = document.activeElement;
+    });
     await page.keyboard.press("Tab");
+    // Past the last control, a real browser moves focus through its own UI
+    // and back to the top of the page. Headless Firefox has no UI, so focus
+    // stays put; start again from the top of the document the same way.
+    const stuck = await page.evaluate(
+      () =>
+        document.activeElement ===
+        (window as unknown as { __beforeTab?: Element | null }).__beforeTab,
+    );
+    if (stuck) {
+      await page.evaluate(() => {
+        document.body.tabIndex = -1;
+        document.body.focus();
+        document.body.removeAttribute("tabindex");
+      });
+      await page.keyboard.press("Tab");
+    }
     if (await target.evaluate((element) => element === document.activeElement)) {
       await expect(target).toBeInViewport();
       return;
