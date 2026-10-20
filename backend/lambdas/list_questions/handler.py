@@ -26,6 +26,7 @@ from backend.chat.access import (
 from backend.chat.context import build_review_context
 from backend.chat.suggested import suggested_questions
 from backend.shared.clients import DynamoDBClient, S3Client
+from backend.shared.http import JSON_HEADERS
 
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
@@ -33,7 +34,7 @@ _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     return {
         "statusCode": status_code,
-        "headers": {"content-type": "application/json"},
+        "headers": dict(JSON_HEADERS),
         "body": json.dumps(body),
     }
 

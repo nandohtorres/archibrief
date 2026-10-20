@@ -19,6 +19,7 @@ import os
 from typing import Any
 
 from backend.shared.clients import DynamoDBClient, S3Client
+from backend.shared.http import JSON_HEADERS
 from backend.shared.report import build_review_report
 
 _PENDING_ALLOWED_FIELDS = (
@@ -43,7 +44,7 @@ _PENDING_ALLOWED_FIELDS = (
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     return {
         "statusCode": status_code,
-        "headers": {"content-type": "application/json"},
+        "headers": dict(JSON_HEADERS),
         "body": json.dumps(body),
     }
 

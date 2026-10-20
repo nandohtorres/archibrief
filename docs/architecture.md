@@ -159,7 +159,7 @@ also reaches older reports:
 - **Cost of not fixing** cites a published figure (IBM Cost of a Data
   Breach 2026, Sophos State of Ransomware 2026), or explains how to
   estimate it. Downtime uses the review's own availability target.
-- **Budget summary:** totals, free-fix count, effort, and a verdict per
+- **Budget summary** (ADR-0051): totals, free-fix count, effort, and a verdict per
   fix (Fix today, Quick win, Worth the money, When budget allows), shown
   at the top and bottom of the view.
 

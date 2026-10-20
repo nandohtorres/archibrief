@@ -102,6 +102,20 @@ export interface StakeholderSummary {
   coverageLimits: string[];
 }
 
+function costIntro(budget: BudgetSummary): string {
+  const items = plural(budget.item_count, "item needs", "items need");
+  const effort = `${budget.effort_label} of engineering`;
+  if (budget.free_count === budget.item_count) {
+    return `${items} attention, and every fix is free on the AWS bill. Together they take ${effort}.`;
+  }
+  const monthly = formatMonthly(budget.monthly_recommended, budget.recommended_has_unpriced);
+  const free =
+    budget.free_count > 0
+      ? `${budget.free_count} of them ${budget.free_count === 1 ? "is a free settings change" : "are free settings changes"}; `
+      : "";
+  return `${items} attention. ${free ? `${free}the` : "The"} recommended fixes add ${monthly} a month to the AWS bill and take ${effort}.`;
+}
+
 // The stakeholder view's headline text, built from the real report rather
 // than fixed sample wording. Wording stays factual: counts, the
 // findings' own titles, and which workload answers were not supplied.
@@ -113,7 +127,7 @@ export function stakeholderSummary(report: ReviewReport, titled = false): Stakeh
   const review = report.findings.filter(({ presentation }) => presentation.priority === "review");
 
   const toReview = plural(review.length, "item", "items");
-  const intro =
+  const findingsIntro =
     high.length > 0
       ? `${plural(high.length, "high-risk configuration gap was", "high-risk configuration gaps were")} found by deterministic checks` +
         (review.length > 0 ? `, plus ${toReview} to review` : "") +
@@ -130,6 +144,11 @@ export function stakeholderSummary(report: ReviewReport, titled = false): Stakeh
         ? `${label} was not supplied, so a conservative assumption was used.`
         : `${label} was not supplied, so conclusions that depend on it are not observable.`,
     );
+
+  // With a budget, lead with the answer a decision-maker asks first: what
+  // it costs.
+  const budget = report.budget;
+  const intro = budget && budget.item_count > 0 ? costIntro(budget) : findingsIntro;
 
   return {
     heading: name ? `What this review means for ${name}` : "What this review means",

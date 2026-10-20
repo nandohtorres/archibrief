@@ -1,8 +1,6 @@
 # Lambda creates /aws/lambda/<name> on a function's first run, with no
-# expiry. Owning each group here sets its retention. The groups already
-# exist in deployed environments, so infra/environments/dev/log-groups.tf
-# imports them instead of creating them. The chat functions own their log
-# groups in chat.tf.
+# expiry. Owning each group here sets its retention. The chat functions own
+# their log groups in chat.tf.
 locals {
   api_lambda_log_functions = {
     admin_authorizer = aws_lambda_function.admin_authorizer.function_name

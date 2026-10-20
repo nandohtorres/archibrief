@@ -79,6 +79,7 @@ from backend.shared.clients import (
     TransactionCanceled,
     UnexpectedStopReason,
 )
+from backend.shared.http import JSON_HEADERS
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.sanitize import QuestionRejected, check_question
 
@@ -135,7 +136,7 @@ ERROR_MESSAGES = {
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     return {
         "statusCode": status_code,
-        "headers": {"content-type": "application/json"},
+        "headers": dict(JSON_HEADERS),
         "body": json.dumps(body),
     }
 

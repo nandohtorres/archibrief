@@ -67,7 +67,7 @@ Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo
 | **Landing.** Know what's wrong with your AWS design, and why it matters. | **Real demos.** Three reviews of real public Terraform, checked by hand. |
 | ![Architecture diagram drawn from the code](docs/screenshots/03-diagram.png) | ![A finding with a reviewer note](docs/screenshots/04-reviewer-note.png) |
 | **Diagram.** Drawn from the code without a model; each finding sits on the resource it names. | **Evidence.** Each finding shows its evidence, confidence and source; the hand check's note marks one the model got wrong. |
-| ![Guided report for non-engineers](docs/screenshots/05-stakeholder.png) | ![Report chat with cited answers](docs/screenshots/06-chat.png) |
+| ![Guided report: what each fix costs, in plain language](docs/screenshots/05-stakeholder.png) | ![Report chat with cited answers](docs/screenshots/06-chat.png) |
 | **Guided report.** The same evidence in plain language, for the person who has to say yes, with what each fix costs per month and what not fixing could cost. | **Chat.** Answers cite this review's findings or AWS guidance. |
 | ![Phone layout, dark theme](docs/screenshots/07-phone.png) | |
 | **Phone, dark theme.** | |

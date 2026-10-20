@@ -27,6 +27,7 @@ import re
 from typing import Any
 
 from backend.shared.clients import S3Client
+from backend.shared.http import JSON_HEADERS
 
 # UUID-shaped (crypto.randomUUID()) or the fallback format
 # makeIdempotencyKey() uses when crypto.randomUUID is unavailable
@@ -43,7 +44,7 @@ _MAX_ARCHIVE_BYTES = 20 * 1024 * 1024
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     return {
         "statusCode": status_code,
-        "headers": {"content-type": "application/json"},
+        "headers": dict(JSON_HEADERS),
         "body": json.dumps(body),
     }
 

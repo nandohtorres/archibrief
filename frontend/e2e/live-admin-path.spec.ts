@@ -162,6 +162,31 @@ test.describe("admin-gated live critical path (mocked network)", () => {
       await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
     });
 
+    // WebKit's request interception drops Blob bodies from FormData, so
+    // the archive is also read in the page as it's appended.
+    await page.addInitScript(() => {
+      const append = FormData.prototype.append;
+      FormData.prototype.append = function (
+        this: FormData,
+        name: string,
+        value: string | Blob,
+        filename?: string,
+      ) {
+        if (value instanceof Blob) {
+          void value.arrayBuffer().then((buffer) => {
+            (window as unknown as { __uploadedFile?: string }).__uploadedFile = new TextDecoder(
+              "latin1",
+            ).decode(buffer);
+          });
+        }
+        return Reflect.apply(
+          append,
+          this,
+          filename === undefined ? [name, value] : [name, value, filename],
+        );
+      } as typeof FormData.prototype.append;
+    });
+
     await page.goto(LIVE_URL);
     await page.getByLabel("Paste Terraform").check();
     await page
@@ -174,8 +199,11 @@ test.describe("admin-gated live critical path (mocked network)", () => {
     await page.getByLabel("Admin key").fill("e2e-admin-key");
     await page.getByRole("button", { name: "Start review" }).click();
 
-    await expect.poll(() => uploaded).toContain("main.tf");
-    expect(uploaded).toContain("ustar");
-    expect(uploaded).toContain('bucket = "e2e-logs"');
+    await expect.poll(() => uploaded).toContain('filename="pasted-terraform.tar"');
+    const archive = () =>
+      page.evaluate(() => (window as unknown as { __uploadedFile?: string }).__uploadedFile ?? "");
+    await expect.poll(archive).toContain("main.tf");
+    expect(await archive()).toContain("ustar");
+    expect(await archive()).toContain('bucket = "e2e-logs"');
   });
 });
