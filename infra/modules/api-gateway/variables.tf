@@ -275,3 +275,9 @@ variable "alarm_topic_arn" {
   default     = null
   description = "SNS topic for chat alarms (the budget alerts topic)."
 }
+
+variable "lambda_log_retention_days" {
+  description = "Days to keep Lambda logs. Must be a value CloudWatch Logs accepts."
+  type        = number
+  default     = 30
+}
