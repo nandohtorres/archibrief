@@ -8,13 +8,13 @@ anyio==4.15.1
     #   httpx2
     #   langsmith
     #   starlette
-bedrock-agentcore==1.23.1
+bedrock-agentcore==1.24.1
     # via -r backend/agent/runtime_requirements.in
-boto3==1.43.96
+boto3==1.43.114
     # via
     #   -r backend/agent/runtime_requirements.in
     #   bedrock-agentcore
-botocore==1.43.96
+botocore==1.43.114
     # via
     #   bedrock-agentcore
     #   boto3
@@ -24,7 +24,7 @@ certifi==2026.7.22
     #   httpcore
     #   httpx
     #   requests
-charset-normalizer==3.5.1
+charset-normalizer==3.5.2
     # via requests
 click==8.5.0
     # via uvicorn
@@ -37,15 +37,15 @@ h11==0.16.0
     #   uvicorn
 httpcore==1.0.9
     # via httpx
-httpcore2==2.13.0
+httpcore2==2.13.1
     # via httpx2
 httpx==0.28.1
     # via
     #   langchain-core
     #   langgraph-sdk
-httpx2==2.13.0
+httpx2==2.13.1
     # via langsmith
-idna==3.19
+idna==3.20
     # via
     #   anyio
     #   httpx
@@ -55,11 +55,11 @@ jmespath==1.1.0
     # via
     #   boto3
     #   botocore
-jsonpatch==1.33
+jsonpatch==1.35
     # via langchain-core
-jsonpointer==3.1.1
+jsonpointer==3.2.1
     # via jsonpatch
-langchain-core==1.6.3
+langchain-core==1.6.12
     # via
     #   langgraph
     #   langgraph-checkpoint
@@ -69,36 +69,36 @@ langchain-protocol==0.0.19
     # via
     #   langchain-core
     #   langgraph-sdk
-langgraph==1.2.11
+langgraph==1.2.16
     # via -r backend/agent/runtime_requirements.in
-langgraph-checkpoint==4.2.0
+langgraph-checkpoint==4.3.0
     # via
     #   langgraph
     #   langgraph-prebuilt
-langgraph-prebuilt==1.1.0
+langgraph-prebuilt==1.1.1
     # via langgraph
-langgraph-sdk==0.4.4
+langgraph-sdk==0.4.8
     # via langgraph
-langsmith==0.12.6
+langsmith==0.14.11
     # via langchain-core
-orjson==3.12.0
+orjson==3.13.0
     # via
     #   langgraph-sdk
     #   langsmith
-ormsgpack==1.12.2
+ormsgpack==1.13.0
     # via langgraph-checkpoint
 packaging==26.3
     # via
     #   langchain-core
     #   langsmith
-pydantic==2.13.5
+pydantic==2.14.1
     # via
     #   -r backend/agent/runtime_requirements.in
     #   bedrock-agentcore
     #   langchain-core
     #   langgraph
     #   langsmith
-pydantic-core==2.46.5
+pydantic-core==2.50.1
     # via pydantic
 python-dateutil==2.9.0.post0
     # via botocore
@@ -116,11 +116,11 @@ six==1.17.0
     # via python-dateutil
 sniffio==1.3.1
     # via langsmith
-starlette==1.6.0
+starlette==1.8.0
     # via bedrock-agentcore
-tenacity==9.1.4
+tenacity==9.2.1
     # via langchain-core
-truststore==0.10.4
+truststore==0.10.5
     # via
     #   httpcore2
     #   httpx2
@@ -147,7 +147,7 @@ uuid-utils==0.17.1
     # via
     #   langchain-core
     #   langsmith
-uvicorn==0.53.0
+uvicorn==0.54.0
     # via bedrock-agentcore
 websockets==16.1.1
     # via
