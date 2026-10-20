@@ -19,7 +19,7 @@ async function openInTheme(page: Page, theme: (typeof THEMES)[number]) {
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   await expect
     .poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor))
-    .toBe(theme === "dark" ? "rgb(13, 19, 25)" : "rgb(244, 247, 249)");
+    .toBe(theme === "dark" ? "rgb(18, 18, 18)" : "rgb(244, 247, 249)");
 }
 
 async function openReport(page: Page) {
