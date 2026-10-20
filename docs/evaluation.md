@@ -14,8 +14,8 @@ all four categories; mobile 93 performance, 100 in the rest).
 
 | Suite | Result | Source and command |
 |---|---|---|
-| Backend | 711 passed, 1 skipped | `python -m pytest tests/backend -q --tb=short` |
-| Frontend unit | 68 passed in 11 files | `cd frontend; npm test`; tests in `tests/frontend/` |
+| Backend | 713 passed, 1 skipped | `python -m pytest tests/backend -q --tb=short` |
+| Frontend unit | 69 passed in 11 files | `cd frontend; npm test`; tests in `tests/frontend/` |
 | Deterministic traps | 60 collected; included in the passing backend run | `python -m pytest tests/backend/traps --collect-only -q -p no:cacheprovider` |
 | Stubbed chat trap checks | 26 collected; included in the passing backend run | Same collection command with `tests/backend/chat/test_traps_stubbed.py` |
 | Playwright | 61 passed in each of Chromium, Firefox and WebKit, including the accessibility, keyboard, viewport and resilience specs | `cd frontend; npx playwright test` |
@@ -42,6 +42,26 @@ counted Aurora instances. It does not establish recall on arbitrary Terraform.
 records the initial 14/14 dangerous misses and 3/4 safe false positives, followed
 by 14/14 caught and 0/4 safe false positives after the scanner/rule rebuild.
 Those are historical fixture denominators, not today's complete suite.
+
+## Regression cases from an outside review
+
+An outside review in October 2026 found text that claimed more than the code
+shows. Each is now a test, and the saved demo reports carry reviewer notes
+([demos.md](demos.md), bug 7):
+
+| Overstatement | Fix | Test |
+|---|---|---|
+| S3 rule: "data at rest is unencrypted" when no encryption is declared, though S3 has encrypted new objects by default since January 2023 | Rule text says the setting isn't declared | `test_s3_encryption_finding_does_not_claim_data_is_unencrypted` |
+| CloudTrail rule: "API activity would not be recorded" when this code defines no trail, though one may exist elsewhere and Event history keeps 90 days | Rule text allows for a trail elsewhere and names what's missing | `test_cloudtrail_finding_allows_for_a_trail_managed_elsewhere` |
+| Finding page called every citationless finding a not-observable gap, including rule findings with direct configuration evidence | Text depends on the finding type | `citationGap` in `tests/frontend/workflow.test.ts` |
+
+Two hand-written demo explanations were also corrected: the breach chain
+(a private S3 route alone doesn't close it) and FEC database sign-in (CloudTrail
+doesn't log IAM database authentication). The demo stakeholder files are
+rebuilt from them, and `build_demo_stakeholder.py --check` keeps them in step.
+
+These tests check wording, not correctness in general: they don't measure
+whether other rules or model findings overstate their evidence.
 
 ## Model traps: what was actually measured
 
