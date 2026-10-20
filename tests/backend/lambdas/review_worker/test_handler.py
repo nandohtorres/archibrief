@@ -146,3 +146,48 @@ def test_stage_exception_never_leaks_content_to_history_or_logs(
     monkeypatch.setattr(worker, "_invoke", fail)
     assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
     assert "PRIVATE-CONTENT-CANARY" not in capsys.readouterr().out
+
+
+def test_rejected_archive_fails_and_releases_the_reservation(prepared, monkeypatch):
+    review_id, _s3, _calls, _replies, agent_calls = prepared
+    monkeypatch.setattr(worker, "_invoke", lambda name, payload: {"status": "rejected"})
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    assert agent_calls == []
+    counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    claim = next(row for row in counters if row["counterKey"].endswith("#initial"))
+    assert claim["released"] is True
+    assert all(
+        row["spent"] == 0 for row in counters if row["counterKey"].startswith("paid#")
+    )
+
+
+def test_failure_after_the_model_call_keeps_the_reservation(prepared, monkeypatch):
+    review_id, *_ = prepared
+    original = worker._invoke
+
+    def fail_validate(name, payload):
+        if name == "validate":
+            raise RuntimeError("boom")
+        return original(name, payload)
+
+    monkeypatch.setattr(worker, "_invoke", fail_validate)
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    assert not any(row.get("released") for row in counters)
+
+
+def test_blocked_input_keeps_the_reservation(prepared, monkeypatch):
+    # Guardrails, which is billed, has already run when ingest blocks input.
+    review_id, *_ = prepared
+    monkeypatch.setattr(worker, "_invoke", lambda name, payload: {"status": "blocked"})
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    assert not any(row.get("released") for row in counters)
+
+
+def test_malformed_resume_key_fails_without_releasing_anything(prepared):
+    review_id, *_ = prepared
+    event = {"review_id": review_id, "phase": "resume", "resume_key": "jobs/other.json"}
+    assert worker.handler(event, None) == {"status": "failed"}
+    counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    assert not any(row.get("released") for row in counters)

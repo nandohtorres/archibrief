@@ -16,16 +16,23 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-from backend.shared.admission import request_digest
+from backend.shared.admission import release_operation, request_digest
 from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.retention import review_is_live
 
 
 def _invoke(stage: str, payload: dict) -> dict:
+    # No stage calls the model, so transient throttling or service errors are
+    # retried. Audit is not: each run writes a new row. AgentCore is not either.
+    attempts = 1 if stage == "audit" else 3
     response = boto3.client(
         "lambda",
-        config=Config(connect_timeout=2, read_timeout=100, retries={"total_max_attempts": 1}),
+        config=Config(
+            connect_timeout=2,
+            read_timeout=100,
+            retries={"mode": "standard", "total_max_attempts": attempts},
+        ),
     ).invoke(
         FunctionName=os.environ[f"{stage.upper()}_FUNCTION_NAME"],
         InvocationType="RequestResponse",
@@ -70,6 +77,16 @@ def _fail(table: DynamoDBClient, review_id: str, code: str) -> dict:
     return {"status": "failed"}
 
 
+def _fail_unpaid(table: DynamoDBClient, review_id: str, code: str, operation: str) -> dict:
+    """Fail a review before any billed call (model or Guardrails) and give back its reservation."""
+    result = _fail(table, review_id, code)
+    try:
+        release_operation(review_id, operation)
+    except Exception:  # noqa: BLE001 - the review is already marked failed
+        print(json.dumps({"event": "reservation_release_failed", "operation": operation}))
+    return result
+
+
 def handler(event: dict, _context: object) -> dict:
     # API admission always constructs this envelope, never forwards the body.
     if set(event) - {"review_id", "phase", "resume_key"}:
@@ -93,13 +110,18 @@ def handler(event: dict, _context: object) -> dict:
     bucket = os.environ["REPORTS_BUCKET_NAME"]
     s3 = S3Client(bucket=bucket)
     context_key = f"jobs/{review_id}/context.json"
+    resume_key = event.get("resume_key", "")
+    match = re.fullmatch(
+        rf"jobs/{re.escape(review_id)}/clarification-([a-f0-9]{{64}})\.json", resume_key
+    )
+    # The claim submit_review or clarify_review reserved for this run.
+    operation = "initial" if phase == "initial" else f"clarify:{match.group(1) if match else ''}"
     try:
         if not paid_work_allowed():
-            return _fail(table, review_id, "paused")
-        resume_key = event.get("resume_key", "")
+            return _fail_unpaid(table, review_id, "paused", operation)
         if phase == "initial":
             if review.get("inputKey") != f"jobs/{review_id}/submission.json":
-                return _fail(table, review_id, "invalid_submission")
+                return _fail_unpaid(table, review_id, "invalid_submission", operation)
             table.update_item(
                 Key={"reviewId": review_id},
                 UpdateExpression="SET pipelineStarted = :yes",
@@ -113,12 +135,13 @@ def handler(event: dict, _context: object) -> dict:
             )
             submission = _read_json(s3, review["inputKey"])
             if request_digest(submission) != review["inputDigest"]:
-                return _fail(table, review_id, "invalid_submission")
+                return _fail_unpaid(table, review_id, "invalid_submission", operation)
             _progress(table, review_id, "ingest")
             ingest = _invoke("ingest", {**submission, "report_bucket": bucket})
             if ingest.get("status") == "rejected":
-                return _fail(table, review_id, "invalid_archive")
+                return _fail_unpaid(table, review_id, "invalid_archive", operation)
             if ingest.get("status") == "blocked":
+                # Guardrails, which is billed, has already run.
                 return _fail(table, review_id, "input_blocked")
             if ingest.get("status") != "parsed":
                 return _fail(table, review_id, "internal_error")
@@ -150,9 +173,7 @@ def handler(event: dict, _context: object) -> dict:
                 "baseline_answers": submission["baseline_answers"],
             }
         else:
-            if not re.fullmatch(
-                rf"jobs/{re.escape(review_id)}/clarification-[a-f0-9]{{64}}\.json", resume_key
-            ):
+            if not match:
                 return _fail(table, review_id, "invalid_submission")
             table.update_item(
                 Key={"reviewId": review_id},
@@ -169,7 +190,7 @@ def handler(event: dict, _context: object) -> dict:
                 return _fail(table, review_id, "invalid_submission")
             state["rounds"] += 1
             if state["rounds"] > int(os.environ.get("MAX_CLARIFICATION_ROUNDS", "3")):
-                return _fail(table, review_id, "clarification_limit")
+                return _fail_unpaid(table, review_id, "clarification_limit", operation)
             state["baseline_answers"].update(answer["answers"])
             state["workload_brief"] += answer["note"]
         if not review_is_live(table.get_item({"reviewId": review_id}, consistent=True) or {}):

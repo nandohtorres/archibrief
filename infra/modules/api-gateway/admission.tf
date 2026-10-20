@@ -33,6 +33,36 @@ variable "verified_public_api_id" {
   description = "REST API ID copied only after an admin-only deployment and WAF bypass checks."
 }
 
+# Estimated-cost allowances in micro-USD (1,000,000 = $1.00), enforced by
+# backend/shared/admission.py. Public requests share the global, visitor and
+# review scopes; admin requests use only their own daily allowance.
+variable "paid_limits" {
+  type = object({
+    global_daily_budget    = number
+    global_daily_requests  = number
+    visitor_daily_budget   = number
+    visitor_daily_requests = number
+    review_budget          = number
+    review_requests        = number
+    admin_daily_budget     = number
+    initial_reserve        = number
+    clarify_reserve        = number
+    deeper_reserve         = number
+  })
+  default = {
+    global_daily_budget    = 1000000
+    global_daily_requests  = 100
+    visitor_daily_budget   = 1000000
+    visitor_daily_requests = 30
+    review_budget          = 1000000
+    review_requests        = 20
+    admin_daily_budget     = 20000000
+    initial_reserve        = 400000
+    clarify_reserve        = 200000
+    deeper_reserve         = 200000
+  }
+}
+
 resource "random_password" "visitor_hash" {
   length  = 48
   special = false
@@ -46,16 +76,26 @@ resource "random_password" "reservation" {
 locals {
   public_admitted = var.public_edge_enabled ? (var.public_access_enabled && var.verified_public_api_id == aws_api_gateway_rest_api.public[0].id) : false
   admission_environment = {
-    ADMIN_KEY                       = random_password.admin_key.result
-    PUBLIC_ACCESS_ENABLED           = local.public_admitted ? "true" : "false"
-    VISITOR_HASH_KEY                 = random_password.visitor_hash.result
-    TURNSTILE_SECRET_PARAMETER_NAME  = var.turnstile_secret_parameter_name
-    TURNSTILE_HOSTNAME               = var.turnstile_hostname
-    USAGE_COUNTERS_TABLE_NAME        = var.usage_counters_table_name
-    REVIEWS_TABLE_NAME               = var.reviews_table_name
-    REPORTS_BUCKET_NAME              = var.reports_bucket_name
-    KILL_SWITCH_PARAMETER_NAME       = var.kill_switch_parameter_name
-    CORS_ALLOWED_ORIGINS             = jsonencode(concat([var.frontend_origin], var.additional_cors_origins))
+    ADMIN_KEY                         = random_password.admin_key.result
+    PUBLIC_ACCESS_ENABLED             = local.public_admitted ? "true" : "false"
+    VISITOR_HASH_KEY                  = random_password.visitor_hash.result
+    TURNSTILE_SECRET_PARAMETER_NAME   = var.turnstile_secret_parameter_name
+    TURNSTILE_HOSTNAME                = var.turnstile_hostname
+    USAGE_COUNTERS_TABLE_NAME         = var.usage_counters_table_name
+    REVIEWS_TABLE_NAME                = var.reviews_table_name
+    REPORTS_BUCKET_NAME               = var.reports_bucket_name
+    KILL_SWITCH_PARAMETER_NAME        = var.kill_switch_parameter_name
+    CORS_ALLOWED_ORIGINS              = jsonencode(concat([var.frontend_origin], var.additional_cors_origins))
+    PAID_DAILY_BUDGET_MICRO_USD       = tostring(var.paid_limits.global_daily_budget)
+    PAID_DAILY_MAX_REQUESTS           = tostring(var.paid_limits.global_daily_requests)
+    PAID_VISITOR_BUDGET_MICRO_USD     = tostring(var.paid_limits.visitor_daily_budget)
+    PAID_VISITOR_MAX_REQUESTS         = tostring(var.paid_limits.visitor_daily_requests)
+    PAID_REVIEW_BUDGET_MICRO_USD      = tostring(var.paid_limits.review_budget)
+    PAID_REVIEW_MAX_REQUESTS          = tostring(var.paid_limits.review_requests)
+    PAID_ADMIN_DAILY_BUDGET_MICRO_USD = tostring(var.paid_limits.admin_daily_budget)
+    INITIAL_RESERVE_MICRO_USD         = tostring(var.paid_limits.initial_reserve)
+    CLARIFY_RESERVE_MICRO_USD         = tostring(var.paid_limits.clarify_reserve)
+    DEEPER_RESERVE_MICRO_USD          = tostring(var.paid_limits.deeper_reserve)
   }
 }
 

@@ -53,14 +53,21 @@ transaction. Defaults allow 100 uploads globally per UTC day, one per visitor
 reservation keys must stay stable during active grants; rotation can strand
 access or reset visitor buckets and needs an explicit migration.
 
-Every paid application path reserves global daily, visitor daily and review
-lifetime allowance in the same transaction as its operation claim. Defaults
-are 1,000,000 micro-USD for each scope, with request limits of 100/30/20.
+Every public paid path reserves global daily, visitor daily and review
+lifetime allowance in the same transaction as its operation claim. Admin
+requests reserve only a separate admin daily allowance, so public traffic
+can't block the owner and owner reviews don't spend the public allowance.
+Terraform sets every value explicitly (`paid_limits` in
+`infra/modules/api-gateway/admission.tf`): public scopes 1,000,000 micro-USD
+each with request limits of 100/30/20, admin 20,000,000 with no request cap.
 Initial reviews reserve 400,000; clarification and deeper review reserve
 200,000 micro-USD. Chat retains its staged screening/model reservations and
-also participates in the shared scopes. Suggestions use the same admission.
-Shared reservations remain conservative after failures and successes; the
-chat-specific ledger separately settles its estimates. These are estimates,
+also participates in the same scopes. Suggestions use the same admission.
+A review that fails before any paid call (paused, invalid input before Guardrails,
+clarification limit) gives its reservation back once; the claim stays so the
+operation can't be dispatched again. Other failures and successes keep the
+conservative estimate; the chat-specific ledger separately settles its
+estimates. These are estimates,
 not an AWS bill ceiling, and do not cover every storage/network/service cost.
 
 Duplicate requests reuse durable claims only where dispatch is intrinsically

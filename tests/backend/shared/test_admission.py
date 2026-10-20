@@ -4,7 +4,11 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from backend.shared.admission import AdmissionDenied, reserve_operation
+from backend.shared.admission import (
+    AdmissionDenied,
+    release_operation,
+    reserve_operation,
+)
 from backend.shared.clients import DynamoDBClient
 
 
@@ -77,3 +81,62 @@ def test_zero_limits_and_expired_reviews_fail_before_any_reservation(
     with pytest.raises(AdmissionDenied):
         reserve_operation({**_review(), "ttl": 1}, "initial", {}, 1)
     assert counters.scan()["Items"] == []
+
+
+def test_admin_uses_its_own_allowance_without_a_request_cap(counters, monkeypatch):
+    monkeypatch.setenv("PAID_DAILY_BUDGET_MICRO_USD", "1")
+    monkeypatch.setenv("PAID_DAILY_MAX_REQUESTS", "1")
+    for number in range(5):
+        reserve_operation(
+            _review(f"r{number}", "admin"), "initial", {}, 400000, admin=True
+        )
+    rows = {row["counterKey"].split("#")[1]: row for row in counters.scan()["Items"]}
+    assert "global" not in rows and "visitor" not in rows and "review" not in rows
+    assert rows["admin"]["spent"] == 2000000
+    assert "requests" not in rows["admin"]
+    monkeypatch.setenv("PAID_ADMIN_DAILY_BUDGET_MICRO_USD", "2000000")
+    with pytest.raises(AdmissionDenied):
+        reserve_operation(_review("r9", "admin"), "initial", {}, 1, admin=True)
+
+
+def test_release_gives_the_reservation_back_once_and_keeps_the_claim(counters):
+    reserve_operation(_review(), "initial", {"input": "a"}, 400000)
+    assert release_operation("r1", "initial")
+    assert not release_operation("r1", "initial")
+    for row in counters.scan()["Items"]:
+        if row["counterKey"].startswith("paid#"):
+            assert row["spent"] == 0
+            assert row["requests"] == 0
+    # The claim stays, so the same operation is never dispatched as new.
+    assert not reserve_operation(_review(), "initial", {"input": "a"}, 400000)
+    assert not release_operation("r1", "missing")
+
+
+def test_release_is_a_no_op_for_claims_written_before_release_existed(counters):
+    counters.put_item(
+        Item={"counterKey": "operation#r1#initial", "cost": 400000, "day": "x"}
+    )
+    assert not release_operation("r1", "initial")
+    assert (
+        "released"
+        not in counters.get_item(Key={"counterKey": "operation#r1#initial"})["Item"]
+    )
+
+
+def test_release_leaves_the_claim_unreleased_if_a_counter_expired(counters):
+    reserve_operation(_review(), "initial", {}, 400000)
+    expired = next(
+        row["counterKey"]
+        for row in counters.scan()["Items"]
+        if row["counterKey"].startswith("paid#global")
+    )
+    counters.delete_item(Key={"counterKey": expired})
+    assert not release_operation("r1", "initial")
+    claim = counters.get_item(Key={"counterKey": "operation#r1#initial"})["Item"]
+    assert "released" not in claim
+
+
+def test_public_requests_never_touch_the_admin_allowance(counters):
+    reserve_operation(_review(), "initial", {}, 400000)
+    keys = {row["counterKey"].split("#")[1] for row in counters.scan()["Items"]}
+    assert keys == {"r1", "global", "visitor", "review"}

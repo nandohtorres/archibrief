@@ -558,6 +558,7 @@ def _admit(
             count_request=not screened,
             now=now,
             table_name=tables.counters_name,
+            admin=admin,
         )
     except AdmissionDenied:
         return "daily_cap_reached"

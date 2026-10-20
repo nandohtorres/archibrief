@@ -445,7 +445,9 @@ def test_changed_question_cannot_reuse_an_admitted_request_id(env):
 
 
 def test_shared_budget_blocks_chat_before_screening(env, monkeypatch):
+    # The public budget doesn't apply to the admin; the admin allowance does.
     monkeypatch.setenv("PAID_DAILY_BUDGET_MICRO_USD", "1")
+    monkeypatch.setenv("PAID_ADMIN_DAILY_BUDGET_MICRO_USD", "1")
     assert _call(_ask())[0] == 429
     assert FakeGuardrails.calls == 0
     assert env.reasoning.calls == []

@@ -34,6 +34,11 @@ data "aws_iam_policy_document" "review_worker" {
     actions   = ["ssm:GetParameter"]
     resources = [var.kill_switch_parameter_arn]
   }
+  # Releases the reservation of a review that fails before any paid call.
+  statement {
+    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
+    resources = [var.usage_counters_table_arn]
+  }
   dynamic "statement" {
     for_each = var.agentcore_runtime_arn == null ? [] : [1]
     content {
@@ -62,6 +67,7 @@ resource "aws_lambda_function" "review_worker" {
     variables = merge({
       REVIEWS_TABLE_NAME         = var.reviews_table_name
       REPORTS_BUCKET_NAME        = var.reports_bucket_name
+      USAGE_COUNTERS_TABLE_NAME  = var.usage_counters_table_name
       KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
       MAX_CLARIFICATION_ROUNDS   = tostring(var.max_clarification_rounds)
       AGENTCORE_RUNTIME_ARN      = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")

@@ -468,7 +468,7 @@ resource "aws_sfn_state_machine" "review" {
       RunInitial = {
         Type           = "Task"
         Resource       = aws_lambda_function.review_worker.arn
-        TimeoutSeconds = 850
+        TimeoutSeconds = 910
         Parameters = {
           "review_id.$" = "$.review_id"
           phase         = "initial"
@@ -479,7 +479,7 @@ resource "aws_sfn_state_machine" "review" {
       RunResume = {
         Type           = "Task"
         Resource       = aws_lambda_function.review_worker.arn
-        TimeoutSeconds = 850
+        TimeoutSeconds = 910
         Parameters = {
           "review_id.$"  = "$.review_id"
           "resume_key.$" = "$.resume.resume_key"

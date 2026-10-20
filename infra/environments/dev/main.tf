@@ -108,6 +108,8 @@ module "step_functions_lambda" {
   guardrail_version          = module.guardrails.guardrail_version
   kill_switch_parameter_name = module.kill_switch.parameter_name
   kill_switch_parameter_arn  = module.kill_switch.parameter_arn
+  usage_counters_table_name  = module.dynamodb.usage_counters_table_name
+  usage_counters_table_arn   = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.usage_counters_table_name}"
   tags                       = var.tags
 }
 

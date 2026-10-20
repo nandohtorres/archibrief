@@ -88,12 +88,14 @@ def test_dispatch_contains_no_submission_content_and_retry_is_idempotent(env):
         sfn.describe_execution(executionArn=executions[0]["executionArn"])["input"]
     ) == {"review_id": upload["reviewId"]}
     counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    # An admin submission uses the admin allowance, not the public scopes.
     assert (
-        next(row for row in counters if row["counterKey"].startswith("paid#global"))[
+        next(row for row in counters if row["counterKey"].startswith("paid#admin"))[
             "spent"
         ]
         == 400000
     )
+    assert not any(row["counterKey"].startswith("paid#global") for row in counters)
 
 
 def test_changed_body_and_replaced_version_cannot_dispatch_another_review(env):
