@@ -15,7 +15,8 @@ Request body (unknown fields are rejected, which is how a forged
 suggestion's own text is asked.
 
 Order of checks, cheapest and most decisive first:
-1. Who may ask: admin key, or CHAT_PUBLIC_ENABLED (off until Phase 3).
+1. Who may ask: admin key, or CHAT_PUBLIC_ENABLED (off until the chat
+   opens to the public).
 2. Body shape, then the kill switch (fails closed; the admin key doesn't
    bypass it).
 3. The review exists and is complete.
@@ -33,9 +34,9 @@ Order of checks, cheapest and most decisive first:
 
 Every AWS call on the paid path is bounded (connect + read timeout, no
 retries) and the model's read timeout is sized, after retrieval, to the
-time the Lambda has left, so a slow dependency becomes a 504 with a refund rather than the
-Lambda being killed with the question stuck in flight (code review
-2026-10-16).
+time the Lambda has left, so a slow dependency becomes a 504 with a
+refund rather than the Lambda being killed with the question stuck in
+flight.
 """
 
 from __future__ import annotations
@@ -217,7 +218,7 @@ def _deadline(context: object, started: float) -> float:
 def _vectors_client() -> S3VectorsClient | None:
     """None when the client can't be built (for example a Lambda runtime
     boto3 too old to know s3vectors). Retrieval then fails open: the
-    model can still cite the review itself (code review 2026-10-16)."""
+    model can still cite the review itself."""
     try:
         return S3VectorsClient(
             bucket_name=os.environ["VECTOR_BUCKET_NAME"],
@@ -265,7 +266,7 @@ def _history(tables: _Tables, review_id: str, exclude_key: str, now: float) -> l
         if i["questionKey"] != exclude_key
         # Only answered turns. A refused question, and above all one
         # Guardrails blocked, must not reach the model as history on a
-        # later turn (code and security reviews, 2026-10-15).
+        # later turn.
         and i.get("status") in ("answered", "not_determinable")
         and int(i.get("ttl", now + 1)) > now
     ]
@@ -278,7 +279,7 @@ def _asked_suggestion(
 ) -> dict[str, Any] | None:
     """The transcript's existing record for this suggestion, if it was
     already asked on this review. A repeat click returns it instead of
-    adding a duplicate to the transcript (code review 2026-10-16)."""
+    adding a duplicate to the transcript."""
     items = tables.questions.query(
         KeyConditionExpression="reviewId = :r AND begins_with(questionKey, :q)",
         ExpressionAttributeValues={":r": review_id, ":q": "Q#"},
@@ -331,8 +332,7 @@ def _record_blocked(tables: _Tables, review_id: str, admin: bool, max_blocked: i
 def _record_failure(tables: _Tables, review_id: str, refund: bool) -> None:
     """Count a failed paid call on the review, and give the question back
     for the first MAX_REFUNDED_FAILURES of them. Without the cap, failed
-    calls (refunded, but billed) would be bounded only by the daily cap
-    (security review 2026-10-15)."""
+    calls (refunded, but billed) would be bounded only by the daily cap."""
     if refund:
         try:
             tables.reviews.update_item(
@@ -361,9 +361,8 @@ def _record_failure(tables: _Tables, review_id: str, refund: bool) -> None:
 
 # The day's chat spend counter. It counts what's been spent (reservations,
 # settled to the estimated real cost) and is compared with the budget in
-# force on every question, so a budget change applies at once. It used to
-# count what was left, fixed at the first question's budget: a raised (or
-# lowered) budget then waited for the next UTC day (2026-10-16).
+# force on every question, so a budget change applies at once rather than
+# on the next UTC day.
 def _spend_key(day: str) -> dict[str, str]:
     return {"counterKey": f"global#{day}#chat_spent_micro_usd"}
 
@@ -377,8 +376,8 @@ def _precheck(
     now: float,
 ) -> str | None:
     """Cheap reads before any spend, so a review or day that's used up
-    doesn't keep paying for Guardrails checks (security review
-    2026-10-15). The admission transaction still decides; this only
+    doesn't keep paying for Guardrails checks. The admission transaction
+    still decides; this only
     turns away requests that would certainly fail it."""
     if not admin:
         if counts_slot and int(review.get("questionsUsed", 0)) >= questions_per_review():
@@ -523,7 +522,7 @@ def _admit(
         # Only a failed condition means a limit was hit. Anything else
         # (TransactionConflict on the shared daily counters when two
         # questions land at once, throttling) is a retryable collision,
-        # not "today's questions are used up" (code review 2026-10-16).
+        # not "today's questions are used up".
         failed = {
             roles[i]
             for i, reason in enumerate(exc.reasons[: len(roles)])
@@ -732,7 +731,7 @@ def handler(event: dict, context: object) -> dict:
         return finish(_error(504, "answer_timeout"), "failed", error="answer_timeout")
     except ClientError as exc:
         # Bedrock throttling or a service error: a plain, retryable
-        # failure rather than a bare 500 (code review 2026-10-15).
+        # failure rather than a bare 500.
         code = exc.response.get("Error", {}).get("Code", "")
         _mark_failed(tables, review_id, in_flight_keys, "answer_failed")
         _record_failure(tables, review_id, refund=counts_slot)

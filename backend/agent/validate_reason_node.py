@@ -1,4 +1,4 @@
-"""Validate reason_node end-to-end against real Bedrock (first real call).
+"""Validate reason_node end-to-end against real Bedrock.
 
 Sibling to backend/corpus/validate_retrieve_node.py — same convention: not
 a pytest test, run directly with real AWS credentials, near-zero cost
@@ -42,20 +42,8 @@ _REGION = os.environ.get("AWS_REGION", "us-east-1")
 _GUARDRAIL_ID = os.environ.get("ARCHIBRIEF_GUARDRAIL_ID", "")
 _GUARDRAIL_VERSION = os.environ.get("ARCHIBRIEF_GUARDRAIL_VERSION", "1")
 
-# TEMPORARY PLACEHOLDER (2026-09-16): ADR-0006 pins Claude Sonnet 5, but
-# AWS's account-level model-access approval for it is still pending after
-# multiple days (use-case form submitted, console Playground trigger
-# tried) — confirmed via direct AccessDeniedException on this exact
-# Converse call. Claude Sonnet 4.6 is already approved and confirmed
-# working end-to-end through this same pipeline (real boto3 Converse
-# call, real "Pong!" response, 2026-09-16). Swapped here ONLY so
-# reason_node can be exercised for real while Sonnet 5 access is
-# pending — not a quality/architecture decision, ADR-0006 is unchanged.
-# TO REVERT once Sonnet 5 access clears: change the string below back to
-# "us.anthropic.claude-sonnet-5" (this is the only hardcoded model ID in
-# the codebase — grep confirmed 2026-09-16 — so this one-line edit is the
-# entire revert). See [[project_archibrief_rag_progress]] for the full
-# access-blocker history.
+# Hardcoded for this manual script; runtime_entrypoint.py reads the model ID
+# from ARCHIBRIEF_REASONING_MODEL_ID instead.
 _MODEL_ID = "us.anthropic.claude-sonnet-4-6"
 
 _WORKLOAD_BRIEF = (
@@ -139,14 +127,10 @@ def main() -> None:
         workload_brief=_WORKLOAD_BRIEF,
         rule_findings=_RULE_FINDINGS,
         retrieved_chunks=retrieved_chunks,
-        # Bumped from 4096 after a real max_tokens truncation on the first
-        # forced-tool-use run (2026-09-16) — forced tool-use output is more
-        # verbose than free-text JSON (full schema-conformant field names,
-        # every required field on every finding, no shortcuts), and this
-        # workload brief alone produces enough findings to exceed 4096.
-        # 8192 is the standard Claude Sonnet output ceiling on Bedrock
-        # without an extended-output beta header — a real limit, not an
-        # arbitrary guess.
+        # Forced tool-use output is more verbose than free-text JSON (every
+        # required field on every finding), and this brief produces enough
+        # findings to exceed 4096. 8192 is the standard Claude Sonnet output
+        # ceiling on Bedrock without an extended-output beta header.
         max_tokens=8192,
     )
 
@@ -174,7 +158,7 @@ def main() -> None:
         # zero model findings), but for THIS scripted workload brief
         # (multiple real deficiencies described) zero is suspicious enough
         # to flag loudly rather than let a silent empty success pass by
-        # unnoticed (Codex review 2026-09-16).
+        # unnoticed.
         print(
             "=== WARNING: model returned zero findings for a workload brief that "
             "describes multiple real deficiencies — investigate before trusting this run ==="

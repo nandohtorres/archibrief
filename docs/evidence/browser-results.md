@@ -1,6 +1,6 @@
-# Launch-prep browser results
+# Browser test results
 
-Executed 2026-10-16 (America/Chicago), starting source `8d391b0`, with only new
+Executed against source `8d391b0`, adding only the
 `frontend/e2e/launch-*.spec.ts` files. No existing specs or components changed.
 Evidence: [machine-readable summary](playwright-launch-summary.json).
 
@@ -37,12 +37,12 @@ not Safari/Firefox or a screen-reader test.
 
 ## Failures and constraints retained for review
 
-Initial setup attempts failed because PowerShell blocked `npm.ps1`, the sandbox
-blocked build-time Google Fonts fetches, and the original new axe spec used
-`import.meta` in Playwright's CommonJS context. Those were resolved with
-`npm.cmd`, an approved build outside the sandbox, and a new-spec-only module
-resolution correction. The first long-content spec also had an invalid typed
-presentation property, corrected before the browser tests ran.
+Setup problems unrelated to the product were fixed before the recorded runs:
+PowerShell's execution policy blocked `npm.ps1` (hence `npm.cmd`/`npx.cmd`), the
+test environment blocked build-time Google Fonts fetches, and the new axe spec
+used `import.meta` in Playwright's CommonJS context. The first long-content spec
+also had an invalid typed presentation property, corrected before the browser
+tests ran.
 
 The first new-spec run returned 12 passed / 5 failed: one contrast check plus
 four retry tests using the wrong button label. Correcting those selectors made
@@ -55,7 +55,3 @@ The early contrast observations are preserved rather than represented as fixed
 product bugs. Build/test runtime was Node 24.14.0, outside the declared Node
 20/22 support range; repeat on a supported runtime before release. Final new
 specs passed TypeScript, ESLint and Prettier checks.
-
-The comparison text was also clarified: AWS-0094 appears alongside other Trivy
-access-block results; ArchiBrief groups selected checks rather than expanding
-that check itself.

@@ -10,10 +10,8 @@ ADR-0027/ADR-0036. Also does a deterministic/lexical companion lookup for
 exact AWS identifiers/control names (ADR-0036), since vector recall alone
 can miss them.
 
-Actually calling Bedrock/S3 Vectors requires a live account (Deployment
-Roadmap blocker) — that call is isolated in backend.shared.clients so this
-node's retrieval/merge logic is real and independently testable against a
-stubbed client.
+The Bedrock and S3 Vectors calls are isolated in backend.shared.clients, so
+this node's retrieval/merge logic is testable against a stubbed client.
 """
 
 from __future__ import annotations
@@ -23,14 +21,10 @@ from dataclasses import dataclass
 
 from backend.shared.clients import BedrockEmbeddingClient, S3VectorsClient
 
-# The plain [A-Z]{2,}-\d+ branch never matched real AWS Well-Architected
-# best-practice IDs like "SEC01-BP01" or "COST01-BP01" — those have
-# digits between the letters and the hyphen on both sides, which the
-# original pattern's letters-only-before-hyphen requirement excluded
-# entirely. Found 2026-09-14 via Codex review of the first retrieval
-# validation, confirmed by testing the pattern directly against every
-# real WAF pillar ID prefix (SEC/COST/OPS/PERF/REL/SUS) — all failed to
-# match before this fix.
+# The [A-Z]{2,}\d{1,3}-[A-Z]{2,}\d{1,3} branch matches Well-Architected
+# best-practice IDs like "SEC01-BP01" or "COST01-BP01", which have digits
+# on both sides of the hyphen and so are missed by the plain
+# [A-Z]{2,}-\d+ branch.
 AWS_IDENTIFIER_PATTERN = re.compile(
     r"\b(?:AWS::[A-Za-z0-9]+::[A-Za-z0-9]+|aws_[a-z0-9_]+"
     r"|[A-Z]{2,}\d{1,3}-[A-Z]{2,}\d{1,3}|[A-Z]{2,}-\d+(?:\.\d+)?)\b"
@@ -48,11 +42,9 @@ class RetrievedChunk:
     corpus_version: str
     score: float
     match_type: str  # "vector" | "lexical"
-    # Citation-reproducibility fields (ADR-0027/ADR-0036) that used to be
-    # dropped between the real Chunk model (backend/corpus/models.py) and
-    # this retrieval-layer shape — reason_node needs all three to build a
-    # real Citation without a second lookup. Found via Codex review of the
-    # first real reason_node run, 2026-09-16.
+    # Citation-reproducibility fields (ADR-0027/ADR-0036) carried over from
+    # the Chunk model (backend/corpus/models.py); reason_node needs them to
+    # build a Citation without a second lookup.
     retrieved_at: str = ""
     source_edition: str | None = None
     parser_version: str = ""
@@ -68,9 +60,8 @@ def lexical_companion_lookup(
 ) -> list[RetrievedChunk]:
     """corpus_index maps an exact identifier -> list of chunk metadata dicts.
 
-    corpus_index is built at ingestion time from the curated knowledge
-    base (Phase 2, not yet populated without a live account) — this
-    function's contract is what that index must satisfy.
+    corpus_index is built from the curated corpus chunks (see
+    backend/corpus/lexical_index.py).
     """
     results: list[RetrievedChunk] = []
     for term in lexical_terms:
@@ -111,10 +102,7 @@ def vector_search(
         # verbatim, so heading_path arrives here as list[str] (Chunk's real
         # type), never the pre-joined string lexical_index.py produces for
         # the lexical path — join it the same way here so RetrievedChunk's
-        # heading_path is consistently a str regardless of match_type. Bug
-        # found via Codex review 2026-09-16: the old `metadata.get(...,  "")`
-        # default silently accepted a list at runtime despite the dataclass
-        # annotation claiming str.
+        # heading_path is consistently a str regardless of match_type.
         raw_heading_path = metadata.get("heading_path", [])
         heading_path = (
             " > ".join(raw_heading_path) if isinstance(raw_heading_path, list) else raw_heading_path

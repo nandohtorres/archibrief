@@ -1,7 +1,7 @@
 # Demo reviews
 
 ArchiBrief's public demos are real reviews of real, public Terraform.
-Each was run once, by the site owner, through the deployed pipeline, and
+Each was run once through the deployed pipeline, on the admin path, and
 saved. Visitors open the saved report: visiting never starts a paid
 review (ADR-0029).
 
@@ -71,7 +71,7 @@ corpus v3.
 |---|---|---|---|---|
 | breach-pattern | `cd4b6384-30cb-48c9-a779-714b7cb7194e` | 83s | 12 (6 rule, 6 model) | saved |
 | medicare-platform | `8d46136d-e14f-4010-aaa4-e2bf0408b06d` | 80s | 9 (2 rule, 7 model) | saved |
-| fec-database | `b7f2a3e7-641d-47a3-a579-31fc637b0cc6` | 91s | 14 (6 rule, 8 model) | saved (re-run 2026-10-16 after the count fix; first run `25ca09c8` held back over a false instance count) |
+| fec-database | `b7f2a3e7-641d-47a3-a579-31fc637b0cc6` | 91s | 14 (6 rule, 8 model) | saved (re-run after the count fix; first run `25ca09c8` held back over a false instance count) |
 
 The briefs are written by ArchiBrief from each project's public README.
 The projects' owners did not write them or review these results.
@@ -119,7 +119,7 @@ those stay the pipeline's unedited output.
 
 ### fec-database
 
-Re-run 2026-10-16 (`b7f2a3e7`), after the instance-count fix.
+Re-run (`b7f2a3e7`) after the instance-count fix.
 
 | Finding | Verdict |
 |---|---|
@@ -138,8 +138,6 @@ Re-run 2026-10-16 (`b7f2a3e7`), after the instance-count fix.
 
 ## Bugs the demos found
 
-See the Issues Log entry of 2026-10-15 for detail.
-
 1. No rule for broad managed policies on compute roles; IMDSv1 only
    caught by Trivy (`d72c0ea`).
 2. Trivy results for `count`/`for_each` resources were dropped
@@ -154,9 +152,9 @@ See the Issues Log entry of 2026-10-15 for detail.
    are free text and left out.
 6. `copy_tags_to_snapshot` and, for clusters, `skip_final_snapshot`
    weren't in the resource summary, so the FEC re-run called a setting
-   unconfirmed that the code sets (2026-10-16).
+   unconfirmed that the code sets.
 
-## Talking points for showing it
+## What each demo shows
 
 - **Breach pattern:** the rules catch each misconfiguration
   deterministically, and the IMDS finding names the broad role, so the

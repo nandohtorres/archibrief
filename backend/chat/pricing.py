@@ -5,7 +5,7 @@ Estimates, not billing. Anthropic list prices in $ per million tokens
 cross-region inference profiles: Anthropic states regional endpoints
 cost 10% more than global from Sonnet 4.5 / Haiku 4.5 on, and a
 third-party listing of Bedrock's Sonnet 4.6 US price agreed. Confirm the
-real Bedrock rates before fixing the caps (master-list item 29).
+real Bedrock rates before tightening the caps.
 
 A $ per million tokens is the same number of micro-dollars per token,
 which is why the arithmetic below has no scale factor.

@@ -7,11 +7,8 @@ run directly with real AWS credentials. UNLIKE validate_retrieval.py, this
 is NOT near-zero cost: it runs a full retrieve_node + reason_node pass
 (one embed call, one vector query, one Claude Converse tool-use call, one
 ApplyGuardrail call) PER BRIEF across both EVAL_BRIEFS and HOLDOUT_BRIEFS
-(6 briefs total as of authoring) — do not run this casually, and per this
-project's standing rule, never run it without Fernando's explicit
-go-ahead in that specific moment (see Work-Project-Issues-Log.md's
-2026-09-16 entries — this rule was established the hard way after an
-earlier unrequested re-run in this same project).
+(6 briefs total as of authoring), so each run costs real money. Run it
+deliberately, not as part of routine testing.
 
 Scores EVAL_BRIEFS and HOLDOUT_BRIEFS separately (never merged into one
 number), matching backend/corpus/validate_retrieval.py's dev/held-out
@@ -52,18 +49,14 @@ _REGION = os.environ.get("AWS_REGION", "us-east-1")
 _GUARDRAIL_ID = os.environ.get("ARCHIBRIEF_GUARDRAIL_ID", "")
 _GUARDRAIL_VERSION = os.environ.get("ARCHIBRIEF_GUARDRAIL_VERSION", "1")
 
-# Same temporary placeholder as validate_reason_node.py, same revert
-# instructions — kept in exact sync deliberately so both scripts are
-# always testing the same model. See that file's comment for the full
-# access-blocker history; not re-duplicated here beyond what's needed to
-# know this is intentional, not copy-paste drift.
+# Same default model as runtime_entrypoint.py, so the eval tests the model
+# the pipeline uses.
 _MODEL_ID = os.environ.get("ARCHIBRIEF_REASONING_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
 
 # Same as validate_reason_node.py's reasoning: forced tool-use output is
 # more verbose than free-text JSON, and a brief with 3 expected findings
 # plus alternatives/framework_mapping per finding can plausibly exceed
-# 4096 — use the same budget that fixed the real max_tokens truncation
-# found 2026-09-16.
+# 4096, so use the same budget.
 _MAX_TOKENS = 8192
 
 
@@ -102,11 +95,10 @@ def _run_brief(
         terraform_resources=brief.terraform_resources,
     )
 
-    # Same rule as the live pipeline (Codex F04): a finding whose citation
-    # fails is dropped and the rest are scored. Strict all-or-nothing used
-    # to discard whole briefs over one bad quote (3 of 10 traps on
-    # 2026-10-15), hiding what the model actually did. Every failure is
-    # still reported, under dropped_findings.
+    # Same rule as the live pipeline: a finding whose citation fails is
+    # dropped and the rest are scored, so one bad quote doesn't hide what
+    # the model did on the rest of the brief. Every failure is still
+    # reported, under dropped_findings.
     model_findings, failures = verify_model_findings(
         raw_findings=raw_findings,
         review_id=f"reasoning-eval-{brief.brief_id}",
@@ -136,9 +128,8 @@ def _print_report(label: str, results: list[dict]) -> None:
     failed = [r for r in results if r.get("finding_validation_failed")]
     if scored:
         overall = sum(r["topics_covered"] for r in scored) / sum(r["topics_total"] for r in scored)
-        # Previously this headline silently dropped blocked/failed briefs
-        # with no indication the number was partial (Codex review
-        # 2026-09-16, confirmed) — now says so explicitly whenever it is.
+        # Say explicitly when blocked/failed briefs make the headline number
+        # partial.
         completeness_note = (
             ""
             if len(scored) == len(results)

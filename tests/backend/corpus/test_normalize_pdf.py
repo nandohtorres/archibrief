@@ -13,9 +13,8 @@ from .fixtures import (
 )
 
 # Real text extracted (pypdf plain-mode) from the "Resources" section under
-# REL01-BP03 in the actual waf-reliability-pillar.pdf, captured 2026-09-15
-# before this feature existed — used verbatim (not fabricated) to validate
-# list detection against a real-world wrapped bullet item and real noise
+# REL01-BP03 in the actual waf-reliability-pillar.pdf, used verbatim (not
+# fabricated) to validate list detection against a real-world wrapped bullet item and real noise
 # (page-footer text mid-run).
 _REAL_REL01_RESOURCES_TEXT = (
     "Resources\n"
@@ -71,7 +70,7 @@ def test_metadata_is_populated():
 
 
 def test_outline_entries_sharing_a_page_do_not_produce_duplicate_sections():
-    """Regression test for the 2026-09-14 duplication incident: a parent
+    """Regression test for chunk duplication: a parent
     heading and its child sharing the same start page must not each
     extract the whole page as their own content."""
     snapshot = normalize_pdf(
@@ -93,15 +92,11 @@ def test_outline_entries_sharing_a_page_do_not_produce_duplicate_sections():
 def test_a_legitimate_multi_page_gap_is_extracted_in_full():
     """A section spanning several pages with no sub-headings (no bad
     destination involved) is real content and must not be truncated.
-    Regression test for a 2026-09-14 finding: an earlier fix capped every
-    section at 5 pages to bound a *different*, since-fixed bug (mis-
-    resolved destinations claiming hundreds of pages) — but the cap
-    itself silently discarded real content on every document that had a
-    genuinely long section, confirmed via a Codex review that measured
-    8-24 real body pages dropped per real WAF pillar PDF. The fix for the
-    mis-resolved-destination case is _drop_entries_with_broken_destinations,
-    not a blanket span cap — a legitimate gap like this one must come
-    through whole."""
+    A blanket page cap per section would silently drop real content (8-24
+    body pages per real WAF pillar PDF). Mis-resolved destinations that
+    claim hundreds of pages are handled by
+    _drop_entries_with_broken_destinations instead, so a legitimate gap
+    like this one must come through whole."""
     snapshot = normalize_pdf(
         build_sample_pdf_bytes_with_a_far_apart_gap(),
         document_id="gap-doc",
@@ -117,9 +112,7 @@ def test_a_legitimate_multi_page_gap_is_extracted_in_full():
 def test_an_implausibly_large_span_raises_instead_of_silently_truncating():
     """If a section's computed span is far beyond anything real (a sign
     some other bad-destination case slipped past the other filters),
-    fail loudly rather than quietly dropping content — silent truncation
-    is exactly the mistake made and then caught (via Codex review) on
-    2026-09-14, see Work-Project-Issues-Log."""
+    fail loudly rather than quietly dropping content."""
     import pytest
 
     from backend.corpus.normalize_pdf import _MAX_PLAUSIBLE_SECTION_PAGE_SPAN
@@ -137,8 +130,7 @@ def test_an_implausibly_large_span_raises_instead_of_silently_truncating():
 
 
 def test_same_depth_siblings_sharing_a_page_both_keep_their_own_section():
-    """Regression test for a real 2026-09-14 finding: collapsing every
-    same-page entry (the earlier, too-broad fix) drops a same-depth
+    """Collapsing every same-page entry drops a same-depth
     sibling's own heading identity and mislabels its content under the
     other sibling's. Only a parent/child pair sharing a page should
     collapse; siblings must both survive, even as near-duplicate text."""
@@ -157,7 +149,7 @@ def test_same_depth_siblings_sharing_a_page_both_keep_their_own_section():
 
 
 def test_a_broken_entry_does_not_leak_a_stale_page_to_its_own_descendants():
-    """Regression test for a real 2026-09-14 finding: dropping a broken
+    """Dropping a broken
     outline entry (one whose page precedes its own parent's) must not
     leave a stale, unrelated sibling's page behind for that entry's own
     descendants to validate against — the descendant must be dropped too,
@@ -215,12 +207,12 @@ def test_numbered_procedure_lines_are_segmented_as_a_list_block():
 
 
 def test_a_lone_bullet_interrupted_by_page_noise_is_demoted_to_prose():
-    """Regression test for the 2026-09-15 over-fragmentation finding: real
+    """Regression test for over-fragmentation: real
     WAF pillar "Design principles" sections render each principle as its
     own single "• Bolded title: paragraph." bullet, with a page
     header/footer line between consecutive principles. A single isolated
     bullet is a stylistic one-off, not a real list — without demoting it,
-    real ingestion of the 6 pillar PDFs went from ~1,073 to ~4,000 chunks
+    ingesting the 6 pillar PDFs yields ~4,000 chunks instead of ~1,073
     (each principle becoming its own tiny atomic LIST chunk)."""
     text = (
         "• Organize teams around business outcomes: leadership vision drives this.\n"
@@ -243,8 +235,8 @@ def test_text_without_any_list_or_code_markers_is_untouched():
 
 
 def test_cli_lines_are_segmented_as_a_code_block():
-    """No real WAF pillar PDF section currently contains a CLI/code block
-    (verified 2026-09-15), so this uses a synthetic example rather than a
+    """No real WAF pillar PDF section currently contains a CLI/code block,
+    so this uses a synthetic example rather than a
     fabricated stand-in for something that exists in the real corpus —
     exercising the detection path so it's not dead code, and so it's
     ready the day a source PDF does carry one."""
@@ -256,10 +248,9 @@ def test_cli_lines_are_segmented_as_a_code_block():
 
 
 # Real text extracted (pypdf plain-mode) from waf-security-pillar's
-# SEC10-BP01 "Identify key personnel and external resources" section,
-# captured 2026-09-15 — a genuine numbered procedure with lettered
-# sub-steps, separated by blank lines, that was entirely demoted to prose
-# before the 2026-09-15 fix (finding #1 of the Codex review).
+# SEC10-BP01 "Identify key personnel and external resources" section:
+# a genuine numbered procedure with lettered sub-steps, separated by blank
+# lines, that must not be demoted to prose.
 _REAL_SEC10_STEPS_TEXT = (
     "1. Set up an incident management solution.\n"
     "\n"
@@ -268,11 +259,10 @@ _REAL_SEC10_STEPS_TEXT = (
     "2. Define contacts in your incident management solution.\n"
 )
 
-# Real text (pypdf plain-mode) from waf-sustainability-pillar, captured
-# 2026-09-15 — two genuine resource bullets immediately followed by the
-# "Sustainability in the cloud" heading and a full unrelated prose
-# paragraph, all absorbed into one LIST block before the 2026-09-15 fix
-# (finding #2 of the Codex review).
+# Real text (pypdf plain-mode) from waf-sustainability-pillar — two genuine
+# resource bullets immediately followed by the "Sustainability in the
+# cloud" heading and a full unrelated prose paragraph, which must not be
+# absorbed into one LIST block.
 _REAL_SUSTAINABILITY_ABSORPTION_TEXT = (
     "• The Carbon Reduction Opportunity of Moving to Amazon Web Services\n"
     "• AWS enables sustainability solutions\n"
@@ -283,10 +273,8 @@ _REAL_SUSTAINABILITY_ABSORPTION_TEXT = (
 )
 
 # Real text (pypdf plain-mode) from waf-security-pillar's "Example table
-# format:" incident-contact table, captured 2026-09-15 — a genuine
-# pipe-delimited table typed prose before the 2026-09-15 fix (finding #3
-# of the Codex review; independently spot-verified against the live chunk
-# waf-security-pillar-0538 before this task began).
+# format:" incident-contact table (chunk waf-security-pillar-0538) — a
+# genuine pipe-delimited table that must not be typed prose.
 _REAL_SECURITY_PILLAR_TABLE_TEXT = (
     "Example table format:\n"
     "  | Role | Name | Contact Information | Responsibilities |\n"
@@ -297,9 +285,8 @@ _REAL_SECURITY_PILLAR_TABLE_TEXT = (
 )
 
 # Real text (pypdf plain-mode) from waf-security-pillar's SEC04-BP01
-# CloudWatch metric-filter guidance, captured 2026-09-15 — a genuine
-# single-seed, multi-line code/expression block typed prose before the
-# 2026-09-15 fix (finding #4 of the Codex review).
+# CloudWatch metric-filter guidance — a genuine single-seed, multi-line
+# code/expression block that must not be typed prose.
 _REAL_CLOUDWATCH_FILTER_TEXT = (
     "The instructions can be modified to configure the Amazon CloudWatch metric filter\n"
     "to filter on AssumeRole events related to the incident response IAM role:\n"
@@ -310,8 +297,8 @@ _REAL_CLOUDWATCH_FILTER_TEXT = (
 
 
 def test_numbered_steps_separated_by_blank_lines_stay_a_list_block():
-    """Regression test for finding #1 (2026-09-15 Codex review): a blank
-    line between list items must not unconditionally break the run."""
+    """A blank line between list items must not unconditionally break the
+    run."""
     blocks = _segment_blocks(_REAL_SEC10_STEPS_TEXT)
     list_blocks = [b for b in blocks if b.kind == BlockKind.LIST]
     assert list_blocks, "expected at least one LIST block, got: " + repr(
@@ -323,7 +310,7 @@ def test_numbered_steps_separated_by_blank_lines_stay_a_list_block():
 
 
 def test_a_lone_bullet_interrupted_by_page_noise_is_still_demoted_with_blank_lines():
-    """The blank-line fix for finding #1 must not resurrect the
+    """Tolerating blank lines between list items must not resurrect the
     over-fragmentation bug the ≥2-seed rule already fixed: an isolated
     bullet separated from the next by blank lines and unrelated content
     (no second marker following) must still demote to prose."""
@@ -339,8 +326,7 @@ def test_a_lone_bullet_interrupted_by_page_noise_is_still_demoted_with_blank_lin
 
 
 def test_heading_after_list_bullets_is_not_absorbed_into_the_list_block():
-    """Regression test for finding #2 (2026-09-15 Codex review): a
-    heading-shaped line (and the unrelated prose paragraph after it) must
+    """A heading-shaped line (and the unrelated prose paragraph after it) must
     not inherit LIST/CODE kind just because the preceding bullet line
     lacked terminal punctuation."""
     blocks = _segment_blocks(_REAL_SUSTAINABILITY_ABSORPTION_TEXT)
@@ -354,9 +340,8 @@ def test_heading_after_list_bullets_is_not_absorbed_into_the_list_block():
 
 
 def test_real_pipe_delimited_table_is_segmented_as_a_table_block():
-    """Regression test for finding #3 (2026-09-15 Codex review): a real
-    pipe-delimited table (independently spot-verified against
-    waf-security-pillar-0538) must be typed TABLE, not prose."""
+    """A real pipe-delimited table (from waf-security-pillar-0538) must be
+    typed TABLE, not prose."""
     blocks = _segment_blocks(_REAL_SECURITY_PILLAR_TABLE_TEXT)
     table_block = next(b for b in blocks if b.kind == BlockKind.TABLE)
     assert "Role | Name | Contact Information" in table_block.text
@@ -386,8 +371,7 @@ def test_a_single_stray_pipe_line_is_not_treated_as_a_table():
 
 
 def test_single_seed_multiline_code_expression_block_is_kept_as_code():
-    """Regression test for finding #4 (2026-09-15 Codex review): a
-    genuine single-marker, multi-line code/expression block (the real
+    """A genuine single-marker, multi-line code/expression block (the real
     CloudWatch metric-filter expression) must not be demoted just because
     it only has one seed line — unlike LIST, CODE tolerates a lone seed
     when it has a real continuation."""
@@ -400,7 +384,7 @@ def test_single_seed_multiline_code_expression_block_is_kept_as_code():
 def test_a_single_line_single_seed_code_match_is_still_demoted():
     """A lone CODE-marker line with no continuation at all (no real code
     block, just an isolated "aws "-prefixed sentence fragment) must still
-    demote to prose — the finding #4 relaxation only applies when there's
+    demote to prose — the lone-seed relaxation only applies when there's
     a genuine continuation line."""
     text = "Some paragraph.\naws is a common abbreviation seen here.\nMore ordinary prose follows next."
     blocks = _segment_blocks(text)
@@ -409,7 +393,7 @@ def test_a_single_line_single_seed_code_match_is_still_demoted():
 
 def test_markdown_header_lines_are_segmented_as_code():
     """Real Markdown ATX headers from waf-operational-excellence-pillar's
-    runbook/playbook templates (finding #4)."""
+    runbook/playbook templates."""
     text = "# Runbook Title\n## Runbook Info\nSome ordinary prose paragraph follows this."
     blocks = _segment_blocks(text)
     code_block = next(b for b in blocks if b.kind == BlockKind.CODE)
@@ -429,12 +413,10 @@ def test_end_to_end_bullet_section_produces_a_list_block_via_normalize_pdf():
 
 
 # Real text (pypdf plain-mode) from waf-sustainability-pillar's SUS06-BP01
-# "Communicate and cascade your sustainability goals" section, captured
-# 2026-09-15 — a genuine list-item explanation that wraps onto a new,
-# capitalized sentence right after a colon, split into a LIST chunk plus a
-# separate PROSE chunk before this fix (finding #1 of the 2026-09-15
-# follow-up Codex review; independently spot-verified against the live
-# chunks waf-sustainability-pillar-0353/-0354 before this task began).
+# "Communicate and cascade your sustainability goals" section (chunks
+# waf-sustainability-pillar-0353/-0354) — a genuine list-item explanation
+# that wraps onto a new, capitalized sentence right after a colon, which
+# must not split into a LIST chunk plus a separate PROSE chunk.
 _REAL_SUSTAINABILITY_CUR_COLON_TEXT = (
     "• Communicate resource usage through proxy metrics to your teams: Track and report on your\n"
     "resource usage through proxy metrics. In the on-demand pricing models of the cloud, resource \n"
@@ -449,14 +431,11 @@ _REAL_SUSTAINABILITY_CUR_COLON_TEXT = (
 
 # Real text (pypdf plain-mode) from waf-reliability-pillar's REL04-BP04
 # "Make mutating operations idempotent" Implementation-steps section,
-# captured 2026-09-15 — a genuine bulleted example list (storage options
-# for idempotency tokens) directly followed, with no intervening
-# explanatory paragraph, by the next numbered procedure step. Before this
-# fix, "4. Implement idempotent operations" was absorbed as an extra seed
-# of the unrelated bullet-marker LIST run instead of starting its own step
-# (finding #2 of the 2026-09-15 follow-up Codex review; independently
-# spot-verified against the live chunks
-# waf-reliability-pillar-0337/-0338 before this task began).
+# chunks waf-reliability-pillar-0337/-0338 — a genuine bulleted example
+# list (storage options for idempotency tokens) directly followed, with
+# no intervening explanatory paragraph, by the next numbered procedure
+# step. "4. Implement idempotent operations" must start its own step, not
+# be absorbed as an extra seed of the unrelated bullet-marker LIST run.
 _REAL_IDEMPOTENCY_ORDINAL_AFTER_BULLETS_TEXT = (
     "Common AWS storage options typically used for storing idempotency tokens and related state \n"
     "include:\n"
@@ -472,13 +451,10 @@ _REAL_IDEMPOTENCY_ORDINAL_AFTER_BULLETS_TEXT = (
 
 # Real text (pypdf plain-mode) from waf-performance-efficiency-pillar's
 # PERF02-BP02 "Understand the available compute configuration and
-# features" section, captured 2026-09-15 — a genuine two-column,
-# non-pipe-delimited table mangled by PDF extraction into "term  •
-# bullet-shaped cell" rows, split prose/list/prose with inconsistent
-# content_type labels before this fix (finding #3 of the 2026-09-15
-# follow-up Codex review; independently spot-verified against the live
-# chunks waf-performance-efficiency-pillar-0125/-0126/-0127 before this
-# task began).
+# features" section (chunks waf-performance-efficiency-pillar-0125/-0126/
+# -0127) — a genuine two-column, non-pipe-delimited table mangled by PDF
+# extraction into "term  • bullet-shaped cell" rows, which must not split
+# into prose/list/prose with inconsistent content_type labels.
 _REAL_MANGLED_COMPUTE_TABLE_TEXT = (
     "Here are some key configuration options \n"
     "to consider:\n"
@@ -505,8 +481,7 @@ _REAL_MANGLED_COMPUTE_TABLE_TEXT = (
 
 
 def test_colon_ended_list_item_absorbs_its_capitalized_continuation():
-    """Regression test for finding #1 (2026-09-15 follow-up Codex review):
-    a list item's explanation that wraps onto a new sentence right after
+    """A list item's explanation that wraps onto a new sentence right after
     a colon must stay inside the same LIST block, not split off as prose
     just because the continuation sentence starts with a capital letter."""
     blocks = _segment_blocks(_REAL_SUSTAINABILITY_CUR_COLON_TEXT)
@@ -518,14 +493,12 @@ def test_colon_ended_list_item_absorbs_its_capitalized_continuation():
 
 
 def test_a_page_footer_stamp_after_a_colon_is_still_not_absorbed():
-    """Regression test caught while verifying finding #1's fix against the
-    full real corpus (not just the one confirmed example): a bullet ending
+    """A bullet ending
     in ":" directly followed by a running page-footer/header stamp (which
     also happens to start with a capital letter) must not be absorbed
     just because of the colon carve-out — real text (pypdf plain-mode)
     from waf-performance-efficiency-pillar's PERF02-BP01 "Benchmark to
-    validate performance" Implementation-steps section, captured
-    2026-09-15."""
+    validate performance" Implementation-steps section."""
     text = (
         "• Benchmark and monitor: Perform your benchmark tests and monitor the metrics during the test.\n"
         "• Analyze and document:\n"
@@ -537,7 +510,7 @@ def test_a_page_footer_stamp_after_a_colon_is_still_not_absorbed():
 
 
 def test_a_genuine_new_heading_after_a_colon_is_still_not_absorbed():
-    """The colon carve-out from finding #1 must not swallow a genuine new
+    """The colon carve-out must not swallow a genuine new
     heading just because the previous list item happened to end with a
     colon — only tested here as a synthetic guardrail since no real
     corpus example of that exact combination was found."""
@@ -554,8 +527,7 @@ def test_a_genuine_new_heading_after_a_colon_is_still_not_absorbed():
 
 
 def test_numbered_step_after_bullet_example_list_starts_its_own_block():
-    """Regression test for finding #2 (2026-09-15 follow-up Codex review):
-    a numbered procedure step directly following a bulleted example list
+    """A numbered procedure step directly following a bulleted example list
     (no explanatory paragraph in between) must not be absorbed as another
     seed of that unrelated bullet-marker list."""
     blocks = _segment_blocks(_REAL_IDEMPOTENCY_ORDINAL_AFTER_BULLETS_TEXT)
@@ -570,8 +542,8 @@ def test_numbered_step_after_bullet_example_list_starts_its_own_block():
 
 
 def test_numbered_and_lettered_substeps_still_share_one_list_run():
-    """The ordinal/bullet marker-flavor split from finding #2 must not
-    reopen finding #1 of the original 2026-09-15 review: numbered steps
+    """The ordinal/bullet marker-flavor split must not break blank-line
+    tolerance for numbered procedures: numbered steps
     and their lettered sub-steps are the same marker "flavor" (ordinal)
     and must still merge into one run when otherwise contiguous."""
     blocks = _segment_blocks(_REAL_SEC10_STEPS_TEXT)
@@ -584,8 +556,7 @@ def test_numbered_and_lettered_substeps_still_share_one_list_run():
 
 
 def test_mangled_two_column_table_stays_one_paragraph_not_a_false_list():
-    """Regression test for finding #3 (2026-09-15 follow-up Codex review):
-    a real two-column, non-pipe-delimited table (mangled by PDF extraction
+    """A real two-column, non-pipe-delimited table (mangled by PDF extraction
     into "term + mid-line bullet" rows) must not have its bullet-shaped
     cells misread as a genuine LIST — true atomic TABLE detection was not
     attempted for this shape (see _segment_blocks' docstring); the

@@ -88,8 +88,8 @@ def test_embedding_input_strips_boilerplate_lines():
 
 def test_embedding_input_keeps_full_text_when_stripping_would_empty_it_and_no_heading_path():
     """True last-resort edge case: no heading_path AND stripping would
-    empty the body. Verified against the real 4463-chunk corpus
-    (2026-09-15) that this never actually happens — every one of the 137
+    empty the body. In the real 4463-chunk corpus this never happens —
+    every one of the 137
     real header-only chunks has a non-empty heading_path — but embedding
     boilerplate is still better than embedding nothing if it ever does."""
     chunk = _chunk(
@@ -104,9 +104,9 @@ def test_embedding_input_keeps_full_text_when_stripping_would_empty_it_and_no_he
 
 
 def test_embedding_input_uses_heading_path_only_when_stripping_would_empty_a_header_only_chunk():
-    """Real gap found 2026-09-15 (Codex review): a chunk whose entire body
-    is just the repeated pillar-title header used to fall back to the
-    ORIGINAL unstripped (boilerplate-including) text. Real example from
+    """A chunk whose entire body is just the repeated pillar-title header
+    must not fall back to the ORIGINAL unstripped (boilerplate-including)
+    text. Real example from
     the current corpus: waf-cost-optimization-pillar-0019, body is only
     "Cost Optimization Pillar AWS Well-Architected Framework", with
     heading_path ['Practice Cloud Financial Management', 'COST01-BP01
@@ -130,7 +130,7 @@ def test_embedding_input_uses_heading_path_only_when_stripping_would_empty_a_hea
 
 def test_compute_boilerplate_lines_flags_a_running_header_repeated_across_a_document():
     """Real boilerplate found empirically in backend/corpus/data/chunks/
-    waf-security-pillar.json (2026-09-15): "Security Pillar AWS
+    waf-security-pillar.json: "Security Pillar AWS
     Well-Architected Framework" recurs verbatim in 238/701 chunks — a
     running page header, not semantic content."""
     doc_id = "waf-security-pillar"
@@ -159,10 +159,10 @@ def test_compute_boilerplate_lines_does_not_flag_a_line_repeated_only_a_handful_
 
 
 def test_compute_boilerplate_lines_counts_a_line_at_most_once_per_chunk():
-    """Real gap found 2026-09-15 (Codex review): counting was by raw line
-    occurrences, not distinct chunks, so a line repeated many times
-    WITHIN a single pathological chunk could inflate the count as if it
-    were genuinely document-wide. Real example from the current corpus:
+    """Counting must be by distinct chunks, not raw line occurrences, or a
+    line repeated many times WITHIN a single pathological chunk inflates
+    the count as if it were genuinely document-wide. Real example from
+    the current corpus:
     waf-cost-optimization-pillar-0000 (a malformed table-of-contents
     chunk) repeats the line "Implementation guidance ... 8" 9 times by
     itself. Here that TOC-style line appears 16 times raw, clearing the
@@ -303,11 +303,10 @@ def test_write_wave_persists_pending_batch_then_clears_it_and_updates_checkpoint
 
 
 def test_write_wave_invalidates_checkpoint_when_only_heading_path_changes():
-    """Regression test for a real 2026-09-14 finding: heading_path is
-    prepended before embedding, but the checkpoint used to be keyed by
-    content_hash (body text only) — so a chunk whose heading changed
-    while its body stayed the same would have been silently skipped on
-    resume, leaving a stale embedding."""
+    """heading_path is prepended before embedding, so a checkpoint keyed
+    by content_hash (body text only) would silently skip a chunk whose
+    heading changed while its body stayed the same, leaving a stale
+    embedding on resume."""
     chunk_before = _chunk("c-0000", text="t", content_hash="h0", heading_path=["A"])
     chunk_after = _chunk("c-0000", text="t", content_hash="h0", heading_path=["B"])
     assert embed._embedding_hash(chunk_before) != embed._embedding_hash(chunk_after)

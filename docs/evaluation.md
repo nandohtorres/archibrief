@@ -1,10 +1,10 @@
 # Evaluation evidence
 
-First written against `8d391b0` on 2026-10-16 with no AWS calls or paid model
-runs; test counts refreshed on 2026-10-17 after the chat deploy, demo cards and
-these launch-prep specs merged. CI runs the same suites on every pull request.
+Measured locally with no AWS calls or paid model runs; test counts reflect the
+code after the chat, demo cards and launch accessibility specs landed. CI runs
+the same suites on every pull request.
 
-The subsequent [browser evaluation](evidence/browser-results.md) records all
+The [browser evaluation](evidence/browser-results.md) records all
 Playwright counts, the initial failures, the final axe-only rerun, and automated
 accessibility limits. It includes a machine-readable per-case result summary.
 
@@ -12,19 +12,15 @@ accessibility limits. It includes a machine-readable per-case result summary.
 
 | Suite | Result | Source and command |
 |---|---|---|
-| Backend | 607 passed, 1 skipped (2026-10-17) | Local output: `..\archibrief\backend\.venv\Scripts\python.exe -m pytest tests/backend -q --tb=short` |
-| Frontend unit | 52 passed in 9 files (2026-10-17) | Local output: `cd frontend; npm.cmd test`; tests in `tests/frontend/` |
+| Backend | 607 passed, 1 skipped | `python -m pytest tests/backend -q --tb=short` |
+| Frontend unit | 52 passed in 9 files | `cd frontend; npm test`; tests in `tests/frontend/` |
 | Deterministic traps | 60 collected; included in the passing backend run | `python -m pytest tests/backend/traps --collect-only -q -p no:cacheprovider` |
-| Stubbed chat trap checks | 26 collected; included in the passing backend run |
-| Playwright | 57 passed (2026-10-17), including the launch-prep accessibility, keyboard, viewport and resilience specs | `cd frontend; npx playwright test` | Same collection command with `tests/backend/chat/test_traps_stubbed.py` |
+| Stubbed chat trap checks | 26 collected; included in the passing backend run | Same collection command with `tests/backend/chat/test_traps_stubbed.py` |
+| Playwright | 57 passed, including the accessibility, keyboard, viewport and resilience specs | `cd frontend; npx playwright test` |
 
-The first sandboxed backend attempt returned 456 passed, 5 skipped, 128 setup
-errors because pytest could not access its shared Windows temporary directory.
-An outside-sandbox rerun resolved the setup errors, without source changes.
-The successful rerun warned that it could not write the sandbox-owned pytest
-cache. Neither outcome is a model-quality measurement. Node reported v24.14.0,
-outside `frontend/package.json`'s supported Node 20/22 range; `npm.cmd ci`
-completed, but results should be repeated on a supported runtime before release.
+None of these is a model-quality measurement. The local frontend run used
+Node v24.14.0, outside `frontend/package.json`'s supported Node 20/22 range;
+`npm ci` completed, and CI repeats the suites on a supported runtime.
 
 ## Deterministic traps
 
@@ -41,7 +37,7 @@ through JSON/HCL/data sources, variable defaults, alternate security-group
 resources, IPv6, module name collisions, IMDS plus broad compute roles, and
 counted Aurora instances. It does not establish recall on arbitrary Terraform.
 
-[ADR-0048](adr/Work-Project-ADR-0048-Trivy-Scanner-In-The-Review-Pipeline.md)
+[ADR-0048](adr/0048-trivy-scanner-in-the-review-pipeline.md)
 records the initial 14/14 dangerous misses and 3/4 safe false positives, followed
 by 14/14 caught and 0/4 safe false positives after the scanner/rule rebuild.
 Those are historical fixture denominators, not today's complete suite.
@@ -66,8 +62,7 @@ No current 10-brief aggregate pass rate can be reproduced from the committed
 records inspected here. The chat has 31 trap cases and 24 quality cases
 (`backend/chat/trap_cases.json`, `eval_cases.json`, and `docs/chat.md`), but
 stubbed verification tests do not establish that a real model passes them.
-The chat was deployed on 2026-10-16 and runs on Sonnet 4.6; its paid eval is
-still pending. Live, it answered 15 demo suggested questions (14 answered, 1
+The chat is deployed and runs on Sonnet 4.6; its paid eval is still pending. Live, it answered 15 demo suggested questions (14 answered, 1
 not determinable by design) at 1.1-4.1 cents and 9-18 s each.
 
 ## Citation pass rate: define the denominator

@@ -1,43 +1,25 @@
 """Retrieval evaluation set (ADR-0035/0036) — a frozen set of realistic
-queries with known-correct chunks, built against the real ingested corpus
-(2026-09-11). This must exist and be run before treating any
-embedding-model choice (Titan V2 vs. Cohere) or chunking parameter as
-final — otherwise there is no way to measure whether retrieval quality is
-actually good, only whether the pipeline runs without error.
+queries with known-correct chunks, built against the real ingested corpus.
+This must exist and be run before treating any embedding-model choice
+(Titan V2 vs. Cohere) or chunking parameter as final; otherwise there is
+no way to measure whether retrieval quality is actually good, only whether
+the pipeline runs without error.
 
-Chunk IDs below were verified against backend/corpus/data/chunks/ at
-authoring time. If the corpus is re-ingested with a different chunking
-policy/version, chunk IDs may shift — re-verify before reusing this set
-against a re-chunked corpus.
+Chunk IDs below were verified against backend/corpus/data/chunks/ (the
+4,463-chunk corpus). If the corpus is re-ingested with a different
+chunking policy/version, chunk IDs may shift, so re-verify before reusing
+this set against a re-chunked corpus. Each query's notes record how its
+expected chunks were chosen.
 
-Re-verified 2026-09-14 after the PDF-normalization fixes in
-normalize_pdf.py (see Work-Project-Issues-Log, 2026-09-14 follow-on
-entry). The 4 HTML-sourced queries (q01-q10) were unaffected — HTML
-normalization/chunking wasn't touched, and their chunk IDs matched
-exactly. The 8 WAF-PDF-sourced queries (q11-q18) were re-checked against
-the corrected corpus (1,073 total chunks, down from 24,897 in the
-polluted run): q12 and q15 happened to keep the same IDs, the rest
-shifted because sections that used to be wrongly merged or wrongly
-capped are now split/extended correctly.
-
-Re-verified again 2026-09-15 against the final 4,463-chunk corpus (after
-the chunk-typing fix and the follow-on procedure-splitting/table/code-
-detection/absorption-bug fix grew the corpus 1,073 -> 3,327 -> 4,463).
-All 10 HTML/short-document queries (q01-q10) still matched exactly. All 8
-WAF-PDF queries (q11-q18) had drifted again and were re-pointed at the
-chunks that now actually contain the answer text — see each query's
-notes for what changed. q12 was also found to have a second, previously
-undocumented duplicate-chunk pair (0011/0012 and 0014/0015 are literal
-duplicates of the same "seven areas" page) in addition to the 0005/0006
-pair found in the 2026-09-14 review; the list now points at the two list
-chunks that actually contain the seven-item list. h03's expected chunk
-in eval_holdout.py's HOLDOUT_QUERIES was found to also be a correct
-answer to q09 in this file (aws-cis-foundations-mapping-0019, a version-
-comparison table): this is left as a known cross-set semantic overlap
-rather than "fixed" here, since q09's own expected_chunk_id
-(aws-cis-foundations-mapping-0016) is still a valid, more version-
-specific answer and changing it isn't necessary — see eval_holdout.py's
-h03 notes for the full writeup of the decision.
+Known quirks:
+- q12's source page is duplicated in the corpus (0005/0006, 0011/0012 and
+  0014/0015 are literal duplicates of the same "seven areas" page); the
+  list points at the chunks that contain the seven-item list.
+- h03's expected chunk in eval_holdout.py's HOLDOUT_QUERIES
+  (aws-cis-foundations-mapping-0019, a version-comparison table) is also a
+  correct answer to q09 here. This cross-set overlap is left as is, since
+  q09's own expected chunk (aws-cis-foundations-mapping-0016) is still a
+  valid, more version-specific answer; see h03's notes.
 """
 
 from pydantic import BaseModel
@@ -264,17 +246,15 @@ def score_retrieval(
     `predictions` maps query_id -> the ordered list of chunk_ids the
     pipeline actually retrieved for that query.
 
-    This computes Hit Rate@k (a.k.a. Success@k): the fraction of queries
-    for which *at least one* expected chunk appears in the top-k results.
-    This is NOT the conventional information-retrieval definition of
-    Recall@k (fraction of *all* relevant items retrieved) — for a query
-    with multiple expected_chunk_ids, retrieving just one of them still
-    counts as a full hit here. Named/labeled precisely per a 2026-09-14
-    Codex review finding: the result had been reported as "Recall@5"
-    everywhere, which overstates what's actually measured for
+    This computes Hit Rate@k (a.k.a. Success@k): the fraction of queries for
+    which *at least one* expected chunk appears in the top-k results. This is
+    NOT the conventional information-retrieval definition of Recall@k (fraction
+    of *all* relevant items retrieved) — for a query with multiple
+    expected_chunk_ids, retrieving just one of them still counts as a full hit
+    here, so calling it "Recall@5" would overstate what's measured for
     multi-chunk-answer queries. With only 18 queries, treat any single
-    percentage from this as a rough signal, not a precise measurement —
-    the 95% Wilson confidence interval for 17/18 is roughly 74%-99%.
+    percentage from this as a rough signal, not a precise measurement — the 95%
+    Wilson confidence interval for 17/18 is roughly 74%-99%.
     """
     per_query: list[dict] = []
     hits = 0

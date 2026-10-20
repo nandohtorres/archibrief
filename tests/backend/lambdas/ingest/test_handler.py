@@ -290,8 +290,8 @@ def _ingest_dirs(root) -> list:
 
 
 def test_handler_removes_its_temp_dir_after_success(tmp_path, monkeypatch):
-    # Regression (Codex F14): a fixed /tmp path kept every submission's
-    # files on disk across warm Lambda invocations.
+    # A fixed /tmp path would keep every submission's files on disk across
+    # warm Lambda invocations.
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     archive_path = str(tmp_path / "good.tar")
     _make_archive(archive_path, {"main.tf": b'resource "aws_s3_bucket" "x" {}'})
@@ -326,8 +326,8 @@ class _RecordingS3:
 
 
 def test_deployed_path_stores_parsed_terraform_in_s3_and_returns_a_reference(tmp_path):
-    # Regression (Codex F07): the full parsed tree went into Step Functions
-    # state, which caps at 256 KiB, and into execution history.
+    # The full parsed tree must not go into Step Functions state, which
+    # caps at 256 KiB, or into execution history.
     archive_path = str(tmp_path / "good.tar")
     _make_archive(archive_path, {"main.tf": b'resource "aws_s3_bucket" "x" {}'})
     s3 = _RecordingS3()
@@ -349,8 +349,8 @@ def test_deployed_path_stores_parsed_terraform_in_s3_and_returns_a_reference(tmp
 
 
 def test_stage_logs_are_structured_and_carry_the_review_id(tmp_path, capsys):
-    # Codex F26: the old "temporary" tracing was free-text print lines with
-    # no review_id, so concurrent reviews' lines couldn't be told apart.
+    # Free-text print lines without a review_id can't be told apart across
+    # concurrent reviews.
     archive_path = str(tmp_path / "good.tar")
     _make_archive(archive_path, {"main.tf": b'resource "aws_s3_bucket" "x" {}'})
     fake = _FakeGuardrailsClient(allow=True, calls=[])

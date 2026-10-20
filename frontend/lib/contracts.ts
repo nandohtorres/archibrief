@@ -100,8 +100,8 @@ export interface ReviewReport {
   cost_estimate_tier: "low" | "medium" | "high";
   baseline_answers: BaselineAnswer[];
   findings: ReportFinding[];
-  // The diagram built from the code (lib/architecture.ts), on reviews
-  // finalized from 2026-10-17 on. Checked with isArchitectureGraph before use.
+  // The diagram built from the code (lib/architecture.ts). Older reviews
+  // have none. Checked with isArchitectureGraph before use.
   architecture?: unknown;
 }
 
@@ -109,19 +109,13 @@ export interface ReviewReport {
 // (backend/lambdas/get_review/handler.py's `_PENDING_ALLOWED_FIELDS`) —
 // a thin, raw DynamoDB-item subset, camelCase, deliberately NOT the
 // snake_case ReviewReport contract, since no evidence ledger exists yet
-// to assemble one from. Added 2026-10-12 building real status polling —
-// previously nothing in the frontend ever called fetchReview before a
-// review completed, so this response shape was unhandled.
+// to assemble one from.
 // preflightFields/needsClarification shapes match
 // backend/agent/nodes/preflight.py's preflight_node return verbatim
 // (DynamoDB stores it unmodified, get_review passes it through as-is).
-// Found 2026-10-12, live-tested: needsClarification was previously typed
-// `boolean` here, but the backend always writes it as the LIST of
-// paused field names (`event.get("needs_clarification", [])` in
-// store_clarification_token.handler.py) — never a boolean anywhere in
-// the real data flow. Harmless until now only because nothing in the
-// frontend ever read this field before a real "needs_clarification"
-// status was reachable live.
+// needsClarification is the LIST of paused field names
+// (`event.get("needs_clarification", [])` in
+// store_clarification_token.handler.py), never a boolean.
 export interface PreflightFieldState {
   outcome: "answered" | "assumption" | "unknown" | "paused" | "stopped";
   value: string | null;
@@ -137,7 +131,7 @@ export interface ReviewStatusPointer {
   createdAt?: string;
   needsClarification?: string[];
   preflightFields?: Record<string, PreflightFieldState>;
-  // Added 2026-10-13 — written directly by the pipeline's RecordStage*
+  // Written directly by the pipeline's RecordStage*
   // Step Functions states (see infra/modules/step-functions-lambda).
   // An internal stage codename (e.g. "ingest", "reasoning") — never
   // shown verbatim to the user; see lib/progress.ts's describeProgress()
@@ -149,22 +143,18 @@ export interface ReviewStatusPointer {
   failedAt?: string;
 }
 
-// Corrected 2026-10-01 (see Work-Project-Issues-Log.md): `POST /reviews`
-// is a direct API Gateway -> Step Functions StartExecution integration,
-// no BFF Lambda (ADR-0016/0042) — this request body IS the raw Step
-// Functions execution input, verbatim. It previously used camelCase
-// field names the state machine never reads (terraformRepoRef,
-// workloadBrief, idempotencyKey) instead of the snake_case fields the
-// definition actually requires via bare "$.xxx" JSONPath references
-// (infra/modules/step-functions-lambda/main.tf's own "REQUIRED
-// StartExecution Input shape" comment): review_id, workload_brief,
-// retrieval_query, baseline_answers. review_id doubles as the
-// idempotency token (IdempotencyGate keys off it directly) — no
+// `POST /reviews` is a direct API Gateway -> Step Functions
+// StartExecution integration, no BFF Lambda (ADR-0016/0042) — this
+// request body IS the raw Step Functions execution input, verbatim, so
+// field names must be the snake_case ones the definition reads via bare
+// "$.xxx" JSONPath references (infra/modules/step-functions-lambda/
+// main.tf's "REQUIRED StartExecution Input shape" comment): review_id,
+// workload_brief, retrieval_query, baseline_answers. review_id doubles
+// as the idempotency token (IdempotencyGate keys off it directly) — no
 // separate idempotencyKey field exists on the backend side.
 //
-// archive_s3_key closes the gap this comment used to describe (resolved
-// 2026-10-12, ADR-0045: direct upload, not server-side GitHub-fetch —
-// see that ADR for the full reasoning). The client uploads its own
+// archive_s3_key (ADR-0045: direct upload, not server-side GitHub
+// fetch). The client uploads its own
 // archive straight to S3 via POST /uploads' presigned POST (see
 // requestUpload()/uploadArchiveToS3() in lib/api.ts) BEFORE calling
 // submitReview(), then sends the resulting key here. Required at the
@@ -206,7 +196,7 @@ export interface SubmitReviewResponse {
 
 export interface ClarificationRequest {
   answers: Record<string, string>;
-  // Added 2026-10-13 — a free-text "anything else" note shown alongside
+  // A free-text "anything else" note shown alongside
   // the structured per-field answers (clarify-step.tsx). The backend
   // (clarify_review.handler) appends this onto workload_brief for the
   // re-invoke rather than merging it into `answers`, since that's the

@@ -1,6 +1,6 @@
 // Where the pre-shared admin key (ADR-0044) is kept in the browser.
 //
-// sessionStorage, not localStorage (Codex F18): the key unlocks paid
+// sessionStorage, not localStorage: the key unlocks paid
 // reviews, so it should not outlive the tab or sit on disk on a shared
 // machine. It survives a reload of the same tab, which is all the polling
 // flow needs. A key saved by older builds in localStorage is moved over

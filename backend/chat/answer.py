@@ -44,7 +44,7 @@ GROUNDING_WORST_SECONDS = 5.0
 # The model call's read timeout under a deadline: whatever time is left
 # after retrieval, up to MODEL_READ_TIMEOUT_SECONDS. Sized after retrieval,
 # not before, so the model doesn't give up seconds to retrieval's worst
-# case (Sonnet answers take 15-19 s; 2026-10-16).
+# case (Sonnet answers take 15-19 s).
 MODEL_READ_TIMEOUT_SECONDS = 24.0
 MIN_MODEL_READ_TIMEOUT_SECONDS = 5.0
 MODEL_CONNECT_TIMEOUT_SECONDS = 1.0

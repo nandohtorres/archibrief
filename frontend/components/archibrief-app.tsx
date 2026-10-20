@@ -80,7 +80,7 @@ export function ArchiBriefApp() {
   useEffect(() => {
     const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
     if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
-    // Tab-scoped, never localStorage (Codex F18) — see lib/admin-key.ts.
+    // Tab-scoped, never localStorage — see lib/admin-key.ts.
     setAdminKey(loadAdminKey(window.sessionStorage, window.localStorage));
   }, []);
 
@@ -134,13 +134,10 @@ export function ArchiBriefApp() {
           setScreen("report");
           return;
         }
-        // Found 2026-10-12, live-tested: before this, "needs_clarification"
-        // was treated identically to "still pending" — the poll loop just
-        // kept counting toward the same 120s timeout, so a review that was
-        // genuinely paused waiting on the user (Step Functions can wait up
-        // to 7 days at StoreClarificationToken) looked indistinguishable
-        // from a dead one. Exit the poll loop immediately instead and show
-        // the real question(s).
+        // A review paused for the user (Step Functions can wait up to 7
+        // days at StoreClarificationToken) is not "still pending": treating
+        // it that way would run into the poll timeout and look like a dead
+        // review. Exit the poll loop immediately and show the question(s).
         if (result.status === "needs_clarification") {
           const pointer = result as ReviewStatusPointer;
           setClarifyFields(pointer.needsClarification ?? []);
@@ -192,7 +189,7 @@ export function ArchiBriefApp() {
   async function handleSubmission(values: SubmissionValues) {
     setSubmission(values);
     setSubmitNotice(null);
-    // Owner-only for now (ADR-0047, amended 2026-10-15): every submit
+    // Owner-only for now (ADR-0047): every submit
     // route already requires the admin key server-side; this just answers
     // a visitor plainly instead of sending a request that would fail.
     if (apiConfigured && !adminKey.trim()) {
@@ -217,14 +214,14 @@ export function ArchiBriefApp() {
     setSubmitting(true);
     try {
       // review_id doubles as the idempotency token server-side (no
-      // separate idempotencyKey field exists — see lib/contracts.ts,
-      // Work-Project-Issues-Log.md 2026-10-01). retrieval_query has no
+      // separate idempotencyKey field exists — see lib/contracts.ts).
+      // retrieval_query has no
       // separate input in this step, so it defaults to the workload
       // brief text itself, the same fallback deeper_review's handler
       // uses when no narrower technical query is available.
       const reviewId = makeIdempotencyKey();
 
-      // ADR-0045 (2026-10-12): the archive goes straight to S3 via a
+      // ADR-0045: the archive goes straight to S3 via a
       // presigned POST, tied to reviewId before the review itself exists
       // anywhere server-side — only the resulting key is sent to
       // POST /reviews, never the file bytes.

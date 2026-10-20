@@ -1,40 +1,26 @@
 # Terraform module: agentcore-runtime
-# Deploys the AgentCore Runtime hosting the PreflightGate -> Retrieve ->
-# Reason LangGraph subworkflow (ADR-0028) — backend/agent/runtime_entrypoint.py
-# is the code this module runs. Once this module's agent_runtime_arn is
-# wired into modules/step-functions-lambda's agentcore_runtime_arn input,
-# the InvokeAgent task in that module's state machine stops pointing at
-# its "not-yet-deployed" placeholder ARN.
+# Deploys the AgentCore Runtime that hosts the PreflightGate -> Retrieve ->
+# Reason LangGraph subworkflow (ADR-0028); backend/agent/runtime_entrypoint.py
+# is the code it runs. Its agent_runtime_arn feeds the InvokeAgent task in
+# modules/step-functions-lambda.
 #
-# ZIP-based deployment (aws_bedrockagentcore_agent_runtime's
-# agent_runtime_artifact.code_configuration), not container/ECR — confirmed
-# 2026-09-16 directly against the locked hashicorp/aws 6.63.0 provider
-# docs that this is a real, supported path (not a workaround inferred from
-# AWS's newer CDK-based `agentcore` CLI, which this project deliberately
-# does not use — every other piece of infra here is Terraform, keep it
-# that way). LangGraph + boto3 + pydantic don't themselves require a
-# container. Genuinely unverified: no live example was found of this exact
-# combination (LangGraph + ZIP/code_configuration + native Terraform
-# aws_bedrockagentcore_agent_runtime) — prior art exists for LangGraph-on-
-# AgentCore via container deployment, and for ZIP/code deployment via
-# Terraform for non-LangGraph agents, but not this combination. If this
-# doesn't validate/apply cleanly, container deployment (ECR + Docker) is
-# the documented fallback, not a hypothetical.
+# Deployed as a ZIP (agent_runtime_artifact.code_configuration) rather than
+# a container: the provider supports it, LangGraph, boto3 and pydantic don't
+# need a container, and it keeps every piece of infrastructure in
+# Terraform. Container deployment (ECR + Docker) is the fallback if that
+# ever stops holding.
 #
-# Packaging is a real, currently-unmet prerequisite (same TODO(account-setup)
-# deferral pattern as modules/step-functions-lambda's lambda_zip_paths):
-# the ZIP must be built for Linux ARM64 (this project is developed on
-# Windows — a Windows-built ZIP containing native wheels, e.g. pydantic's
-# compiled core, can fail at deployment/import on ARM64 Linux), stay under
-# the 250 MB package limit, and include backend/corpus/'s JSON data files
-# that backend/corpus/lexical_index.py reads from disk at import time.
+# The ZIP must be built for Linux ARM64 (native wheels such as pydantic's
+# compiled core fail if built on another platform), stay under the 250 MB
+# package limit, and include the JSON data files backend/corpus/
+# lexical_index.py reads at import time. backend/agent/build_runtime_package.py
+# builds it.
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# Dedicated bucket for the runtime's own deployment artifact — separate
-# from modules/s3's "source of truth" bucket (ADR-0007/ADR-0042), which is
-# for review data, not deployment packages.
+# The runtime's deployment artifact gets its own bucket, separate from the
+# review-data bucket in modules/s3 (ADR-0007/ADR-0042).
 resource "aws_s3_bucket" "artifact" {
   bucket = "${var.name_prefix}-agentcore-artifact"
   tags   = var.tags
@@ -58,24 +44,14 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "artifact" {
   }
 }
 
-# TODO(account-setup): same deferral as modules/step-functions-lambda's
-# lambda_zip_paths — var.agent_runtime_zip_path won't exist on disk until
-# a real CI packaging step runs (backend/agent/runtime_entrypoint.py +
-# backend + backend/corpus's JSON data files, zipped for Linux ARM64).
-# This resource genuinely cannot plan/apply cleanly until that exists —
-# not a code bug, an account/CI bootstrap gap, consistent with how every
-# other placeholder in this environment is documented.
+# var.agent_runtime_zip_path must exist on disk before plan; it is built by
+# backend/agent/build_runtime_package.py.
 resource "aws_s3_object" "runtime_code" {
   bucket = aws_s3_bucket.artifact.id
   key    = "runtime/agentcore-runtime.zip"
   source = var.agent_runtime_zip_path
-  # source_hash, not etag/filemd5 — confirmed 2026-09-16 against
-  # HashiCorp's own aws_s3_object docs: when the destination bucket uses
-  # SSE-KMS (this one does, see aws_s3_bucket_server_side_encryption_configuration
-  # above), the object's real S3 ETag is not a plain MD5 of the plaintext
-  # content, so comparing etag/filemd5 for change detection is unreliable.
-  # source_hash is computed client-side and doesn't depend on how S3
-  # computed its own ETag.
+  # source_hash rather than etag: with SSE-KMS the object's ETag is not an
+  # MD5 of the content, so etag-based change detection is unreliable.
   source_hash = filemd5(var.agent_runtime_zip_path)
 }
 
@@ -87,10 +63,8 @@ data "aws_iam_policy_document" "agentcore_trust" {
       type        = "Service"
       identifiers = ["bedrock-agentcore.amazonaws.com"]
     }
-    # Confused-deputy protection for a service principal — the same
-    # pattern AWS documents for other service-assumed roles in this
-    # account. Scopes which specific AgentCore runtime is allowed to
-    # assume this role, not just which account.
+    # Confused-deputy protection: only AgentCore runtimes in this account
+    # may assume the role.
     condition {
       test     = "StringEquals"
       variable = "aws:SourceAccount"
@@ -111,14 +85,10 @@ resource "aws_iam_role" "agentcore_execution" {
   tags                 = var.tags
 }
 
-# bedrock:InvokeModel covers the Converse API too — confirmed 2026-09-16
-# against AWS's own IAM docs ("other actions, such as Converse... are
-# blocked automatically when InvokeModel is denied"); there is no separate
-# bedrock:Converse allow-action. GetInferenceProfile is separately needed
-# for the cross-region inference profile ARNs this project uses. Same dual
-# Sonnet-5/Sonnet-4.6 ARN pattern as deploy-role-policy.example.json's
-# BedrockReasoningInvoke statement and modules/iam's runtime boundary fix
-# (2026-09-16) — kept in sync deliberately, not accidentally duplicated.
+# bedrock:InvokeModel also covers the Converse API; there is no separate
+# Converse action. GetInferenceProfile is needed for the cross-region
+# inference profile ARNs. The model list matches modules/iam's runtime
+# boundary and deploy-role-policy.example.json; keep them in sync.
 data "aws_iam_policy_document" "agentcore_execution" {
   statement {
     sid       = "ApplyGuardrail"
@@ -140,21 +110,14 @@ data "aws_iam_policy_document" "agentcore_execution" {
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-5",
       "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
-      # Titan V2 embeddings (ADR-0035) — confirmed missing 2026-09-16 via
-      # Codex review: retrieve_node's BedrockEmbeddingClient calls
-      # invoke_model against amazon.titan-embed-text-v2:0 (backend/shared/
-      # clients/__init__.py), and this runtime's own retrieve_node call
-      # (via compiled_graph()) needs this permission just as much as the
-      # reasoning call does. No inference profile needed for Titan — it's
-      # invoked directly by foundation-model ARN.
+      # Titan V2 embeddings (ADR-0035) for the retrieve step's query
+      # embedding; invoked by foundation-model ARN, no inference profile.
       "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
     ]
   }
 
-  # S3VectorsClient.query_vectors (backend/shared/clients/__init__.py)
-  # requests returnMetadata=True, which needs GetVectors alongside
-  # QueryVectors — confirmed by reading that client method directly, not
-  # assumed from the API name alone.
+  # query_vectors asks for metadata (returnMetadata=True), which needs
+  # GetVectors alongside QueryVectors.
   statement {
     sid       = "VectorsQuery"
     effect    = "Allow"
@@ -169,24 +132,10 @@ data "aws_iam_policy_document" "agentcore_execution" {
     resources = ["${aws_s3_bucket.artifact.arn}/*"]
   }
 
-  # Audited 2026-10-13 (pre-launch per-Lambda IAM sweep): unlike
-  # modules/iam's AllowLogging statement and modules/step-functions-
-  # lambda's state_machine_invoke document (log-delivery/resource-policy
-  # actions, genuinely unscopable in IAM), CreateLogGroup/CreateLogStream/
-  # PutLogEvents normally CAN be scoped to a specific log-group ARN. Not
-  # done here because of a real chicken-and-egg problem, not an IAM API
-  # limitation: AgentCore Runtime's log group name embeds
-  # `agent_runtime_id`, an AWS-generated value with a random suffix
-  # (confirmed live against the real deployed runtime: a log group of
-  # the form "/aws/bedrock-agentcore/runtimes/<name>-<random-suffix>-
-  # DEFAULT" — the real suffix is deliberately not reproduced here per
-  # ADR-0015's no-real-account-identifiers-in-committed-code policy)
-  # that doesn't exist until
-  # aws_bedrockagentcore_agent_runtime.review is created — but that
-  # resource needs this execution role's ARN to be created in the first
-  # place. Scoping this statement to the real log group would require a
-  # circular dependency. DescribeLogGroups genuinely has no resource-level
-  # scoping in IAM regardless.
+  # Not scoped to a log group ARN: the runtime's log group name embeds the
+  # AWS-generated runtime ID, which doesn't exist until the runtime is
+  # created, and the runtime needs this role first. Scoping it would be a
+  # circular dependency. DescribeLogGroups has no resource-level scoping.
   statement {
     sid    = "Logging"
     effect = "Allow"
@@ -206,17 +155,8 @@ resource "aws_iam_role_policy" "agentcore_execution" {
   policy = data.aws_iam_policy_document.agentcore_execution.json
 }
 
-# `PYTHON_3_12` and `network_mode = "PUBLIC"` confirmed correct against
-# the locked hashicorp/aws 6.63.0 provider docs (Codex review 2026-09-16,
-# cross-checked against this project's own independent research, not
-# taken purely on trust). entry_point and code.s3.prefix below were fixed
-# per that same review — entry_point must be a list (a single string was
-# rejected by the schema), and the S3 code source needs prefix to name
-# the exact ZIP object key (matching aws_s3_object.runtime_code.key
-# above), not a folder-style prefix that assumes AgentCore infers a
-# filename. Neither was independently re-derived beyond Codex's citation
-# of the provider docs — a real `terraform validate` (Fernando's, not run
-# here) is still the authoritative check.
+# entry_point must be a list, and code.s3.prefix names the exact ZIP object
+# key, not a folder.
 resource "aws_bedrockagentcore_agent_runtime" "review" {
   agent_runtime_name = replace(var.name_prefix, "-", "_")
   role_arn           = aws_iam_role.agentcore_execution.arn
@@ -234,14 +174,9 @@ resource "aws_bedrockagentcore_agent_runtime" "review" {
     }
   }
 
-  # Explicit, not defaulted — a real deployment shouldn't depend on
-  # runtime_entrypoint.py's own os.environ.get(..., fallback) defaults,
-  # which exist only so the file stays importable/testable without a real
-  # environment (same reasoning as every other explicit env-var wiring in
-  # this project). ARCHIBRIEF_GUARDRAIL_ID defaulting to "" silently
-  # broke guardrails.check() with a confusing KeyError in this exact
-  # project already (see Work-Project-Issues-Log.md, 2026-09-16) — that
-  # failure mode is exactly what wiring this in for real prevents.
+  # Set explicitly rather than relying on runtime_entrypoint.py's fallback
+  # defaults, which exist only so the module imports in tests. An empty
+  # guardrail ID, for example, fails later with a confusing error.
   environment_variables = {
     ARCHIBRIEF_GUARDRAIL_ID         = var.guardrail_id
     ARCHIBRIEF_GUARDRAIL_VERSION    = var.guardrail_version
@@ -250,33 +185,15 @@ resource "aws_bedrockagentcore_agent_runtime" "review" {
     ARCHIBRIEF_REASONING_MODEL_ID   = var.reasoning_model_id
     ARCHIBRIEF_REASONING_MAX_TOKENS = tostring(var.reasoning_max_tokens)
     AWS_REGION                      = data.aws_region.current.name
-    # Found 2026-10-13, live-tested: AgentCore Runtime caches the ZIP it
-    # read from S3 at creation and does NOT re-check that S3 key for new
-    # content — re-uploading to the same key (aws_s3_object.runtime_code,
-    # which Terraform correctly detects via source_hash and re-uploads)
-    # is silently a no-op from AgentCore's perspective, because nothing
-    # about this resource's own agent_runtime_artifact.code_configuration
-    # block changed. Confirmed directly: a real execution's Finalize step
-    # failed on a field (defaults_version) added to runtime_entrypoint.py
-    # on 2026-10-01, nearly two weeks after this module's own
-    # build_runtime_package.py was last run — the deployed runtime was
-    # running stale code despite several terraform applies in between,
-    # each of which re-uploaded the (until-now still-stale) zip with no
-    # actual effect. Independently confirmed as a known AgentCore
-    # behavior, not specific to this project — see
-    # https://dev.to/aws-builders/terraform-your-aws-agentcore-11kl's
-    # "_CODE_VERSION" pattern. Tying an env var to the same content hash
-    # already used for the S3 object's own source_hash forces Terraform
-    # to see a real diff on THIS resource whenever the code actually
-    # changes, which is what makes AgentCore refetch it.
+    # AgentCore caches the ZIP it read at creation and does not re-read the
+    # S3 key when its content changes, so a new upload alone runs stale
+    # code. Tying an env var to the ZIP's hash makes Terraform update this
+    # resource whenever the code changes, which makes AgentCore refetch it.
     ARCHIBRIEF_CODE_VERSION = aws_s3_object.runtime_code.source_hash
   }
 
-  # No VPC requirement identified for this workload (it only calls
-  # Bedrock/S3 Vectors public AWS API endpoints, no private resources) —
-  # PUBLIC is the documented default/simple path; AgentCore VPC is a
-  # separate, optional add-on capability this module deliberately doesn't
-  # use.
+  # The runtime only calls public AWS endpoints (Bedrock, S3 Vectors), so
+  # it needs no VPC.
   network_configuration {
     network_mode = "PUBLIC"
   }

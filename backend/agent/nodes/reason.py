@@ -37,12 +37,9 @@ from backend.shared.models.finding import (
     FindingType,
 )
 
-# Bumped 2026-09-16: the model-facing contract changed materially (tool-use
-# forcing + chunk_id/exact_quote instead of an asked-for Citation object),
-# so a finding persisted under the old free-text-citation prompt is not
-# reproducible under this prompt_version — see ADR-0039.
-# Bumped again 2026-10-15 (#15b): terraform_resources added to the input,
-# then provider defaults stated for "not set" settings (15c).
+# Bump whenever the model-facing contract changes (tool schema, input
+# fields, prompt rules), so a persisted finding can be traced to the exact
+# prompt that produced it (ADR-0039).
 PROMPT_VERSION = "reason_prompt@2026-10-15d"
 
 _TOOL_NAME = "emit_findings"
@@ -140,11 +137,7 @@ class FindingValidationError(Exception):
     forbidden type (deterministic-rule-result), or a malformed shape
     (bad confidence_inputs, alternatives_considered, etc.) — raised with
     every failure listed together so the caller sees the full picture in
-    one shot, not one crash at a time. Renamed from CitationVerificationError
-    2026-09-16 once its scope grew to cover shape validation too, per
-    Codex review (a shape error used to raise immediately and silently
-    discard any citation failures already collected for other items in
-    the same batch)."""
+    one shot, not one crash at a time."""
 
     def __init__(self, failures: list[str]) -> None:
         self.failures = failures
@@ -152,14 +145,13 @@ class FindingValidationError(Exception):
 
 
 # The model must never emit this type itself — see SYSTEM_PROMPT and
-# _resolve_citation's explicit rejection below. Closes a real grounding
-# bypass Codex flagged 2026-09-16: deterministic-rule-result findings
-# carry no citation by design, so a model that could freely choose this
-# type could self-label ANY invented, ungrounded claim with it to skip
-# citation verification entirely. Excluding it from the schema's `type`
-# enum is a soft (prompt-level, not server-enforced-by-itself) defense;
-# _resolve_citation's explicit rejection of it on any model-returned item
-# is the real enforcement.
+# _resolve_citation's explicit rejection below. This closes a grounding bypass:
+# deterministic-rule-result findings carry no citation by design, so a model
+# that could freely choose this type could self-label ANY invented, ungrounded
+# claim with it to skip citation verification entirely. Excluding it from the
+# schema's `type` enum is a soft (prompt-level, not server-enforced-by-itself)
+# defense; _resolve_citation's explicit rejection of it on any model-returned
+# item is the real enforcement.
 _MODEL_ALLOWED_TYPES = [t.value for t in FindingType if t != FindingType.DETERMINISTIC_RULE_RESULT]
 _CITATIONLESS_TYPES = {FindingType.NOT_OBSERVABLE}
 
@@ -190,15 +182,12 @@ _FINDING_INPUT_SCHEMA = {
                             "for deterministic-rule-result/not-observable."
                         ),
                     },
-                    # No minimum/maximum here — confirmed live 2026-09-16
-                    # (real ValidationException, first attempt with
-                    # strict:true): "For 'number' type, properties
-                    # maximum, minimum are not supported" under Bedrock's
-                    # strict tool schema enforcement. Pydantic's own
-                    # Field(ge=0.0, le=1.0) on Finding.confidence and
-                    # ConfidenceInputs (backend/shared/models/finding.py)
-                    # still enforces the same bounds server-side — no
-                    # actual validation is lost by removing them here.
+                    # No minimum/maximum here: Bedrock's strict tool schema
+                    # rejects them for 'number' types with a
+                    # ValidationException. Pydantic's Field(ge=0.0, le=1.0)
+                    # on Finding.confidence and ConfidenceInputs
+                    # (backend/shared/models/finding.py) enforces the same
+                    # bounds server-side.
                     "confidence": {"type": "number"},
                     "confidence_inputs": {
                         "type": "object",
@@ -255,7 +244,7 @@ def _requirements_from_preflight(preflight_fields: dict | None) -> list[dict]:
     """The requirement values preflight settled on, each labeled with how
     it was established (answered by the user / conservative assumption /
     unknown) so the model can tailor findings and tag the ones that rest on
-    an assumption (Codex F06: these never reached the prompt before)."""
+    an assumption."""
     return [
         {
             "requirement": name,
@@ -279,7 +268,7 @@ def build_user_content(
         "workload_brief": workload_brief,
         "requirements": _requirements_from_preflight(preflight_fields),
         "rule_engine_findings": rule_findings,
-        # RuleEngine's allowlisted, sanitized resource summary (#15b).
+        # RuleEngine's allowlisted, sanitized resource summary.
         "terraform_resources": terraform_resources or {"resources": [], "truncated": False},
         "retrieved_evidence": retrieved_chunks,
     }
@@ -312,10 +301,8 @@ def call_reasoning_model(
     # toolUse.input coming back as an empty dict ({}) instead of the real
     # arguments (e.g. aws/aws-sdk-go-v2#3048) — fail with a message that
     # names the actual problem instead of a bare KeyError on "findings".
-    # Also require "findings" to actually be a list (Codex review
-    # 2026-09-16: the old check accepted null or a dict here too, which
-    # would have crashed confusingly, or in the empty-list case succeeded
-    # silently with zero findings and no signal anything was off).
+    # "findings" must also be a list: null or a dict would otherwise crash
+    # confusingly later.
     findings = tool_input.get("findings") if isinstance(tool_input, dict) else None
     if not isinstance(findings, list):
         raise ToolCallMissing(
@@ -363,9 +350,7 @@ def _resolve_citation(
     # Reject non-string and whitespace-only quotes explicitly. Without
     # this, a whitespace-only quote (e.g. "   ") is truthy so it passes
     # the `not exact_quote` guard below, but its tolerant pattern would
-    # match zero-or-more whitespace at the very start of any chunk text —
-    # a real bug found by Codex review 2026-09-16, verified reproducible
-    # before this fix.
+    # match zero-or-more whitespace at the very start of any chunk text.
     if not isinstance(exact_quote, str) or not exact_quote.strip():
         failures.append(
             f"finding[{index}]: type {finding_type!r} requires a non-empty string exact_quote, "
@@ -392,7 +377,7 @@ def _resolve_citation(
         # The real matched substring from the source chunk, not the
         # model's (possibly whitespace/punctuation-drifted) quote — keeps
         # exact_text_span independently reproducible against the actual
-        # corpus per ADR-0027/ADR-0036 (Codex review 2026-09-16).
+        # corpus per ADR-0027/ADR-0036.
         exact_text_span=match.group(0),
         parser_version=chunk["parser_version"],
         corpus_version=chunk.get("corpus_version", corpus_version),
@@ -411,7 +396,7 @@ def parse_model_findings(
     """Strict form of verify_model_findings: raises FindingValidationError
     if ANY finding fails. Used by the eval/validation scripts, which need to
     see every failure. The live pipeline uses verify_model_findings so one
-    bad citation doesn't discard the whole review (Codex F04)."""
+    bad citation doesn't discard the whole review."""
     findings, failures = verify_model_findings(
         raw_findings,
         review_id,
@@ -440,22 +425,13 @@ def verify_model_findings(
 
     Builds real, server-verified Finding objects from the model's
     chunk_id/exact_quote pairs — the model never supplies a Citation
-    directly (per Codex review 2026-09-16: a model-supplied citation string
-    can't be trusted to actually be in the evidence it was given, and the
-    old free-text citation raised a ValidationError on every real run
-    anyway, since Citation is a structured object).
+    directly, because a model-supplied citation can't be trusted to actually
+    be in the evidence it was given.
 
-    Every item in the batch is checked — citation verification AND Finding
-    shape/type validation — before anything is raised. The original version
-    of this function let a shape error (e.g. a malformed confidence_inputs
-    or an unexpected alternatives_considered key) raise immediately out of
-    Finding(...)/AlternativeConsidered(...), which aborted the whole batch
-    and silently discarded every citation failure already collected for
-    OTHER items — so a single malformed finding could hide real grounding
-    problems the caller genuinely needed to see (Codex review 2026-09-16,
-    reproduced directly before this fix: a batch with one bad citation and
-    one malformed confidence_inputs raised a bare pydantic ValidationError
-    with no mention of the citation problem at all)."""
+    Every item in the batch is checked (citation verification and Finding
+    shape/type validation) before anything is returned, so one malformed
+    finding can't abort the batch and hide grounding failures in other
+    items."""
     if not isinstance(raw_findings, list):
         raise ToolCallMissing(f"expected a list of findings, got {raw_findings!r}")
 
@@ -536,8 +512,8 @@ def reason_node(state: dict) -> dict:
     reasoning_client: BedrockReasoningClient = state["reasoning_client"]
 
     workload_brief = state["workload_brief"]
-    # User-typed clarification answers now reach the prompt too (Codex F06),
-    # so they get the same Guardrails screen as the brief.
+    # User-typed clarification answers reach the prompt too, so they get the
+    # same Guardrails screen as the brief.
     answered = [
         str(field.get("value"))
         for field in (state.get("preflight_fields") or {}).values()
@@ -565,7 +541,7 @@ def reason_node(state: dict) -> dict:
 
     # Verified findings are kept even if others in the batch fail; failed
     # ones are dropped (never relaxed) and reported so the review can show
-    # its model coverage was incomplete (Codex F04).
+    # its model coverage was incomplete.
     model_findings, dropped = verify_model_findings(
         raw_findings=raw_findings,
         review_id=state["review_id"],

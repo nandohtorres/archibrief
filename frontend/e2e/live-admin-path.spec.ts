@@ -1,5 +1,5 @@
 // Covers the "admin-gated submit review -> view findings -> 'go deeper'"
-// critical path named in Work-Project-Build-Plan.md's Phase 7 E2E item.
+// critical path.
 // Built against out-live (NEXT_PUBLIC_API_BASE_URL="/mock-api" baked in
 // at build time - see e2e/dev-server.mjs), with every network call
 // intercepted via page.route() and answered locally. This deliberately
@@ -108,7 +108,7 @@ test.describe("admin-gated live critical path (mocked network)", () => {
   });
 
   test("admin key is tab-scoped, sent with requests, and can be forgotten", async ({ page }) => {
-    // Regression (Codex F18): the key used to persist in localStorage.
+    // Regression: the key must not persist in localStorage.
     let sentKey: string | undefined;
     await page.route("**/mock-api/uploads", async (route) => {
       sentKey = route.request().headers()["x-admin-key"];

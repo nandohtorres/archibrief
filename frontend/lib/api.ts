@@ -76,8 +76,7 @@ export async function submitReview(
   // startDate), never a {reviewId, status} shape, since this AWS_PROXY
   // integration subtype has no response transformation capability. The
   // {reviewId, status} result below is constructed from what was already
-  // sent, not parsed back out of the response (Work-Project-Issues-Log.md,
-  // 2026-10-01).
+  // sent, not parsed back out of the response.
   const response = await fetch(`${requireApiBaseUrl()}/reviews`, {
     method: "POST",
     headers: requestHeaders(adminKey),
@@ -93,7 +92,7 @@ export async function submitReview(
   return { reviewId: request.review_id, status: "pending" };
 }
 
-// ADR-0045 (2026-10-12): the first half of the direct-upload archive_path
+// ADR-0045: the first half of the direct-upload archive_path
 // flow — admin-gated like every other non-demo route, since issuing a
 // presigned POST is real AWS-facing work tied to this account's bucket.
 export async function requestUpload(
