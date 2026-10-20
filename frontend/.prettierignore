@@ -14,3 +14,6 @@ public/demos/chats
 # Demo diagrams: written by scripts/build_demo_architectures.py, whose
 # --check compares them byte for byte.
 public/demos/architecture
+# Demo stakeholder views: written by scripts/build_demo_stakeholder.py,
+# whose --check compares them byte for byte.
+public/demos/stakeholder

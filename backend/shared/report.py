@@ -9,9 +9,11 @@ contract shapes.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from backend.shared.models.finding import Finding, FindingType
+from backend.shared.stakeholder.brief import build_stakeholder_view
 
 # Heuristic mapping that matches frontend/lib/fixtures.ts's fixtureReport
 # (deterministic-rule-result -> high, fact -> confirmed, assumption ->
@@ -34,8 +36,32 @@ def compute_presentation(finding: Finding) -> dict[str, str]:
     return {"priority": priority, "short_label": short_label}
 
 
+def stakeholder_view(findings: list[Finding], ledger: dict[str, Any]) -> dict | None:
+    """The plain-language cards and budget summary, or None if building
+    them fails: like the diagram, never worth failing a report over."""
+    try:
+        return build_stakeholder_view(
+            findings, ledger.get("terraform_resources"), ledger.get("baseline_answers") or []
+        )
+    except Exception as exc:  # noqa: BLE001 - any failure just drops the view
+        print(json.dumps({"event": "stakeholder_view_failed", "error": type(exc).__name__}))
+        return None
+
+
+def report_findings(findings: list[Finding], view: dict | None) -> list[dict[str, Any]]:
+    blocks = (view or {}).get("blocks", {})
+    entries = []
+    for f in findings:
+        entry = {"record": f.model_dump(mode="json"), "presentation": compute_presentation(f)}
+        if f.finding_id in blocks:
+            entry["stakeholder"] = blocks[f.finding_id]
+        entries.append(entry)
+    return entries
+
+
 def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> dict[str, Any]:
     findings = [Finding.model_validate(f) for f in ledger.get("findings", [])]
+    view = stakeholder_view(findings, ledger)
 
     report = {
         "review_id": review_item["reviewId"],
@@ -53,11 +79,10 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
         "created_at": review_item.get("completedAt", ledger.get("generated_at")),
         "cost_estimate_tier": review_item.get("costEstimateTier", "medium"),
         "baseline_answers": ledger.get("baseline_answers", []),
-        "findings": [
-            {"record": f.model_dump(mode="json"), "presentation": compute_presentation(f)}
-            for f in findings
-        ],
+        "findings": report_findings(findings, view),
     }
+    if view is not None:
+        report["budget"] = view["budget"]
     # The architecture diagram; older ledgers don't have one.
     if isinstance(ledger.get("architecture"), dict):
         report["architecture"] = ledger["architecture"]

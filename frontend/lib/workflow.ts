@@ -1,4 +1,4 @@
-import type { FindingPriority, ReportFinding, ReviewReport } from "./contracts";
+import type { BudgetSummary, FindingPriority, ReportFinding, ReviewReport } from "./contracts";
 
 export type AppScreen = "submission" | "preflight" | "progress" | "clarify" | "report" | "failure";
 // Where the report on screen came from: the public sample (GET /demo),
@@ -145,3 +145,44 @@ export const reportSourceLabels: Record<ReportSource, string> = {
   live: "Complete · evidence ledger",
   fixture: "Complete · fixture evidence ledger",
 };
+
+// "$0", "$7.59", "$3,000": cents only where they matter.
+export function formatDollars(amount: number): string {
+  if (amount === 0) return "$0";
+  if (amount >= 100) {
+    return `$${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  }
+  return `$${amount.toFixed(2)}`;
+}
+
+// A fix's monthly cost, with "+ usage" when part of it can't be priced
+// from the code (log volume, table size, an unlisted instance size).
+export function formatMonthly(amount: number, hasUnpriced: boolean): string {
+  if (hasUnpriced) return amount === 0 ? "Usage-based" : `${formatDollars(amount)} + usage`;
+  return formatDollars(amount);
+}
+
+// The budget's one-sentence answer to "what will this cost us?".
+export function budgetHeadline(budget: BudgetSummary): string {
+  const paid = budget.item_count - budget.free_count;
+  const items = plural(budget.item_count, "item needs", "items need");
+  if (budget.item_count === 0) return "Nothing here needs fixing.";
+  if (paid === 0) return `${items} attention, and every fix is free on the AWS bill.`;
+  const free =
+    budget.free_count > 0
+      ? `${budget.free_count} ${budget.free_count === 1 ? "costs" : "cost"} nothing to fix`
+      : "none are free";
+  return `${items} attention: ${free}, the rest change the AWS bill.`;
+}
+
+// Findings in the budget's order (most urgent, cheapest first); findings
+// without a stakeholder card keep their place after them.
+export function orderByBudget(findings: ReportFinding[], budget?: BudgetSummary): ReportFinding[] {
+  if (!budget) return findings;
+  const rank = new Map(budget.rows.map((row, index) => [row.finding_id, index]));
+  return [...findings].sort(
+    (left, right) =>
+      (rank.get(left.record.finding_id) ?? rank.size) -
+      (rank.get(right.record.finding_id) ?? rank.size),
+  );
+}

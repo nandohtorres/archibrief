@@ -1,0 +1,582 @@
+{
+  "blocks": {
+    "02675180-cc09-4d57-aa33-1ee0e351d591": {
+      "action": "Turn on 1-minute monitoring and record network traffic (VPC Flow Logs).",
+      "analogy": "Like a guard who glances at the cameras every five minutes.",
+      "concern": null,
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 2.0,
+        "effort_hours_low": 1.0,
+        "effort_label": "1 to 2 hours",
+        "has_unpriced": true,
+        "lines": [
+          {
+            "basis": "list price",
+            "label": "1-minute server monitoring",
+            "monthly_high": 2.1,
+            "monthly_low": 2.1,
+            "source_url": "https://aws.amazon.com/cloudwatch/pricing/"
+          },
+          {
+            "basis": "$0.50 per GB of logs written",
+            "label": "Access logs",
+            "monthly_high": null,
+            "monthly_low": 0.0,
+            "source_url": "https://aws.amazon.com/cloudwatch/pricing/"
+          }
+        ],
+        "monthly_known": 2.1
+      },
+      "inaction": {
+        "detail": "Without an audit trail or logs, a break-in is found later, and breaches that last more than 200 days averaged $5.65 million against $4.32 million for faster ones.",
+        "headline": "Breaches take 247 days on average to find and contain",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "medium",
+      "source": "reviewer",
+      "subject": null,
+      "title": "The internet-facing server is only checked every 5 minutes",
+      "verdict": "when-budget-allows",
+      "verdict_label": "When budget allows",
+      "what_could_happen": "Short attacks and spikes fall between checks, so an intrusion is noticed later."
+    },
+    "458d3366-73cc-4245-bc41-bb9f75077e80": {
+      "action": "No change needed for cost. The private storage route is its own item.",
+      "analogy": "Like worrying about tolls on a road that has none.",
+      "concern": null,
+      "fix": null,
+      "inaction": null,
+      "needs_action": false,
+      "severity": "low",
+      "source": "reviewer",
+      "subject": null,
+      "title": "No extra data-transfer charge here",
+      "verdict": null,
+      "verdict_label": null,
+      "what_could_happen": "Nothing: transfer between the server and S3 in the same region is free. The reviewer corrected this finding."
+    },
+    "600b9ca4-c98e-4386-a9d6-de27672b7067": {
+      "action": "Declare the bucket's encryption in the code, with your own key for sensitive data.",
+      "analogy": "Like a safe that came with a factory lock nobody chose or wrote down.",
+      "concern": "s3_encryption",
+      "fix": {
+        "caveat": "Declaring S3's default encryption is free; a customer-managed key adds about $1/month and lets you control who can decrypt.",
+        "effort_hours_high": 1,
+        "effort_hours_low": 0.5,
+        "effort_label": "30 minutes to 1 hour",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "Configuration change only",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": ""
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "medium",
+      "source": "rule",
+      "subject": "cg-cardholder-data-bucket",
+      "title": "The code doesn't say how stored files are encrypted",
+      "verdict": "quick-win",
+      "verdict_label": "Quick win",
+      "what_could_happen": "S3 encrypts new files with an AWS-owned key by default, but nothing here chooses or records that, and nobody can limit who decrypts sensitive files."
+    },
+    "624a4c66-8f2d-4c22-96af-0702aa6274ac": {
+      "action": "Run a second server in another data center behind the load balancer from the HTTPS fix, with automatic replacement.",
+      "analogy": "Like a shop with one cashier and no one to cover.",
+      "concern": null,
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 12.0,
+        "effort_hours_low": 4.0,
+        "effort_label": "0.5 to 1.5 working days",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "t3.micro at $0.0104/hour, on-demand",
+            "label": "Extra server",
+            "monthly_high": 7.59,
+            "monthly_low": 7.59,
+            "source_url": "https://aws.amazon.com/ec2/pricing/on-demand/"
+          }
+        ],
+        "monthly_known": 7.59
+      },
+      "inaction": {
+        "detail": "Your 99.9% availability target allows about 44 minutes of downtime a month, and one failure here could use all of it. There's no fair average for downtime: it depends on the business.",
+        "headline": "Every hour offline costs what the service earns or saves in an hour",
+        "method": "Multiply your revenue (or staff time saved) per hour by the hours a failure would keep the service down.",
+        "source_name": null,
+        "source_url": null
+      },
+      "needs_action": true,
+      "severity": "high",
+      "source": "reviewer",
+      "subject": null,
+      "title": "The whole platform runs on one server",
+      "verdict": "worth-the-money",
+      "verdict_label": "Worth the money",
+      "what_could_happen": "A crash, a reboot for patching or a data-center problem takes the card platform offline until someone fixes it."
+    },
+    "a5c4e002-aa8f-4088-a26e-3ba59830ba84": {
+      "action": "Add a free S3 gateway endpoint and let the bucket be reached only through it.",
+      "analogy": "Like using a public road between two of your own buildings when a private tunnel is free.",
+      "concern": null,
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 3.0,
+        "effort_hours_low": 1.0,
+        "effort_label": "1 to 3 hours",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "S3/DynamoDB gateway endpoint",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": "https://aws.amazon.com/vpc/pricing/"
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "medium",
+      "source": "reviewer",
+      "subject": null,
+      "title": "Storage traffic doesn't use a private route",
+      "verdict": "quick-win",
+      "verdict_label": "Quick win",
+      "what_could_happen": "If the bucket's settings slip, nothing makes it refuse requests from outside your network. A private endpoint lets the bucket accept only your own traffic."
+    },
+    "cb07d6a3-579d-4501-a42c-1b344acbc411": {
+      "action": "Turn on a CloudTrail trail that writes to a locked-down bucket.",
+      "analogy": "Like an office building with no sign-in sheet and no cameras.",
+      "concern": "cloudtrail_present",
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 2,
+        "effort_hours_low": 1,
+        "effort_label": "1 to 2 hours",
+        "has_unpriced": true,
+        "lines": [
+          {
+            "basis": "the first trail of management events is free; you pay S3 storage for the log files, usually a few dollars a month",
+            "label": "CloudTrail audit log",
+            "monthly_high": null,
+            "monthly_low": 0.0,
+            "source_url": "https://aws.amazon.com/cloudtrail/pricing/"
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "Without an audit trail or logs, a break-in is found later, and breaches that last more than 200 days averaged $5.65 million against $4.32 million for faster ones.",
+        "headline": "Breaches take 247 days on average to find and contain",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "high",
+      "source": "rule",
+      "subject": null,
+      "title": "There's no record of who did what in the AWS account",
+      "verdict": "worth-the-money",
+      "verdict_label": "Worth the money",
+      "what_could_happen": "If something goes wrong, there's no way to tell who changed what, or when."
+    },
+    "cd120b0c-9d10-438e-ad83-4f61af51567c": {
+      "action": "Replace the broad AWS policy with one that names only the resources the code uses.",
+      "analogy": "Like a delivery driver with keys to the whole warehouse.",
+      "concern": "iam_compute_broad_managed",
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 6,
+        "effort_hours_low": 2,
+        "effort_label": "2 to 6 hours",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "Configuration change only",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": ""
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "high",
+      "source": "rule",
+      "subject": "cg-banking-WAF-Role",
+      "title": "Running code has far more access than it needs",
+      "verdict": "fix-today",
+      "verdict_label": "Fix today",
+      "what_could_happen": "If the server or function is hacked, the attacker can reach everything this access allows, such as every storage bucket."
+    },
+    "d4831d89-2615-442e-bf98-81d30627e116": {
+      "action": "The fixes for IMDSv2, the server's access and the private storage route each break the chain. Once they're done, test that it's closed.",
+      "analogy": "Like an unlocked side door, a front desk that hands out keys, and a master key on the ring, all at once.",
+      "concern": null,
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 1.0,
+        "effort_hours_low": 0.5,
+        "effort_label": "30 minutes to 1 hour",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "Configuration change only",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": ""
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "critical",
+      "source": "reviewer",
+      "subject": null,
+      "title": "Three gaps line up into a path to the card data",
+      "verdict": "fix-today",
+      "verdict_label": "Fix today",
+      "what_could_happen": "An attacker who tricks the web server can take its access keys and download or delete every card record. This is the pattern behind the 2019 Capital One breach."
+    },
+    "e0eff08e-bd54-4d2f-bb01-ac17890eb13d": {
+      "action": "Require IMDSv2 tokens on the server, a one-line setting.",
+      "analogy": "Like a hotel front desk that gives a room key to anyone who calls.",
+      "concern": "ec2_imdsv2",
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 2,
+        "effort_hours_low": 0.5,
+        "effort_label": "30 minutes to 2 hours",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "Configuration change only",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": ""
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "high",
+      "source": "rule",
+      "subject": "ec2-vulnerable-proxy-server",
+      "title": "The server hands out its access keys too easily",
+      "verdict": "fix-today",
+      "verdict_label": "Fix today",
+      "what_could_happen": "A common web flaw (SSRF) can trick the server into revealing its AWS keys. This is how the 2019 Capital One breach happened."
+    },
+    "e61e6701-93c0-48e9-ba2a-db6097224bdd": {
+      "action": "Turn on all four of AWS's public-access blocks for the bucket.",
+      "analogy": "Like a filing cabinet whose lock can be switched off by one wrong setting.",
+      "concern": "s3_public_access",
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 1,
+        "effort_hours_low": 0.25,
+        "effort_label": "15 minutes to 1 hour",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "Configuration change only",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": ""
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "high",
+      "source": "rule",
+      "subject": "cg-cardholder-data-bucket",
+      "title": "A storage bucket isn't locked against public sharing",
+      "verdict": "fix-today",
+      "verdict_label": "Fix today",
+      "what_could_happen": "One mistaken permission change could put every file in it on the open internet."
+    },
+    "e7983266-071a-48d5-9208-3b7cac99e75a": {
+      "action": "Serve the site over HTTPS with a free AWS certificate on a load balancer, and require HTTPS for storage calls.",
+      "analogy": "Like reading card numbers aloud on a phone line others can listen in on.",
+      "concern": null,
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 8.0,
+        "effort_hours_low": 4.0,
+        "effort_label": "4 to 8 hours",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "list price",
+            "label": "Application Load Balancer",
+            "monthly_high": 22.27,
+            "monthly_low": 22.27,
+            "source_url": "https://aws.amazon.com/elasticloadbalancing/pricing/"
+          }
+        ],
+        "monthly_known": 22.27
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "critical",
+      "source": "reviewer",
+      "subject": null,
+      "title": "Card data travels to the website unencrypted",
+      "verdict": "worth-the-money",
+      "verdict_label": "Worth the money",
+      "what_could_happen": "Anyone on the network path can read or change what customers send, and it breaks PCI-DSS requirement 4."
+    },
+    "e82d002f-ed0d-4a93-bb2e-d5cb5b3514ad": {
+      "action": "Turn on versioning so old copies are kept, with a rule that expires them.",
+      "analogy": "Like a document with no undo and no saved drafts.",
+      "concern": "s3_versioning",
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 1,
+        "effort_hours_low": 0.25,
+        "effort_label": "15 minutes to 1 hour",
+        "has_unpriced": true,
+        "lines": [
+          {
+            "basis": "$0.023 per GB of old versions kept",
+            "label": "Storage for old file versions",
+            "monthly_high": null,
+            "monthly_low": 0.0,
+            "source_url": "https://aws.amazon.com/s3/pricing/"
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "What organizations spent to recover from a ransomware attack, not counting any ransom paid. Backups and version history are what make recovery possible.",
+        "headline": "Average ransomware recovery: $1.7 million",
+        "method": null,
+        "source_name": "Sophos State of Ransomware 2026",
+        "source_url": "https://www.sophos.com/en-us/content/state-of-ransomware"
+      },
+      "needs_action": true,
+      "severity": "medium",
+      "source": "rule",
+      "subject": "cg-cardholder-data-bucket",
+      "title": "Deleted or overwritten files can't be brought back",
+      "verdict": "when-budget-allows",
+      "verdict_label": "When budget allows",
+      "what_could_happen": "A mistake, a bad script or ransomware could wipe files for good."
+    }
+  },
+  "budget": {
+    "effort_hours_high": 39.0,
+    "effort_hours_low": 15.0,
+    "effort_label": "2 to 5 working days",
+    "free_count": 6,
+    "item_count": 11,
+    "monthly_known": 31.96,
+    "monthly_optional": 2.1,
+    "monthly_recommended": 29.86,
+    "note": "AWS list prices for us-east-1, on-demand, as of 2026-10. A real bill also depends on region, discounts, traffic and storage. Effort is a rough guide for one engineer who knows the system.",
+    "price_region": "us-east-1",
+    "prices_as_of": "2026-10",
+    "recommended_has_unpriced": true,
+    "rows": [
+      {
+        "effort_label": "30 minutes to 1 hour",
+        "finding_id": "d4831d89-2615-442e-bf98-81d30627e116",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "critical",
+        "subject": null,
+        "title": "Three gaps line up into a path to the card data",
+        "verdict": "fix-today",
+        "verdict_label": "Fix today"
+      },
+      {
+        "effort_label": "4 to 8 hours",
+        "finding_id": "e7983266-071a-48d5-9208-3b7cac99e75a",
+        "has_unpriced": false,
+        "monthly_known": 22.27,
+        "severity": "critical",
+        "subject": null,
+        "title": "Card data travels to the website unencrypted",
+        "verdict": "worth-the-money",
+        "verdict_label": "Worth the money"
+      },
+      {
+        "effort_label": "2 to 6 hours",
+        "finding_id": "cd120b0c-9d10-438e-ad83-4f61af51567c",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "high",
+        "subject": "cg-banking-WAF-Role",
+        "title": "Running code has far more access than it needs",
+        "verdict": "fix-today",
+        "verdict_label": "Fix today"
+      },
+      {
+        "effort_label": "30 minutes to 2 hours",
+        "finding_id": "e0eff08e-bd54-4d2f-bb01-ac17890eb13d",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "high",
+        "subject": "ec2-vulnerable-proxy-server",
+        "title": "The server hands out its access keys too easily",
+        "verdict": "fix-today",
+        "verdict_label": "Fix today"
+      },
+      {
+        "effort_label": "15 minutes to 1 hour",
+        "finding_id": "e61e6701-93c0-48e9-ba2a-db6097224bdd",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "high",
+        "subject": "cg-cardholder-data-bucket",
+        "title": "A storage bucket isn't locked against public sharing",
+        "verdict": "fix-today",
+        "verdict_label": "Fix today"
+      },
+      {
+        "effort_label": "1 to 2 hours",
+        "finding_id": "cb07d6a3-579d-4501-a42c-1b344acbc411",
+        "has_unpriced": true,
+        "monthly_known": 0.0,
+        "severity": "high",
+        "subject": null,
+        "title": "There's no record of who did what in the AWS account",
+        "verdict": "worth-the-money",
+        "verdict_label": "Worth the money"
+      },
+      {
+        "effort_label": "0.5 to 1.5 working days",
+        "finding_id": "624a4c66-8f2d-4c22-96af-0702aa6274ac",
+        "has_unpriced": false,
+        "monthly_known": 7.59,
+        "severity": "high",
+        "subject": null,
+        "title": "The whole platform runs on one server",
+        "verdict": "worth-the-money",
+        "verdict_label": "Worth the money"
+      },
+      {
+        "effort_label": "30 minutes to 1 hour",
+        "finding_id": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "medium",
+        "subject": "cg-cardholder-data-bucket",
+        "title": "The code doesn't say how stored files are encrypted",
+        "verdict": "quick-win",
+        "verdict_label": "Quick win"
+      },
+      {
+        "effort_label": "1 to 3 hours",
+        "finding_id": "a5c4e002-aa8f-4088-a26e-3ba59830ba84",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "medium",
+        "subject": null,
+        "title": "Storage traffic doesn't use a private route",
+        "verdict": "quick-win",
+        "verdict_label": "Quick win"
+      },
+      {
+        "effort_label": "15 minutes to 1 hour",
+        "finding_id": "e82d002f-ed0d-4a93-bb2e-d5cb5b3514ad",
+        "has_unpriced": true,
+        "monthly_known": 0.0,
+        "severity": "medium",
+        "subject": "cg-cardholder-data-bucket",
+        "title": "Deleted or overwritten files can't be brought back",
+        "verdict": "when-budget-allows",
+        "verdict_label": "When budget allows"
+      },
+      {
+        "effort_label": "1 to 2 hours",
+        "finding_id": "02675180-cc09-4d57-aa33-1ee0e351d591",
+        "has_unpriced": true,
+        "monthly_known": 2.1,
+        "severity": "medium",
+        "subject": null,
+        "title": "The internet-facing server is only checked every 5 minutes",
+        "verdict": "when-budget-allows",
+        "verdict_label": "When budget allows"
+      }
+    ],
+    "unpriced_items": [
+      "Access logs",
+      "CloudTrail audit log",
+      "Storage for old file versions"
+    ],
+    "verdict_counts": {
+      "fix-today": 4,
+      "quick-win": 2,
+      "when-budget-allows": 2,
+      "worth-the-money": 3
+    }
+  },
+  "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e"
+}

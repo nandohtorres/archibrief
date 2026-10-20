@@ -22,6 +22,7 @@ inline at Ingest and again here before calling the model.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 
 from pydantic import ValidationError
@@ -35,12 +36,21 @@ from backend.shared.models.finding import (
     Finding,
     FindingCategory,
     FindingType,
+    FixComponent,
+    PlainLanguage,
 )
+from backend.shared.stakeholder.catalog import HARMS
+from backend.shared.stakeholder.pricing import PRICE_ITEM_KEYS
+
+# What a model finding's fix may add. Shield Advanced ($3,000/month) is
+# left out: a figure that size only comes from a hand-written recipe.
+_MODEL_PRICE_ITEMS = [key for key in PRICE_ITEM_KEYS if key != "shield_advanced"]
+_MODEL_MAX_QUANTITY = 4
 
 # Bump whenever the model-facing contract changes (tool schema, input
 # fields, prompt rules), so a persisted finding can be traced to the exact
 # prompt that produced it (ADR-0039).
-PROMPT_VERSION = "reason_prompt@2026-10-15d"
+PROMPT_VERSION = "reason_prompt@2026-10-20"
 
 _TOOL_NAME = "emit_findings"
 
@@ -102,7 +112,19 @@ results — never answer in plain text. You must:
   availability, data sensitivity, etc.), each labeled by source: "answered"
   by the user, an "assumption" (conservative default), or "unknown". Tailor
   findings to them, and tag any finding that depends on a requirement with
-  is_assumption=true as type "assumption"."""
+  is_assumption=true as type "assumption".
+- Every finding also gets a "plain" explanation for a business reader
+  who isn't an engineer: a short title with no AWS jargon, one everyday
+  comparison (analogy), what could happen, and what fixing it involves.
+  Set needs_action=false when the finding only confirms something is
+  already done well. Never write a dollar amount, price or cost estimate
+  anywhere: application code prices the fix. Instead, list in
+  fix_components what the fix adds, using only the listed item names
+  ("none" when it is only a configuration change), with quantity, and
+  size only when it is an instance type or class listed in
+  terraform_resources. Give a realistic effort range in hours for one
+  engineer, and pick the harm that best describes the cost of not
+  fixing it ("none" if no listed harm fits)."""
 
 # Appended to SYSTEM_PROMPT only for a "go deeper" re-run (ADR-0023:
 # lightweight is the default first pass; deeper evaluation happens only
@@ -155,6 +177,49 @@ class FindingValidationError(Exception):
 _MODEL_ALLOWED_TYPES = [t.value for t in FindingType if t != FindingType.DETERMINISTIC_RULE_RESULT]
 _CITATIONLESS_TYPES = {FindingType.NOT_OBSERVABLE}
 
+
+# The stakeholder view's explanation (backend/shared/stakeholder). Prices
+# are never asked for: fix_components names price-table items only.
+_PLAIN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "analogy": {"type": "string"},
+        "what_could_happen": {"type": "string"},
+        "action": {"type": "string"},
+        "needs_action": {"type": "boolean"},
+        "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+        "harm": {"type": "string", "enum": [*HARMS, "none"]},
+        "fix_components": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "item": {"type": "string", "enum": _MODEL_PRICE_ITEMS},
+                    "quantity": {"type": "integer"},
+                    "size": {"type": ["string", "null"]},
+                },
+                "required": ["item", "quantity", "size"],
+                "additionalProperties": False,
+            },
+        },
+        "effort_hours_low": {"type": "number"},
+        "effort_hours_high": {"type": "number"},
+    },
+    "required": [
+        "title",
+        "analogy",
+        "what_could_happen",
+        "action",
+        "needs_action",
+        "severity",
+        "harm",
+        "fix_components",
+        "effort_hours_low",
+        "effort_hours_high",
+    ],
+    "additionalProperties": False,
+}
 
 _FINDING_INPUT_SCHEMA = {
     "type": "object",
@@ -215,6 +280,7 @@ _FINDING_INPUT_SCHEMA = {
                         },
                     },
                     "depth_level": {"type": "string", "enum": ["lightweight", "deep"]},
+                    "plain": _PLAIN_SCHEMA,
                 },
                 "required": [
                     "category",
@@ -230,6 +296,7 @@ _FINDING_INPUT_SCHEMA = {
                     "framework_mapping",
                     "alternatives_considered",
                     "depth_level",
+                    "plain",
                 ],
                 "additionalProperties": False,
             },
@@ -384,6 +451,73 @@ def _resolve_citation(
     )
 
 
+# A dollar figure in the model's plain text would bypass the price table.
+_MONEY = re.compile(
+    r"[$€£¥]|\b(usd|eur|gbp|dollars?|euros?|pounds?|cents?|bucks)\b"
+    r"|\d\s*k\b|\d[\d,.]*\s*(a|per|/)\s*(month|mo|year|yr|hour|hr)\b",
+    re.IGNORECASE,
+)
+_SIZE_SETTINGS = ("instance_type", "instance_class")
+
+
+def _declared_sizes(terraform_resources: dict | None) -> set[str]:
+    """Instance types/classes the submitted Terraform really uses."""
+    sizes = set()
+    for entry in (terraform_resources or {}).get("resources") or []:
+        for setting in _SIZE_SETTINGS:
+            value = (entry.get("settings") or {}).get(setting)
+            if isinstance(value, str):
+                sizes.add(value)
+    return sizes
+
+
+def verify_plain(raw: object, declared_sizes: set[str]) -> PlainLanguage | None:
+    """The model's plain explanation, or None when it doesn't hold up.
+
+    It only feeds the stakeholder view, so a bad one is dropped without
+    dropping the finding. Text naming a dollar amount is rejected (prices
+    come from code), and a size the Terraform doesn't use is cleared, so
+    it shows as unpriced rather than priced from a guess."""
+    if not isinstance(raw, dict):
+        return None
+    texts = [raw.get(k) for k in ("title", "analogy", "what_could_happen", "action")]
+    if any(isinstance(t, str) and _MONEY.search(t) for t in texts):
+        return None
+    components_raw = raw.get("fix_components") or []
+    if not isinstance(components_raw, list) or any(
+        not isinstance(c, dict)
+        or c.get("item") not in _MODEL_PRICE_ITEMS
+        or not isinstance(c.get("quantity") or 1, int)
+        or not 1 <= (c.get("quantity") or 1) <= _MODEL_MAX_QUANTITY
+        for c in components_raw
+    ):
+        return None
+    try:
+        components = [
+            FixComponent(
+                item=c["item"],
+                quantity=c.get("quantity") or 1,
+                size=c.get("size") if c.get("size") in declared_sizes else None,
+            )
+            for c in components_raw
+        ]
+        return PlainLanguage(
+            written_by="model",
+            title=raw["title"],
+            analogy=raw["analogy"],
+            what_could_happen=raw["what_could_happen"],
+            action=raw["action"],
+            needs_action=raw["needs_action"],
+            severity=raw["severity"],
+            harm=None if raw.get("harm") in (None, "none") else raw["harm"],
+            fix_components=components,
+            effort_hours_low=raw["effort_hours_low"],
+            effort_hours_high=raw["effort_hours_high"],
+        )
+    except (ValidationError, KeyError, TypeError, ValueError, AttributeError):
+        return None
+
+
 def parse_model_findings(
     raw_findings: list[dict],
     review_id: str,
@@ -392,6 +526,7 @@ def parse_model_findings(
     retrieved_chunks: list[dict],
     deterministic_rule_version: str | None,
     parent_finding_id: str | None = None,
+    terraform_resources: dict | None = None,
 ) -> list[Finding]:
     """Strict form of verify_model_findings: raises FindingValidationError
     if ANY finding fails. Used by the eval/validation scripts, which need to
@@ -405,6 +540,7 @@ def parse_model_findings(
         retrieved_chunks,
         deterministic_rule_version,
         parent_finding_id,
+        terraform_resources,
     )
     if failures:
         raise FindingValidationError(failures)
@@ -419,6 +555,7 @@ def verify_model_findings(
     retrieved_chunks: list[dict],
     deterministic_rule_version: str | None,
     parent_finding_id: str | None = None,
+    terraform_resources: dict | None = None,
 ) -> tuple[list[Finding], list[str]]:
     """Returns (verified findings, failure reasons). An item that fails
     citation or shape verification is excluded, never relaxed.
@@ -436,6 +573,7 @@ def verify_model_findings(
         raise ToolCallMissing(f"expected a list of findings, got {raw_findings!r}")
 
     chunk_by_id = {c["chunk_id"]: c for c in retrieved_chunks}
+    declared_sizes = _declared_sizes(terraform_resources)
     retrieved_chunk_ids = [c.get("chunk_id", "") for c in retrieved_chunks]
 
     failures: list[str] = []
@@ -478,6 +616,7 @@ def verify_model_findings(
                     retrieved_chunk_ids=retrieved_chunk_ids,
                     deterministic_rule_version=deterministic_rule_version,
                     parent_finding_id=parent_finding_id,
+                    plain=verify_plain(item.get("plain"), declared_sizes),
                 )
             )
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
@@ -550,6 +689,7 @@ def reason_node(state: dict) -> dict:
         retrieved_chunks=retrieved_chunks,
         deterministic_rule_version=state.get("deterministic_rule_version"),
         parent_finding_id=state.get("parent_finding_id"),
+        terraform_resources=state.get("terraform_resources"),
     )
     findings = resolve_rule_findings(rule_findings) + model_findings
 

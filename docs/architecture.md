@@ -136,6 +136,39 @@ flowchart LR
    against the review. Admin-only until public access opens; see
    `docs/chat.md`.
 
+### The stakeholder view: plain terms and what fixing costs
+
+The guided report explains each finding for a non-engineer and puts a
+price on it, so the person approving the work can see what a fix costs
+and what not fixing could cost. `backend/shared/stakeholder/` builds it
+when a report is read (`backend/shared/report.py`), so a price update
+also reaches older reports:
+
+- **Rule findings** carry their `concern` (for example `rds_multi_az`).
+  `catalog.py` has hand-written text for each concern: a plain title, an
+  everyday comparison, what could happen, the fix, what the fix adds and
+  roughly how long it takes. Older reports without a concern are matched
+  by their fixed rule titles.
+- **Model findings** carry a `plain` block written by Reason. The model
+  can only name items from the price table, plus an instance size the
+  Terraform really uses. Validation drops a `plain` block that states a
+  dollar amount, and keeps the finding.
+- **Prices** come only from `pricing.py`: dated us-east-1 on-demand list
+  prices. Anything that depends on usage (logs, table size) or on a size
+  the table doesn't list is shown as unpriced. It is never guessed.
+- **Cost of not fixing** cites a published figure (IBM Cost of a Data
+  Breach 2026, Sophos State of Ransomware 2026), or explains how to
+  estimate it. Downtime uses the review's own availability target.
+- **Budget summary:** totals, free-fix count, effort, and a verdict per
+  fix (Fix today, Quick win, Worth the money, When budget allows), shown
+  at the top and bottom of the view.
+
+The demos' saved reports predate the `plain` block. Their explanations
+are written by hand in `scripts/demo_plain_language.json`, and
+`scripts/build_demo_stakeholder.py` builds `public/demos/stakeholder/`
+from them. A test fails if those files fall out of date with the price
+table or catalog.
+
 `GET /demo` is the one route with no Lambda/Step Functions/Bedrock cost
 at all — a precomputed, static reference report, deliberately
 unauthenticated (ADR-0029).

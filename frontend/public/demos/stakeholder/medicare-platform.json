@@ -1,0 +1,363 @@
+{
+  "blocks": {
+    "109c426a-8cd9-4aa7-a906-80190c403742": {
+      "action": "Decide whether AWS Shield Advanced is worth it. For most workloads the Shield Standard protection already included is enough.",
+      "analogy": "Like home insurance without flood cover.",
+      "concern": null,
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 4.0,
+        "effort_hours_low": 2.0,
+        "effort_label": "2 to 4 hours",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "list price, with a one-year commitment, plus data transfer fees; one subscription covers the whole organization",
+            "label": "AWS Shield Advanced",
+            "monthly_high": 3000.0,
+            "monthly_low": 3000.0,
+            "source_url": "https://aws.amazon.com/shield/pricing/"
+          }
+        ],
+        "monthly_known": 3000.0
+      },
+      "inaction": {
+        "detail": "Your 99.9% availability target allows about 44 minutes of downtime a month, and one failure here could use all of it. There's no fair average for downtime: it depends on the business.",
+        "headline": "Every hour offline costs what the service earns or saves in an hour",
+        "method": "Multiply your revenue (or staff time saved) per hour by the hours a failure would keep the service down.",
+        "source_name": null,
+        "source_url": null
+      },
+      "needs_action": true,
+      "severity": "low",
+      "source": "reviewer",
+      "subject": null,
+      "title": "The site has standard, not premium, protection against traffic floods",
+      "verdict": "when-budget-allows",
+      "verdict_label": "When budget allows",
+      "what_could_happen": "A very large flood of traffic could slow or block partner access and put the 99.9% target at risk."
+    },
+    "4454b72d-f729-41d7-b273-0667fc1ee571": {
+      "action": "Confirm 90 days meets the record-keeping policy.",
+      "analogy": "Like daily, weekly and monthly copies, kept in two places.",
+      "concern": null,
+      "fix": null,
+      "inaction": null,
+      "needs_action": false,
+      "severity": "low",
+      "source": "reviewer",
+      "subject": null,
+      "title": "Backups run on four schedules",
+      "verdict": null,
+      "verdict_label": null,
+      "what_could_happen": "Little: the code keeps backups every 4 hours (1 day), daily (7 days), weekly (35 days) and monthly (90 days), with copies in a second vault. The reviewer checked this."
+    },
+    "4c93e0fb-6304-4d22-9aa0-966623888c6d": {
+      "action": "Turn on a CloudTrail trail that writes to a locked-down bucket.",
+      "analogy": "Like an office building with no sign-in sheet and no cameras.",
+      "concern": "cloudtrail_present",
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 2,
+        "effort_hours_low": 1,
+        "effort_label": "1 to 2 hours",
+        "has_unpriced": true,
+        "lines": [
+          {
+            "basis": "the first trail of management events is free; you pay S3 storage for the log files, usually a few dollars a month",
+            "label": "CloudTrail audit log",
+            "monthly_high": null,
+            "monthly_low": 0.0,
+            "source_url": "https://aws.amazon.com/cloudtrail/pricing/"
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "Without an audit trail or logs, a break-in is found later, and breaches that last more than 200 days averaged $5.65 million against $4.32 million for faster ones.",
+        "headline": "Breaches take 247 days on average to find and contain",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "high",
+      "source": "rule",
+      "subject": null,
+      "title": "There's no record of who did what in the AWS account",
+      "verdict": "worth-the-money",
+      "verdict_label": "Worth the money",
+      "what_could_happen": "If something goes wrong, there's no way to tell who changed what, or when."
+    },
+    "7ffe34ac-cb93-43d7-ba30-679d035d976e": {
+      "action": "Turn on all four of AWS's public-access blocks for the bucket.",
+      "analogy": "Like a filing cabinet whose lock can be switched off by one wrong setting.",
+      "concern": "s3_public_access",
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 1,
+        "effort_hours_low": 0.25,
+        "effort_label": "15 minutes to 1 hour",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "Configuration change only",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": ""
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "high",
+      "source": "rule",
+      "subject": "services/bucket-access-logs/bucket_access_logs",
+      "title": "A storage bucket isn't locked against public sharing",
+      "verdict": "fix-today",
+      "verdict_label": "Fix today",
+      "what_could_happen": "One mistaken permission change could put every file in it on the open internet."
+    },
+    "9dacdaed-4075-43aa-bc54-fcae707bb67b": {
+      "action": "Point the log bucket's encryption at the customer-managed key the project already creates.",
+      "analogy": "Like knowing a safe is locked but not who holds the key.",
+      "concern": null,
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 1.0,
+        "effort_hours_low": 0.5,
+        "effort_label": "30 minutes to 1 hour",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "Configuration change only",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": ""
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "medium",
+      "source": "reviewer",
+      "subject": null,
+      "title": "It's unclear which key encrypts the audit logs",
+      "verdict": "quick-win",
+      "verdict_label": "Quick win",
+      "what_could_happen": "With an AWS-managed key, you can't control or audit exactly who can decrypt the health-data audit logs."
+    },
+    "ade46b43-d232-4874-aee0-631426150e03": {
+      "action": "Confirm each partner type has its own narrowly scoped role or API credentials, set up outside this code.",
+      "analogy": "Like a building with three tenant companies where you can't see whose badge opens which floor.",
+      "concern": null,
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 8.0,
+        "effort_hours_low": 2.0,
+        "effort_label": "2 to 8 hours",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "Configuration change only",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": ""
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "The global average cost of a breach, counting investigation, notification, lost business and fines. Breaches in the US averaged $11.5 million.",
+        "headline": "Average data breach: $4.99 million",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "high",
+      "source": "reviewer",
+      "subject": null,
+      "title": "Partner access controls aren't visible in this code",
+      "verdict": "fix-today",
+      "verdict_label": "Fix today",
+      "what_could_happen": "If partners share credentials, one compromised partner could reach another partner's Medicare claims data."
+    },
+    "c684c845-928f-4aee-9ae6-b47b84ecc634": {
+      "action": "Review who can use the keys; rotation needs no change.",
+      "analogy": "Like changing the locks on a schedule.",
+      "concern": null,
+      "fix": null,
+      "inaction": null,
+      "needs_action": false,
+      "severity": "low",
+      "source": "reviewer",
+      "subject": null,
+      "title": "Encryption keys change automatically",
+      "verdict": null,
+      "verdict_label": null,
+      "what_could_happen": "Little: rotation is on. It's still worth checking that only the right services can use the keys."
+    },
+    "c89a5c02-0b75-407b-b71c-fd379e931602": {
+      "action": "Send AWS Health and backup events to the team's incident system with EventBridge rules.",
+      "analogy": "Like alarms ringing in an empty room.",
+      "concern": null,
+      "fix": {
+        "caveat": null,
+        "effort_hours_high": 4.0,
+        "effort_hours_low": 2.0,
+        "effort_label": "2 to 4 hours",
+        "has_unpriced": false,
+        "lines": [
+          {
+            "basis": "no AWS charge",
+            "label": "Configuration change only",
+            "monthly_high": 0.0,
+            "monthly_low": 0.0,
+            "source_url": ""
+          }
+        ],
+        "monthly_known": 0.0
+      },
+      "inaction": {
+        "detail": "Without an audit trail or logs, a break-in is found later, and breaches that last more than 200 days averaged $5.65 million against $4.32 million for faster ones.",
+        "headline": "Breaches take 247 days on average to find and contain",
+        "method": null,
+        "source_name": "IBM Cost of a Data Breach Report 2026",
+        "source_url": "https://www.ibm.com/reports/data-breach"
+      },
+      "needs_action": true,
+      "severity": "medium",
+      "source": "reviewer",
+      "subject": null,
+      "title": "Problems aren't sent to the on-call team automatically",
+      "verdict": "quick-win",
+      "verdict_label": "Quick win",
+      "what_could_happen": "A key, firewall or backup problem could go unnoticed until a partner reports a failure."
+    },
+    "c8e05434-f498-4d2d-bcae-449edc8ab97e": {
+      "action": "Check that the lock mode and retention period match the record-keeping policy.",
+      "analogy": "Like a sealed logbook.",
+      "concern": null,
+      "fix": null,
+      "inaction": null,
+      "needs_action": false,
+      "severity": "low",
+      "source": "reviewer",
+      "subject": null,
+      "title": "Audit logs are stored so they can't be altered",
+      "verdict": null,
+      "verdict_label": null,
+      "what_could_happen": "Little, as long as the lock is in compliance mode with a long enough retention period."
+    }
+  },
+  "budget": {
+    "effort_hours_high": 20.0,
+    "effort_hours_low": 7.75,
+    "effort_label": "1 to 2.5 working days",
+    "free_count": 4,
+    "item_count": 6,
+    "monthly_known": 3000.0,
+    "monthly_optional": 3000.0,
+    "monthly_recommended": 0.0,
+    "note": "AWS list prices for us-east-1, on-demand, as of 2026-10. A real bill also depends on region, discounts, traffic and storage. Effort is a rough guide for one engineer who knows the system.",
+    "price_region": "us-east-1",
+    "prices_as_of": "2026-10",
+    "recommended_has_unpriced": true,
+    "rows": [
+      {
+        "effort_label": "15 minutes to 1 hour",
+        "finding_id": "7ffe34ac-cb93-43d7-ba30-679d035d976e",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "high",
+        "subject": "services/bucket-access-logs/bucket_access_logs",
+        "title": "A storage bucket isn't locked against public sharing",
+        "verdict": "fix-today",
+        "verdict_label": "Fix today"
+      },
+      {
+        "effort_label": "2 to 8 hours",
+        "finding_id": "ade46b43-d232-4874-aee0-631426150e03",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "high",
+        "subject": null,
+        "title": "Partner access controls aren't visible in this code",
+        "verdict": "fix-today",
+        "verdict_label": "Fix today"
+      },
+      {
+        "effort_label": "1 to 2 hours",
+        "finding_id": "4c93e0fb-6304-4d22-9aa0-966623888c6d",
+        "has_unpriced": true,
+        "monthly_known": 0.0,
+        "severity": "high",
+        "subject": null,
+        "title": "There's no record of who did what in the AWS account",
+        "verdict": "worth-the-money",
+        "verdict_label": "Worth the money"
+      },
+      {
+        "effort_label": "30 minutes to 1 hour",
+        "finding_id": "9dacdaed-4075-43aa-bc54-fcae707bb67b",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "medium",
+        "subject": null,
+        "title": "It's unclear which key encrypts the audit logs",
+        "verdict": "quick-win",
+        "verdict_label": "Quick win"
+      },
+      {
+        "effort_label": "2 to 4 hours",
+        "finding_id": "c89a5c02-0b75-407b-b71c-fd379e931602",
+        "has_unpriced": false,
+        "monthly_known": 0.0,
+        "severity": "medium",
+        "subject": null,
+        "title": "Problems aren't sent to the on-call team automatically",
+        "verdict": "quick-win",
+        "verdict_label": "Quick win"
+      },
+      {
+        "effort_label": "2 to 4 hours",
+        "finding_id": "109c426a-8cd9-4aa7-a906-80190c403742",
+        "has_unpriced": false,
+        "monthly_known": 3000.0,
+        "severity": "low",
+        "subject": null,
+        "title": "The site has standard, not premium, protection against traffic floods",
+        "verdict": "when-budget-allows",
+        "verdict_label": "When budget allows"
+      }
+    ],
+    "unpriced_items": [
+      "CloudTrail audit log"
+    ],
+    "verdict_counts": {
+      "fix-today": 2,
+      "quick-win": 2,
+      "when-budget-allows": 1,
+      "worth-the-money": 1
+    }
+  },
+  "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d"
+}
