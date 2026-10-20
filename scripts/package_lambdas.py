@@ -1,28 +1,10 @@
 """Builds the deployment zip for each Lambda listed in LAMBDA_SPECS.
 
-Found missing 2026-10-12 (see Work-Project-Issues-Log.md): six Lambdas
-built across recent sessions — create_upload, clarify_review,
-deeper_review, get_demo, get_review, store_clarification_token — had no
-build/*.zip at all, which `terraform apply` needs to exist at plan time
-(aws_lambda_function's `filename` must point at a real file). No
-packaging script existed anywhere in this repo to produce one; the
-earlier Lambdas' zips (admin_authorizer, finalize, ingest, etc.) were
-apparently built some other, non-reproducible way, and turned out to be
-a kitchen-sink bundle (finalize's old zip carried a full hcl2 install it
-never imports) rather than scoped per-Lambda deps — this script fixes
-that too, bundling only each Lambda's actual (transitive) imports.
-
-Also found while building this (2026-10-12): `finalize` and `ingest`'s
-*existing* zips were stale — both handlers (and backend/shared/clients,
-which several Lambdas depend on) genuinely changed across this and
-earlier sessions (`git status` confirms real diffs, not just a touched
-mtime) after their last zip was built back on 2026-09-08. Deploying the
-old zips would have silently run outdated code — the
-cost_estimate_tier/DynamoDB-merge fix (finalize) and the S3-archive-
-download path (ingest) would never have actually taken effect. Added
-both here so `python scripts/package_lambdas.py` (no args) rebuilds
-every Lambda whose source could plausibly have drifted from its zip,
-not just the ones that never had one.
+`terraform plan` needs every Lambda's build/*.zip to exist, since
+aws_lambda_function's `filename` must point at a real file. Each zip
+bundles only that Lambda's own (transitive) imports, never a shared
+kitchen-sink bundle, and rebuilding every Lambda from source keeps a zip
+from silently running code older than its handler.
 
 Run from the repo root:  python scripts/package_lambdas.py [name ...]
 With no arguments, packages every Lambda in LAMBDA_SPECS.
@@ -37,15 +19,13 @@ supports downloading wheels for a different target platform without
 executing any of that platform's code, which is what makes this safe to
 run from here at all. boto3/botocore are bundled only into ask_question
 (see its spec); every other Lambda uses the runtime's own copy, matching
-every existing zip in this repo (confirmed by inspecting
-admin_authorizer's/finalize's zips directly, not assumed).
+the deployed zips.
 
-Reproducible builds (2026-10-15): third-party versions are pinned in
+Reproducible builds: third-party versions are pinned in
 scripts/lambda_constraints.txt, and the zip is written with fixed
 timestamps and permissions in a fixed order. Rebuilding unchanged code
 gives a byte-identical zip, so `terraform plan` only shows Lambdas whose
-code or dependencies really changed. Before this, every rebuild changed
-every zip's hash, even when the code inside was identical.
+code or dependencies really changed.
 """
 
 from __future__ import annotations
@@ -290,9 +270,9 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
         ],
         "packages": [],
     },
-    # admin_authorizer and validate were deployed from zips built outside
-    # this script (Codex F23); listed here so every Lambda builds the same
-    # way. tests/backend/test_package_lambdas.py keeps these lists honest.
+    # admin_authorizer and validate are listed too, so every Lambda builds
+    # the same way. tests/backend/test_package_lambdas.py keeps these lists
+    # honest.
     "admin_authorizer": {
         "sources": [
             "backend/__init__.py",

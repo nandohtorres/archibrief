@@ -1,6 +1,6 @@
 {
   "version": "chat_eval@2026-10-15a",
-  "notes": "Answer-quality cases over the saved demo reviews (frontend/public/demos/reports, briefs from demos.json) and the trap-suite review. Keyword groups: AND across groups, OR within a group, matched case-insensitively against the answer text (same rule as backend/agent/reasoning_eval.py). must_cite_matching: the answer must cite at least one finding whose text contains one of these strings. Scored by backend/chat/chat_eval.py; paid, needs Fernando's go-ahead.",
+  "notes": "Answer-quality cases over the saved demo reviews (frontend/public/demos/reports, briefs from demos.json) and the trap-suite review. Keyword groups: AND across groups, OR within a group, matched case-insensitively against the answer text (same rule as backend/agent/reasoning_eval.py). must_cite_matching: the answer must cite at least one finding whose text contains one of these strings. Scored by backend/chat/chat_eval.py; paid, so it only runs with --confirm-paid.",
   "cases": [
     {"id": "B-1", "review": "breach-pattern", "question": "Which issues should I fix first, and why?", "expected_status": "answered", "must_cite_matching": ["IMDS", "AmazonS3FullAccess", "SSRF", "metadata"], "keyword_groups": [["metadata", "IMDS"], ["S3", "bucket"]]},
     {"id": "B-2", "review": "breach-pattern", "question": "Explain the attack path in plain language for a non-technical manager.", "expected_status": "answered", "must_cite_matching": ["SSRF", "IMDS", "metadata"], "keyword_groups": [["credential", "password", "key"], ["data", "bucket"]]},

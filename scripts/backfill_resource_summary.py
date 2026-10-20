@@ -13,7 +13,7 @@ ledger changes.
     python scripts/backfill_resource_summary.py --apply <review_id> ...  # writes S3
 
 Dry run by default: it prints what it would add. --apply overwrites the
-ledger object in the reports bucket, so it needs Fernando's OK. Free (S3
+ledger object in the reports bucket, so run it deliberately. Free (S3
 reads and writes only, no model).
 """
 
