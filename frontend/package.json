@@ -21,7 +21,7 @@
     "lighthouse": "node e2e/dev-server.mjs live --build-only && npx --yes @lhci/cli@0.15.1 autorun"
   },
   "dependencies": {
-    "next": "^15.0.0",
+    "next": "^16.4.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
