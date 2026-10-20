@@ -1,10 +1,9 @@
 # Privacy notice draft — do not publish as current deployed behavior
 
-The seven-day access boundary and cleanup settings below are prepared locally.
-They have not been deployed or verified against AWS in this continuation.
-Turnstile, HMAC visitor identifiers and capability-bound uploads are now
-implemented locally with anonymous access disabled. See
-`public-access-implementation.md` for evidence and release limits.
+The seven-day access boundary, cleanup settings, Turnstile, HMAC visitor
+identifiers and capability-bound uploads below are built but not yet deployed
+or verified against AWS; anonymous access is off. See
+[public access design](public-access-implementation.md) for release limits.
 
 ArchiBrief processes the Terraform archive, workload description, clarification
 answers and questions you submit to create an architecture review. AWS storage,

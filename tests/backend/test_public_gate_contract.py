@@ -1,4 +1,4 @@
-"""Prevent accidentally exposing current paid integrations during Gate 2 work."""
+"""Prevent accidentally exposing paid integrations before public access opens."""
 
 from pathlib import Path
 

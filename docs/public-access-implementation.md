@@ -1,154 +1,117 @@
-# Public access implementation ? 2026-10-17
+# Public access design
 
-Implemented and tested locally in `archibrief-cleanup-codex`, based on `9871be0`.
-Public access remains disabled. Nothing was pushed or deployed; no AWS call,
-Terraform command, paid evaluation, history rewrite or project-file deletion
-was performed. This report supplements the earlier `hardening-results.md`.
+**Status: built and tested, switched off.** The live site is admin-only. Two
+flags (`public_access_enabled`, `chat_public_enabled`) stay false until the
+release checks at the end of this document pass. Tests here prove mocked
+behavior, not live IAM, WAF bypass prevention, real DynamoDB concurrency or
+model quality.
 
-## Changes and local commits
+## Uploads
 
-| Commit | Behavior |
-|---|---|
-| `2dd5370` | Server-issued upload reservations; separate review capabilities; shared atomic admission on review, clarification, deeper review and chat; identifier-only worker; packaging and regressions. |
-| `9fa89f1` | Recover the same upload grant/version after a lost response; preserve the original deadline and quota; tighten dispatch retry conditions. |
-| `feab86c` | Prepare a Regional REST API with stage WAF; keep HTTP admin-only; wire admission IAM, S3 versions/KMS, worker and identifier-only state machine. Flags stay false. |
-| `dec8c15` | Permit bucket existence checks so recovery can distinguish a missing upload from denied access. |
-| `04d118f` | Browser Turnstile, tab-scoped capabilities, checksum/version-bound upload, submission retries and six new browser tests. |
+`backend/shared/uploads.py` issues the review ID and a conditional S3 PUT. The
+signature binds the exact byte length, SHA-256 checksum and
+`If-None-Match: *`; the API accepts up to 20 MiB, and the upload lease lasts
+900 seconds. Submission verifies the exact S3 version, digest and size before
+binding the immutable input and starting a Standard execution with a stable
+name. A retry with a changed body is a conflict.
 
-Exact files: `git diff --name-only 9871be0..HEAD`. Backend changes cover shared
-admission/access/HTTP/upload helpers, API and pipeline handlers, agent retry
-configuration and packaging. Frontend changes cover the submission flow,
-API/contracts, capability storage, a maintained Turnstile dependency and test
-builds. Infrastructure changes span API Gateway, orchestration, IAM, S3 and
-hosting CSP. Existing browser spec files were not changed.
+A client nonce recovers the same grant after a lost response, without another
+upload reservation or a renewed expiry. A server-side secret derives
+unpredictable review capabilities, and the database stores only their hashes.
+The browser keeps capabilities in tab session storage, never in URLs. Read
+access is a transferable capability; writes also require the original visitor
+identifier. Closing the tab loses browser access, and a network change can
+prevent writes.
 
-## Admission contract
+The upload role can list the reports bucket so a HEAD on a missing object
+returns 404 rather than an ambiguous 403
+([HeadObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html)).
+That permission is not part of the browser upload signature.
 
-`backend/shared/uploads.py` issues the review ID and conditional S3 PUT. It
-signs the exact byte length, SHA-256 checksum and `If-None-Match: *`; the API
-accepts up to 20 MiB. The upload lease lasts 900 seconds. Submission verifies
-the exact S3 version, digest and size before binding the immutable input and
-starting a stable Standard execution name. Changed-body retries conflict.
+## Abuse protection
 
-A client nonce recovers the same grant after response loss without another
-upload reservation or a renewed expiry. An upload-only server secret derives
-unpredictable review capabilities; the database stores their hashes. The
-browser keeps capabilities in tab session storage, outside URLs. Read access
-is a transferable capability; writes also require the original visitor HMAC.
-The upload role can list the reports bucket so a missing-object HEAD returns
-404 rather than an ambiguous 403, as specified by the
-[AWS HeadObject contract](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html).
-That permission is not included in the browser upload signature.
-Closing the tab loses browser access. IP/network changes can prevent writes.
+Cloudflare Turnstile is verified server-side for success, hostname and the
+`archibrief-upload` action, with a bounded timeout, and fails closed. The
+secret lives in SSM, not in the repo. Visitor identifiers are an HMAC of the
+address API Gateway observed (IPv6 grouped by /64); forwarded headers are
+ignored. Admin calls skip the challenge.
 
-Turnstile is verified server-side for success, hostname and action
-`archibrief-upload`, with bounded timeout and fail-closed errors. The secret
-is referenced from SSM, not committed. Trusted API request-context addresses
-produce HMAC visitor identifiers; arbitrary forwarded headers are ignored.
-IPv6 addresses use a /64 grouping. Admin calls bypass the challenge.
+Upload grants and the global and visitor upload counters share one DynamoDB
+transaction. Defaults allow 100 uploads a UTC day globally and one per
+visitor (100 for admin). Abandoned reservations still count. The visitor HMAC
+and reservation keys must stay stable while grants are active; rotating them
+needs a migration.
 
-Upload grants and global/visitor upload counters share one DynamoDB
-transaction. Defaults allow 100 uploads globally per UTC day, one per visitor
-(100 for admin). Abandoned reservations consume allowance. Visitor HMAC and
-reservation keys must stay stable during active grants; rotation can strand
-access or reset visitor buckets and needs an explicit migration.
+## Spending limits
 
-Every public paid path reserves global daily, visitor daily and review
-lifetime allowance in the same transaction as its operation claim. Admin
+Every public paid path (initial review, clarification, deeper review, chat)
+reserves estimated cost against global daily, visitor daily and review
+lifetime allowances in the same transaction as its operation claim. Admin
 requests reserve only a separate admin daily allowance, so public traffic
 can't block the owner and owner reviews don't spend the public allowance.
+
 Terraform sets every value explicitly (`paid_limits` in
-`infra/modules/api-gateway/admission.tf`): public scopes 1,000,000 micro-USD
-each with request limits of 100/30/20, admin 20,000,000 with no request cap.
-Initial reviews reserve 400,000; clarification and deeper review reserve
-200,000 micro-USD. Chat retains its staged screening/model reservations and
-also participates in the same scopes. Suggestions use the same admission.
-A review that fails before any paid call (paused, invalid input before Guardrails,
-clarification limit) gives its reservation back once; the claim stays so the
-operation can't be dispatched again. Other failures and successes keep the
-conservative estimate; the chat-specific ledger separately settles its
-estimates. These are estimates,
-not an AWS bill ceiling, and do not cover every storage/network/service cost.
+`infra/modules/api-gateway/admission.tf`): public scopes $1.00 each with
+request limits of 100/30/20, admin $20.00 with no request cap. Initial reviews
+reserve $0.40; clarification and deeper review reserve $0.20. A
+`tests/backend/test_defaults_match_terraform.py` check fails if the handler
+fallbacks drift from these defaults.
 
-Duplicate requests reuse durable claims only where dispatch is intrinsically
-idempotent, or return the saved result/in-progress. Old UTC-day claims do not
-authorize fresh paid dispatch. Zero or invalid configured allowances fail
-closed. Tests cover stale preliminary reads and conditional rejection; Moto
-is not thread-safe, so they do not prove real-service parallel behavior.
+A review that fails before any billed call (paused, input rejected before
+Guardrails, clarification limit) gives its reservation back once; the claim
+stays, so the operation can't be dispatched again. Other failures and
+successes keep the conservative estimate. Chat additionally settles its own
+estimates in a chat-specific ledger. These are estimates, not an AWS billing
+ceiling.
 
-## Front door and content
+Duplicate requests reuse durable claims only where dispatch is idempotent, or
+return the saved result. A claim from an earlier UTC day can't authorize new
+paid work. Zero or invalid allowances fail closed.
 
-The proposed Regional REST `public` stage has a WAF association, a 16 KiB body
-bound, a 300-request per-IP rate rule and AWS managed common rules. Sampled
-request bodies are disabled. Stage-scoped Lambda invoke permissions prevent
-alternate stages from using that grant. The old HTTP API always requires
-admin authorization. API handlers enforce capabilities, expiry and CORS.
-The default REST endpoint is behind its stage WAF; it is not an unprotected
-CloudFront origin. Custom-domain migration is not included.
+## Front door
 
-New state machine inputs/results contain identifiers and status only. The
-worker reads submission/context/clarification objects under `jobs/` in S3,
-invokes content-bearing stages privately and returns bounded status. Resume
-callbacks carry an object key. No automatic retry repeats paid worker work.
-Existing payload-bearing executions must drain with the legacy callback
-shape before migration; their historical payloads are not erased. Pipeline
-operational errors fail conservatively and may need a new review.
+A Regional REST API `public` stage sits behind WAF: a 16 KiB body limit, a
+300-request per-IP rate rule and the AWS managed common rule set, with sampled
+request bodies disabled. Stage-scoped Lambda permissions stop other stages
+from using that grant. The original HTTP API always requires the admin key.
+Handlers enforce capabilities, expiry and CORS themselves.
 
-Logical access ends at the original seven-day review expiry. S3 lifecycle
-rules include `jobs/` alongside uploads/parsed/reports and noncurrent versions;
-DynamoDB TTL and CloudWatch settings remain asynchronous cleanup controls.
-They establish no exact physical-deletion deadline. Backups, Standard history,
-logs, exports, caches and historical records still require an inventory.
+## Review pipeline and content
 
-## Validation and failures
+Step Functions inputs and results carry identifiers and status only, so
+briefs, answers and findings never enter execution history. A worker Lambda
+reads the submission, context and clarification objects under `jobs/` in S3
+and runs the content-bearing stages. Stages that don't call the model retry
+transient Lambda errors; the AgentCore call runs once, because a timed-out
+model call may already be billed. The Step Functions task timeout (910 s)
+sits above the worker's 900 s Lambda timeout, so the Lambda's own timeout
+fires first. Executions started under the earlier payload-bearing state
+machine must drain before migration.
 
-Reproducible compact evidence: [public-admission-checks.json](evidence/public-admission-checks.json).
-Detailed test reports remain in ignored `backend/build/`.
+Access ends at the review's seven-day expiry. S3 lifecycle rules cover
+`jobs/`, uploads, parsed input, reports and noncurrent versions; DynamoDB TTL
+and log retention clean up asynchronously, so there is no exact physical
+deletion deadline.
 
-| Check | Result |
-|---|---|
-| Complete backend | 700 passed, 5 skipped, no failures/errors |
-| Frontend unit | 58 passed in 11 files |
-| Playwright, fixture/admin/public builds | 66 passed, no skips, failures or flakes |
-| Ruff on backend/scripts; ESLint; TypeScript; default Prettier | Passed |
-| HCL syntax parsing | 56 files parsed; not Terraform validation |
-| Offline Trivy HIGH/CRITICAL | Passed with existing exceptions, default and edge-enabled scanner inputs |
-| Production npm audit | Zero findings |
-| Staged Gitleaks | Passed on each local commit |
+## Validation
 
-Four backend skips need the ignored corpus; one scanner test is Linux-only.
-Trivy warned about unset deployment variables, so scanner evaluation is
-partial. Native Windows Python 3.14/Node 24 tests do not replace Linux Python
-3.12 execution, artifact packaging or provider validation. Packaging manifests
-and their unit checks changed; deployable ZIP builds were not run here.
+Compact evidence: [public-admission-checks.json](evidence/public-admission-checks.json).
+The backend, frontend unit and Playwright suites cover the upload contract,
+admission races (sequentially; Moto is not thread-safe), capability checks,
+lost-response recovery and the browser upload flow. HCL was parsed but not
+run through `terraform validate`, and deployable ZIP builds weren't rebuilt.
 
-Failures corrected before the final run: the packaging SDK expectation, test
-package discovery, an invalid threaded Moto test, DynamoDB Decimal sizing in
-finalization, two incorrect browser button labels, and lost-response upload
-recovery. The secret hook rejected two fake fixture literals; generated test
-placeholders passed without scanner exceptions. Sandbox restrictions required
-approved reruns for temporary directories, browser builds, scanners and audit.
-The earlier full dependency audit still lists 19 development-tool findings
-(4 moderate, 15 high); the production-only audit above is clean.
-A broader Ruff run including all backend tests found 15 existing helper-style
-issues; the configured backend/scripts check passes. They remain follow-up.
+## Before turning it on
 
-## Release work still required
-
-1. Review a Terraform format/validate/plan and IAM changes after the standing
-   no-Terraform/no-AWS restrictions are explicitly lifted. Review ZIP builds,
-   KMS/SSM permissions, budget estimates and the worker's latency/failure path.
-2. Deploy the REST edge with anonymous access off. Inspect WAF association,
-   absent admin-header handling, CORS, checksum/version HEAD, conditional PUT,
-   custom/default endpoints and alternate-stage bypasses using real services.
-   Copy its verified API ID into `verified_public_api_id` only after checks.
-   Public activation requires that ID and configured challenge secrets.
-3. Test true concurrent last-slot requests across every paid path, ambiguous
-   dispatch/callback failures, network changes, challenge outages and immutable
-   object/version binding. Keep flags off until this evidence is reviewed.
-4. Inventory historical content and backups, plan expiry backfill without
-   extending lifetimes, complete upload-secret checks and finalize the privacy
-   notice. Do not publish a seven-day physical-deletion promise.
-5. Run the separately authorized bounded paid pilot in
-   [evaluation-runbook.md](evaluation-runbook.md), with account/region and
-   spending allowance agreed first. Then review deployment and launch evidence.
+1. Run `terraform validate` and `plan`, and review the IAM, KMS and SSM
+   changes, ZIP builds and the worker's failure path.
+2. Deploy the REST front door with anonymous access off. Check the WAF
+   association, missing admin headers, CORS, checksum/version HEAD, the
+   conditional PUT, and default-endpoint and other-stage bypasses against real
+   services. Only then copy the API ID into `verified_public_api_id`.
+3. Test real concurrent last-slot requests on every paid path, ambiguous
+   dispatch failures, network changes and Turnstile outages.
+4. Inventory retained content and backups, and finalize the privacy notice.
+   Don't promise seven-day physical deletion.
+5. Run the bounded paid evaluation in [evaluation-runbook.md](evaluation-runbook.md),
+   then raise the public limits to match measured per-review cost.

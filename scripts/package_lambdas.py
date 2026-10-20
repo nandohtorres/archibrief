@@ -264,8 +264,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # avoids the pydantic models. boto3 is bundled here (the same pin as
     # the AgentCore runtime lock) because it calls S3 Vectors, and AWS no
     # longer publishes which boto3 the python3.12 runtime carries in each
-    # Region: an older one wouldn't know the s3vectors client
-    # (code review 2026-10-16).
+    # Region: an older one wouldn't know the s3vectors client.
     "ask_question": {
         "sources": [
             "backend/shared/http.py",
@@ -317,9 +316,9 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
         ],
         "packages": [],
     },
-    # admin_authorizer and validate were deployed from zips built outside
-    # this script (Codex F23); listed here so every Lambda builds the same
-    # way. tests/backend/test_package_lambdas.py keeps these lists honest.
+    # admin_authorizer and validate are listed here too, so every Lambda
+    # builds the same way. tests/backend/test_package_lambdas.py keeps these
+    # lists honest.
     "admin_authorizer": {
         "sources": [
             "backend/__init__.py",

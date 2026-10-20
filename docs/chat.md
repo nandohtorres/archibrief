@@ -6,10 +6,9 @@ Well-Architected guidance, or that say plainly it can't tell. Decisions
 and their reasons are in ADR-0046 §4–§5 and ADR-0050; the threat model's
 trust boundary 6 covers the attack surface.
 
-The next release is prepared locally with separate read/write capabilities,
-visitor binding and shared atomic paid admission. Public access is disabled;
-see [implementation and release evidence](public-access-implementation.md).
-The flow below describes that local source, not a new deployment.
+Chat is admin-only for now. Public use adds separate read/write
+capabilities, visitor binding and shared spending limits, all switched off;
+see [public access design](public-access-implementation.md).
 
 ## How a question is answered
 
