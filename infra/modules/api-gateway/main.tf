@@ -664,5 +664,31 @@ resource "aws_apigatewayv2_stage" "default" {
     throttling_rate_limit  = var.chat_throttling_rate_limit
   }
 
+  # One JSON line per request. Context variables only: no headers (so never
+  # the admin key), query strings or bodies.
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_access.arn
+    format = jsonencode({
+      requestId          = "$context.requestId"
+      ip                 = "$context.identity.sourceIp"
+      requestTime        = "$context.requestTime"
+      httpMethod         = "$context.httpMethod"
+      routeKey           = "$context.routeKey"
+      status             = "$context.status"
+      protocol           = "$context.protocol"
+      responseLength     = "$context.responseLength"
+      responseLatency    = "$context.responseLatency"
+      integrationLatency = "$context.integrationLatency"
+      integrationError   = "$context.integrationErrorMessage"
+      authorizerError    = "$context.authorizer.error"
+    })
+  }
+
   tags = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "api_access" {
+  name              = "/aws/apigateway/${var.name_prefix}-api"
+  retention_in_days = var.api_access_log_retention_days
+  tags              = var.tags
 }

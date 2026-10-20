@@ -172,8 +172,23 @@
       ],
       "Resource": [
         "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/archibrief-dev-*",
-        "arn:aws:logs:us-east-1:123456789012:log-group:/aws/states/archibrief-dev-*"
+        "arn:aws:logs:us-east-1:123456789012:log-group:/aws/states/archibrief-dev-*",
+        "arn:aws:logs:us-east-1:123456789012:log-group:/aws/apigateway/archibrief-dev-*"
       ]
+    },
+    {
+      "Sid": "ApiGatewayAccessLogDelivery",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogDelivery",
+        "logs:GetLogDelivery",
+        "logs:UpdateLogDelivery",
+        "logs:DeleteLogDelivery",
+        "logs:ListLogDeliveries",
+        "logs:PutResourcePolicy",
+        "logs:DescribeResourcePolicies"
+      ],
+      "Resource": "*"
     },
     {
       "Sid": "DescribeIsAccountWide",

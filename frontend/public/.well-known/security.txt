@@ -1,0 +1,6 @@
+# Report security issues privately through GitHub.
+Contact: https://github.com/nandohtorres/archibrief/security/advisories/new
+Policy: https://github.com/nandohtorres/archibrief/blob/master/SECURITY.md
+Preferred-Languages: en
+Canonical: https://archibrief.dev/.well-known/security.txt
+Expires: 2027-10-19T00:00:00.000Z

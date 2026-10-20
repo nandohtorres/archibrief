@@ -117,3 +117,9 @@ variable "trivy_version" {
   default     = "0.76.0"
   description = "Must match TRIVY_VERSION in scripts/build_trivy_layer.py."
 }
+
+variable "lambda_log_retention_days" {
+  description = "Days to keep Lambda logs. Must be a value CloudWatch Logs accepts."
+  type        = number
+  default     = 30
+}
