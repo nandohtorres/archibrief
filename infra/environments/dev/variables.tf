@@ -15,13 +15,12 @@ variable "environment" {
 
 variable "domain" {
   type        = string
-  description = "Public domain, registered 2026-09-08 (Work-Project-Cost-Log.md)."
+  description = "Public domain for the site and API."
   default     = "archibrief.dev"
 }
 
-# TODO(account-setup): every variable below is a real placeholder until
-# AWS account/IAM bootstrap (Work-Project-Deployment-Roadmap.md). See
-# terraform.tfvars.example for the values to override per-environment.
+# Account-specific values; see terraform.tfvars.example for what to set
+# per environment.
 
 variable "aws_account_id" {
   type = string
@@ -75,17 +74,17 @@ variable "get_demo_zip_path" {
 
 variable "create_upload_zip_path" {
   type        = string
-  description = "Deployment package for POST /uploads's Lambda (backend/lambdas/create_upload) — ADR-0045, drafted 2026-10-12."
+  description = "Deployment package for POST /uploads's Lambda (backend/lambdas/create_upload), ADR-0045."
 }
 
 variable "agentcore_runtime_zip_path" {
   type        = string
-  description = "Deployment package for the AgentCore Runtime entrypoint (backend/agent/runtime_entrypoint.py) — see modules/agentcore-runtime's own variable doc for the real packaging prerequisite this depends on."
+  description = "Deployment package for the AgentCore Runtime entrypoint (backend/agent/runtime_entrypoint.py); see modules/agentcore-runtime's agent_runtime_zip_path for packaging requirements."
 }
 
 variable "alert_email" {
   type        = string
-  description = "Email address for AWS Budgets threshold notifications (ADR-0040) — real value goes in terraform.tfvars (gitignored), never here."
+  description = "Email address for AWS Budgets threshold notifications (ADR-0040). The real value goes in terraform.tfvars (gitignored), never here."
 }
 
 variable "monthly_budget_usd" {
@@ -94,9 +93,8 @@ variable "monthly_budget_usd" {
   description = "ADR-0024/ADR-0040 target/alert threshold, not an enforced ceiling."
 }
 
-# Titan V2's actual output dimension — baseline candidate, not a final
-# locked choice (ADR-0035). Confirm against the live retrieval evaluation
-# before treating this as settled.
+# Titan V2's output dimension (ADR-0035). Immutable once the index
+# exists.
 variable "embedding_dimension" {
   type    = number
   default = 1024

@@ -3,8 +3,8 @@ variable "name_prefix" {
   default = "archibrief"
 }
 
-# TODO(account-setup): the real value only exists once the AWS account's
-# OIDC identity provider for GitHub Actions is registered during bootstrap.
+# Exists only once the account's OIDC identity provider for GitHub
+# Actions is registered; the deploy role isn't created until then.
 variable "github_oidc_provider_arn" {
   type        = string
   description = "ARN of the GitHub Actions OIDC provider, for the CI/CD deploy role's trust policy."

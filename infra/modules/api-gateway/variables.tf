@@ -12,12 +12,9 @@ variable "domain_name" {
   default = "api.archibrief.dev"
 }
 
-# Was declared but never actually wired to a resource until Phase B
-# (2026-10-14) — var.domain_name sat unused since this module's original
-# build; Work-Project-Issues-Log.md, 2026-10-14 has the full story of
-# how that was found. null keeps the API reachable only at its default
-# *.execute-api.*.amazonaws.com endpoint (the pre-existing behavior),
-# same null-means-off pairing as frontend-hosting's certificate_arn.
+# null keeps the API reachable only at its default
+# *.execute-api.*.amazonaws.com endpoint, the same null-means-off pattern
+# as frontend-hosting's certificate_arn.
 variable "certificate_arn" {
   type        = string
   default     = null
@@ -26,13 +23,13 @@ variable "certificate_arn" {
 
 variable "frontend_origin" {
   type        = string
-  description = "The frontend's real origin (scheme + host, e.g. https://dxxxxxxxxxxxxx.cloudfront.net) for CORS. Found 2026-10-12: this was hardcoded to the never-set-up https://archibrief.dev placeholder, so the browser's CORS preflight rejected every request from the real CloudFront origin with a generic 'Failed to fetch' — no request ever reached a Lambda."
+  description = "The frontend's real origin (scheme + host, e.g. https://dxxxxxxxxxxxxx.cloudfront.net) for CORS. If it doesn't match the origin the browser uses, the CORS preflight rejects every request with a generic 'Failed to fetch' before any Lambda runs."
 }
 
 variable "additional_cors_origins" {
   type        = list(string)
   default     = []
-  description = "Extra allowed CORS origins alongside frontend_origin, e.g. [\"https://archibrief.dev\", \"https://www.archibrief.dev\"] once the custom domain resolves. Kept separate from frontend_origin rather than folded in, since frontend_origin is also used elsewhere as a single scalar (module docs/other references)."
+  description = "Extra allowed CORS origins alongside frontend_origin, e.g. [\"https://archibrief.dev\", \"https://www.archibrief.dev\"] once the custom domain resolves. Separate because frontend_origin is used elsewhere as a single scalar."
 }
 
 variable "throttling_burst_limit" {
@@ -45,15 +42,11 @@ variable "throttling_rate_limit" {
   default = 10
 }
 
-# Deliberately separate, lower quota for the one public/unauthenticated
-# route (GET /demo). Without this, demo_* and the admin-gated routes
-# shared one stage-wide throttle bucket — a public traffic spike (or a
-# bot hitting the one URL that needs no credential) could exhaust the
-# whole API's quota and throttle real admin usage along with it. Each
-# invocation of get_demo has ~zero marginal AWS cost on its own (it
-# never touches DynamoDB/S3/Step Functions/AgentCore, per that route's
-# own comment), so this exists purely to isolate blast radius between
-# public and admin-gated traffic, not to cap spend.
+# Separate, lower quota for the one public route (GET /demo). With one
+# stage-wide bucket, a public traffic spike (or a bot hitting the one URL
+# that needs no credential) could exhaust the whole API's quota and
+# throttle admin usage. get_demo has near-zero marginal cost, so this
+# isolates blast radius rather than capping spend.
 variable "demo_throttling_burst_limit" {
   type    = number
   default = 5
@@ -76,7 +69,7 @@ variable "admin_authorizer_zip_path" {
 
 variable "permissions_boundary_arn" {
   type        = string
-  description = "IAM permissions boundary applied to every role this module creates and passes to lambda.amazonaws.com/apigateway.amazonaws.com — see modules/iam's runtime_permissions_boundary_arn output and Work-Project-Issues-Log.md, 2026-09-09."
+  description = "IAM permissions boundary applied to every role this module creates and passes to lambda.amazonaws.com/apigateway.amazonaws.com (modules/iam's runtime_permissions_boundary_arn output)."
 }
 
 variable "get_review_zip_path" {
@@ -91,12 +84,12 @@ variable "clarify_review_zip_path" {
 
 variable "reviews_table_name" {
   type        = string
-  description = "DynamoDB table name (not ARN) — get_review/clarify_review read it from REVIEWS_TABLE_NAME, same convention as the state-machine Lambdas in modules/step-functions-lambda."
+  description = "DynamoDB table name (not ARN); get_review/clarify_review read it from REVIEWS_TABLE_NAME."
 }
 
 variable "reviews_table_arn" {
   type        = string
-  description = "DynamoDB table ARN, paired with reviews_table_name — scopes get_review's/clarify_review's IAM policies."
+  description = "DynamoDB table ARN, paired with reviews_table_name; scopes get_review's/clarify_review's IAM policies."
 }
 
 variable "deeper_review_zip_path" {
@@ -106,38 +99,38 @@ variable "deeper_review_zip_path" {
 
 variable "findings_table_name" {
   type        = string
-  description = "DynamoDB table name (not ARN) — deeper_review writes each new versioned-child Finding here (first real writer of this table, 2026-10-01 — see Work-Project-Issues-Log.md)."
+  description = "DynamoDB table name (not ARN); deeper_review writes each new versioned-child Finding here."
 }
 
 variable "findings_table_arn" {
   type        = string
-  description = "DynamoDB table ARN, paired with findings_table_name — scopes deeper_review's IAM policy."
+  description = "DynamoDB table ARN, paired with findings_table_name; scopes deeper_review's IAM policy."
 }
 
 variable "reports_bucket_name" {
   type        = string
-  description = "S3 bucket name (not ARN) — deeper_review reads the evidence ledger JSON from here via REPORTS_BUCKET_NAME."
+  description = "S3 bucket name (not ARN); deeper_review reads the evidence ledger JSON from here via REPORTS_BUCKET_NAME."
 }
 
 variable "reports_bucket_arn" {
   type        = string
-  description = "S3 bucket ARN, paired with reports_bucket_name — scopes deeper_review's IAM policy."
+  description = "S3 bucket ARN, paired with reports_bucket_name; scopes deeper_review's IAM policy."
 }
 
 variable "agentcore_runtime_arn" {
   type        = string
-  description = "ARN of the deployed AgentCore Runtime — deeper_review invokes it directly (bedrock-agentcore:InvokeAgentRuntime), bypassing Step Functions entirely (see backend/agent/graph.py's build_deeper_graph docstring). May be null before AgentCore is deployed, same deferral as modules/step-functions-lambda's own agentcore_runtime_arn."
+  description = "ARN of the deployed AgentCore Runtime. deeper_review invokes it directly (bedrock-agentcore:InvokeAgentRuntime), bypassing Step Functions (see backend/agent/graph.py's build_deeper_graph docstring). May be null before AgentCore is deployed, like modules/step-functions-lambda's agentcore_runtime_arn."
   default     = null
 }
 
 variable "get_demo_zip_path" {
   type        = string
-  description = "Deployment package for GET /demo's Lambda (backend/lambdas/get_demo) — fully static, bundles its own reference_report.json, no AWS clients at all."
+  description = "Deployment package for GET /demo's Lambda (backend/lambdas/get_demo); fully static, bundles its own reference_report.json, no AWS clients."
 }
 
 variable "create_upload_zip_path" {
   type        = string
-  description = "Deployment package for POST /uploads's Lambda (backend/lambdas/create_upload) — the direct-upload archive_path design (ADR-0045, drafted 2026-10-12)."
+  description = "Deployment package for POST /uploads's Lambda (backend/lambdas/create_upload), the direct-upload design (ADR-0045)."
 }
 
 variable "kill_switch_parameter_name" {
@@ -218,7 +211,7 @@ variable "vector_index_name" {
 variable "chat_model_id" {
   type        = string
   default     = "us.anthropic.claude-sonnet-4-6"
-  description = "Model for chat answers; must be in chat_model_ids. Sonnet 4.6 since 2026-10-16: Haiku 4.5's Marketplace subscription can't complete for this account yet. The chat eval picks the cheapest that passes (ADR-0050 §8)."
+  description = "Model for chat answers; must be in chat_model_ids. Defaults to Sonnet 4.6 because Haiku 4.5's Marketplace subscription can't be completed for this account. The chat eval picks the cheapest model that passes (ADR-0050 §8)."
 }
 
 variable "chat_model_ids" {
@@ -230,7 +223,7 @@ variable "chat_model_ids" {
 variable "chat_public_enabled" {
   type        = bool
   default     = false
-  description = "Second lock behind the admin authorizer: non-admin callers are refused unless true. Stays false until Phase 3's visitor limits exist; Fernando's call."
+  description = "Second lock behind the admin authorizer: non-admin callers are refused unless true. Stays false until per-visitor limits exist."
 }
 
 variable "chat_questions_per_review" {
@@ -246,7 +239,7 @@ variable "chat_blocked_per_review" {
 variable "chat_daily_budget_micro_usd" {
   type        = number
   default     = 1000000
-  description = "Estimated chat spend allowed per UTC day, in millionths of a dollar ($1.00; raised from $0.40 with the switch to Sonnet, 2026-10-16). The hard stop; master-list item 29 sets the real value from measured cost."
+  description = "Estimated chat spend allowed per UTC day, in millionths of a dollar ($1.00, sized for Sonnet pricing). This is the hard stop; tune it from measured cost."
 }
 
 variable "chat_daily_max_questions" {

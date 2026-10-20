@@ -1,14 +1,11 @@
 # Terraform module: iam
-# Scope: deployment/bootstrap roles and cross-service policies ONLY (the
+# Scope: deployment/bootstrap roles and cross-service policies only (the
 # CI/CD deploy role, the admin break-glass grant procedure per ADR-0037).
-# Per-Lambda execution roles do NOT belong here — each Lambda's
-# least-privilege execution role is defined in
-# infra/modules/step-functions-lambda, the same module as the Lambda
-# itself (ADR-0021) — never a shared/generic role.
+# Per-Lambda execution roles do not belong here; each one is defined in
+# the same module as its Lambda (ADR-0021), never a shared role.
 #
-# github_oidc_provider_arn is null until AWS account bootstrap registers
-# the GitHub Actions OIDC provider — this module's deploy role is not
-# created until that exists (count-gated below).
+# The deploy role is created only once github_oidc_provider_arn is set
+# (the GitHub Actions OIDC provider is registered in the account).
 
 data "aws_iam_policy_document" "deploy_role_trust" {
   count = var.github_oidc_provider_arn == null ? 0 : 1
@@ -44,31 +41,26 @@ resource "aws_iam_role" "ci_deploy" {
 }
 
 # The admin app-role (ADR-0037) is granted out-of-band via a break-glass
-# CLI/console procedure, never an in-app endpoint — this group exists so
-# that procedure has a concrete IAM principal to attach a scoped policy
-# to, not an automated self-service grant path.
+# CLI/console procedure, never an in-app endpoint. This group gives that
+# procedure a concrete IAM principal to attach a scoped policy to; it is
+# not an automated self-service grant path.
 resource "aws_iam_group" "admin_break_glass" {
   name = "${var.name_prefix}-admin-break-glass"
 }
 
 # Permissions boundary for every archibrief-dev-* role that gets passed
 # to a runtime service principal (lambda.amazonaws.com,
-# states.amazonaws.com, apigateway.amazonaws.com) — the actual
-# enforcement for the privilege-escalation gap flagged and deliberately
-# deferred in Work-Project-Issues-Log.md (2026-09-09, "deploy role has
-# no IAM permissions boundary"): the deploy identity can create/modify
-# these roles and attach policies to them via PutRolePolicy/
-# AttachRolePolicy with no boundary today. Once every such role in
-# deploy-role-policy.json's iam:CreateRole condition + each module's
-# `permissions_boundary` argument enforce this boundary, IAM caps the
-# role's EFFECTIVE permissions to the intersection of its own policy and
-# this boundary — so even a mistakenly (or maliciously) over-broad
-# policy attached to one of these roles can't grant it more than what's
-# listed here. Deliberately does NOT apply to ci_deploy above: that role
-# is assumed directly via GitHub Actions OIDC, not passed to a runtime
-# service principal, and legitimately needs the same broad
-# infrastructure-management permissions as the deploy identity itself —
-# a different vector than the one this finding described.
+# states.amazonaws.com, apigateway.amazonaws.com). The deploy identity
+# can create these roles and attach policies to them, so without a
+# boundary it could escalate privileges through them. With
+# deploy-role-policy.json's iam:CreateRole condition and each module's
+# `permissions_boundary` argument enforcing this boundary, a role's
+# effective permissions are the intersection of its own policy and this
+# boundary, so even an over-broad policy attached to one of these roles
+# can't grant more than what is listed here. Not applied to ci_deploy
+# above: that role is assumed directly through GitHub Actions OIDC, not
+# passed to a service principal, and needs broad infrastructure
+# permissions.
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "runtime_permissions_boundary" {
@@ -127,22 +119,13 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
     resources = ["arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:guardrail/*"]
   }
 
-  # Missing until 2026-09-16 (found scoping AgentCore Runtime deployment,
-  # confirmed via AWS's own IAM docs and by reading this file directly):
-  # this boundary had ApplyGuardrail and S3 Vectors but no InvokeModel/
-  # GetInferenceProfile statement anywhere. A permissions boundary caps a
-  # role's EFFECTIVE permissions to the INTERSECTION of its own identity
-  # policy and this boundary — so attaching this boundary (as every
-  # runtime role in this project does, per this file's own top comment)
-  # to the new AgentCore execution role would have silently blocked its
-  # Converse/model calls even with a fully correct identity policy on the
-  # role itself. Per AWS's Converse API docs, Converse is authorized by
-  # bedrock:InvokeModel (no separate bedrock:Converse allow-action
-  # exists); GetInferenceProfile is separately required for the
-  # cross-region inference profile ARNs this project uses (see
-  # BedrockReasoningInvoke in deploy-role-policy.example.json for the
-  # same dual foundation-model + inference-profile ARN pattern, kept
-  # scoped to Claude Sonnet specifically rather than every Bedrock model).
+  # Every model a runtime role calls must also be allowed here, or the
+  # boundary intersection silently blocks the call even when the role's
+  # identity policy grants it. Converse is authorized by
+  # bedrock:InvokeModel (there is no separate Converse action);
+  # GetInferenceProfile is needed for the cross-region inference profile
+  # ARNs. Scoped to specific models rather than all of Bedrock, matching
+  # BedrockReasoningInvoke in deploy-role-policy.example.json.
   statement {
     sid    = "AllowBedrockReasoningInvoke"
     effect = "Allow"
@@ -160,54 +143,31 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
       # own role grants it; the boundary just has to allow it.
       "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
-      # Titan V2 embeddings (ADR-0035) — this boundary statement caps the
-      # AgentCore execution role's own ReasoningInvoke grant (see
-      # modules/agentcore-runtime/main.tf), so it needs the same Titan ARN
-      # or the boundary intersection would silently strip that permission
-      # even though the role's identity policy grants it. Confirmed missing
-      # 2026-09-16 via Codex review, same fix applied in both places.
+      # Titan V2 embeddings (ADR-0035), matching the AgentCore execution
+      # role's grant in modules/agentcore-runtime/main.tf.
       "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
     ]
   }
 
-  # Missing entirely until 2026-10-12, found by statically tracing a real
-  # submission end to end after live testing kept dying silently: the
-  # state machine's own CheckKillSwitch task (an ssm:getParameter SDK
-  # integration — infra/modules/step-functions-lambda/main.tf) has this
-  # action correctly granted on its own identity policy, but with NO
-  # ssm:GetParameter statement anywhere in this boundary, the
-  # intersection is empty — AccessDenied, no Catch on that state, the
-  # whole execution dies before Ingest ever runs, and the DynamoDB item
-  # IdempotencyGate already wrote stays at status "pending" forever
-  # (nothing updates it on this unhandled failure). This is exactly why
-  # every real test submission completed IdempotencyGate (status: pending
-  # was visible via GET /reviews/{reviewId}) but never produced a single
-  # Ingest/RuleEngine/etc. CloudWatch log group.
+  # The state machine's CheckKillSwitch task (an ssm:getParameter SDK
+  # integration) and the kill-switch checks in the API Lambdas need this.
+  # Without it the intersection is empty and every execution fails with
+  # AccessDenied before Ingest runs.
   statement {
     sid     = "AllowKillSwitchRead"
     effect  = "Allow"
     actions = ["ssm:GetParameter"]
-    # Found wrong on first deploy (2026-10-12, live-tested): the kill-
-    # switch parameter is named "/${name_prefix}/kill-switch" (SLASH-
-    # delimited — infra/modules/kill-switch/main.tf), unlike every other
-    # resource in this boundary, which is hyphen-delimited
-    # ("${name_prefix}-*"). The first version of this statement used
-    # "${var.name_prefix}-*", which requires a literal hyphen right after
-    # name_prefix — it never matched "archibrief-dev/kill-switch" (a
-    # slash there instead), so CheckKillSwitch kept failing identically
-    # even after this statement existed.
+    # The kill-switch parameter is named "/${name_prefix}/kill-switch"
+    # (slash-delimited, see infra/modules/kill-switch/main.tf), unlike the
+    # hyphen-delimited "${name_prefix}-*" resources elsewhere in this
+    # boundary, so the pattern uses a slash.
     resources = ["arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/${var.name_prefix}/*"]
   }
 
-  # Also missing entirely until 2026-10-12, found in the same trace:
-  # clarify_review's own identity policy (infra/modules/api-gateway/main.tf)
-  # grants states:SendTaskSuccess/SendTaskFailure (Resource: "*" — these
-  # actions identify the paused task by token, not state-machine ARN, so
-  # AWS doesn't support scoping them further), needed to resume a review
-  # paused at StoreClarificationToken's waitForTaskToken. Not yet hit by
-  # live testing (no submission so far has triggered needs_clarification),
-  # but would have failed the exact same silent way as the kill-switch gap
-  # above the first time it was.
+  # clarify_review (infra/modules/api-gateway/main.tf) calls
+  # SendTaskSuccess/SendTaskFailure to resume a review paused at
+  # StoreClarificationToken. Resource "*" because these actions identify
+  # the paused task by token, not by state machine ARN.
   statement {
     sid       = "AllowClarificationTaskTokenCompletion"
     effect    = "Allow"
@@ -232,16 +192,15 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
       "logs:DescribeLogGroups",
     ]
     # Log-delivery/resource-policy actions don't support resource-level
-    # scoping in IAM — same as the identity policies that already use
-    # them (step-functions-lambda's state_machine_invoke document).
+    # scoping in IAM, the same as in the identity policies that use them
+    # (step-functions-lambda's state_machine_invoke document).
     resources = ["*"]
   }
 
-  # Explicit, self-documenting escalation blocklist. Technically
-  # redundant with the enumerated Allow list above (an IAM boundary
-  # defaults to deny for anything not explicitly allowed), but kept
-  # explicit so a future careless wildcard Allow added above can't
-  # silently reopen the exact gap this boundary exists to close.
+  # Explicit escalation blocklist. Redundant with the enumerated Allow
+  # list above (a boundary denies anything not allowed), but it keeps a
+  # future wildcard Allow from silently reopening the gap this boundary
+  # exists to close.
   statement {
     sid    = "DenyEscalationVectors"
     effect = "Deny"

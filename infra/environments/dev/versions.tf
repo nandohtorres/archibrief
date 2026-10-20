@@ -1,8 +1,5 @@
-# Pinned per ADR-0004/ADR-0042. aws provider >= 6.24 required for the
-# aws_s3vectors_* resources (ADR-0007) — verified against the Terraform
-# Registry during this implementation pass, 2026-09-08.
-# .terraform.lock.hcl gets committed once `terraform init` is actually run
-# (requires AWS account bootstrap first — see Work-Project-Deployment-Roadmap.md).
+# Pinned per ADR-0004/ADR-0042. aws provider >= 6.24 is required for the
+# aws_s3vectors_* resources (ADR-0007). .terraform.lock.hcl is committed.
 
 terraform {
   required_version = "~> 1.9"

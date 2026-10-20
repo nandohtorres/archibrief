@@ -17,14 +17,10 @@ paths = [
 [[rules]]
 id = "aws-account-id-placeholder"
 description = "Flag non-placeholder AWS account IDs committed in tfvars/tf files"
-# Fixed 2026-10-14: the previous version of this regex used a negative
-# lookahead, (?!000000000000) - gitleaks compiles rule regexes with
-# Go's standard `regexp` package (RE2 syntax), which does not support
-# lookahead/lookbehind at all. That meant this rule either failed to
-# load or silently never matched as intended - never actually caught
-# anything. Rewritten to match any 12-digit aws_account_id assignment
-# unconditionally, with the one real placeholder value exempted via
-# gitleaks' own per-rule allowlist below (no lookahead needed there).
+# gitleaks compiles rule regexes with Go's `regexp` package (RE2), which
+# has no lookahead/lookbehind, so the placeholder can't be excluded in the
+# regex itself. The rule matches any 12-digit aws_account_id assignment,
+# and the placeholder is exempted through the per-rule allowlist below.
 regex = '''aws_account_id\s*=\s*"\d{12}"'''
 tags = ["aws", "account-id"]
 
@@ -33,10 +29,10 @@ tags = ["aws", "account-id"]
 
 [[rules]]
 id = "aws-account-id-in-arn"
-description = "Flag any non-placeholder AWS account ID embedded in an ARN (.tf/.json/.md, code comments, etc.) - the rule above only catches an `aws_account_id = \"...\"` assignment, not an ID inside an ARN string, which is the shape a real leak actually took on 2026-10-13 (see Work-Project-Issues-Log.md)"
-# Generic on purpose: an earlier version matched the real account ID as
-# a literal, which put that ID in the repo itself. Never name a real
-# account ID in this file - match the ARN shape and allowlist placeholders.
+description = "Flag any non-placeholder AWS account ID embedded in an ARN (.tf/.json/.md, code comments, etc.) - the rule above only catches an `aws_account_id = \"...\"` assignment, not an ID inside an ARN string, which is the more likely shape of a leak"
+# Generic on purpose: matching a real account ID as a literal would put
+# that ID in the repo itself. Never name a real account ID in this file;
+# match the ARN shape and allowlist placeholders.
 regex = '''arn:aws[a-z-]*:[a-z0-9-]+:[a-z0-9-]*:\d{12}:'''
 tags = ["aws", "account-id"]
 
