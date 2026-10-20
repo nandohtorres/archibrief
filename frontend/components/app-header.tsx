@@ -10,6 +10,8 @@ interface AppHeaderProps {
   onPreview: (screen: AppScreen) => void;
   // The logo goes back to the home page from any screen.
   onHome: () => void;
+  // Scrolls to a home page section, going home first from other screens.
+  onSection: (id: string) => void;
 }
 
 const previews: Array<{ screen: AppScreen; label: string }> = [
@@ -20,6 +22,77 @@ const previews: Array<{ screen: AppScreen; label: string }> = [
   { screen: "failure", label: "Failure" },
 ];
 
+const sections: Array<{ id: string; label: string }> = [
+  { id: "samples", label: "Sample reviews" },
+  { id: "how", label: "How it works" },
+  { id: "submit", label: "Review yours" },
+];
+
+const nextTheme: Record<ThemeChoice, ThemeChoice> = {
+  system: "light",
+  light: "dark",
+  dark: "system",
+};
+
+const themeNames: Record<ThemeChoice, string> = {
+  system: "System",
+  light: "Light",
+  dark: "Dark",
+};
+
+// Stacked layers: the architecture a review looks through.
+function BrandEmblem() {
+  return (
+    <svg className="brand-emblem" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16 3 29 10 16 17 3 10Z" fill="currentColor" />
+      <path
+        d="M3 15.5 16 22.5 29 15.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinejoin="round"
+        opacity="0.65"
+      />
+      <path
+        d="M3 21 16 28 29 21"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinejoin="round"
+        opacity="0.35"
+      />
+    </svg>
+  );
+}
+
+function ThemeIcon({ theme }: { theme: ThemeChoice }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {theme === "dark" && <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />}
+      {theme === "light" && (
+        <>
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </>
+      )}
+      {theme === "system" && (
+        <>
+          <rect x="3" y="4" width="18" height="12" rx="2" />
+          <path d="M8 20h8M12 16v4" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export function AppHeader({
   apiConfigured,
   screen,
@@ -27,6 +100,7 @@ export function AppHeader({
   onThemeChange,
   onPreview,
   onHome,
+  onSection,
 }: AppHeaderProps) {
   return (
     <>
@@ -40,13 +114,8 @@ export function AppHeader({
           aria-label="ArchiBrief home"
           onClick={onHome}
         >
-          <span className="brand-mark" aria-hidden="true">
-            A
-          </span>
-          <div>
-            <strong>ArchiBrief</strong>
-            <span>Evidence-backed AWS architecture review</span>
-          </div>
+          <BrandEmblem />
+          <strong className="brand-name">ArchiBrief</strong>
         </button>
         <div className="header-controls">
           {!apiConfigured && (
@@ -54,18 +123,29 @@ export function AppHeader({
               <span aria-hidden="true">●</span> Fixture mode
             </span>
           )}
-          <label className="theme-control" htmlFor="theme-select">
-            <span className="theme-label">Theme</span>
-            <select
-              id="theme-select"
-              value={theme}
-              onChange={(event) => onThemeChange(event.target.value as ThemeChoice)}
-            >
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </label>
+          <nav className="site-nav" aria-label="Sections">
+            {sections.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onSection(section.id);
+                }}
+              >
+                {section.label}
+              </a>
+            ))}
+          </nav>
+          <button
+            type="button"
+            className="theme-toggle"
+            aria-label={`Theme: ${themeNames[theme]}. Switch to ${themeNames[nextTheme[theme]]}`}
+            title={`Theme: ${themeNames[theme]}`}
+            onClick={() => onThemeChange(nextTheme[theme])}
+          >
+            <ThemeIcon theme={theme} />
+          </button>
         </div>
       </header>
       {/* Development aid only - never rendered in a build pointed at a real API. */}

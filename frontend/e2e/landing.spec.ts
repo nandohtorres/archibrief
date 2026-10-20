@@ -70,4 +70,13 @@ test.describe("landing page", () => {
     await expect(page.locator("#report-heading")).toHaveCount(0);
     expect(await page.evaluate(() => window.scrollY)).toBeLessThan(50);
   });
+
+  test("a header link opens its home page section from a report", async ({ page }) => {
+    await page.goto(LIVE_URL);
+    await page.getByRole("button", { name: "See a real review" }).click();
+    await expect(page.locator("#report-heading")).toBeVisible();
+    await page.getByRole("navigation", { name: "Sections" }).getByText("How it works").click();
+    await expect(page.locator("#report-heading")).toHaveCount(0);
+    await expect(page.locator("#how-heading")).toBeInViewport();
+  });
 });
