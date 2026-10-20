@@ -129,6 +129,9 @@ with body `[]` passes JSON parsing and then raises `AttributeError` at
 fields; apply the same contract across entry points. The probe intentionally
 used no credentials or live endpoint. No handler behavior was changed here.
 
+**Status: resolved.** The upload, submit, chat and clarification handlers all
+reject non-object JSON with a 400; `clarify_review` has a regression test.
+
 ### 5. Chat defaults and timeout handling need one authoritative contract
 
 **Medium configuration/operational risk.** Terraform configures Sonnet 4.6 and
@@ -142,6 +145,11 @@ less time remains. Existing tests explicitly assert that behavior. Consider a
 controlled pre-call timeout when the remaining request budget cannot cover the
 minimum call and final persistence. That deserves a deliberate behavioral change
 and regression test, rather than being slipped into cleanup.
+
+**Status: resolved.** Handler fallbacks now match Terraform (Sonnet 4.6, $1.00),
+and `tests/backend/test_defaults_match_terraform.py` fails if they drift.
+`model_read_timeout` raises a controlled timeout before the call when less than
+the minimum read time remains.
 
 ## Publication and maintenance follow-ups
 

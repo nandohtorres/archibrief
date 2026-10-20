@@ -231,3 +231,12 @@ def test_kill_switch_blocks_resume_and_keeps_token(table, monkeypatch):
     assert result["statusCode"] == 503
     assert _FakeSfnClient.calls == []
     assert _stored(table)["clarificationTaskToken"] == "token-1"
+
+
+@pytest.mark.parametrize("body", ["[]", '"text"', "null", "5"])
+def test_non_object_json_body_returns_400(table, body):
+    table.put_item(Item=_waiting())
+    event = {**_event("r1", None), "body": body}
+
+    assert handler(event, None)["statusCode"] == 400
+    assert _stored(table)["status"] == "needs_clarification"
