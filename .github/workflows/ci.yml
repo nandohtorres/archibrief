@@ -1,5 +1,5 @@
-# ArchiBrief CI — advisory (not yet gating merges; Phase 7 tightens this
-# to required/blocking status checks per Work-Project-Build-Plan.md).
+# ArchiBrief CI. Advisory for now: these jobs are not yet required status
+# checks for merging.
 #
 # Third-party actions are pinned to full commit SHAs (tag in the trailing
 # comment) so a moved or compromised tag cannot change what CI runs.
@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
-      # backend/ isn't installed as a package — call sites import
+      # backend/ isn't installed as a package: call sites import
       # "backend.xxx" from the repo root (see backend/pyproject.toml's
       # pythonpath = [".."] pytest setting), so CI installs dependencies
       # directly rather than `pip install -e backend`.

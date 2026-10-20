@@ -61,7 +61,7 @@ HOLDOUT_QUERIES: list[EvalQuery] = [
             "(v5.0.0 support question) and q09 (IAM.6, v1.2.0). Re-verified "
             "2026-09-15 against the 4,463-chunk corpus: chunk 0012 (the "
             "v1.4.0-specific controls list) still directly answers this "
-            "query. Codex also found that aws-cis-foundations-mapping-0019 "
+            "query. A later review found that aws-cis-foundations-mapping-0019 "
             "— a cross-version control-mapping table — contains the same "
             "IAM.18 row (and, separately, the IAM.6 row that answers q09 in "
             "eval.py), which is genuine cross-set overlap: a retriever "

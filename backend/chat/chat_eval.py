@@ -188,7 +188,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("chat-eval-results.json"))
     args = parser.parse_args()
     if not args.confirm_paid:
-        print("Refusing to run: pass --confirm-paid (needs Fernando's go-ahead).", file=sys.stderr)
+        print("Refusing to run: this makes paid model calls; pass --confirm-paid.", file=sys.stderr)
         return 2
 
     canary = f"eval-canary-{secrets.token_hex(8)}"

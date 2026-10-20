@@ -1,8 +1,8 @@
 # Report chat (ADR-0046 §4, ADR-0050): POST and GET
 # /reviews/{reviewId}/questions.
 #
-# Admin-gated like every other non-demo route until Phase 3 builds the
-# visitor limits; the handlers also refuse non-admin callers unless
+# Admin-gated like every other non-demo route until per-visitor limits
+# exist; the handlers also refuse non-admin callers unless
 # chat_public_enabled is true, so removing the authorizer alone can't
 # open a paid public endpoint.
 #
@@ -219,7 +219,7 @@ resource "aws_apigatewayv2_integration" "chat" {
   integration_uri        = aws_lambda_function.chat[each.key].invoke_arn
   payload_format_version = "2.0"
   # Above the Lambda's own timeout, so its timeout response reaches the
-  # caller rather than a bare gateway 503 (same as deeper_review, Codex F19).
+  # caller rather than a bare gateway 503 (same as deeper_review).
   timeout_milliseconds = 29000
 }
 

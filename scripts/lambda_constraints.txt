@@ -13,7 +13,7 @@
 # scripts/package_lambdas.py), run the backend tests, then plan and apply.
 #
 # boto3 and its dependencies: bundled into ask_question only, at the same
-# versions as backend/agent/runtime_requirements.lock.txt (2026-10-16).
+# versions as backend/agent/runtime_requirements.lock.txt.
 annotated-types==0.8.0
 boto3==1.43.96
 botocore==1.43.96
