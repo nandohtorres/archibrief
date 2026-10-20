@@ -3236,3 +3236,32 @@ h4 {
 .brand-home:hover strong {
   color: var(--accent);
 }
+
+/* Privacy page (app/privacy/page.tsx). */
+.privacy-page {
+  max-width: 68ch;
+  padding: var(--space-6) 0;
+}
+
+.privacy-page h1 {
+  margin: var(--space-3) 0;
+  font: 600 clamp(2rem, 5vw, 3rem) / 1.1 var(--font-serif);
+}
+
+.privacy-page h2 {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: 1.05rem;
+}
+
+.privacy-page p {
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+/* At least 24px tall so it meets the WCAG 2.5.8 tap-target size. */
+.site-footer a {
+  display: inline-block;
+  min-height: 24px;
+  line-height: 24px;
+  color: var(--text-muted);
+}

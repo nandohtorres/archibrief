@@ -506,6 +506,8 @@ export function ArchiBriefApp() {
           {apiConfigured
             ? "Static analysis only · never accesses your AWS account"
             : "Fixture build · no live AWS access"}
+          {" · "}
+          <a href="/privacy.html">Privacy</a>
         </span>
       </footer>
     </div>
