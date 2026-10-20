@@ -10,7 +10,7 @@ trust boundary 6 covers the attack surface.
 
 ```
 POST /reviews/{reviewId}/questions
-  1. admin key, or CHAT_PUBLIC_ENABLED (off until Phase 3)
+  1. admin key, or CHAT_PUBLIC_ENABLED (off until public access opens)
   2. body shape (unknown fields → 400), kill switch (fails closed)
   3. review exists and is complete
   4. same client_request_id already answered → stored answer, no cost
@@ -39,8 +39,8 @@ count. No model call.
 | 503 | `chat_paused`, `guardrails_unavailable`; `answer_failed` on Bedrock throttling | No / refunded |
 | 504 | `answer_timeout` | Refunded (first 3 failures per review) |
 
-Hardening from the pre-deploy code and security reviews (2026-10-15):
-only answered turns become history (never a blocked or refused
+Hardening from the pre-deploy code and security reviews: only answered
+turns become history (never a blocked or refused
 question); a used-up review or day is turned away before the Guardrails
 call; after 6 failed paid calls a review takes no more; the browser
 reuses a request's id when retrying it, so a timeout isn't charged twice.
@@ -75,7 +75,7 @@ the Lambda, so they change without a code deploy):
 | `chat_daily_max_questions` | 100 | Count backstop per UTC day |
 | `chat_blocked_per_review` | 5 | Guardrail-blocked questions before a 429 |
 | `chat_grounding_check_enabled` | true | Log grounding scores (detect-only) |
-| `chat_public_enabled` | false | Second lock; stays false until Phase 3 |
+| `chat_public_enabled` | false | Second lock; stays false until public access opens |
 | `chat_alarms_enabled` | false | Needs `infra/environments/dev/proposed-chat-iam.md` first |
 
 ## Tests
@@ -86,7 +86,7 @@ the Lambda, so they change without a code deploy):
   `tests/backend/lambdas/ask_question` and `list_questions` (moto: every
   status code, limits, replay, refunds, suggestions, logging),
   `tests/frontend/chat.test.ts`, `frontend/e2e/report-chat.spec.ts`.
-- Paid, only with Fernando's go-ahead:
+- Paid, run deliberately and never in CI:
   `python -m backend.chat.chat_eval --confirm-paid [--traps] --model <id>`
   runs 24 quality cases over the demo reviews and the 31 trap cases
   against the real model, scored by fixed rules. The model choice is
@@ -94,7 +94,7 @@ the Lambda, so they change without a code deploy):
 
 ## Going live, in order
 
-Each step is Fernando's call; the paid ones need a go-ahead each time.
+Paid steps are run deliberately, one at a time.
 
 1. `python scripts/package_lambdas.py`, then `terraform apply` (two new
    Lambdas, two routes, the questions table, two guardrails, Haiku in
@@ -109,8 +109,9 @@ Each step is Fernando's call; the paid ones need a go-ahead each time.
    and, from the logged grounding scores, whether to block on grounding.
 5. `python scripts/pregenerate_demo_chats.py --confirm-paid` (paid) to
    store the demos' suggested answers in `frontend/public/demos/chats/`.
-6. Measure real per-question cost (master-list 29) and set the daily cap.
-7. Phase 3 (Turnstile, visitor limits), then `chat_public_enabled`.
+6. Measure real per-question cost and set the daily cap.
+7. Public-access controls (Turnstile, visitor limits), then
+   `chat_public_enabled`.
    Before that, require review ids to be random UUIDs server-side: a
    review id is the only key to its conversation, and today only the
    frontend generates UUIDs (the API accepts any id matching its pattern).

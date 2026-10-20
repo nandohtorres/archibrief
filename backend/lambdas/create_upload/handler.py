@@ -1,28 +1,22 @@
 """ArchiBrief Lambda: create_upload.
 
-Backs `POST /uploads` — the first half of the direct-upload path chosen
-for `archive_path` (ADR-0045, drafted 2026-10-12): the client uploads
-its own Terraform archive straight to S3 via a presigned POST, instead
-of ArchiBrief fetching it from a client-supplied URL server-side. See
-that ADR for the full reasoning (GitHub-fetch deferred as a documented
-future option, not built here).
+Backs `POST /uploads`, the first half of the direct-upload path
+(ADR-0045): the client uploads its Terraform archive straight to S3 via a
+presigned POST, instead of ArchiBrief fetching it server-side from a
+client-supplied URL.
 
-Request body: `{"review_id": "..."}` — the same client-generated UUID
-the client will later send as `SubmitReviewRequest.review_id`
-(frontend/lib/contracts.ts), so the resulting S3 key can be tied to
-that review before the review itself exists anywhere server-side.
-`review_id` is validated against a conservative safe-character pattern
-before being interpolated into the S3 key — it is client-supplied and
-otherwise unvalidated at this point in the pipeline, so treating it as
-untrusted input here (not just at Ingest, later) avoids a path-
-traversal/key-injection shaped bug the same way extract_archive already
-treats archive *contents* as untrusted (ADR-0038).
+Request body: `{"review_id": "..."}`, the same client-generated ID the
+client later sends as `SubmitReviewRequest.review_id`
+(frontend/lib/contracts.ts), so the S3 key is tied to the review before
+the review exists server-side. `review_id` is untrusted input here, so it
+is checked against a conservative safe-character pattern before being
+interpolated into the S3 key, preventing path traversal or key injection
+(ADR-0038 treats archive contents the same way).
 
-Response: `{"archiveKey": "...", "uploadUrl": "...", "uploadFields": {...}}`
-— the frontend POSTs the file directly to `uploadUrl` with
-`uploadFields` as additional form fields (the standard S3 presigned-POST
-browser upload pattern), never routing the file bytes through this
-Lambda or through API Gateway at all.
+Response: `{"archiveKey": "...", "uploadUrl": "...", "uploadFields": {...}}`.
+The frontend POSTs the file to `uploadUrl` with `uploadFields` as form
+fields (the standard S3 presigned-POST browser upload), so file bytes
+never pass through this Lambda or API Gateway.
 """
 
 from __future__ import annotations
@@ -41,11 +35,8 @@ from backend.shared.clients import S3Client
 # sequences that could escape the "uploads/" key prefix.
 _REVIEW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
-# Generous for Terraform source (which is plain text, typically small)
-# without being unbounded — a first-pass ceiling, not calibrated against
-# real submission sizes, same caveat as every other first-pass heuristic
-# in this codebase (see backend/lambdas/finalize/handler.py's
-# compute_cost_estimate_tier).
+# Generous for Terraform source (plain text, typically small) without
+# being unbounded. Not yet calibrated against real submission sizes.
 _MAX_ARCHIVE_BYTES = 20 * 1024 * 1024
 
 

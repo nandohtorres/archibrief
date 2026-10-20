@@ -325,7 +325,7 @@ def test_max_tokens_defaults_to_a_bounded_value_when_omitted():
     assert reasoning_client.calls[0]["max_tokens"] == 4096
 
 
-# --- Partial results: one bad citation must not discard the review (Codex F04)
+# --- Partial results: one bad citation must not discard the review
 
 
 def _reason_state(
@@ -404,8 +404,8 @@ def test_parse_model_findings_stays_strict_for_eval_scripts():
 
 
 def test_clarification_answers_and_assumptions_reach_the_model_prompt():
-    # Regression (Codex F06): preflight answers/defaults never entered the
-    # reasoning prompt, so clarifying questions didn't tailor anything.
+    # Preflight answers and defaults must reach the reasoning prompt, or
+    # clarifying questions don't tailor anything.
     import json
 
     state = _reason_state([_valid_finding_item()])

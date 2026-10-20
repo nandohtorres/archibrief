@@ -286,7 +286,7 @@ def test_malformed_answers_raise(ctx, raw):
         verify_answer(raw, ctx, CHUNKS, CANARY)
 
 
-# --- Fixes from the 2026-10-15 code and security reviews -------------------
+# --- Output sanitization hardening -------------------------------------------
 
 ZWSP = chr(0x200B)
 
@@ -366,9 +366,8 @@ def test_the_cap_never_leaves_a_code_fence_open(ctx):
 
 
 def test_a_long_partial_answer_keeps_its_partial_note(ctx):
-    # The cap used to run out before the note saying the answer is
-    # incomplete, so a long partial answer read as complete (code review
-    # 2026-10-16).
+    # The length cap must leave room for the note saying the answer is
+    # incomplete, or a long partial answer reads as complete.
     paragraphs = [
         {"text": "word " * 200, "citations": [{"ref": "F1", "exact_quote": ""}]}
         for _ in range(5)

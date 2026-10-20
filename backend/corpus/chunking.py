@@ -3,13 +3,9 @@ import re
 
 from .models import BlockKind, Chunk, DocumentSnapshot, Section
 
-# bumped 2026-09-15: no chunking-logic change of its own, but the BlockKind
-# values it now receives from normalize_pdf's 3-finding follow-up
-# segmentation fixes (colon-continuation, ordinal-vs-bullet list mixing,
-# mangled-table LIST false-positive — see normalize_pdf.py's
-# _PARSER_VERSION comment) change some block boundaries and content_type
-# labels, so old chunks built under 1.1.0 are not equivalent to new ones
-# under the same chunker_version.
+# Bump whenever chunk boundaries or content_type labels can change,
+# including changes caused by the BlockKind values normalize_pdf.py emits,
+# so chunks built under different versions are never treated as equivalent.
 _CHUNKER_VERSION = "1.2.0"
 _ATOMIC_KINDS = {BlockKind.TABLE, BlockKind.CODE, BlockKind.LIST}
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")

@@ -1,5 +1,5 @@
 """answer_question under a deadline: the detect-only grounding check is
-skipped when there isn't time for it (code review 2026-10-16)."""
+skipped when there isn't time for it."""
 
 from __future__ import annotations
 

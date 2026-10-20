@@ -2,8 +2,7 @@
 
 Bounded stateless work (ADR-0028): static-only HCL parse of submitted
 Terraform. Never runs `terraform init`/`plan`/`apply`, provisioners, or
-external data sources against submitted content (ADR-0027, hard rule —
-see Work-Project-Coding-Conventions.md "Security-relevant conventions").
+external data sources against submitted content (ADR-0027, a hard rule).
 
 This module and everything it imports must have zero dependency capable
 of shelling out to `terraform` — no `subprocess`, no terraform binary.
@@ -34,20 +33,12 @@ from backend.shared.archive import (  # noqa: F401  (re-exported for callers/tes
 from backend.shared.clients import GuardrailsClient, S3Client
 from backend.shared.terraform_scope import MODULE_FIELD, scoped_key
 
-# with_comments=False (2026-10-01 fix): hcl2's SerializationOptions
-# defaults with_comments to True, which attaches a `__comments__` key
-# (containing the comment's raw text) onto any block with an adjacent
-# `//`/`/* */` comment — found while writing the ADR-0038 adversarial
-# regression suite's "instructions hidden in Terraform comments" test,
-# which failed against the real parser: a `//` comment survived verbatim
-# into parse_terraform_files' output (stored under the resource's body
-# dict, same place RuleEngine/downstream code reads real attributes from)
-# even though a `#` comment did not. `#` comments are a different lexer
-# token hcl2 drops outright regardless of this option; only `//`/`/* */`
-# were ever actually at risk. This option doesn't change what Terraform
-# *data* gets parsed — comments were never part of the semantic HCL model
-# — it only stops hcl2's own debug/tooling metadata from being carried
-# into application data.
+# with_comments=False: hcl2 defaults it to True, which attaches the raw
+# text of any adjacent `//` or `/* */` comment to the block body as
+# `__comments__`, where downstream code reads real attributes. That would
+# carry instructions hidden in Terraform comments into application data
+# (ADR-0038). `#` comments are dropped by the lexer either way. Comments
+# are not part of the HCL data model, so nothing real is lost.
 _SERIALIZATION_OPTIONS = SerializationOptions(strip_string_quotes=True, with_comments=False)
 
 
@@ -140,13 +131,10 @@ def _resolve_guardrails_client(
     """Injected client wins (tests); otherwise build one from config.
 
     Checks the event payload first, then falls back to the Lambda's own
-    `GUARDRAIL_ID`/`GUARDRAIL_VERSION` environment variables (set by
-    Terraform once a real Bedrock Guardrail is deployed) — the deployed
-    Guardrail is fixed per environment, not something the Step Functions
-    state machine's payload needs to carry on every invocation. Absent
-    both sources, Guardrails is skipped rather than failing — the same
-    "blocked on a deployed resource, not on missing code" pattern as the
-    Audit/Finalize Lambdas' DynamoDB/S3 writes.
+    `GUARDRAIL_ID`/`GUARDRAIL_VERSION` environment variables set by
+    Terraform; the Guardrail is fixed per environment, so the state
+    machine payload doesn't need to carry it. With neither source,
+    the Guardrails check is skipped rather than failing.
     """
     if guardrails_client is not None:
         return guardrails_client
@@ -160,20 +148,14 @@ def _resolve_guardrails_client(
 def _resolve_archive_path(event: dict, dest_dir: str, s3_client: S3Client | None = None) -> str:
     """Resolves the local filesystem path extract_archive() needs.
 
-    Added 2026-10-12 (ADR-0045, direct-upload archive_path design) — the
-    real submission path now sends `archive_s3_key`, the key the client
-    already uploaded its tarball to via create_upload's presigned POST,
-    not a local path (no client could ever supply a path meaningful
-    inside this Lambda's own ephemeral filesystem, which is what the
-    pre-existing `archive_path` field alone would have required). Downloads
-    the object once to `dest_dir` and returns that local path so
-    extract_archive()'s existing, already-tested
-    path-traversal/symlink/member-count checks run completely unchanged
-    on the downloaded file.
+    Submissions send `archive_s3_key`, the key the client uploaded its
+    tarball to via create_upload's presigned POST (ADR-0045). The object
+    is downloaded once to `dest_dir`, so extract_archive()'s
+    path-traversal, symlink and member-count checks run on the local
+    file as usual.
 
-    `archive_path` support is kept for direct/lower-level invocations
-    (tests, and any future caller that already has a local file) — not
-    deprecated, just no longer the only way in.
+    `archive_path` (an existing local file) is also accepted, for tests
+    and direct invocations.
     """
     archive_path = event.get("archive_path")
     if archive_path:
@@ -201,8 +183,8 @@ def handler(
 ):
     workload_brief = event["workload_brief"]
     # A fresh directory per invocation, removed afterwards: warm Lambda
-    # containers reuse /tmp, so a fixed path kept every previous
-    # submission's files on disk (Codex F14).
+    # containers reuse /tmp, so a fixed path would keep every previous
+    # submission's files on disk.
     dest_dir = event.get("dest_dir") or tempfile.mkdtemp(prefix="archibrief-ingest-")
     try:
         return _ingest(event, workload_brief, dest_dir, guardrails_client, s3_client)
@@ -216,8 +198,8 @@ def _log_stage(review_id: str | None, stage: str, **fields: object) -> None:
 
     Written with print(flush=True) on purpose: a hard Lambda timeout kills
     the process without an exception, and CPython block-buffers stdout
-    when it isn't a tty, so unflushed lines never reach CloudWatch
-    (confirmed 2026-10-12 while chasing an Ingest hang). The last line for
+    when it isn't a tty, so unflushed lines never reach CloudWatch. The
+    last line for
     a review_id shows which stage it was stuck in. Never logs the brief,
     file contents or archive paths.
     """
@@ -283,7 +265,7 @@ def _ingest(
 
     # In the deployed workflow the parsed tree goes to S3 and only a
     # reference travels through Step Functions state: a 50 MiB archive can
-    # parse to far more than the 256 KiB state limit (Codex F07), and
+    # parse to far more than the 256 KiB state limit, and
     # execution history/logs would otherwise retain the user's Terraform.
     report_bucket = event.get("report_bucket")
     if review_id and report_bucket:

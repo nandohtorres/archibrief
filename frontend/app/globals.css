@@ -1,7 +1,5 @@
 /* Fonts come from next/font in app/layout.tsx: self-hosted at build time,
-   with size-matched fallbacks so nothing shifts when they load. (Before
-   2026-10-15 a Google Fonts @import here used "&amp;" between families,
-   so only IBM Plex Mono ever loaded.) */
+   with size-matched fallbacks so nothing shifts when they load. */
 
 :root {
   --bg: #f4f7f9;
@@ -545,7 +543,7 @@ h4 {
   resize: vertical;
 }
 
-/* Try-it section (2026-10-15): example architectures, upload/paste
+/* Try-it section: example architectures, upload/paste
    switch, admin key beside the submit button. */
 .example-heading {
   margin: var(--space-3) 0 var(--space-1);
@@ -2298,9 +2296,8 @@ h4 {
   font: 0.72rem/1.5 var(--font-mono);
 }
 
-/* Landing: the "master" design (2026-10-15, frontend/design/landing-options/
-   option-master.html). A's editorial hero, B's sample cards, C's check
-   marks, walkthrough and checks list. */
+/* Landing: editorial hero, sample cards, check marks, walkthrough and
+   checks list. */
 .landing {
   max-width: 1080px;
   margin: 0 auto;
@@ -2363,7 +2360,7 @@ h4 {
   text-decoration: none;
 }
 
-/* C's quiet bordered secondary next to the solid primary. */
+/* A quiet bordered secondary next to the solid primary. */
 .landing-actions .button.secondary {
   border-color: var(--border);
   background: var(--surface);
@@ -2398,7 +2395,7 @@ h4 {
   scroll-margin-top: var(--space-3);
 }
 
-/* B's alternating band: full-bleed surface behind the section. */
+/* Alternating band: full-bleed surface behind the section. */
 .landing-band {
   position: relative;
   isolation: isolate;
@@ -2552,7 +2549,7 @@ h4 {
   font-size: 0.8rem;
 }
 
-/* C's walkthrough: numbered circles on a line, each step with its visual. */
+/* Walkthrough: numbered circles on a line, each step with its visual. */
 .landing-label {
   display: block;
   color: var(--text-faint);
@@ -2866,7 +2863,7 @@ h4 {
   font: 600 0.74rem/1.4 var(--font-mono);
 }
 
-/* C's checks list and "won't claim" box. */
+/* Checks list and "won't claim" box. */
 .landing-band-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
@@ -3161,7 +3158,7 @@ h4 {
   font-size: 0.85rem;
 }
 
-/* Phone pass (master-list #9, 2026-10-15). Kept last so it overrides the
+/* Phone layout. Kept last so it overrides the
    general 680px rules above. */
 @media (max-width: 680px) {
   /* Header: one row of logo and theme button. The section links are
@@ -3211,7 +3208,7 @@ h4 {
   }
 }
 
-/* Landing draft (2026-10-17): "one review, two readers" cards. */
+/* Landing: "one review, two readers" cards. */
 .landing-sample .landing-label {
   margin-bottom: 0.5rem;
 }

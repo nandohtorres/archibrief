@@ -1,4 +1,4 @@
-// The finished demo reviews (master list 15h): opened from static files in
+// The finished demo reviews: opened from static files in
 // public/demos with no admin key and no API call at all.
 import { expect, test } from "@playwright/test";
 import { LIVE_URL } from "../playwright.config";

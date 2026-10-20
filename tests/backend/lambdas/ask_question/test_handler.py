@@ -459,7 +459,7 @@ def test_a_canary_leak_becomes_a_refusal_and_is_logged(env, capsys):
     assert any(entry.get("canary_hit") is True for entry in log)
 
 
-# --- Fixes from the 2026-10-15 code and security reviews -------------------
+# --- Refusals, refunds and edge-case hardening -------------------------------
 
 
 def test_blocked_and_refused_questions_never_become_history(env):
@@ -532,7 +532,7 @@ def test_a_non_ascii_admin_header_is_just_not_admin(env):
     assert response["statusCode"] == 403
 
 
-# --- Code review 2026-10-16 -------------------------------------------------
+# --- Usage caps, timeouts and failure handling -------------------------------
 
 
 def test_the_usage_counters_policy_allows_the_precheck_read():
@@ -682,8 +682,8 @@ def test_retrieval_fails_open_when_s3_vectors_is_unavailable(env, monkeypatch):
 
 
 def test_a_failed_answer_logs_which_check_failed(env, capsys):
-    # The first live failure (2026-10-16) logged only "answer_failed",
-    # which hid that the model had hit max_tokens.
+    # A bare "answer_failed" would hide that the model hit max_tokens, so
+    # the log names the check that failed.
     env.reasoning.raises = ModelOutputTruncated("max_tokens")
     _call(_ask())
     env.reasoning.raises = None

@@ -6,7 +6,6 @@ out-fixture
 out-live
 playwright-report
 test-results
-design
 .lighthouseci
 lighthouse-reports
 # Saved demo reports and chat answers: unedited pipeline and API output.

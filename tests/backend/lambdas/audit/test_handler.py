@@ -40,7 +40,7 @@ def test_handler_writes_audit_row_to_configured_table(monkeypatch):
 
 
 def test_handler_fails_instead_of_claiming_success_without_a_table(monkeypatch):
-    # Regression (Codex F13): previously returned "recorded" and wrote nothing.
+    # Without a table it must fail, not return "recorded" and write nothing.
     monkeypatch.delenv("AUDIT_TABLE_NAME", raising=False)
     with pytest.raises(AuditTableNotConfigured):
         handler({"review_id": "r-1"}, None)

@@ -1,10 +1,9 @@
 """ArchiBrief Lambda: rule-engine.
 
 Deterministic checks against the parsed Terraform resource tree (IAM,
-exposure, encryption, availability, recovery, observability, cost — the
-v1 scenario list in Work-Project-Spec.md). Every check produces zero or
-more `Finding` objects of type deterministic-rule-result — never a raw
-dict (Work-Project-Coding-Conventions.md "Typed-finding discipline").
+exposure, encryption, availability, recovery, observability, cost). Every
+check produces zero or more `Finding` objects of type
+deterministic-rule-result, never a raw dict.
 
 Two sources feed it (ADR-0048):
 - Trivy's results for the checks ArchiBrief trusts, produced by the Scan
@@ -15,12 +14,12 @@ Two sources feed it (ADR-0048):
   public bucket policies, ...) and as the fallback when Trivy didn't run.
 
 Resource names reach finding text only through display_name(), which
-restricts them to identifier characters and truncates them (master-list
-#14): rule findings are part of the reasoning model's input.
+restricts them to identifier characters and truncates them: rule findings
+are part of the reasoning model's input.
 
 It also returns resource_summary (resource_summary.py): what the
 Terraform declares and its key settings, so the model reasons from facts
-instead of guessing about settings no rule mentions (#15b).
+instead of guessing about settings no rule mentions.
 """
 
 from __future__ import annotations
@@ -321,9 +320,9 @@ def _port_range(from_port: object, to_port: object, protocol: object) -> range |
 def _exposed_ports(ports: range, trivy_ran: bool) -> set[int]:
     """Sensitive ports in range; SSH/RDP are Trivy's (AWS-0107) when it ran.
 
-    All-traffic rules used to be left to Trivy entirely, but its finding
-    only names SSH/RDP, so a database open on every port (FEC demo) read
-    as an admin-port issue. The database ports are reported here.
+    Trivy's finding only names SSH/RDP, so leaving all-traffic rules to it
+    would make a database open on every port read as an admin-port issue.
+    The database ports are reported here.
     """
     sensitive = SENSITIVE_PORTS - ADMIN_PORTS if trivy_ran else SENSITIVE_PORTS
     return {p for p in sensitive if p in ports}
@@ -467,7 +466,7 @@ def rule_rds_encryption(parsed: dict, review_id: str) -> list[Finding]:
 @concern("rds_public")
 def rule_rds_publicly_accessible(parsed: dict, review_id: str) -> list[Finding]:
     findings = []
-    # Aurora's per-instance resource carries the same setting (FEC demo).
+    # Aurora's per-instance resource carries the same setting.
     instances = [
         (resource_type, key, body)
         for resource_type in ("aws_db_instance", "aws_rds_cluster_instance")
@@ -1059,7 +1058,7 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
 
 def load_parsed(event: dict) -> dict:
     """Parsed Terraform comes inline (tests/local) or, in the deployed
-    workflow, as an S3 reference written by Ingest (Codex F07)."""
+    workflow, as an S3 reference written by Ingest."""
     if "parsed_s3_key" in event:
         body = S3Client(bucket=event["report_bucket"]).get_object(event["parsed_s3_key"])
         return json.loads(body)

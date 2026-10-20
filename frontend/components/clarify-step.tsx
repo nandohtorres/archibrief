@@ -27,7 +27,7 @@ type FieldSchema = YesNoMultiSelectSchema | TextSchema;
 // Known baseline-field schemas — mirrors backend/agent/nodes/
 // preflight.py's FIELD_LABELS, extended with the actual question text
 // and answer shape (yes/no + multi-select, rather than a bare free-text
-// box) per Fernando's explicit request. Falls back to a plain free-text
+// box). Falls back to a plain free-text
 // field for anything not listed here, so an unrecognized field still
 // renders something usable instead of breaking the form.
 const FIELD_SCHEMAS: Record<string, YesNoMultiSelectSchema> = {

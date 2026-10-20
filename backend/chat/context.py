@@ -216,7 +216,7 @@ def build_review_context(ledger: dict[str, Any]) -> ReviewContext:
         }
     )
     # A finding trimmed out of the prompt can't be cited or suggested
-    # either: the model never saw it (code review 2026-10-15).
+    # either: the model never saw it.
     shown = {f["ref"] for f in ctx.review_data["findings"]}
     for alias in [a for a in ctx.finding_ids if a not in shown]:
         del ctx.finding_ids[alias]

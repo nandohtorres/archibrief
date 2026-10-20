@@ -27,8 +27,8 @@ def is_admin(event: dict) -> bool:
 
 
 def caller_allowed(admin: bool) -> bool:
-    """Admin only until Phase 3 opens the chat (ADR-0050 §2). The flag is a
-    second lock behind the API's admin authorizer, so removing the
+    """Admin only until the chat opens to the public (ADR-0050 §2). The flag
+    is a second lock behind the API's admin authorizer, so removing the
     authorizer alone can't open a paid public endpoint."""
     return admin or os.environ.get("CHAT_PUBLIC_ENABLED", "false").lower() == "true"
 

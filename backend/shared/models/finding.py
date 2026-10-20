@@ -1,7 +1,6 @@
 """The `Finding` pydantic model — single schema for the typed evidence ledger.
 
-See Work-Project-Coding-Conventions.md ("Typed-finding discipline") and
-ADR-0002, ADR-0027, ADR-0036, ADR-0039.
+See ADR-0002, ADR-0027, ADR-0036 and ADR-0039.
 """
 
 from __future__ import annotations
@@ -38,10 +37,8 @@ class DepthLevel(str, Enum):
 
 class Citation(BaseModel):
     source_url: str
-    # Optional to match the real corpus Chunk model (backend/corpus/models.py)
-    # — some source docs (HTML pages) have no dated edition to record, per
-    # embed.py's to_vector_record docstring. Was `str` (required) here,
-    # which would reject a real, legitimately-edition-less chunk's citation.
+    # Optional to match the corpus Chunk model (backend/corpus/models.py):
+    # some sources, such as HTML pages, have no dated edition.
     source_edition: str | None
     retrieved_at: datetime
     canonical_url: str | None = None

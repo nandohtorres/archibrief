@@ -1,30 +1,26 @@
 """AgentCore Runtime entrypoint for the PreflightGate -> Retrieve -> Reason
 subworkflow (ADR-0028).
 
-This is what infra/modules/agentcore-runtime deploys — the piece that
-lets Step Functions' InvokeAgent task (infra/modules/step-functions-lambda)
-call something real instead of a placeholder ARN. Everything before
-(Ingest, RuleEngine) and after (Validate, Audit, Finalize) stays outside
-this entrypoint entirely, as bounded Lambda work Step Functions
-orchestrates directly (ADR-0028) — this file owns exactly the LangGraph
-subworkflow and nothing else.
+This is what infra/modules/agentcore-runtime deploys and what Step Functions'
+InvokeAgent task (infra/modules/step-functions-lambda) calls. Everything before
+(Ingest, RuleEngine) and after (Validate, Audit, Finalize) stays outside this
+entrypoint entirely, as bounded Lambda work Step Functions orchestrates
+directly (ADR-0028) — this file owns exactly the LangGraph subworkflow and
+nothing else.
 
-Standard AgentCore pattern (BedrockAgentCoreApp + @app.entrypoint),
-confirmed against AWS's own docs 2026-09-16: the compiled graph and every
-real AWS client it needs are built ONCE at import/module time, not
-per-invocation, so a warm process reuses them across requests. AgentCore
-does not promise reuse across cold starts, so nothing here assumes state
-survives a cold start that wasn't explicitly rebuilt from these
+Standard AgentCore pattern (BedrockAgentCoreApp + @app.entrypoint): the
+compiled graph and every real AWS client it needs are built ONCE at
+import/module time, not per-invocation, so a warm process reuses them across
+requests. AgentCore does not promise reuse across cold starts, so nothing here
+assumes state survives a cold start that wasn't explicitly rebuilt from these
 module-level singletons.
 
-UNVERIFIED, flagged deliberately (2026-09-16): no live example was found
-combining LangGraph + AgentCore's ZIP/code_configuration deployment path +
-native Terraform aws_bedrockagentcore_agent_runtime specifically. Prior art
-exists for LangGraph-on-AgentCore via container deployment, and for
-ZIP/code deployment via Terraform for non-LangGraph agents, but not this
-exact combination. The entrypoint contract below (input/output shape,
-exception-propagation choice) is a best-effort design against AWS's
-documented AgentCore patterns, not confirmed against a real deployment.
+Published examples cover LangGraph on AgentCore via container deployment,
+and ZIP/code deployment via Terraform for non-LangGraph agents, but not
+this exact combination (LangGraph + ZIP/code_configuration + native
+Terraform aws_bedrockagentcore_agent_runtime). The entrypoint contract
+below (input/output shape, exception propagation) follows AWS's documented
+AgentCore patterns.
 """
 
 from __future__ import annotations
@@ -49,14 +45,8 @@ _VECTOR_INDEX_NAME = os.environ.get("ARCHIBRIEF_VECTOR_INDEX", "archibrief-dev-k
 _GUARDRAIL_ID = os.environ.get("ARCHIBRIEF_GUARDRAIL_ID", "")
 _GUARDRAIL_VERSION = os.environ.get("ARCHIBRIEF_GUARDRAIL_VERSION", "1")
 
-# This is the REAL production entrypoint — unlike validate_reason_node.py
-# (a manual script that hardcodes its model ID with a large revert-comment
-# because ADR-0006 pins Sonnet 5 but account access is still pending), this
-# file must not hardcode a model string per the plan already recorded in
-# [[project_archibrief_rag_progress]]: "when the real production invocation
-# entrypoint gets built, don't hardcode a model string there either — wire
-# it to an env var". Default still follows the same temporary Sonnet 4.6
-# stand-in as every other real call site until Sonnet 5 access clears.
+# The model ID comes from an env var so it can change without a code
+# change; the default matches the other call sites.
 _MODEL_ID = os.environ.get("ARCHIBRIEF_REASONING_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
 _MAX_TOKENS = int(os.environ.get("ARCHIBRIEF_REASONING_MAX_TOKENS", "8192"))
 
@@ -64,10 +54,10 @@ app = BedrockAgentCoreApp()
 
 # Built once at import time, reused across a warm process — see module
 # docstring. build_lexical_corpus_index_from_disk() reads backend/corpus/
-# JSON data files that must ship inside the deployment artifact (flagged
-# in infra/modules/agentcore-runtime's own packaging notes).
+# JSON data files that must ship inside the deployment artifact (see
+# build_runtime_package.py).
 _GRAPH = compiled_graph()
-# "Go deeper" (2026-10-01): same deployed AgentCore Runtime, same
+# "Go deeper": same deployed AgentCore Runtime, same
 # module-level singletons — a second graph object, not a second deployed
 # runtime, since nothing here needs a different Bedrock model/IAM role,
 # only a different wiring of the same nodes (build_deeper_graph's own
@@ -122,7 +112,7 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     Reason(deep) re-run for one finding — see _invoke_deeper. One
     AgentCore Runtime, one entrypoint, branching on `mode` rather than a
     second deployed runtime, since both paths need the same Bedrock
-    model/IAM role and only differ in which graph they run (2026-10-01).
+    model/IAM role and only differ in which graph they run.
 
     `payload` is whatever Step Functions' InvokeAgent task sends — per
     infra/modules/step-functions-lambda's ResultPath comment, this is the
@@ -131,15 +121,15 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
 
     Real failures (GuardrailBlocked from reason_node, FindingValidationError/
     ModelOutputTruncated/UnexpectedStopReason/ToolCallMissing from
-    reason.py/clients) are deliberately left to propagate as real
-    exceptions rather than caught and returned as an {"error": ...} dict —
-    per this task's own directive: AgentCore surfaces an uncaught exception
-    as a real runtime invocation error Step Functions can react to (Catch/
-    Retry on the Task); a normally-RETURNED error dict would look like
-    SUCCESS to Step Functions and silently proceed to Validate with no
-    real findings. needs_clarification (preflight pausing for a required
-    field) is the one legitimate non-exception "stop" outcome — a real,
-    expected result, not a failure — so it's returned explicitly instead.
+    reason.py/clients) are deliberately left to propagate as real exceptions
+    rather than caught and returned as an {"error": ...} dict. AgentCore
+    surfaces an uncaught exception as a real runtime invocation error Step
+    Functions can react to (Catch/Retry on the Task); a normally-RETURNED
+    error dict would look like SUCCESS to Step Functions and silently proceed
+    to Validate with no real findings. needs_clarification (preflight pausing
+    for a required field) is the one legitimate non-exception "stop" outcome —
+    a real, expected result, not a failure — so it's returned explicitly
+    instead.
 
     Returns a SMALL, EXPLICIT JSON-serializable result — never the raw
     graph state, which carries boto3 client objects (not JSON-serializable)
@@ -170,8 +160,7 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     # No checkpointer exists on this graph today, so LangGraph's own
     # thread_id isn't required for correctness — context.session_id (set
     # by the Step Functions RuntimeSessionId parameter) is available for
-    # request correlation/logging if needed, deliberately not wired into
-    # a checkpointer here since adding one is separate, unstarted scope.
+    # request correlation/logging if needed.
     result_state = _GRAPH.invoke(initial_state)
 
     if result_state.get("needs_clarification"):
@@ -185,11 +174,8 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
         "dropped_model_findings": result_state.get("dropped_model_findings", []),
-        # Added 2026-10-01 — previously dropped on this path (only ever
-        # returned on the needs_clarification early exit above), which
-        # meant Finalize had no way to persist per-field preflight
-        # outcomes for a completed review at all. See
-        # Work-Project-Issues-Log.md, 2026-10-01 entry.
+        # Returned on the success path too, so Finalize can persist
+        # per-field preflight outcomes for a completed review.
         "preflight_fields": result_state.get("preflight_fields", {}),
         "defaults_version": result_state.get("defaults_version"),
     }

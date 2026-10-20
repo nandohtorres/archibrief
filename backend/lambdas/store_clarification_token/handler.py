@@ -23,15 +23,9 @@ def handler(event: dict, _context: object) -> dict:
     review_id = event["review_id"]
     task_token = event["taskToken"]
 
-    # Found 2026-10-12, live-tested: this previously read
-    # os.environ["REVIEWS_TABLE_NAME"], a Lambda environment variable
-    # that was never actually set anywhere in Terraform (confirmed via a
-    # real KeyError in production) — and even if it had been, it would
-    # have deviated from every other Lambda on this same state machine
-    # (Audit/Finalize), which all get reviews_table_name/report_bucket
-    # injected as a literal ASL Parameter into the event instead, per
-    # the "deliberately not caller-supplied input" convention documented
-    # where those Parameters are set. Matches that convention now.
+    # Like the other Lambdas on this state machine, the table name arrives
+    # as a literal ASL Parameter in the event rather than an environment
+    # variable, so it is never caller-supplied input.
     table_name = event["reviews_table_name"]
     client = DynamoDBClient(table_name=table_name)
 
@@ -39,11 +33,9 @@ def handler(event: dict, _context: object) -> dict:
     existing.update(
         {
             "status": "needs_clarification",
-            # currentStage mirrors status here (2026-10-13 stage-tracker
-            # feature) — this Lambda already writes directly to DynamoDB,
-            # unlike Ingest/RuleEngine/Validate/Audit/Finalize, which get
-            # a currentStage write from a preceding RecordStage* ASL
-            # state instead (see infra/modules/step-functions-lambda).
+            # currentStage mirrors status here because this Lambda writes
+            # to DynamoDB itself; the other stages get currentStage from a
+            # preceding RecordStage* ASL state (infra/modules/step-functions-lambda).
             "currentStage": "needs_clarification",
             "clarificationTaskToken": task_token,
             "needsClarification": event.get("needs_clarification", []),

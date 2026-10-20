@@ -102,10 +102,8 @@ export interface StakeholderSummary {
   coverageLimits: string[];
 }
 
-// The stakeholder view's headline text, built from the real report. It
-// used to be fixed sample wording ("payments-api", "Three high-risk
-// gaps"), so a live review of any other system showed the sample's
-// conclusions (master-list 15c). Wording stays factual: counts, the
+// The stakeholder view's headline text, built from the real report rather
+// than fixed sample wording. Wording stays factual: counts, the
 // findings' own titles, and which workload answers were not supplied.
 // `titled`: the page already shows a real title (a demo's), so the
 // heading doesn't repeat a name derived from the repository label.

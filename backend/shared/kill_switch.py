@@ -2,7 +2,7 @@
 
 The state machine checks the SSM parameter itself (CheckKillSwitch), but
 "go deeper" and clarification-resume start paid work through API Lambdas
-that never pass that state (Codex F08). Both call this first.
+that never pass that state. Both call this first.
 
 Fails closed: an unset parameter name or an unreadable parameter counts as
 "paid work disabled", so a misconfiguration can't silently bypass the stop.

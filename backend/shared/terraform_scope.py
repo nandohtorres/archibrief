@@ -17,7 +17,7 @@ MODULE_FIELD = "__module__"
 # reaches finding text is dropped.
 _IDENTIFIER_UNSAFE = re.compile(r"[^A-Za-z0-9_-]")
 # Long enough for real names, short enough that a name can't carry a
-# sentence-length instruction into text the model reads (master-list #14).
+# sentence-length instruction into text the model reads.
 MAX_DISPLAY_NAME = 32
 
 
