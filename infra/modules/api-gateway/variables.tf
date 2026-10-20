@@ -281,3 +281,9 @@ variable "lambda_log_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "api_access_log_retention_days" {
+  description = "Days to keep API Gateway access logs. They include client IP addresses."
+  type        = number
+  default     = 30
+}
