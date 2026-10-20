@@ -123,17 +123,16 @@ requires `--confirm-paid`. None of these commands is part of an offline test run
 
 ## Known limits
 
-- Local handler defaults now match Terraform's Sonnet 4.6 and $1.00/day
-  allowance, with a configuration-contract test. Deployments should still supply
-  both settings explicitly. This continuation did not redeploy the code.
-- Local chat admission now atomically reserves screening cost and a daily
-  request before Guardrails. Blocked/failed screening retains that estimate;
-  allowed screening reserves the remaining model allowance separately. Initial
-  review and deeper review still need shared global/visitor accounting.
-- Local replay, transcript, suggestion, review, clarification and deeper-review
-  paths enforce expiry. New chat records cannot outlive their review. Storage
-  cleanup and workflow-history isolation remain separate public-launch work;
-  see [the implementation plan](public-access-plan.md).
+- Handler defaults match Terraform's Sonnet 4.6 and $1.00/day allowance,
+  and a configuration-contract test fails if they drift. Deployments should
+  still set both explicitly.
+- Chat admission atomically reserves screening cost and a daily request before
+  Guardrails. Blocked or failed screening keeps that estimate; allowed
+  screening reserves the remaining model allowance separately. Every paid path
+  shares the same global, visitor and review limits.
+- Replay, transcript, suggestion, review, clarification and deeper-review
+  paths enforce expiry, and chat records can't outlive their review. Storage
+  cleanup is covered in [public access design](public-access-implementation.md).
 
 - A Lambda killed at its 28 s timeout refunds nothing; a retry with the
   same id after 90 s is admitted and charged again. The local model timeout

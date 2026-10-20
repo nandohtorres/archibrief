@@ -1,8 +1,7 @@
 # Evaluation evidence
 
-Measured locally with no AWS calls or paid model runs; test counts reflect the
-code after the chat, demo cards and launch accessibility specs landed. CI runs
-the same suites on every pull request.
+Measured locally with no AWS calls or paid model runs. CI runs the same
+suites on every pull request.
 
 The [browser evaluation](evidence/browser-results.md) records all
 Playwright counts, the initial failures, the final axe-only rerun, and automated
@@ -10,30 +9,23 @@ accessibility limits. It includes a machine-readable per-case result summary.
 
 ## Free test results
 
-The subsequent hardening run passed **669 backend tests, with 5 skipped**,
-**56 frontend unit tests**, and **60 Playwright tests**. Sources and commands
-are in [hardening-checks.json](evidence/hardening-checks.json) and the
-[hardening report](hardening-results.md). Node 24 is now supported and selected
-for CI; the backend local interpreter remains Python 3.14, while CI/deployment
-use 3.12. The table below preserves the earlier cleanup checkpoint.
-
-| Suite | Result | Source and command |
+| Suite | Result | Command |
 |---|---|---|
-| Backend | 625 passed, 5 skipped | Publication-cleanup rerun: `python -m pytest tests/backend -q --tb=short -p no:cacheprovider` |
-| Frontend unit | 56 passed in 10 files | Publication-cleanup rerun: `cd frontend; npm test`; tests in `tests/frontend/` |
-| Deterministic traps | 60 collected; included in the passing backend run | `python -m pytest tests/backend/traps --collect-only -q -p no:cacheprovider` |
-| Stubbed chat trap checks | 26 collected; included in the passing backend run | Same collection command with `tests/backend/chat/test_traps_stubbed.py` |
-| Playwright | 60 passed, including the accessibility, keyboard, viewport and resilience specs | Publication-cleanup rerun: `cd frontend; npx playwright test --workers=2 --reporter=json` |
+| Backend | 715 passed, 5 skipped | `python -m pytest tests/backend -q --tb=short -p no:cacheprovider` |
+| Frontend unit | 58 passed in 11 files | `cd frontend; npm test` (tests in `tests/frontend/`) |
+| Playwright | 67 passed, including accessibility, keyboard, viewport, contrast and resilience specs | `cd frontend; npx playwright test` |
+| Deterministic traps | 60, included in the backend run | `python -m pytest tests/backend/traps -q -p no:cacheprovider` |
+| Stubbed chat trap checks | 26, included in the backend run | `python -m pytest tests/backend/chat/test_traps_stubbed.py -q` |
+| Lint and types | Ruff, ESLint, TypeScript and Prettier pass | `ruff check backend scripts`; `npm run lint`; `npm run typecheck` |
 
-The 2026-10-17 publication-cleanup results and their limitations are recorded in
-[`publication-checks.json`](evidence/publication-checks.json). Four backend
-skips require the gitignored ingested corpus; one Trivy unit test is Linux-only
-and skips on Windows. The 60 deterministic trap tests still ran in both modes.
-These counts describe local validation, not a new paid or deployed evaluation.
+Four backend skips need the gitignored ingested corpus; one Trivy unit test
+is Linux-only and skips on Windows. Earlier runs are recorded in
+[`hardening-checks.json`](evidence/hardening-checks.json),
+[`publication-checks.json`](evidence/publication-checks.json) and
+[`public-admission-checks.json`](evidence/public-admission-checks.json).
 
-None of these is a model-quality measurement. At the earlier checkpoint the
-local Node v24.14.0 was outside the then-declared Node 20/22 range. The hardening
-change updates that contract and CI. Remote CI was not run in this continuation.
+None of these is a model-quality measurement; they test deterministic code
+and mocked integrations. CI runs the same suites on Python 3.12 and Node 24.
 
 ## Deterministic traps
 
@@ -113,7 +105,7 @@ presence figure must never be marketed as 100% factual accuracy.
 
 Run the free suites above. Trivy-backed tests use the offline flags in
 `backend/lambdas/scan/handler.py`, including `--skip-check-update`; no Terraform
-execution is needed. Corpus-dependent skips mean this run did not validate the
+execution is needed. Corpus-dependent tests skip without the
 gitignored corpus. Keep development and holdout model results separate.
 
 The paid runners are `backend/agent/validate_reasoning_eval.py --traps` and

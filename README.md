@@ -27,7 +27,7 @@ The frontend exposes progress, clarification, findings, a stakeholder view of th
 - Counts, expressions, missing modules, and omitted settings limit what the model can observe. The demo audits found three such gaps (resource counts, backup plans, snapshot settings); each was fixed in the resource summary, and the FEC demo was re-run after the count fix.
 - Trap tests cover their fixtures. Mocked tests do not measure live model quality, production IAM correctness, or deployed accessibility.
 - “Go deeper” is synchronous with a bounded agent timeout; long requests can fail.
-- Anonymous admission, shared quotas, bound uploads and identifier-only workflow state are prepared locally. Live validation, upload-secret checks, retention inventory and a final privacy notice remain public-launch work. A seven-day deletion guarantee is not established by this checkout.
+- Public uploads, shared spending limits and identifier-only workflow state are built but switched off. Live validation, a retention inventory and a final privacy notice come before opening them. There is no seven-day physical-deletion guarantee.
 
 ## Stack
 

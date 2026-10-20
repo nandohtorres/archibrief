@@ -32,8 +32,8 @@ behavior, not a guarantee that stored copies disappear at that instant.
 Cleanup is asynchronous. S3 object versions, DynamoDB TTL deletion, backups,
 workflow execution history and operational logs have different lifetimes.
 Historical Standard workflow history includes submitted/derived content and
-has a separate retention period. New local source limits workflow state to
-identifiers/status and stores content in S3; this is not yet deployed. Turning off CloudWatch payload logging does not
+has a separate retention period. The public-access pipeline limits workflow state to
+identifiers/status and stores content in S3; it is not yet deployed. Turning off CloudWatch payload logging does not
 erase that history. Exact physical-deletion, backup and log periods must be
 verified and disclosed before publication. No blanket seven-day deletion or
 provider no-retention/no-training claim is established here.
@@ -41,4 +41,4 @@ provider no-retention/no-training claim is established here.
 Before publishing, add the operator identity, working privacy/deletion contact,
 verified processing region, provider feature/data-use policies, retention
 inventory, and the date the final notice takes effect. Reconcile the notice with
-the deployed system and the acceptance evidence in `public-access-plan.md`.
+the deployed system and the release checks in [public access design](public-access-implementation.md).

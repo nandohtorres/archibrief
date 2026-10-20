@@ -1,7 +1,8 @@
-# Model evaluation handoff
+# Model evaluation runbook
 
-No paid evaluation was run in this continuation. The earlier restriction on
-AWS calls remains in force; `--confirm-paid` is a program guard, not permission.
+How to run the paid model evaluation. It calls Bedrock and costs money, so it
+runs only when deliberately started; `--confirm-paid` is a program guard, not
+permission to spend.
 
 ## Offline preview
 
