@@ -34,7 +34,7 @@ from typing import Any
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
-from backend.agent.graph import ReviewState, compiled_graph
+from backend.agent.graph import ReviewState, compiled_deeper_graph, compiled_graph
 from backend.corpus.lexical_index import build_lexical_corpus_index_from_disk
 from backend.shared.clients import (
     BedrockEmbeddingClient,
@@ -67,6 +67,12 @@ app = BedrockAgentCoreApp()
 # JSON data files that must ship inside the deployment artifact (flagged
 # in infra/modules/agentcore-runtime's own packaging notes).
 _GRAPH = compiled_graph()
+# "Go deeper" (2026-10-01): same deployed AgentCore Runtime, same
+# module-level singletons — a second graph object, not a second deployed
+# runtime, since nothing here needs a different Bedrock model/IAM role,
+# only a different wiring of the same nodes (build_deeper_graph's own
+# docstring explains why).
+_DEEPER_GRAPH = compiled_deeper_graph()
 _EMBEDDING_CLIENT = BedrockEmbeddingClient(region_name=_REGION)
 _VECTORS_CLIENT = S3VectorsClient(
     bucket_name=_VECTOR_BUCKET_NAME, index_name=_VECTOR_INDEX_NAME, region_name=_REGION
@@ -78,9 +84,45 @@ _GUARDRAILS_CLIENT = GuardrailsClient(
 _REASONING_CLIENT = BedrockReasoningClient(model_id=_MODEL_ID, region_name=_REGION)
 
 
+def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
+    """Go-deeper pass: Retrieve -> Reason(deep) only, scoped to one
+    finding. Called by deeper_review.handler (behind
+    POST /reviews/{reviewId}/findings/{findingId}/deeper), never by the
+    outer Step Functions state machine — see build_deeper_graph's
+    docstring for why PreflightGate/baseline_answers don't apply here.
+    """
+    initial_state: ReviewState = {
+        "review_id": payload["review_id"],
+        "workload_brief": payload["workload_brief"],
+        "retrieval_query": payload["retrieval_query"],
+        "rule_findings": [],
+        "embedding_client": _EMBEDDING_CLIENT,
+        "vectors_client": _VECTORS_CLIENT,
+        "lexical_corpus_index": _LEXICAL_CORPUS_INDEX,
+        "guardrails_client": _GUARDRAILS_CLIENT,
+        "reasoning_client": _REASONING_CLIENT,
+        "max_tokens": payload.get("max_tokens", _MAX_TOKENS),
+        "corpus_version": payload.get("corpus_version", "unknown"),
+        "deterministic_rule_version": payload.get("deterministic_rule_version"),
+        "deep_mode": True,
+        "parent_finding_id": payload["parent_finding_id"],
+    }
+    result_state = _DEEPER_GRAPH.invoke(initial_state)
+    return {
+        "status": "complete",
+        "findings": result_state.get("reasoned_findings", []),
+        "dropped_model_findings": result_state.get("dropped_model_findings", []),
+    }
+
+
 @app.entrypoint
 def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
-    """One review's PreflightGate -> Retrieve -> Reason pass.
+    """One review's PreflightGate -> Retrieve -> Reason pass, OR (when
+    `payload["mode"] == "deeper"`) a scoped "go deeper" Retrieve ->
+    Reason(deep) re-run for one finding — see _invoke_deeper. One
+    AgentCore Runtime, one entrypoint, branching on `mode` rather than a
+    second deployed runtime, since both paths need the same Bedrock
+    model/IAM role and only differ in which graph they run (2026-10-01).
 
     `payload` is whatever Step Functions' InvokeAgent task sends — per
     infra/modules/step-functions-lambda's ResultPath comment, this is the
@@ -105,12 +147,16 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     size limit; nothing downstream of this entrypoint needs the raw
     chunks, only the findings they produced).
     """
+    if payload.get("mode") == "deeper":
+        return _invoke_deeper(payload)
+
     initial_state: ReviewState = {
         "review_id": payload["review_id"],
         "workload_brief": payload["workload_brief"],
         "baseline_answers": payload.get("baseline_answers", {}),
         "retrieval_query": payload["retrieval_query"],
         "rule_findings": payload.get("rule_findings", []),
+        "terraform_resources": payload.get("terraform_resources", {}),
         "embedding_client": _EMBEDDING_CLIENT,
         "vectors_client": _VECTORS_CLIENT,
         "lexical_corpus_index": _LEXICAL_CORPUS_INDEX,
@@ -138,6 +184,14 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     return {
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
+        "dropped_model_findings": result_state.get("dropped_model_findings", []),
+        # Added 2026-10-01 — previously dropped on this path (only ever
+        # returned on the needs_clarification early exit above), which
+        # meant Finalize had no way to persist per-field preflight
+        # outcomes for a completed review at all. See
+        # Work-Project-Issues-Log.md, 2026-10-01 entry.
+        "preflight_fields": result_state.get("preflight_fields", {}),
+        "defaults_version": result_state.get("defaults_version"),
     }
 
 

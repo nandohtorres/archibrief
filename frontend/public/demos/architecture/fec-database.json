@@ -1,0 +1,292 @@
+{
+  "account_findings": [
+    "a2192a0b-4448-40bf-afb3-fbb2414cf994",
+    "d65709cc-ff1a-4939-adb8-487b0e5a3fdc"
+  ],
+  "edges": [
+    {
+      "from": "aws_db_subnet_group.rds",
+      "to": "aws_subnet.rds_az1"
+    },
+    {
+      "from": "aws_db_subnet_group.rds",
+      "to": "aws_subnet.rds_az2"
+    },
+    {
+      "from": "aws_internet_gateway.rds",
+      "to": "aws_vpc.rds"
+    },
+    {
+      "from": "aws_rds_cluster.development-aurora-cluster",
+      "to": "aws_security_group.rds"
+    },
+    {
+      "from": "aws_rds_cluster.production-aurora-cluster",
+      "to": "aws_security_group.rds"
+    },
+    {
+      "from": "aws_rds_cluster.staging-aurora-cluster",
+      "to": "aws_security_group.rds"
+    },
+    {
+      "from": "aws_rds_cluster_instance.development_aurora_inst",
+      "to": "aws_rds_cluster.development-aurora-cluster"
+    },
+    {
+      "from": "aws_rds_cluster_instance.production_aurora_inst",
+      "to": "aws_rds_cluster.production-aurora-cluster"
+    },
+    {
+      "from": "aws_rds_cluster_instance.staging_aurora_inst",
+      "to": "aws_rds_cluster.staging-aurora-cluster"
+    },
+    {
+      "from": "aws_route_table.rds",
+      "to": "aws_internet_gateway.rds"
+    },
+    {
+      "from": "aws_route_table.rds",
+      "to": "aws_vpc.rds"
+    },
+    {
+      "from": "aws_security_group.rds",
+      "to": "aws_vpc.rds"
+    },
+    {
+      "from": "aws_subnet.rds_az1",
+      "to": "aws_route_table.rds"
+    },
+    {
+      "from": "aws_subnet.rds_az1",
+      "to": "aws_vpc.rds"
+    },
+    {
+      "from": "aws_subnet.rds_az2",
+      "to": "aws_route_table.rds"
+    },
+    {
+      "from": "aws_subnet.rds_az2",
+      "to": "aws_vpc.rds"
+    },
+    {
+      "from": "internet",
+      "to": "aws_internet_gateway.rds"
+    },
+    {
+      "from": "internet",
+      "to": "aws_security_group.rds"
+    }
+  ],
+  "lanes": [
+    "internet",
+    "network",
+    "data",
+    "security"
+  ],
+  "nodes": [
+    {
+      "details": [],
+      "findings": [],
+      "id": "internet",
+      "label": "internet",
+      "lane": "internet",
+      "module": "",
+      "name": "Internet",
+      "type": "internet"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_db_parameter_group.fec_default",
+      "label": "db parameter group",
+      "lane": "data",
+      "module": "",
+      "name": "fec_default",
+      "type": "aws_db_parameter_group"
+    },
+    {
+      "details": [],
+      "findings": [
+        "e8b1caad-d6d6-494c-bec7-775c6a9d67b7"
+      ],
+      "id": "aws_db_subnet_group.rds",
+      "label": "db subnet group",
+      "lane": "data",
+      "module": "",
+      "name": "rds",
+      "type": "aws_db_subnet_group"
+    },
+    {
+      "details": [
+        "iam role policy"
+      ],
+      "findings": [],
+      "id": "aws_iam_role.rds_logs_role",
+      "label": "iam role",
+      "lane": "security",
+      "module": "",
+      "name": "rds_logs_role",
+      "type": "aws_iam_role"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_internet_gateway.rds",
+      "label": "internet gateway",
+      "lane": "network",
+      "module": "",
+      "name": "rds",
+      "type": "aws_internet_gateway"
+    },
+    {
+      "details": [],
+      "findings": [
+        "dc306f91-1060-49a8-8a13-f828085c9877",
+        "bb7583eb-3b42-465d-8e88-118da17c6dbf",
+        "f733eeb9-95af-4a11-a214-233823c13248",
+        "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+        "54815d01-faa8-41f2-b9e0-9dfa33ec6d1b",
+        "f0c95c6a-2aa1-4dec-8d6a-cc2faebf69dd"
+      ],
+      "id": "aws_rds_cluster.development-aurora-cluster",
+      "label": "rds cluster",
+      "lane": "data",
+      "module": "",
+      "name": "development-aurora-cluster",
+      "type": "aws_rds_cluster"
+    },
+    {
+      "details": [],
+      "findings": [
+        "dc306f91-1060-49a8-8a13-f828085c9877",
+        "bb7583eb-3b42-465d-8e88-118da17c6dbf",
+        "f733eeb9-95af-4a11-a214-233823c13248",
+        "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+        "54815d01-faa8-41f2-b9e0-9dfa33ec6d1b",
+        "f0c95c6a-2aa1-4dec-8d6a-cc2faebf69dd"
+      ],
+      "id": "aws_rds_cluster.production-aurora-cluster",
+      "label": "rds cluster",
+      "lane": "data",
+      "module": "",
+      "name": "production-aurora-cluster",
+      "type": "aws_rds_cluster"
+    },
+    {
+      "details": [],
+      "findings": [
+        "dc306f91-1060-49a8-8a13-f828085c9877",
+        "bb7583eb-3b42-465d-8e88-118da17c6dbf",
+        "f733eeb9-95af-4a11-a214-233823c13248",
+        "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+        "54815d01-faa8-41f2-b9e0-9dfa33ec6d1b",
+        "f0c95c6a-2aa1-4dec-8d6a-cc2faebf69dd"
+      ],
+      "id": "aws_rds_cluster.staging-aurora-cluster",
+      "label": "rds cluster",
+      "lane": "data",
+      "module": "",
+      "name": "staging-aurora-cluster",
+      "type": "aws_rds_cluster"
+    },
+    {
+      "copies": 2,
+      "details": [],
+      "findings": [
+        "d89d7166-f861-44af-9d84-2cd0ecc5b048"
+      ],
+      "id": "aws_rds_cluster_instance.development_aurora_inst",
+      "label": "rds cluster instance",
+      "lane": "data",
+      "module": "",
+      "name": "development_aurora_inst",
+      "type": "aws_rds_cluster_instance"
+    },
+    {
+      "copies": 3,
+      "details": [],
+      "findings": [
+        "e3ebb27e-03c8-436b-9a64-e6cae1f0b1b0"
+      ],
+      "id": "aws_rds_cluster_instance.production_aurora_inst",
+      "label": "rds cluster instance",
+      "lane": "data",
+      "module": "",
+      "name": "production_aurora_inst",
+      "type": "aws_rds_cluster_instance"
+    },
+    {
+      "copies": 2,
+      "details": [],
+      "findings": [
+        "e8e69ea5-4b46-4bf0-bb12-154e54867dca"
+      ],
+      "id": "aws_rds_cluster_instance.staging_aurora_inst",
+      "label": "rds cluster instance",
+      "lane": "data",
+      "module": "",
+      "name": "staging_aurora_inst",
+      "type": "aws_rds_cluster_instance"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_route_table.rds",
+      "label": "route table",
+      "lane": "network",
+      "module": "",
+      "name": "rds",
+      "type": "aws_route_table"
+    },
+    {
+      "details": [],
+      "findings": [
+        "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
+        "5b7be8d8-05f5-46f4-b216-41d31f80b57e"
+      ],
+      "id": "aws_security_group.rds",
+      "label": "security group",
+      "lane": "network",
+      "module": "",
+      "name": "rds",
+      "type": "aws_security_group"
+    },
+    {
+      "details": [
+        "route table association"
+      ],
+      "findings": [],
+      "id": "aws_subnet.rds_az1",
+      "label": "subnet",
+      "lane": "network",
+      "module": "",
+      "name": "rds_az1",
+      "type": "aws_subnet"
+    },
+    {
+      "details": [
+        "route table association"
+      ],
+      "findings": [],
+      "id": "aws_subnet.rds_az2",
+      "label": "subnet",
+      "lane": "network",
+      "module": "",
+      "name": "rds_az2",
+      "type": "aws_subnet"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_vpc.rds",
+      "label": "vpc",
+      "lane": "network",
+      "module": "",
+      "name": "rds",
+      "type": "aws_vpc"
+    }
+  ],
+  "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+  "truncated": false,
+  "version": 1
+}

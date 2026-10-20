@@ -46,7 +46,9 @@ def _make_finding(
             else None
         ),
         confidence=0.9,
-        confidence_inputs=ConfidenceInputs(evidence_directness=0.9, source_agreement=0.9, rule_determinism=0.5),
+        confidence_inputs=ConfidenceInputs(
+            evidence_directness=0.9, source_agreement=0.9, rule_determinism=0.5
+        ),
         risk_impact=risk_impact,
         recommendation="do something",
         framework_mapping=[],
@@ -125,7 +127,9 @@ def test_citation_from_plausible_source_flagged_plausible_when_matching():
 def test_citation_from_implausible_source_flagged_implausible_not_rejected():
     # still counts as covered (recall isn't penalized), but the flag says
     # the citation came from an unexpected document, for human review
-    finding = _make_finding("Root user has no MFA.", document_id="waf-cost-optimization-pillar")
+    finding = _make_finding(
+        "Root user has no MFA.", document_id="waf-cost-optimization-pillar"
+    )
     result = score_reasoning([finding], _BRIEF)
     assert result["topic_hits"][0]["covered"] is True
     assert result["topic_hits"][0]["citation_relevance"] == "implausible"
@@ -157,7 +161,9 @@ def test_citation_relevance_is_none_when_topic_not_covered_at_all():
 
 def test_unmatched_findings_are_reported_not_penalized():
     matching = _make_finding("Root user has no MFA configured.")
-    extra = _make_finding("Separately, S3 versioning is also disabled.", category="recovery")
+    extra = _make_finding(
+        "Separately, S3 versioning is also disabled.", category="recovery"
+    )
     result = score_reasoning([matching, extra], _BRIEF)
     assert result["topic_recall"] == 1.0  # extra finding doesn't lower recall
     assert len(result["unmatched_findings"]) == 1
@@ -181,7 +187,9 @@ def test_empty_expected_findings_yields_full_recall_by_convention():
         brief_id="empty", workload_brief="x", retrieval_query="y", expected_findings=[]
     )
     result = score_reasoning([], brief)
-    assert result["topic_recall"] == 0.0  # total=0 -> defined as 0.0, not divide-by-zero
+    assert (
+        result["topic_recall"] == 0.0
+    )  # total=0 -> defined as 0.0, not divide-by-zero
     assert result["topics_total"] == 0
 
 
@@ -203,14 +211,18 @@ def test_every_expected_finding_has_nonempty_keyword_groups(briefs):
         for expected in brief.expected_findings:
             assert expected.keyword_groups, f"{brief.brief_id}/{expected.topic_id}"
             for group in expected.keyword_groups:
-                assert group, f"{brief.brief_id}/{expected.topic_id} has an empty keyword group"
+                assert group, (
+                    f"{brief.brief_id}/{expected.topic_id} has an empty keyword group"
+                )
 
 
 @pytest.mark.parametrize("briefs", [EVAL_BRIEFS, HOLDOUT_BRIEFS])
 def test_every_expected_finding_has_plausible_source_documents(briefs):
     for brief in briefs:
         for expected in brief.expected_findings:
-            assert expected.plausible_source_documents, f"{brief.brief_id}/{expected.topic_id}"
+            assert expected.plausible_source_documents, (
+                f"{brief.brief_id}/{expected.topic_id}"
+            )
 
 
 @pytest.mark.parametrize("briefs", [EVAL_BRIEFS, HOLDOUT_BRIEFS])

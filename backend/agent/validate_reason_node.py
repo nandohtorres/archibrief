@@ -175,14 +175,18 @@ def main() -> None:
         # (multiple real deficiencies described) zero is suspicious enough
         # to flag loudly rather than let a silent empty success pass by
         # unnoticed (Codex review 2026-09-16).
-        print("=== WARNING: model returned zero findings for a workload brief that "
-              "describes multiple real deficiencies — investigate before trusting this run ===")
+        print(
+            "=== WARNING: model returned zero findings for a workload brief that "
+            "describes multiple real deficiencies — investigate before trusting this run ==="
+        )
 
     rule_findings = resolve_rule_findings(_RULE_FINDINGS)
     findings = rule_findings + model_findings
 
-    print(f"=== {len(rule_findings)} rule-engine finding(s) + {len(model_findings)} "
-          f"model finding(s), citations server-verified ===")
+    print(
+        f"=== {len(rule_findings)} rule-engine finding(s) + {len(model_findings)} "
+        f"model finding(s), citations server-verified ==="
+    )
     print(json.dumps([f.model_dump(mode="json") for f in findings], indent=2, default=str))
 
 

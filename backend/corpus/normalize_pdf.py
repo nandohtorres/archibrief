@@ -418,7 +418,11 @@ def _segment_blocks(text: str) -> list[Block]:
         stripped = line.strip()
         if not stripped:
             previous_kind = kinds[index - 1] if index > 0 else None
-            kinds.append(previous_kind if previous_kind in (BlockKind.LIST, BlockKind.TABLE, BlockKind.CODE) else BlockKind.PARAGRAPH)
+            kinds.append(
+                previous_kind
+                if previous_kind in (BlockKind.LIST, BlockKind.TABLE, BlockKind.CODE)
+                else BlockKind.PARAGRAPH
+            )
             is_seed.append(False)
             marker_styles.append(None)
             continue

@@ -12,15 +12,15 @@
 
 resource "aws_s3vectors_vector_bucket" "knowledge_base" {
   vector_bucket_name = var.vector_bucket_name
-  tags                = var.tags
+  tags               = var.tags
 }
 
 resource "aws_s3vectors_index" "knowledge_base" {
   vector_bucket_name = aws_s3vectors_vector_bucket.knowledge_base.vector_bucket_name
-  index_name          = var.index_name
-  data_type           = var.data_type
-  dimension           = var.dimension
-  distance_metric     = var.distance_metric
+  index_name         = var.index_name
+  data_type          = var.data_type
+  dimension          = var.dimension
+  distance_metric    = var.distance_metric
 
   metadata_configuration {
     non_filterable_metadata_keys = var.non_filterable_metadata_keys

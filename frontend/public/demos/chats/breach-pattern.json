@@ -1,0 +1,319 @@
+{
+  "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
+  "generated_at": "2026-10-17T04:28:22.299617+00:00",
+  "suggested": [
+    {
+      "suggested_id": "s1",
+      "question": "Which issues should I fix first, and why?",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "text": "The single most urgent issue is the complete SSRF-to-S3 attack chain. An internet request can exploit the nginx proxy via server-side request forgery, reach the instance metadata service over IMDSv1 (which accepts plain HTTP GETs with no token), steal the attached role's temporary credentials, and then use those credentials — which carry AmazonS3FullAccess — to read or exfiltrate all cardholder data. Fix these three together as one priority: enforce IMDSv2 on the EC2 instance, replace AmazonS3FullAccess with a least-privilege policy scoped to the specific bucket and required actions only, and add a VPC endpoint with a bucket policy condition that rejects any request not originating from that endpoint.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "d4831d89-2615-442e-bf98-81d30627e116",
+              "title": "The internet-facing nginx proxy, combined with overly permissive IAM and IMDSv1, forms a complete SSRF-to-S3 attack cha…"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "e0eff08e-bd54-4d2f-bb01-ac17890eb13d",
+              "title": "EC2 instance 'ec2-vulnerable-proxy-server' does not require IMDSv2 tokens"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "cd120b0c-9d10-438e-ad83-4f61af51567c",
+              "title": "IAM role 'cg-banking-WAF-Role' is used by running code and has AmazonS3FullAccess"
+            }
+          ]
+        },
+        {
+          "text": "The second cluster addresses the cardholder data bucket's own defences. Public access blocking is not fully enabled, meaning a single ACL or policy change could expose the bucket directly to the internet — the workload's stated top risk. The bucket also has no server-side encryption, leaving data at rest unprotected in violation of PCI-DSS baseline expectations. Alongside this, the proxy appears to accept only HTTP with no TLS termination, which violates PCI-DSS Requirement 4 on protecting cardholder data in transit. Enable all four public-access-block flags, attach SSE-KMS or SSE-S3 encryption, and configure HTTPS (TLS 1.2+) on the proxy while adding an aws:SecureTransport bucket policy condition.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "e61e6701-93c0-48e9-ba2a-db6097224bdd",
+              "title": "Public access to S3 bucket 'cg-cardholder-data-bucket' is not fully blocked"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+              "title": "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "e7983266-071a-48d5-9208-3b7cac99e75a",
+              "title": "The EC2 proxy appears to accept only HTTP (port 80); no TLS termination or HTTPS enforcement is configured for cardhold…"
+            }
+          ]
+        },
+        {
+          "text": "Third, close the audit and detection gaps. There is no CloudTrail resource in the Terraform, so API activity across the account goes unrecorded — a direct problem for PCI-DSS audit and incident response obligations. Detailed CloudWatch monitoring is also disabled on the internet-facing proxy, reducing visibility to 5-minute metric granularity and slowing detection of anomalous…",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "cb07d6a3-579d-4501-a42c-1b344acbc411",
+              "title": "No aws_cloudtrail resource found in the submitted Terraform"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "02675180-cc09-4d57-aa33-1ee0e351d591",
+              "title": "Detailed CloudWatch monitoring is disabled on the internet-facing proxy EC2 instance, reducing visibility into potentia…"
+            }
+          ]
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    },
+    {
+      "suggested_id": "s2",
+      "question": "Explain \"S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption…\" for a non-technical stakeholder.",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "text": "Think of the cardholder data bucket as a filing cabinet that holds sensitive card numbers and payment records. Server-side encryption is the lock on that cabinet: when data is written in, AWS automatically scrambles it so that even if someone gained unauthorised access to the underlying storage hardware, they would see only unreadable gibberish. The review found that this lock is simply not turned on for the bucket named 'cg-cardholder-data-bucket'.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+              "title": "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration"
+            }
+          ]
+        },
+        {
+          "text": "For a bank handling cardholder data, this is a serious gap. PCI-DSS — the payment card industry's security standard that applies to this workload — requires that stored cardholder data be protected. Leaving data unencrypted at rest means the organisation is not meeting that baseline obligation, and a storage-level breach would expose card numbers in plain, readable form.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+              "title": "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration"
+            },
+            {
+              "kind": "requirement",
+              "field": "regulatory_data_residency",
+              "label": "Regulatory and data residency"
+            }
+          ]
+        },
+        {
+          "text": "The fix is straightforward: AWS provides built-in encryption options for S3 that can be switched on without changing any application code. The recommended approach is to attach an encryption configuration to the bucket using either AWS-managed keys (SSE-S3) or customer-managed keys through AWS Key Management Service (SSE-KMS). SSE-KMS gives the bank additional control, such as audit logs of every time a key is used to decrypt data, which is valuable for PCI-DSS compliance evidence.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+              "title": "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration"
+            }
+          ]
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    },
+    {
+      "suggested_id": "s3",
+      "question": "How do I fix \"S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption…\"?",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "text": "The finding is that the S3 bucket holding cardholder data has no server-side encryption configuration attached, meaning data is stored in plaintext. For a PCI-DSS workload this is a baseline violation and is rated high priority.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+              "title": "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration"
+            }
+          ]
+        },
+        {
+          "text": "The fix is to add a separate aws_s3_bucket_server_side_encryption_configuration resource linked to the bucket. You can use SSE-KMS (recommended for PCI-DSS because it gives you key-level audit trails in AWS KMS) or SSE-S3 as a minimum. SSE-KMS also lets you create separate KMS keys per data classification, which aligns with Well-Architected guidance on scoping key access to appropriate principals.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+              "title": "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration"
+            },
+            {
+              "kind": "source",
+              "chunk_id": "waf-security-pillar-0612",
+              "quote": "Conﬁgure encryption in additional AWS services: For other AWS services you use, review the\nsecurity documentation for that service to determine the service's encryption options.",
+              "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+              "heading_path": "Data protection > Protecting data at rest > SEC08-BP02 Enforce encryption at rest"
+            }
+          ]
+        },
+        {
+          "text": "Here is a minimal Terraform snippet to add SSE-KMS encryption to the bucket:\n\n```\nresource \"aws_s3_bucket_server_side_encryption_configuration\" \"cardholder\" {\n  bucket = aws_s3_bucket.cg-cardholder-data-bucket.id\n\n  rule {\n    apply_server_side_encryption_by_default {\n      sse_algorithm     = \"aws:kms\"\n      kms_master_key_id = aws_kms_key.cardholder_key.arn\n    }\n    bucket_key_enabled = true\n  }\n}\n```",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+              "title": "S3 bucket 'cg-cardholder-data-bucket' has no server-side encryption configuration"
+            }
+          ]
+        },
+        {
+          "text": "Encryption at rest is necessary but not sufficient on its own. The public-access block finding and the SSRF attack-chain finding both highlight that the bucket also needs all four public-access block flags enabled and a bucket policy restricting requests to the VPC endpoint, so that even if credentials are stolen via the proxy, the bucket cannot be reached from the internet.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "e61e6701-93c0-48e9-ba2a-db6097224bdd",
+              "title": "Public access to S3 bucket 'cg-cardholder-data-bucket' is not fully blocked"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "d4831d89-2615-442e-bf98-81d30627e116",
+              "title": "The internet-facing nginx proxy, combined with overly permissive IAM and IMDSv1, forms a complete SSRF-to-S3 attack cha…"
+            }
+          ]
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    },
+    {
+      "suggested_id": "s5",
+      "question": "What changes if traffic grows 10×?",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "text": "The workload is currently sized for moderate, single-region traffic. The internet-facing reverse proxy is a single EC2 instance (t3.micro) with no load balancer or Auto Scaling Group. At 10× current traffic, that single instance would almost certainly become a bottleneck or fail outright, since there is no mechanism to add capacity automatically. The review already flags this as a single point of failure that cannot meet the 99.9% availability target even at current load.",
+          "citations": [
+            {
+              "kind": "requirement",
+              "field": "expected_traffic_scale",
+              "label": "Traffic and scale"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "624a4c66-8f2d-4c22-96af-0702aa6274ac",
+              "title": "The reverse proxy is a single EC2 instance with no load balancer or Auto Scaling Group; this is a single point of failu…"
+            }
+          ]
+        },
+        {
+          "text": "AWS Well-Architected guidance specifically warns that provisioning a fixed number of resources and failing to configure minimum and maximum counts leads to scaling failures, and that adding capacity too late causes degraded service. Both conditions apply here: the proxy is a single fixed instance with no Auto Scaling Group, so a 10× traffic surge would exhaust its capacity with no automatic relief.",
+          "citations": [
+            {
+              "kind": "source",
+              "chunk_id": "waf-reliability-pillar-0577",
+              "quote": "Your scaling policies add capacity too late, which leads to capacity exhaustion and degraded \nservice while additional resources are brought online.",
+              "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/reliability-pillar/wellarchitected-reliability-pillar.pdf",
+              "heading_path": "Change management > Design your workload to adapt to changes in demand > REL07-BP03 Obtain resources upon detection that more resources are needed for a workload"
+            },
+            {
+              "kind": "source",
+              "chunk_id": "waf-reliability-pillar-0575",
+              "quote": "You provision a ﬁxed number of scalable resources.",
+              "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/reliability-pillar/wellarchitected-reliability-pillar.pdf",
+              "heading_path": "Change management > Design your workload to adapt to changes in demand > REL07-BP03 Obtain resources upon detection that more resources are needed for a workload"
+            }
+          ]
+        },
+        {
+          "text": "A traffic spike would also amplify the security risk. Under high load, operators are more likely to miss anomalous requests that could be SSRF attempts against the nginx proxy. The SSRF-to-S3 attack chain — public proxy, IMDSv1 not enforced, and full S3 access on the attached role — remains equally exploitable regardless of traffic volume, but incident detection becomes harder when the instance is saturated.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "d4831d89-2615-442e-bf98-81d30627e116",
+              "title": "The internet-facing nginx proxy, combined with overly permissive IAM and IMDSv1, forms a complete SSRF-to-S3 attack cha…"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "e0eff08e-bd54-4d2f-bb01-ac17890eb13d",
+              "title": "EC2 instance 'ec2-vulnerable-proxy-server' does not require IMDSv2 tokens"
+            }
+          ]
+        },
+        {
+          "text": "To handle a 10× increase safely, the review recommends placing nginx behind an Application Load Balancer spanning both existing public subnets and managing instances in an Auto Scaling Group with a minimum of two instances across the two availability zones. Without those changes, a 10× traffic surge would breach the 99.9% availability target and likely cause a complete outage of the card platform. The exact traffic numbers at which the current instance saturates cannot be determined from the Terraform c…",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "624a4c66-8f2d-4c22-96af-0702aa6274ac",
+              "title": "The reverse proxy is a single EC2 instance with no load balancer or Auto Scaling Group; this is a single point of failu…"
+            },
+            {
+              "kind": "requirement",
+              "field": "availability_criticality",
+              "label": "Availability target"
+            }
+          ]
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    },
+    {
+      "suggested_id": "s6",
+      "question": "Why not accept IMDSv1 because the proxy is internal?",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "text": "The proxy is not actually internal — it has a public IP address and is the sole internet-facing component of the platform. Because it is directly reachable from the internet, any SSRF or open-redirect vulnerability in nginx can be triggered by an external attacker without needing any prior foothold inside the network. That makes the \"it's internal\" assumption incorrect from the start.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "d4831d89-2615-442e-bf98-81d30627e116",
+              "title": "The internet-facing nginx proxy, combined with overly permissive IAM and IMDSv1, forms a complete SSRF-to-S3 attack cha…"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "e0eff08e-bd54-4d2f-bb01-ac17890eb13d",
+              "title": "EC2 instance 'ec2-vulnerable-proxy-server' does not require IMDSv2 tokens"
+            }
+          ]
+        },
+        {
+          "text": "IMDSv1 responds to any plain HTTP GET to the link-local address, with no session token required. IMDSv2 was specifically designed to block externally-triggered requests by requiring a session-oriented token and by rejecting requests that carry an X-Forwarded-For header — exactly the kind of header a proxied SSRF request would carry. Leaving IMDSv1 active removes that protection entirely.",
+          "citations": [
+            {
+              "kind": "source",
+              "chunk_id": "waf-security-pillar-0531",
+              "quote": "IMDSv2 uses the techniques of session authentication, blocking requests that \ncontain an X-Forwarded-For HTTP header, and a network TTL of 1 to stop traﬃc originating from \nexternal sources to retrieve information about the EC2 instance.",
+              "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+              "heading_path": "Infrastructure protection > Protecting compute > SEC06-BP05 Automate compute protection"
+            }
+          ]
+        },
+        {
+          "text": "The attack chain the review identifies is: internet request → SSRF on the nginx proxy → IMDSv1 credential theft → full S3 access. The role attached to the proxy instance carries AmazonS3FullAccess, so stolen credentials give an attacker read, write, and delete access to the cardholder data bucket. This is a complete, exploitable path from the internet to PCI-DSS-regulated data — the workload's stated top risk.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "d4831d89-2615-442e-bf98-81d30627e116",
+              "title": "The internet-facing nginx proxy, combined with overly permissive IAM and IMDSv1, forms a complete SSRF-to-S3 attack cha…"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "cd120b0c-9d10-438e-ad83-4f61af51567c",
+              "title": "IAM role 'cg-banking-WAF-Role' is used by running code and has AmazonS3FullAccess"
+            }
+          ]
+        },
+        {
+          "text": "PCI-DSS applies to this workload, and any path from the internet to cardholder data is treated as the highest-priority risk. Accepting IMDSv1 on a public-facing proxy would leave that path open. Enforcing IMDSv2 by setting http_tokens = \"required\" is a low-cost, high-impact control that closes the credential-theft step of the chain without requiring architectural changes.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "e0eff08e-bd54-4d2f-bb01-ac17890eb13d",
+              "title": "EC2 instance 'ec2-vulnerable-proxy-server' does not require IMDSv2 tokens"
+            },
+            {
+              "kind": "requirement",
+              "field": "regulatory_data_residency",
+              "label": "Regulatory and data residency"
+            }
+          ]
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    }
+  ]
+}

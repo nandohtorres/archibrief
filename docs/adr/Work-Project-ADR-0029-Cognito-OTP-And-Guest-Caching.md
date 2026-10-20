@@ -12,12 +12,12 @@ status: accepted
 **Status:** Accepted (2026-09-03) — **extends** ADR-0010, corrects
 terminology, doesn't reverse the core decision. **Auth-method framing
 superseded by
-[[Work-Project-ADR-0043-Auth-Method-Simplified-Password-Plus-Email-Code]]**
+[ADR-0043](Work-Project-ADR-0043-Auth-Method-Simplified-Password-Plus-Email-Code.md)**
 (2026-09-04): the "no magic link" OTP correction and the guest-caching
 decision below both stand; passkeys-as-primary was replaced with
 email/password-primary + emailed auth code as a second factor. **The
 auth-method question is now moot: superseded by
-[[Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential]]**
+[ADR-0044](Work-Project-ADR-0044-No-User-Accounts-Admin-Pre-Shared-Credential.md)**
 (2026-09-11), which removes user accounts entirely. This ADR's
 guest-caching *principle* (serve a precomputed/cached report, don't run
 the pipeline fresh per visitor) carries forward unchanged into ADR-0044,
@@ -54,5 +54,5 @@ visitor even though the input is identical every time.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0010" and the direct AWS
+See an independent design review §"ADR-0010" and the direct AWS
 Cognito documentation verification performed 2026-09-03.

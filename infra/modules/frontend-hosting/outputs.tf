@@ -1,5 +1,5 @@
 output "cloudfront_domain_name" {
-  description = "Default *.cloudfront.net domain — the actual URL to visit until Phase B (custom domain) lands."
+  description = "Default *.cloudfront.net domain. Always served, including when var.aliases adds custom domains; the API's CORS frontend_origin must list whichever origin visitors actually use."
   value       = aws_cloudfront_distribution.frontend.domain_name
 }
 

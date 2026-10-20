@@ -50,6 +50,17 @@ CONSERVATIVE_DEFAULTS: dict[str, str] = {
     "availability_criticality": "standard (not mission-critical, no multi-region requirement assumed)",
 }
 
+# Human-readable labels for the frontend's BaselineAnswer.label (2026-10-01)
+# — finalize.handler reads this to assemble the per-field outcomes it
+# writes into the evidence ledger (see assemble_baseline_answers there).
+# Kept here, not duplicated in finalize.py, since a field's label is a
+# property of the field itself, same ownership as BASELINE_FIELD_POLICIES.
+FIELD_LABELS: dict[str, str] = {
+    "regulatory_data_residency": "Regulatory and data residency",
+    "expected_traffic_scale": "Traffic and scale",
+    "availability_criticality": "Availability target",
+}
+
 
 class TaskTokenGateway(Protocol):
     def pause_for_clarification(self, review_id: str, field: str, task_token: str) -> None: ...

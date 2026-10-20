@@ -10,7 +10,7 @@ status: accepted
 # ADR 0002: Product Mode — Review, Not Generation
 
 **Status:** Accepted (2026-09-02) — **extended by
-[[Work-Project-ADR-0027-Untrusted-Terraform-Ingestion-Contract]]**
+[ADR-0027](Work-Project-ADR-0027-Untrusted-Terraform-Ingestion-Contract.md)**
 (2026-09-03): the review-mode decision stands; ADR-0027 adds the
 untrusted-ingestion and evidence-reproducibility contracts this mode
 needed but didn't originally define.
@@ -47,7 +47,5 @@ is a launch criterion.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Product direction," and
-[[Research-ArchGuard-Differentiation-Claude]] /
-[[Research-ArchGuard-Differentiation-Codex]] for the competitive research
-that drove this.
+See the project decision log §"Product direction" and the private
+competitive-research notes that drove this.

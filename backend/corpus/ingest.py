@@ -153,15 +153,19 @@ def main() -> None:
         try:
             result = ingest_source(source, retrieved_at=retrieved_at)
             results.append(result)
-            print(f"OK   {result['document_id']:40s} {result['sections']:3d} sections  "
-                  f"{result['chunks']:4d} chunks  {result['total_tokens']:7d} tokens")
+            print(
+                f"OK   {result['document_id']:40s} {result['sections']:3d} sections  "
+                f"{result['chunks']:4d} chunks  {result['total_tokens']:7d} tokens"
+            )
         except Exception as error:  # noqa: BLE001
             print(f"FAIL {source.document_id:40s} {error}")
 
     total_chunks = sum(r["chunks"] for r in results)
     total_tokens = sum(r["total_tokens"] for r in results)
-    print(f"\n{len(results)}/{len(SOURCES)} sources ingested — {total_chunks} chunks, "
-          f"{total_tokens} total tokens")
+    print(
+        f"\n{len(results)}/{len(SOURCES)} sources ingested — {total_chunks} chunks, "
+        f"{total_tokens} total tokens"
+    )
 
 
 if __name__ == "__main__":

@@ -10,10 +10,10 @@ status: accepted
 # ADR 0022: Prompt-Injection Defense Architecture
 
 **Status:** Accepted (2026-09-03) — **extended by
-[[Work-Project-ADR-0038-Prompt-Injection-Architectural-Boundaries]]**
+[ADR-0038](Work-Project-ADR-0038-Prompt-Injection-Architectural-Boundaries.md)**
 (2026-09-03): the five original controls stand (layer 1's implementation
 corrected to Bedrock Guardrails by
-[[Work-Project-ADR-0033-Hugging-Face-Path-Corrected]]); ADR-0038 adds
+[ADR-0033](Work-Project-ADR-0033-Hugging-Face-Path-Corrected.md)); ADR-0038 adds
 architectural controls that don't depend on the model behaving correctly.
 
 ## Context
@@ -50,7 +50,7 @@ Scoped-down stack, four layers plus one cost-specific addition:
   patterns, typed MCP tool calls) — could be added later if real abuse
   patterns emerge.
 - Covers **W5** (threat modeling + prompt-injection defenses) from
-  [[Research]] — see that task's status update.
+  the research task list.
 
 ## Full reasoning
 

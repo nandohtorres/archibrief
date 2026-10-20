@@ -1,24 +1,101 @@
 import type { ReportFinding, ReviewReport } from "@/lib/contracts";
-import { confidenceLabel, formatFindingId } from "@/lib/workflow";
+import type { ReviewerNote } from "@/lib/demos";
+import { confidenceLabel, formatFindingId, stakeholderSummary } from "@/lib/workflow";
 
 interface GuidedReportProps {
   report: ReviewReport;
   onOpenTechnicalFinding: (findingId: string) => void;
   onAsk: (finding: ReportFinding) => void;
+  // Hand-check notes when this is a demo review, keyed by finding id.
+  reviewerNotes?: Map<string, ReviewerNote>;
+  // True when the page shows a real title (a demo's) above this view.
+  titled?: boolean;
 }
 
-export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedReportProps) {
-  const visibleFindings = report.findings.filter(
+interface FindingCardProps {
+  finding: ReportFinding;
+  reviewerNote: ReviewerNote | null;
+  open: boolean;
+  onOpenTechnicalFinding: (findingId: string) => void;
+  onAsk: (finding: ReportFinding) => void;
+}
+
+function FindingCard({
+  finding,
+  reviewerNote,
+  open,
+  onOpenTechnicalFinding,
+  onAsk,
+}: FindingCardProps) {
+  return (
+    <details open={open}>
+      <summary>
+        <span className={`priority-pill ${finding.presentation.priority}`}>
+          {finding.presentation.short_label}
+        </span>
+        <span>
+          <small>
+            {formatFindingId(finding.record.finding_id)} · {finding.record.category}
+          </small>
+          <strong>{finding.record.finding}</strong>
+        </span>
+        <i aria-hidden="true">›</i>
+      </summary>
+      <div className="guided-finding-body">
+        {reviewerNote && (
+          <aside className="reviewer-note" aria-label="Reviewer note">
+            <strong>Reviewer note · {reviewerNote.verdict}</strong>
+            <p>{reviewerNote.note}</p>
+          </aside>
+        )}
+        <h4>Why it matters</h4>
+        <p>{finding.record.risk_impact}</p>
+        <h4>Recommended action</h4>
+        <p>{finding.record.recommendation}</p>
+        <p className="plain-confidence">
+          <strong>Confidence: {confidenceLabel(finding.record.confidence)}.</strong> Based on the
+          evidence inputs recorded in the technical view; it is not a safety guarantee.
+        </p>
+        <div className="guided-actions">
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() => onOpenTechnicalFinding(finding.record.finding_id)}
+          >
+            View technical evidence
+          </button>
+          <button className="button secondary" type="button" onClick={() => onAsk(finding)}>
+            Ask about this finding
+          </button>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+export function GuidedReport({
+  report,
+  onOpenTechnicalFinding,
+  onAsk,
+  reviewerNotes = new Map(),
+  titled = false,
+}: GuidedReportProps) {
+  const decisionFindings = report.findings.filter(
     ({ presentation }) => presentation.priority !== "confirmed",
   );
+  // Facts read straight from the code. Some are only context ("Multi-AZ
+  // is on"), but some are real problems ("storage encryption explicitly
+  // disabled"), so they're shown, in their own labeled section, rather
+  // than hidden (decision 2026-10-16).
+  const confirmedFindings = report.findings.filter(
+    ({ presentation }) => presentation.priority === "confirmed",
+  );
+  const summary = stakeholderSummary(report, titled);
   return (
     <div className="guided-report">
       <span className="guided-eyebrow">Stakeholder view · same evidence ledger</span>
-      <h2>What this review means for payments-api</h2>
-      <p className="guided-intro">
-        Three high-risk configuration gaps warrant validation before production. They indicate
-        focused control work—not proof that the architecture requires a redesign.
-      </p>
+      <h2>{summary.heading}</h2>
+      <p className="guided-intro">{summary.intro}</p>
 
       <aside className="scope-note">
         <strong>What ArchiBrief can and cannot establish</strong>
@@ -30,14 +107,23 @@ export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedRe
 
       <section className="stakeholder-summary" aria-labelledby="stakeholder-summary-heading">
         <h3 id="stakeholder-summary-heading">Decision summary</h3>
-        <p>
-          First validate public-access controls, narrow the Lambda role, and confirm whether
-          organization-level CloudTrail already covers this account.
-        </p>
-        <p>
-          <strong>Coverage limit:</strong> data-residency requirements were not supplied, so
-          dependent conclusions remain not observable.
-        </p>
+        {summary.startWith.length > 0 ? (
+          <>
+            <p>Start with:</p>
+            <ul>
+              {summary.startWith.map((title) => (
+                <li key={title}>{title}</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p>No high-risk gaps need fixing first; review the items below.</p>
+        )}
+        {summary.coverageLimits.map((limit) => (
+          <p key={limit}>
+            <strong>Coverage limit:</strong> {limit}
+          </p>
+        ))}
       </section>
 
       <div className="baseline-strip" aria-label="Workload context">
@@ -54,45 +140,39 @@ export function GuidedReport({ report, onOpenTechnicalFinding, onAsk }: GuidedRe
 
       <h3 className="guided-section-heading">Findings that affect a decision</h3>
       <div className="guided-findings">
-        {visibleFindings.map((finding, index) => (
-          <details key={finding.record.finding_id} open={index === 0}>
-            <summary>
-              <span className={`priority-pill ${finding.presentation.priority}`}>
-                {finding.presentation.short_label}
-              </span>
-              <span>
-                <small>
-                  {formatFindingId(finding.record.finding_id)} · {finding.record.category}
-                </small>
-                <strong>{finding.record.finding}</strong>
-              </span>
-              <i aria-hidden="true">›</i>
-            </summary>
-            <div className="guided-finding-body">
-              <h4>Why it matters</h4>
-              <p>{finding.record.risk_impact}</p>
-              <h4>Recommended action</h4>
-              <p>{finding.record.recommendation}</p>
-              <p className="plain-confidence">
-                <strong>Confidence: {confidenceLabel(finding.record.confidence)}.</strong> Based on
-                the evidence inputs recorded in the technical view; it is not a safety guarantee.
-              </p>
-              <div className="guided-actions">
-                <button
-                  className="button secondary"
-                  type="button"
-                  onClick={() => onOpenTechnicalFinding(finding.record.finding_id)}
-                >
-                  View technical evidence
-                </button>
-                <button className="button secondary" type="button" onClick={() => onAsk(finding)}>
-                  Ask about this finding
-                </button>
-              </div>
-            </div>
-          </details>
+        {decisionFindings.map((finding, index) => (
+          <FindingCard
+            key={finding.record.finding_id}
+            finding={finding}
+            reviewerNote={reviewerNotes.get(finding.record.finding_id) ?? null}
+            open={index === 0}
+            onOpenTechnicalFinding={onOpenTechnicalFinding}
+            onAsk={onAsk}
+          />
         ))}
       </div>
+
+      {confirmedFindings.length > 0 && (
+        <>
+          <h3 className="guided-section-heading">Confirmed from the code</h3>
+          <p className="guided-section-note">
+            Settings read directly from the Terraform. Some are only context; check whether any of
+            them matter for your workload.
+          </p>
+          <div className="guided-findings">
+            {confirmedFindings.map((finding) => (
+              <FindingCard
+                key={finding.record.finding_id}
+                finding={finding}
+                reviewerNote={reviewerNotes.get(finding.record.finding_id) ?? null}
+                open={false}
+                onOpenTechnicalFinding={onOpenTechnicalFinding}
+                onAsk={onAsk}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -34,7 +34,12 @@ def test_list_vectors_paginates_until_next_token_is_absent():
     stubber.add_response(
         "list_vectors",
         {"vectors": [{"key": "c-0001"}]},
-        {"vectorBucketName": "bkt", "indexName": "idx", "returnMetadata": True, "nextToken": "page-2"},
+        {
+            "vectorBucketName": "bkt",
+            "indexName": "idx",
+            "returnMetadata": True,
+            "nextToken": "page-2",
+        },
     )
     stubber.activate()
 

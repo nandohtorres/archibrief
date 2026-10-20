@@ -1,0 +1,215 @@
+{
+  "account_findings": [
+    "4c93e0fb-6304-4d22-9aa0-966623888c6d",
+    "ade46b43-d232-4874-aee0-631426150e03"
+  ],
+  "edges": [
+    {
+      "from": "aws_ssm_parameter.services/bucket-access-logs/bucket_access_logs",
+      "to": "aws_s3_bucket.services/bucket-access-logs/bucket_access_logs"
+    }
+  ],
+  "lanes": [
+    "edge",
+    "network",
+    "data",
+    "security",
+    "monitoring"
+  ],
+  "nodes": [
+    {
+      "details": [
+        "backup selection"
+      ],
+      "findings": [
+        "4454b72d-f729-41d7-b273-0667fc1ee571"
+      ],
+      "id": "aws_backup_plan.services/backup-plan/this",
+      "label": "backup plan",
+      "lane": "data",
+      "module": "services/backup-plan",
+      "name": "this",
+      "type": "aws_backup_plan"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_cloudwatch_log_resource_policy.modules/firewall/waf",
+      "label": "cloudwatch log resource policy",
+      "lane": "monitoring",
+      "module": "modules/firewall",
+      "name": "waf",
+      "type": "aws_cloudwatch_log_resource_policy"
+    },
+    {
+      "details": [
+        "kms alias"
+      ],
+      "findings": [
+        "c684c845-928f-4aee-9ae6-b47b84ecc634"
+      ],
+      "id": "aws_kms_key.services/kms-keys/primary",
+      "label": "kms key",
+      "lane": "security",
+      "module": "services/kms-keys",
+      "name": "primary",
+      "type": "aws_kms_key"
+    },
+    {
+      "details": [
+        "kms alias"
+      ],
+      "findings": [
+        "c684c845-928f-4aee-9ae6-b47b84ecc634"
+      ],
+      "id": "aws_kms_key.services/kms-keys/secondary",
+      "label": "kms key",
+      "lane": "security",
+      "module": "services/kms-keys",
+      "name": "secondary",
+      "type": "aws_kms_key"
+    },
+    {
+      "details": [
+        "s3 bucket lifecycle configuration",
+        "s3 bucket object lock configuration",
+        "s3 bucket policy",
+        "s3 bucket server side encryption configuration",
+        "s3 bucket versioning"
+      ],
+      "findings": [
+        "7ffe34ac-cb93-43d7-ba30-679d035d976e",
+        "c8e05434-f498-4d2d-bcae-449edc8ab97e",
+        "9dacdaed-4075-43aa-bc54-fcae707bb67b"
+      ],
+      "id": "aws_s3_bucket.services/bucket-access-logs/bucket_access_logs",
+      "label": "s3 bucket",
+      "lane": "data",
+      "module": "services/bucket-access-logs",
+      "name": "bucket_access_logs",
+      "type": "aws_s3_bucket"
+    },
+    {
+      "details": [
+        "vpc security group ingress rule"
+      ],
+      "findings": [],
+      "id": "aws_security_group.services/security-groups/datadog_synthetics",
+      "label": "security group",
+      "lane": "network",
+      "module": "services/security-groups",
+      "name": "datadog_synthetics",
+      "type": "aws_security_group"
+    },
+    {
+      "details": [
+        "vpc security group egress rule"
+      ],
+      "findings": [],
+      "id": "aws_security_group.services/security-groups/internet",
+      "label": "security group",
+      "lane": "network",
+      "module": "services/security-groups",
+      "name": "internet",
+      "type": "aws_security_group"
+    },
+    {
+      "details": [
+        "vpc security group ingress rule"
+      ],
+      "findings": [
+        "c89a5c02-0b75-407b-b71c-fd379e931602"
+      ],
+      "id": "aws_security_group.services/security-groups/remote_management",
+      "label": "security group",
+      "lane": "network",
+      "module": "services/security-groups",
+      "name": "remote_management",
+      "type": "aws_security_group"
+    },
+    {
+      "details": [],
+      "findings": [
+        "c89a5c02-0b75-407b-b71c-fd379e931602"
+      ],
+      "id": "aws_security_group.services/security-groups/zscaler_private",
+      "label": "security group",
+      "lane": "network",
+      "module": "services/security-groups",
+      "name": "zscaler_private",
+      "type": "aws_security_group"
+    },
+    {
+      "details": [],
+      "findings": [
+        "c89a5c02-0b75-407b-b71c-fd379e931602"
+      ],
+      "id": "aws_security_group.services/security-groups/zscaler_public",
+      "label": "security group",
+      "lane": "network",
+      "module": "services/security-groups",
+      "name": "zscaler_public",
+      "type": "aws_security_group"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_ssm_parameter.services/bucket-access-logs/bucket_access_logs",
+      "label": "ssm parameter",
+      "lane": "security",
+      "module": "services/bucket-access-logs",
+      "name": "bucket_access_logs",
+      "type": "aws_ssm_parameter"
+    },
+    {
+      "details": [],
+      "findings": [],
+      "id": "aws_vpc_endpoint.services/020-vpc-network/s3",
+      "label": "vpc endpoint",
+      "lane": "network",
+      "module": "services/020-vpc-network",
+      "name": "s3",
+      "type": "aws_vpc_endpoint"
+    },
+    {
+      "copies": "unknown",
+      "details": [],
+      "findings": [],
+      "id": "aws_wafv2_ip_set.services/api-waf/api_customers",
+      "label": "wafv2 ip set",
+      "lane": "edge",
+      "module": "services/api-waf",
+      "name": "api_customers",
+      "type": "aws_wafv2_ip_set"
+    },
+    {
+      "copies": "unknown",
+      "details": [],
+      "findings": [],
+      "id": "aws_wafv2_ip_set.services/api-waf/ipv6_api_customers",
+      "label": "wafv2 ip set",
+      "lane": "edge",
+      "module": "services/api-waf",
+      "name": "ipv6_api_customers",
+      "type": "aws_wafv2_ip_set"
+    },
+    {
+      "details": [
+        "wafv2 web acl association",
+        "wafv2 web acl logging configuration"
+      ],
+      "findings": [
+        "109c426a-8cd9-4aa7-a906-80190c403742"
+      ],
+      "id": "aws_wafv2_web_acl.modules/firewall/this",
+      "label": "wafv2 web acl",
+      "lane": "edge",
+      "module": "modules/firewall",
+      "name": "this",
+      "type": "aws_wafv2_web_acl"
+    }
+  ],
+  "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+  "truncated": false,
+  "version": 1
+}

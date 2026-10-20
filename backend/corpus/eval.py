@@ -65,7 +65,11 @@ EVAL_QUERIES: list[EvalQuery] = [
         query_id="q02",
         query="How can a workload running outside of AWS get temporary AWS credentials instead of long-term access keys?",
         expected_document_id="iam-best-practices",
-        expected_chunk_ids=["iam-best-practices-0005", "iam-best-practices-0006", "iam-best-practices-0007"],
+        expected_chunk_ids=[
+            "iam-best-practices-0005",
+            "iam-best-practices-0006",
+            "iam-best-practices-0007",
+        ],
         notes="Answer spans a few adjacent chunks under the same heading; any one counts as a hit.",
     ),
     EvalQuery(

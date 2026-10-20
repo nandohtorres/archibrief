@@ -5,11 +5,12 @@ variable "name_prefix" {
 
 variable "lambda_zip_paths" {
   type = object({
-    ingest      = string
-    rule_engine = string
-    validate    = string
-    audit       = string
-    finalize    = string
+    ingest                    = string
+    rule_engine               = string
+    validate                  = string
+    audit                     = string
+    finalize                  = string
+    store_clarification_token = string
   })
   description = "Path to each Lambda's deployment package — TODO(account-setup): real build artifacts don't exist until a packaging step runs in CI."
 }
@@ -18,8 +19,18 @@ variable "reports_bucket_arn" {
   type = string
 }
 
+variable "reports_bucket_name" {
+  type        = string
+  description = "S3 bucket name (not ARN) for Finalize's Parameters and the state machine's own literal reference — a Terraform-known infra constant, never caller-supplied input (see 2026-09-17 fix: this used to be sourced from the StartExecution request body, which leaked an internal resource name into the public API contract)."
+}
+
 variable "reviews_table_arn" {
   type = string
+}
+
+variable "reviews_table_name" {
+  type        = string
+  description = "DynamoDB table name (not ARN) for Finalize's Parameters and the leading idempotency-check Task — same Terraform-known-constant reasoning as reports_bucket_name."
 }
 
 variable "audit_table_arn" {
@@ -73,4 +84,36 @@ variable "kill_switch_parameter_arn" {
 variable "tags" {
   type    = map(string)
   default = {}
+}
+
+variable "mark_review_failed_zip_path" {
+  type        = string
+  default     = "../../../backend/lambdas/mark_review_failed/build/mark_review_failed.zip"
+  description = "Deployment package for the mark-review-failed Lambda (built by scripts/package_lambdas.py)."
+}
+
+variable "max_clarification_rounds" {
+  type        = number
+  default     = 2
+  description = "How many times one review may pause for clarification before it fails with ClarificationLimitReached."
+}
+
+# ADR-0048: Trivy scan step. Defaults point at the build outputs, so the
+# environment's terraform.tfvars doesn't need new entries.
+variable "scan_zip_path" {
+  type        = string
+  default     = "../../../backend/lambdas/scan/build/scan.zip"
+  description = "Scan Lambda package (python scripts/package_lambdas.py scan)."
+}
+
+variable "trivy_layer_zip_path" {
+  type        = string
+  default     = "../../../backend/build/trivy-layer.zip"
+  description = "Trivy layer zip (python scripts/build_trivy_layer.py)."
+}
+
+variable "trivy_version" {
+  type        = string
+  default     = "0.76.0"
+  description = "Must match TRIVY_VERSION in scripts/build_trivy_layer.py."
 }

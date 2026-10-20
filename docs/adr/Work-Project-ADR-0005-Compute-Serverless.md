@@ -10,7 +10,7 @@ status: accepted
 # ADR 0005: Compute — Serverless
 
 **Status:** Accepted (2026-09-02) — **extended by
-[[Work-Project-ADR-0028-Orchestration-Ownership-Boundary]]**
+[ADR-0028](Work-Project-ADR-0028-Orchestration-Ownership-Boundary.md)**
 (2026-09-03): the serverless choice stands; ADR-0028 adds the explicit
 ownership boundary between Step Functions, Lambda, and AgentCore/
 LangGraph.
@@ -18,9 +18,7 @@ LangGraph.
 ## Context
 
 Considered serverless (Lambda + Step Functions + API Gateway) vs.
-ECS/Fargate vs. Kubernetes/EKS. Kubernetes was seriously discussed for its
-"prestige/seniority signal" value toward Fernando's long-term Solutions
-Architect goal.
+ECS/Fargate vs. Kubernetes/EKS.
 
 ## Decision
 
@@ -33,10 +31,9 @@ cost default.
 
 Kubernetes/EKS explicitly rejected as a non-goal: real cost data (EKS
 control plane alone ~$0.10/hr / ~$73/mo minimum, before worker nodes, vs.
-near-$0 idle serverless cost) plus Fernando's own confirmation he doesn't
-want to commit to operating EKS with genuine depth (real autoscaling, a
-real node-failure recovery, real upgrades) rather than deploying it
-shallowly for signal alone.
+near-$0 idle serverless cost), and running a cluster responsibly means
+real autoscaling, node-failure recovery, and upgrades — operational load
+a bursty, low-volume workload doesn't justify.
 
 ## Consequences
 
@@ -47,5 +44,5 @@ shallowly for signal alone.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Open questions" (compute) for the full Kubernetes
+See the project decision log §"Open questions" (compute) for the full Kubernetes
 discussion and cost figures.

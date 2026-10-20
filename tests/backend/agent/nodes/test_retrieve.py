@@ -152,7 +152,9 @@ def test_vector_search_reads_content_type_from_metadata():
             }
         ]
     )
-    results = vector_search("incident contact table", _StubEmbeddingClient(), vectors_client)
+    results = vector_search(
+        "incident contact table", _StubEmbeddingClient(), vectors_client
+    )
     assert len(results) == 1
     assert results[0].content_type == "table"
 

@@ -10,7 +10,7 @@ status: accepted
 # ADR 0017: Application Database — DynamoDB
 
 **Status:** Accepted (2026-09-03) — **cost justification corrected by
-[[Work-Project-ADR-0034-Aurora-Cost-Comparison-Corrected]]** (2026-09-03):
+[ADR-0034](Work-Project-ADR-0034-Aurora-Cost-Comparison-Corrected.md)** (2026-09-03):
 the DynamoDB choice stands, but the "~50x cheaper"/"$43+/mo Aurora floor"
 claim was stale.
 

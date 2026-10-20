@@ -10,14 +10,14 @@ status: accepted
 # ADR 0041: Threat-Modeling Methodology — STRIDE Primary, OWASP LLM Top 10 Overlay
 
 **Status:** Accepted (2026-09-03) — resolves the remaining open half of
-**W5** ([[Research]])
+research task W5
 
 ## Context
 
 W5 (threat modeling + prompt-injection defenses) was only partially
 resolved by ADR-0022/0038 — the prompt-injection defense architecture
 was decided, but the broader threat-modeling methodology (which framework
-to use, how to document it as a real portfolio artifact) was still open.
+to use, how to document it as a standalone artifact) was still open.
 Codex's review recommended a specific hybrid approach, citing OWASP's own
 threat-modeling process documentation and NIST's Generative AI Profile.
 
@@ -39,18 +39,18 @@ threat-modeling process documentation and NIST's Generative AI Profile.
    Shows risk ownership, measurement, and lifecycle thinking without
    turning a solo project into a compliance program.
 
-The portfolio artifact contains: scope/non-goals, a data-flow diagram,
+The threat-model document contains: scope/non-goals, a data-flow diagram,
 assets/data classes, trust boundaries, attacker profiles, threat
 register, control mapping, abuse cases, test evidence, residual-risk
 decisions, and a change log.
 
 ## Consequences
 
-- Closes W5 in [[Research]] — update its status.
-- The resulting threat-model document becomes a real portfolio artifact
-  per the original "Deliverables" list in [[Work-Project]].
+- Closes research task W5.
+- The resulting threat-model document is published with the code
+  (`docs/threat-model.md`).
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"Broader threat-modeling
+See an independent design review §"Broader threat-modeling
 methodology."

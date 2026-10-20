@@ -1,0 +1,46 @@
+#!/bin/sh
+# Blocks a commit when staged changes contain a secret, using the same
+# .gitleaks.toml rules as CI's secrets-scan job. Catching it here means
+# the secret never enters git history (CI only sees it after commit).
+#
+# Also runs the same Trivy scan of infra/ as CI (ADR-0048) when the
+# commit touches infra/, so a new HIGH/CRITICAL misconfiguration is caught
+# before it's committed. Accepted findings live in .trivyignore.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Emergency bypass:       git commit --no-verify
+
+# winget adds tools to the user PATH, but shells/GUI git clients started
+# before the install won't see them - fall back to winget's dirs.
+for d in "$HOME"/AppData/Local/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_* \
+         "$HOME"/AppData/Local/Microsoft/WinGet/Packages/AquaSecurity.Trivy_* \
+         "$HOME/AppData/Local/Microsoft/WinGet/Links"; do
+  [ -d "$d" ] && PATH="$PATH:$d"
+done
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks not found - commit blocked." >&2
+  echo "Install it (winget install Gitleaks.Gitleaks) or bypass with --no-verify." >&2
+  exit 1
+fi
+
+root="$(git rev-parse --show-toplevel)"
+
+gitleaks git --pre-commit --staged --redact --no-banner -v \
+  --config "$root/.gitleaks.toml" || exit 1
+
+if git diff --cached --name-only | grep -q '^infra/.*\.tf$'; then
+  if ! command -v trivy >/dev/null 2>&1; then
+    echo "pre-commit: trivy not found - commit blocked (infra/ changed)." >&2
+    echo "Install it (winget install AquaSecurity.Trivy) or bypass with --no-verify." >&2
+    exit 1
+  fi
+  echo "pre-commit: Trivy scan of infra/ ..."
+  trivy config --skip-check-update --skip-version-check --disable-telemetry \
+    --severity HIGH,CRITICAL --ignorefile "$root/.trivyignore" --exit-code 1 \
+    --quiet "$root/infra" || {
+      echo "pre-commit: Trivy found a HIGH/CRITICAL issue in infra/ - commit blocked." >&2
+      echo "Fix it, or accept it with a reason in .trivyignore." >&2
+      exit 1
+    }
+fi

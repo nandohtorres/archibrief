@@ -1,0 +1,392 @@
+{
+  "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
+  "generated_at": "2026-10-17T04:36:46.723046+00:00",
+  "suggested": [
+    {
+      "suggested_id": "s1",
+      "question": "Which issues should I fix first, and why?",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "citations": [
+            {
+              "finding_id": "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
+              "kind": "finding",
+              "title": "Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433, 3306, 5432, 6379, 9200, 27017]"
+            },
+            {
+              "finding_id": "5b7be8d8-05f5-46f4-b216-41d31f80b57e",
+              "kind": "finding",
+              "title": "Security group 'rds' allows SSH or RDP from anywhere"
+            },
+            {
+              "finding_id": "e3ebb27e-03c8-436b-9a64-e6cae1f0b1b0",
+              "kind": "finding",
+              "title": "RDS instance 'production_aurora_inst' is publicly accessible"
+            }
+          ],
+          "text": "The four high-priority findings should be addressed before anything else, because they represent direct internet exposure of a government database. The RDS security group allows unrestricted ingress from the entire internet (0.0.0.0/0) on all ports, including database port 5432 and remote-administration ports SSH/RDP. On top of that, all three Aurora cluster instances — production, staging, and development — are flagged as publicly accessible. The workload's own brief states the databases must never be reachable directly from the internet, so these findings are in direct conflict with the stated design intent."
+        },
+        {
+          "citations": [
+            {
+              "finding_id": "a2192a0b-4448-40bf-afb3-fbb2414cf994",
+              "kind": "finding",
+              "title": "No aws_cloudtrail resource found in the submitted Terraform"
+            },
+            {
+              "finding_id": "f733eeb9-95af-4a11-a214-233823c13248",
+              "kind": "finding",
+              "title": "IAM database authentication is not enabled on any of the three Aurora clusters (default: false). This means database ac…"
+            },
+            {
+              "finding_id": "f733eeb9-95af-4a11-a214-233823c13248",
+              "heading_path": "AWS Foundational Security Best Practices standard in Security Hub CSPM > Controls that apply to the standard",
+              "kind": "source",
+              "quote": "[RDS.12] IAM authentication should be configured for RDS clusters",
+              "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html"
+            }
+          ],
+          "text": "Once the network exposure is closed, the next priority is auditability and traceability, which the workload explicitly requires. There is no CloudTrail resource in the Terraform, meaning no API-level audit log exists for the account at all. Separately, IAM database authentication is not enabled on any cluster, so database connections rely on passwords with no per-identity audit trail. Enabling CloudTrail and IAM database authentication together would give a cryptographically signed, traceable record of both AWS API calls and individual database connection attempts."
+        },
+        {
+          "citations": [
+            {
+              "finding_id": "54815d01-faa8-41f2-b9e0-9dfa33ec6d1b",
+              "kind": "finding",
+              "title": "The Terraform configuration does not appear to configure CloudWatch Logs export (e.g., enabled_cloudwatch_logs_exports)…"
+            },
+            {
+              "finding_id": "54815d01-faa8-41f2-b9e0-9dfa33ec6d1b",
+              "heading_path": "AWS Foundational Security Best Practices standard in Security Hub CSPM > Controls that apply to the standard",
+              "kind": "source",
+              "quote": "[RDS.37] Aurora PostgreSQL DB clusters should publish logs to CloudWatch Logs",
+              "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html"
+            },
+            {
+              "finding_id": "d65709cc-ff1a-4939-adb8-487b0e5a3fdc",
+              "kind": "finding",
+              "title": "No RDS event notification subscription (aws_db_event_subscription) is present in the Terraform configuration. Without t…"
+            }
+          ],
+          "text": "After the traceability gaps, address the observability gaps that affect operational response during filing-deadline peaks. None of the Aurora clusters export PostgreSQL logs to CloudWatch Logs, so slow queries, authentication failures, and DDL changes are invisible centrally. There are also no RDS event notification subscriptions, meaning failovers or backup failures would go undetected until staff notice an outage manually — a serious risk during the high-traffic filing periods."
+        },
+        {
+          "citations": [
+            {
+              "finding_id": "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+              "kind": "finding",
+              "title": "The production Aurora cluster is configured with 3 instances (1 writer + 2 readers), which provides read-scaling capaci…"
+            },
+            {
+              "finding_id": "e8b1caad-d6d6-494c-bec7-775c6a9d67b7",
+              "kind": "finding",
+              "title": "The subnet group spans two AZs (rds_az1, rds_az2), and the production cluster has 3 instances. However, only two AZs ar…"
+            },
+            {
+              "finding_id": "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+              "heading_path": "Data management > PERF03-BP02 Evaluate available configuration options for data store",
+              "kind": "source",
+              "quote": "RDS and Aurora, and provisioned NoSQL \ndatabases such as Neptune and Amazon \nDocumentDB all support adding read \nreplicas to oﬄoad the read portions of the \nworkload.",
+              "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/performance-efficiency-pillar/wellarchitected-performance-efficiency-pillar.pdf"
+            }
+          ],
+          "text": "Finally, review the availability and scaling posture. The production cluster's reader fleet is static with no confirmed auto…"
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    },
+    {
+      "suggested_id": "s2",
+      "question": "Explain \"Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433…\" for a non-technical stakeholder.",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "text": "Think of a security group as the firewall that controls who is allowed to knock on the database's door. Right now, the firewall has a rule that says \"anyone on the entire internet\" (expressed as 0.0.0.0/0, meaning every possible address) is allowed to reach the database ports — the specific numbered doors that database software listens on.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
+              "title": "Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433, 3306, 5432, 6379, 9200, 27017]"
+            }
+          ]
+        },
+        {
+          "text": "The workload's own requirement is that the databases should only be reachable from the FEC's application platform, never directly from the internet. This open firewall rule directly contradicts that requirement. Even though the campaign-finance data is public record, its integrity matters, and an internet-exposed database port is an invitation for unauthorised connection attempts, brute-force password attacks, or exploitation of any database vulnerability.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
+              "title": "Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433, 3306, 5432, 6379, 9200, 27017]"
+            },
+            {
+              "kind": "requirement",
+              "field": "regulatory_data_residency",
+              "label": "Regulatory and data residency"
+            }
+          ]
+        },
+        {
+          "text": "The risk is compounded because all three Aurora instances — production, staging, and development — are also individually configured as publicly accessible, meaning they each have a public network address. Combined with the open firewall, this means the production campaign-finance database is only one misconfiguration away from being directly reachable and potentially writable from anywhere in the world.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "e3ebb27e-03c8-436b-9a64-e6cae1f0b1b0",
+              "title": "RDS instance 'production_aurora_inst' is publicly accessible"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "d89d7166-f861-44af-9d84-2cd0ecc5b048",
+              "title": "RDS instance 'development_aurora_inst' is publicly accessible"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "e8e69ea5-4b46-4bf0-bb12-154e54867dca",
+              "title": "RDS instance 'staging_aurora_inst' is publicly accessible"
+            }
+          ]
+        },
+        {
+          "text": "The fix is straightforward in principle: update the firewall rule to allow connections only from the FEC's own internal application servers (by specifying their network addresses or their own security group), and remove the rule that allows remote-administration access from the internet. This would close the exposure without affecting how the FEC's own systems connect to the databases.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
+              "title": "Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433, 3306, 5432, 6379, 9200, 27017]"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "5b7be8d8-05f5-46f4-b216-41d31f80b57e",
+              "title": "Security group 'rds' allows SSH or RDP from anywhere"
+            }
+          ]
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    },
+    {
+      "suggested_id": "s3",
+      "question": "How do I fix \"Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433…\"?",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "text": "The finding shows that the 'rds' security group currently permits inbound traffic from 0.0.0.0/0 (the entire internet) on all ports, including sensitive database and management ports such as 5432 (PostgreSQL), 3306, 1433, 6379, 9200, and 27017. This directly contradicts the workload's requirement that databases should only be reachable from the FEC's own application platform, never from the internet.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
+              "title": "Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433, 3306, 5432, 6379, 9200, 27017]"
+            }
+          ]
+        },
+        {
+          "text": "A related finding also flags that the same security group allows SSH (port 22) and RDP (port 3389) from anywhere, which is separately flagged by CIS AWS Foundations Benchmark. Both issues stem from the same overly permissive ingress rule and should be fixed together.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "5b7be8d8-05f5-46f4-b216-41d31f80b57e",
+              "title": "Security group 'rds' allows SSH or RDP from anywhere"
+            },
+            {
+              "kind": "source",
+              "chunk_id": "aws-cis-foundations-mapping-0008",
+              "quote": "[EC2.53] EC2 security groups should not allow ingress from 0.0.0.0/0 to remote server administration ports",
+              "source_url": "https://docs.aws.amazon.com/securityhub/latest/userguide/cis-aws-foundations-benchmark.html",
+              "heading_path": "CIS AWS Foundations Benchmark in Security Hub CSPM > CIS AWS Foundations Benchmark version 3.0.0 > Controls that apply to CIS AWS Foundations Benchmark version 3.0.0"
+            }
+          ]
+        },
+        {
+          "text": "The fix is to replace the catch-all 0.0.0.0/0 ingress rule with a rule that only allows traffic from the security group (or CIDR) of the FEC application platform. For PostgreSQL on Aurora, only port 5432 should be open, and only to the application tier. SSH/RDP should be removed entirely — use AWS Systems Manager Session Manager for any administrative access instead. Here is a minimal corrected ingress block:",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
+              "title": "Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433, 3306, 5432, 6379, 9200, 27017]"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "5b7be8d8-05f5-46f4-b216-41d31f80b57e",
+              "title": "Security group 'rds' allows SSH or RDP from anywhere"
+            }
+          ]
+        },
+        {
+          "text": "Note that restricting the security group alone is not sufficient: all three Aurora cluster instances (production, staging, and development) also have publicly_accessible = true, which gives them public DNS endpoints. You should set publicly_accessible = false on each instance resource alongside tightening the security group, so the databases are only reachable from within the VPC regardless of security group state.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "d89d7166-f861-44af-9d84-2cd0ecc5b048",
+              "title": "RDS instance 'development_aurora_inst' is publicly accessible"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "e3ebb27e-03c8-436b-9a64-e6cae1f0b1b0",
+              "title": "RDS instance 'production_aurora_inst' is publicly accessible"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "e8e69ea5-4b46-4bf0-bb12-154e54867dca",
+              "title": "RDS instance 'staging_aurora_inst' is publicly accessible"
+            }
+          ]
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    },
+    {
+      "suggested_id": "s5",
+      "question": "What changes if traffic grows 10×?",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "text": "The most immediate risk from a 10× traffic increase is read-query saturation. The production cluster currently has a fixed fleet of three instances (one writer, two readers), and no Aurora Auto Scaling is confirmed in the Terraform. AWS guidance warns that provisioning a fixed number of scalable resources and failing to provide enough headroom for demand bursts are common failure modes. With campaign-finance read traffic already described as heavy around filing deadlines, a 10× spike would very likely exhaust reader capacity, causing latency spikes or connection exhaustion on the public FEC website and API.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+              "title": "The production Aurora cluster is configured with 3 instances (1 writer + 2 readers), which provides read-scaling capaci…"
+            },
+            {
+              "kind": "source",
+              "chunk_id": "waf-reliability-pillar-0575",
+              "quote": "You provision a ﬁxed number of scalable resources.",
+              "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/reliability-pillar/wellarchitected-reliability-pillar.pdf",
+              "heading_path": "Change management > Design your workload to adapt to changes in demand > REL07-BP03 Obtain resources upon detection that more resources are needed for a workload"
+            },
+            {
+              "kind": "requirement",
+              "field": "expected_traffic_scale",
+              "label": "Traffic and scale"
+            }
+          ]
+        },
+        {
+          "text": "Even if Auto Scaling were added, AWS guidance notes that scaling policies can add capacity too late, leading to degraded service while new instances come online. Aurora reader instances take a few minutes to become available, so a sudden 10× burst — typical of a filing deadline — could still cause a brief degradation window before new readers are ready. Pre-warming by temporarily increasing the minimum reader count before known deadline periods would reduce this risk.",
+          "citations": [
+            {
+              "kind": "source",
+              "chunk_id": "waf-reliability-pillar-0577",
+              "quote": "Your scaling policies add capacity too late, which leads to capacity exhaustion and degraded \nservice while additional resources are brought online.",
+              "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/reliability-pillar/wellarchitected-reliability-pillar.pdf",
+              "heading_path": "Change management > Design your workload to adapt to changes in demand > REL07-BP03 Obtain resources upon detection that more resources are needed for a workload"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+              "title": "The production Aurora cluster is configured with 3 instances (1 writer + 2 readers), which provides read-scaling capaci…"
+            }
+          ]
+        },
+        {
+          "text": "A 10× load increase also raises the stakes for the two-AZ subnet configuration. The subnet group currently spans only two AZs. Under extreme load, if one AZ becomes impaired, two of the three production instances could be in the affected zone, collapsing read capacity precisely when it is most needed. Extending the subnet group to a third AZ would spread the three instances across separate failure domains, reducing this compounded risk.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "e8b1caad-d6d6-494c-bec7-775c6a9d67b7",
+              "title": "The subnet group spans two AZs (rds_az1, rds_az2), and the production cluster has 3 instances. However, only two AZs ar…"
+            },
+            {
+              "kind": "requirement",
+              "field": "availability_criticality",
+              "label": "Availability target"
+            }
+          ]
+        },
+        {
+          "text": "Higher traffic also increases the attack surface. The production instance is currently marked publicly accessible, and the RDS security group allows ingress from the entire internet. Under normal load these are serious findings; under a high-profile filing-deadline even…",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
+              "title": "Security group rule 'rds' allows 0.0.0.0/0 ingress to sensitive port(s) [1433, 3306, 5432, 6379, 9200, 27017]"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "e3ebb27e-03c8-436b-9a64-e6cae1f0b1b0",
+              "title": "RDS instance 'production_aurora_inst' is publicly accessible"
+            }
+          ]
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    },
+    {
+      "suggested_id": "s6",
+      "question": "Why not use existing single-instance cluster reads?",
+      "status": "answered",
+      "refusal_reason": null,
+      "answer": [
+        {
+          "text": "The review explicitly considered relying on single-instance reads but rejected it because the workload experiences heavy, deadline-driven read spikes. A single reader cannot absorb those peaks without also degrading write performance on the primary writer instance, which would put the public-facing FEC website and API at risk precisely when demand is highest.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+              "title": "The production Aurora cluster is configured with 3 instances (1 writer + 2 readers), which provides read-scaling capaci…"
+            },
+            {
+              "kind": "requirement",
+              "field": "expected_traffic_scale",
+              "label": "Traffic and scale"
+            }
+          ]
+        },
+        {
+          "text": "AWS Well-Architected guidance specifically calls out Aurora's ability to add read replicas to offload read-heavy workloads. With a static reader fleet and no auto-scaling policy, the cluster cannot grow to meet a filing-deadline surge, meaning connection exhaustion or latency degradation becomes likely under peak load.",
+          "citations": [
+            {
+              "kind": "source",
+              "finding_id": "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+              "quote": "RDS and Aurora, and provisioned NoSQL \ndatabases such as Neptune and Amazon \nDocumentDB all support adding read \nreplicas to oﬄoad the read portions of the \nworkload.",
+              "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/performance-efficiency-pillar/wellarchitected-performance-efficiency-pillar.pdf",
+              "heading_path": "Data management > PERF03-BP02 Evaluate available configuration options for data store"
+            }
+          ]
+        },
+        {
+          "text": "There is also a related resilience concern: the subnet group currently spans only two AZs, so even the existing three-instance production cluster cannot fully spread across three AZs. This compounds the risk of relying on a minimal, static reader count, since an AZ-level event could simultaneously remove multiple instances and leave the cluster with reduced read capacity at the worst possible time.",
+          "citations": [
+            {
+              "kind": "source",
+              "chunk_id": "waf-reliability-pillar-0707",
+              "quote": "Deploy and operate all production workloads in at least two Availability Zones (AZs) in a Region.",
+              "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/reliability-pillar/wellarchitected-reliability-pillar.pdf",
+              "heading_path": "Failure management > Use fault isolation to protect your workload > REL10-BP01 Deploy the workload to multiple locations"
+            },
+            {
+              "kind": "finding",
+              "finding_id": "e8b1caad-d6d6-494c-bec7-775c6a9d67b7",
+              "title": "The subnet group spans two AZs (rds_az1, rds_az2), and the production cluster has 3 instances. However, only two AZs ar…"
+            }
+          ]
+        },
+        {
+          "text": "The recommended path is to add an auto-scaling policy for Aurora reader instances so the fleet can grow during filing deadlines and shrink afterwards, balancing both availability and cost. This directly addresses the reason the single-instance option was rejected: it cannot dynamically match the documented traffic pattern that the workload's availability requirement depends on.",
+          "citations": [
+            {
+              "kind": "finding",
+              "finding_id": "9be7ea7a-796e-4242-8f7f-059e55f65f35",
+              "title": "The production Aurora cluster is configured with 3 instances (1 writer + 2 readers), which provides read-scaling capaci…"
+            },
+            {
+              "kind": "requirement",
+              "field": "availability_criticality",
+              "label": "Availability target"
+            }
+          ]
+        }
+      ],
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "prompt_version": "chat_prompt@2026-10-15a"
+    }
+  ]
+}

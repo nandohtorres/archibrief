@@ -10,7 +10,7 @@ status: accepted
 # ADR 0003: Framework Mapping Hierarchy
 
 **Status:** Accepted (2026-09-02) — **amended by
-[[Work-Project-ADR-0042-Minor-Amendments-Batch]]** (2026-09-03): the
+[ADR-0042](Work-Project-ADR-0042-Minor-Amendments-Batch.md)** (2026-09-03): the
 hierarchy stands; adds a more precise AWS-specific ordering for
 observable-configuration findings.
 
@@ -22,7 +22,7 @@ actually certify.
 
 ## Decision
 
-1. **AWS Well-Architected Framework** — primary rubric, ties to SAA-C03.
+1. **AWS Well-Architected Framework** — primary rubric.
 2. **CIS Controls v8** — secondary security cross-reference.
 3. **NIST CSF 2.0** — optional, executive-communication framing only.
 4. **CompTIA Security+ SY0-701 domains** — opt-in, clearly-labeled
@@ -31,7 +31,7 @@ actually certify.
    (CI/CD evidence), AWS Foundational Security Best Practices/Security Hub
    (AWS-native grounding).
 6. Deliberately excluded: SOC 2, ISO 27001 (too heavy/audit-scale), NIST
-   800-53 (federal-specific, ties to deprioritized clearance track).
+   800-53 (federal-specific, out of scope).
 
 Never label a design "compliant" — findings relate to a framework outcome;
 state what additional evidence would be needed to actually assess it.
@@ -45,6 +45,6 @@ state what additional evidence would be needed to actually assess it.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Product direction" and
-[[Research-ArchGuard-Differentiation-Claude]] (includes the Security+
-domain-mapping viability research pass).
+The project's private decision log (§"Product direction"), including a
+dedicated research pass on whether Security+ domains are viable as a
+technical mapping.

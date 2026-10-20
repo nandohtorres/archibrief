@@ -17,7 +17,7 @@ the lightweight-first-pass default
 Codex flagged a real risk in ADR-0023's "brief explanation + citation"
 lightweight default: read loosely, it could be taken to mean the base
 report omits required fields (risk/impact, confidence inputs,
-alternatives, framework mapping) that ADR-0002/[[Work-Project-Spec]]
+alternatives, framework mapping) that ADR-0002/the project spec
 already require on every finding. Separately, without versioning, a
 "go deeper" request run after the corpus or model changes could silently
 contradict the original finding.
@@ -39,9 +39,9 @@ contradict the original finding.
 
 ## Consequences
 
-- Updates the `Findings` data model in [[Work-Project-System-Design]] to
+- Updates the `Findings` data model in the system design notes to
   include snapshot/version fields.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0023."
+See an independent design review §"ADR-0023."

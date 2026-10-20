@@ -48,5 +48,5 @@ never raw IPs in logs long-term.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0011" and the direct AWS API
+See an independent design review §"ADR-0011" and the direct AWS API
 Gateway/Budgets documentation verification performed 2026-09-03.

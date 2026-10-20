@@ -1,0 +1,564 @@
+{
+  "full_run": {
+    "stats": {
+      "startTime": "2026-10-17T02:07:01.801Z",
+      "duration": 66304.75499999999,
+      "expected": 54,
+      "skipped": 0,
+      "unexpected": 2,
+      "flaky": 0
+    },
+    "cases": [
+      {
+        "file": "fixture-demo-path.spec.ts",
+        "title": "submission -> preflight -> progress -> report -> go deeper (fixture-only)",
+        "status": "passed"
+      },
+      {
+        "file": "landing.spec.ts",
+        "title": "shows the pitch, samples and the full submission form",
+        "status": "passed"
+      },
+      {
+        "file": "landing.spec.ts",
+        "title": "without the owner key, submitting explains it's owner-only and sends nothing",
+        "status": "passed"
+      },
+      {
+        "file": "landing.spec.ts",
+        "title": "a rejected key gets a plain message, not an error screen",
+        "status": "passed"
+      },
+      {
+        "file": "landing.spec.ts",
+        "title": "the sample card opens the sample review",
+        "status": "passed"
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: landing, light",
+        "status": "failed",
+        "axe_version": "4.13.0",
+        "violations": [
+          {
+            "id": "color-contrast",
+            "nodes": [
+              {
+                "target": [
+                  ".landing-step:nth-child(1) > div:nth-child(1) > p:nth-child(2)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.39 (foreground color: #778896, background color: #f4f7f9, font size: 11.4pt (15.2px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-step:nth-child(1) > div:nth-child(1) > .landing-step-note"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 2.88 (foreground color: #8594a2, background color: #f4f7f9, font size: 10.1pt (13.44px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".indent:nth-child(3)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.58 (foreground color: #778896, background color: #fcfdfd, font size: 9.6pt (12.8px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".indent:nth-child(4)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.58 (foreground color: #778896, background color: #fcfdfd, font size: 9.6pt (12.8px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".indent:nth-child(5)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.58 (foreground color: #778896, background color: #fcfdfd, font size: 9.6pt (12.8px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".indent:nth-child(6)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.58 (foreground color: #778896, background color: #fcfdfd, font size: 9.6pt (12.8px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-brief"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.16 (foreground color: #778896, background color: #e7f0f4, font size: 11.4pt (15.2px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-brief > .landing-label"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.15 (foreground color: #618ca0, background color: #e7f0f4, font size: 8.4pt (11.2px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-step:nth-child(2) > div:nth-child(1) > p:nth-child(2)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.39 (foreground color: #778896, background color: #f4f7f9, font size: 11.4pt (15.2px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-step:nth-child(2) > div:nth-child(1) > .landing-step-note"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 2.88 (foreground color: #8594a2, background color: #f4f7f9, font size: 10.1pt (13.44px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-retrieved"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.58 (foreground color: #778896, background color: #fcfdfd, font size: 11.4pt (15.2px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-step:nth-child(3) > div:nth-child(1) > p:nth-child(2)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.39 (foreground color: #778896, background color: #f4f7f9, font size: 11.4pt (15.2px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-step:nth-child(3) > div:nth-child(1) > .landing-step-note"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 2.88 (foreground color: #8594a2, background color: #f4f7f9, font size: 10.1pt (13.44px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  "div:nth-child(1) > dt"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.05 (foreground color: #8594a2, background color: #fcfdfd, font size: 7.7pt (10.24px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  "div:nth-child(2) > dt"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.05 (foreground color: #8594a2, background color: #fcfdfd, font size: 7.7pt (10.24px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  "div:nth-child(3) > dt"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.05 (foreground color: #8594a2, background color: #fcfdfd, font size: 7.7pt (10.24px), font weight: bold). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: technical, light",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: guided, light",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: landing, dark",
+        "status": "failed",
+        "axe_version": "4.13.0",
+        "violations": [
+          {
+            "id": "color-contrast",
+            "nodes": [
+              {
+                "target": [
+                  ".landing-step:nth-child(1) > div:nth-child(1) > .landing-step-note"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #637281, background color: #0d1319, font size: 10.1pt (13.44px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-brief"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.19 (foreground color: #7a8995, background color: #132933, font size: 11.4pt (15.2px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-brief > .landing-label"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.2 (foreground color: #5b8ea5, background color: #132933, font size: 8.4pt (11.2px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-step:nth-child(2) > div:nth-child(1) > .landing-step-note"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #637281, background color: #0d1319, font size: 10.1pt (13.44px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  ".landing-step:nth-child(3) > div:nth-child(1) > .landing-step-note"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #637281, background color: #0d1319, font size: 10.1pt (13.44px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  "div:nth-child(1) > dt"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.55 (foreground color: #637281, background color: #121a22, font size: 7.7pt (10.24px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  "div:nth-child(2) > dt"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.55 (foreground color: #637281, background color: #121a22, font size: 7.7pt (10.24px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": [
+                  "div:nth-child(3) > dt"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.55 (foreground color: #637281, background color: #121a22, font size: 7.7pt (10.24px), font weight: bold). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: technical, dark",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: guided, dark",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-keyboard.spec.ts",
+        "title": "keyboard-only sample, report tabs, filtering, and return to submission",
+        "status": "passed"
+      },
+      {
+        "file": "launch-resilience.spec.ts",
+        "title": "slow sample request stays pending, sends once, then renders",
+        "status": "passed"
+      },
+      {
+        "file": "launch-resilience.spec.ts",
+        "title": "sample offline response is recoverable without leaking server text",
+        "status": "passed"
+      },
+      {
+        "file": "launch-resilience.spec.ts",
+        "title": "sample malformed response is recoverable without leaking server text",
+        "status": "passed"
+      },
+      {
+        "file": "launch-resilience.spec.ts",
+        "title": "sample rate-limited response is recoverable without leaking server text",
+        "status": "passed"
+      },
+      {
+        "file": "launch-resilience.spec.ts",
+        "title": "sample unavailable response is recoverable without leaking server text",
+        "status": "passed"
+      },
+      {
+        "file": "launch-resilience.spec.ts",
+        "title": "long finding text and many findings remain searchable and exportable at 320px",
+        "status": "passed"
+      },
+      {
+        "file": "launch-viewports.spec.ts",
+        "title": "landing and both report views fit 320x568",
+        "status": "passed"
+      },
+      {
+        "file": "launch-viewports.spec.ts",
+        "title": "landing and both report views fit 768x1024",
+        "status": "passed"
+      },
+      {
+        "file": "launch-viewports.spec.ts",
+        "title": "landing and both report views fit 844x390",
+        "status": "passed"
+      },
+      {
+        "file": "launch-viewports.spec.ts",
+        "title": "landing and both report views fit 1920x1080",
+        "status": "passed"
+      },
+      {
+        "file": "live-admin-path.spec.ts",
+        "title": "submit -> poll -> report -> go deeper",
+        "status": "passed"
+      },
+      {
+        "file": "live-admin-path.spec.ts",
+        "title": "admin key is tab-scoped, sent with requests, and can be forgotten",
+        "status": "passed"
+      },
+      {
+        "file": "live-admin-path.spec.ts",
+        "title": "pasted Terraform is uploaded as a tar holding main.tf",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "the theme select switches the page theme",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "submission (light) has no horizontal scroll",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "submission (dark) has no horizontal scroll",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (technical) (light) has no horizontal scroll",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (technical) (dark) has no horizontal scroll",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (guided) (light) has no horizontal scroll",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (guided) (dark) has no horizontal scroll",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "main actions are visible and large enough to tap",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "submission: every control is at least 24px and inputs don't zoom",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (technical): every control is at least 24px and inputs don't zoom",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (guided): every control is at least 24px and inputs don't zoom",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "header stays compact and finding filters aren't cut off",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "the checker itself flags low contrast, including SVG text",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "submission desktop light",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "submission desktop dark",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (technical) desktop light",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (technical) desktop dark",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (guided) desktop light",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (guided) desktop dark",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "submission phone light",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "submission phone dark",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (technical) phone light",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (technical) phone dark",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (guided) phone light",
+        "status": "passed"
+      },
+      {
+        "file": "mobile-and-contrast.spec.ts",
+        "title": "report (guided) phone dark",
+        "status": "passed"
+      },
+      {
+        "file": "report-chat.spec.ts",
+        "title": "suggested and typed questions get cited answers, then the limit",
+        "status": "passed"
+      },
+      {
+        "file": "report-chat.spec.ts",
+        "title": "server limits show plain messages and keep the question",
+        "status": "passed"
+      },
+      {
+        "file": "report-chat.spec.ts",
+        "title": "a retry after a timeout reuses the request id; a new question gets a new one",
+        "status": "passed"
+      },
+      {
+        "file": "report-chat.spec.ts",
+        "title": "asking about a finding sends that finding as the focus",
+        "status": "passed"
+      },
+      {
+        "file": "sample-review.spec.ts",
+        "title": "opens the sample without an admin key and labels it hypothetical",
+        "status": "passed"
+      },
+      {
+        "file": "sample-review.spec.ts",
+        "title": "shows a friendly failure when the sample can't load",
+        "status": "passed"
+      }
+    ]
+  },
+  "final_axe_run": {
+    "stats": {
+      "startTime": "2026-10-17T03:05:54.356Z",
+      "duration": 33226.029,
+      "expected": 6,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "cases": [
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: landing, light",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: technical, light",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: guided, light",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: landing, dark",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: technical, dark",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      },
+      {
+        "file": "launch-accessibility.spec.ts",
+        "title": "axe WCAG A/AA: guided, dark",
+        "status": "passed",
+        "axe_version": "4.13.0",
+        "violations": [],
+        "incomplete_rule_ids": [
+          "aria-prohibited-attr",
+          "color-contrast"
+        ]
+      }
+    ]
+  }
+}

@@ -119,3 +119,35 @@ resource "aws_dynamodb_table" "usage_counters" {
 
   tags = var.tags
 }
+
+# Report chat questions (ADR-0050). One item per question (Q#<request
+# id>) and per stored suggested answer (S#<suggestion id>), under the
+# review they belong to. Items expire 7 days after they're asked; the
+# handlers also check the time on every read, since TTL deletion is late.
+resource "aws_dynamodb_table" "review_questions" {
+  name         = "${var.table_prefix}-review-questions"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "reviewId"
+  range_key    = "questionKey"
+
+  attribute {
+    name = "reviewId"
+    type = "S"
+  }
+
+  attribute {
+    name = "questionKey"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  tags = var.tags
+}

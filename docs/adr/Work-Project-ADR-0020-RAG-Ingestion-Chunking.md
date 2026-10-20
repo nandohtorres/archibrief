@@ -10,7 +10,7 @@ status: accepted
 # ADR 0020: RAG Ingestion and Chunking Strategy
 
 **Status:** Accepted (2026-09-03) — **chunking approach corrected by
-[[Work-Project-ADR-0036-Structure-Aware-Chunking-Baseline]]** (2026-09-03):
+[ADR-0036](Work-Project-ADR-0036-Structure-Aware-Chunking-Baseline.md)** (2026-09-03):
 the "512-token recursive splitting always beats semantic chunking" claim
 was an overgeneralization; replaced with a structure-aware baseline and
 expanded citation metadata. Incremental-sync approach stands.

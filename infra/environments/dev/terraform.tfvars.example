@@ -8,15 +8,28 @@ github_oidc_provider_arn = null
 github_repo              = "REPLACE_ME/archibrief"
 
 lambda_zip_paths = {
-  ingest      = "../../../backend/lambdas/ingest/build/ingest.zip"
-  rule_engine = "../../../backend/lambdas/rule_engine/build/rule_engine.zip"
-  validate    = "../../../backend/lambdas/validate/build/validate.zip"
-  audit       = "../../../backend/lambdas/audit/build/audit.zip"
-  finalize    = "../../../backend/lambdas/finalize/build/finalize.zip"
+  ingest                     = "../../../backend/lambdas/ingest/build/ingest.zip"
+  rule_engine                = "../../../backend/lambdas/rule_engine/build/rule_engine.zip"
+  validate                   = "../../../backend/lambdas/validate/build/validate.zip"
+  audit                      = "../../../backend/lambdas/audit/build/audit.zip"
+  finalize                   = "../../../backend/lambdas/finalize/build/finalize.zip"
+  store_clarification_token  = "../../../backend/lambdas/store_clarification_token/build/store_clarification_token.zip"
 }
 
 # Pre-shared admin-credential authorizer on POST /reviews (ADR-0044).
 admin_authorizer_zip_path = "../../../backend/lambdas/admin_authorizer/build/admin_authorizer.zip"
+
+# GET /reviews/{reviewId}, POST /clarify, and POST .../deeper Lambdas
+# (2026-10-01 — wired alongside StoreClarificationToken/clarify_review,
+# see Work-Project-Build-Plan.md Phase 4).
+get_review_zip_path     = "../../../backend/lambdas/get_review/build/get_review.zip"
+clarify_review_zip_path = "../../../backend/lambdas/clarify_review/build/clarify_review.zip"
+deeper_review_zip_path  = "../../../backend/lambdas/deeper_review/build/deeper_review.zip"
+get_demo_zip_path       = "../../../backend/lambdas/get_demo/build/get_demo.zip"
+
+# POST /uploads Lambda (2026-10-12) — direct-upload archive_path design
+# (ADR-0045).
+create_upload_zip_path  = "../../../backend/lambdas/create_upload/build/create_upload.zip"
 
 # AgentCore Runtime entrypoint package (backend/agent/runtime_entrypoint.py)
 # — TODO(account-setup): does not exist until a real CI packaging step

@@ -35,6 +35,6 @@ cited findings with stated confidence, not a certification/attestation.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Product direction" for the full naming trail
+See the project decision log §"Product direction" for the full naming trail
 (Architext → ArchiDocs → ArchiAudit rejected → ArchiBrief) and the
 archguard.io hallucination incident.

@@ -2,3 +2,16 @@
 node_modules
 out
 package-lock.json
+out-fixture
+out-live
+playwright-report
+test-results
+design
+.lighthouseci
+lighthouse-reports
+# Saved demo reports and chat answers: unedited pipeline and API output.
+public/demos/reports
+public/demos/chats
+# Demo diagrams: written by scripts/build_demo_architectures.py, whose
+# --check compares them byte for byte.
+public/demos/architecture

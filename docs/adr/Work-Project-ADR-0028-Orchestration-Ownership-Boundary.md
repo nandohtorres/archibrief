@@ -38,11 +38,11 @@ relevant to where long-running work should live.
 
 ## Consequences
 
-- Updates [[Work-Project-System-Design]]'s pipeline diagram — node
+- Updates the system design notes' pipeline diagram — node
   ownership now explicit rather than implied.
-- Keeps the LangGraph resume-signal (ADR-0008) real without expanding the
+- Keeps LangGraph (ADR-0008) in a real, bounded role without expanding the
   product around the framework.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0005," §"ADR-0008."
+See an independent design review §"ADR-0005," §"ADR-0008."

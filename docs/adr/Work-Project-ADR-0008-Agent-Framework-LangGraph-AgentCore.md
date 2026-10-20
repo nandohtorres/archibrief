@@ -10,7 +10,7 @@ status: accepted
 # ADR 0008: Agent Framework — LangGraph on Bedrock AgentCore
 
 **Status:** Accepted (2026-09-02) — **extended by
-[[Work-Project-ADR-0028-Orchestration-Ownership-Boundary]]**
+[ADR-0028](Work-Project-ADR-0028-Orchestration-Ownership-Boundary.md)**
 (2026-09-03): the LangGraph-on-AgentCore choice stands; ADR-0028 defines
 what it owns (the one reasoning/retrieval subworkflow) versus Step
 Functions/Lambda, closing a real duplication risk Codex flagged.
@@ -18,18 +18,17 @@ Functions/Lambda, closing a real duplication risk Codex flagged.
 ## Context
 
 Weighed simple custom orchestration (Step Functions + direct LLM calls,
-no framework) against a named agent framework, given the resume value of
-using a framework worth naming in an interview. A 2026 job-market study
-found LangGraph has the second-highest hiring footprint among agent
-frameworks despite fewer GitHub stars than competitors, and all major
-frameworks sit in the same $185-190k median-salary band.
+no framework) against an established agent framework. A framework brings
+explicit graph-based state, checkpointing, and a well-documented model of
+nodes and edges, at the cost of a dependency; LangGraph is among the most
+widely adopted options.
 
 ## Decision
 
 **LangGraph running on Bedrock AgentCore.** AgentCore (GA Oct 2025) is
 AWS's own framework-agnostic agent runtime with native LangGraph memory
-integration, so the pairing keeps the AWS-native story while adding a
-real, named framework skill. Graph-based state management fits the
+integration, so the pairing stays AWS-native while using a standard
+framework rather than bespoke orchestration. Graph-based state management fits the
 "deterministic rules + RAG/LLM synthesis" pipeline shape.
 
 ## Consequences
@@ -40,5 +39,5 @@ real, named framework skill. Graph-based state management fits the
 
 ## Full reasoning
 
-See [[Work-Project]] §"W1-W4 stack research findings" and
-[[Research-Work-Agent-Framework]].
+See the project decision log §"W1-W4 stack research findings" and
+the private research notes on agent frameworks.

@@ -156,6 +156,10 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-5",
       "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+      # The report chat's default model (ADR-0050). Only the chat Lambda's
+      # own role grants it; the boundary just has to allow it.
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
       # Titan V2 embeddings (ADR-0035) — this boundary statement caps the
       # AgentCore execution role's own ReasoningInvoke grant (see
       # modules/agentcore-runtime/main.tf), so it needs the same Titan ARN
@@ -164,6 +168,51 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
       # 2026-09-16 via Codex review, same fix applied in both places.
       "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
     ]
+  }
+
+  # Missing entirely until 2026-10-12, found by statically tracing a real
+  # submission end to end after live testing kept dying silently: the
+  # state machine's own CheckKillSwitch task (an ssm:getParameter SDK
+  # integration — infra/modules/step-functions-lambda/main.tf) has this
+  # action correctly granted on its own identity policy, but with NO
+  # ssm:GetParameter statement anywhere in this boundary, the
+  # intersection is empty — AccessDenied, no Catch on that state, the
+  # whole execution dies before Ingest ever runs, and the DynamoDB item
+  # IdempotencyGate already wrote stays at status "pending" forever
+  # (nothing updates it on this unhandled failure). This is exactly why
+  # every real test submission completed IdempotencyGate (status: pending
+  # was visible via GET /reviews/{reviewId}) but never produced a single
+  # Ingest/RuleEngine/etc. CloudWatch log group.
+  statement {
+    sid     = "AllowKillSwitchRead"
+    effect  = "Allow"
+    actions = ["ssm:GetParameter"]
+    # Found wrong on first deploy (2026-10-12, live-tested): the kill-
+    # switch parameter is named "/${name_prefix}/kill-switch" (SLASH-
+    # delimited — infra/modules/kill-switch/main.tf), unlike every other
+    # resource in this boundary, which is hyphen-delimited
+    # ("${name_prefix}-*"). The first version of this statement used
+    # "${var.name_prefix}-*", which requires a literal hyphen right after
+    # name_prefix — it never matched "archibrief-dev/kill-switch" (a
+    # slash there instead), so CheckKillSwitch kept failing identically
+    # even after this statement existed.
+    resources = ["arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/${var.name_prefix}/*"]
+  }
+
+  # Also missing entirely until 2026-10-12, found in the same trace:
+  # clarify_review's own identity policy (infra/modules/api-gateway/main.tf)
+  # grants states:SendTaskSuccess/SendTaskFailure (Resource: "*" — these
+  # actions identify the paused task by token, not state-machine ARN, so
+  # AWS doesn't support scoping them further), needed to resume a review
+  # paused at StoreClarificationToken's waitForTaskToken. Not yet hit by
+  # live testing (no submission so far has triggered needs_clarification),
+  # but would have failed the exact same silent way as the kill-switch gap
+  # above the first time it was.
+  statement {
+    sid       = "AllowClarificationTaskTokenCompletion"
+    effect    = "Allow"
+    actions   = ["states:SendTaskSuccess", "states:SendTaskFailure"]
+    resources = ["*"]
   }
 
   statement {

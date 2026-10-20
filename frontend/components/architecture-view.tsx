@@ -1,23 +1,110 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { FindingPriority, ReportFinding } from "@/lib/contracts";
+import {
+  NODE_HEIGHT,
+  NODE_WIDTH,
+  laneLabels,
+  layoutArchitecture,
+  type ArchitectureGraph,
+  type PlacedNode,
+} from "@/lib/architecture";
+import { formatFindingId, priorityRank } from "@/lib/workflow";
 
 interface ArchitectureViewProps {
+  graph: ArchitectureGraph;
+  findings: ReportFinding[];
   onOpenFinding: (findingId: string) => void;
+  // "Show on architecture" from a finding: select the resource it sits on.
+  focus?: { findingId: string; at: number } | null;
 }
 
-const architectureFindings = [
-  { id: "finding-001", label: "F-001 · S3 public-access protection" },
-  { id: "finding-002", label: "F-002 · Lambda IAM scope" },
-  { id: "finding-003", label: "F-003 · CloudTrail coverage" },
-  { id: "finding-004", label: "F-004 · RDS Multi-AZ" },
-];
+function topPriority(
+  findingIds: string[],
+  byId: Map<string, ReportFinding>,
+): FindingPriority | null {
+  let top: FindingPriority | null = null;
+  for (const id of findingIds) {
+    const priority = byId.get(id)?.presentation.priority;
+    if (priority && (top === null || priorityRank[priority] > priorityRank[top])) top = priority;
+  }
+  return top;
+}
 
-export function ArchitectureView({ onOpenFinding }: ArchitectureViewProps) {
-  const [view, setView] = useState<"submitted" | "recommended">("submitted");
-  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
-  const [hoveredFindingId, setHoveredFindingId] = useState<string | null>(null);
-  const highlightedFindingId = hoveredFindingId ?? selectedFindingId;
+function copiesLabel(copies: PlacedNode["copies"]): string | null {
+  if (copies === undefined) return null;
+  return typeof copies === "number" ? `×${copies}` : "× several";
+}
+
+function FindingButtons({
+  ids,
+  byId,
+  onOpenFinding,
+}: {
+  ids: string[];
+  byId: Map<string, ReportFinding>;
+  onOpenFinding: (findingId: string) => void;
+}) {
+  const listed = ids
+    .map((id) => byId.get(id))
+    .filter((finding): finding is ReportFinding => finding !== undefined)
+    .sort((a, b) => priorityRank[b.presentation.priority] - priorityRank[a.presentation.priority]);
+  return (
+    <ul className="architecture-finding-list">
+      {listed.map(({ record, presentation }) => (
+        <li key={record.finding_id}>
+          <button type="button" onClick={() => onOpenFinding(record.finding_id)}>
+            <span className={`priority-pill ${presentation.priority}`}>
+              {presentation.short_label}
+            </span>
+            <span className="architecture-finding-text">{record.finding}</span>
+            <span className="architecture-finding-open">
+              Open {formatFindingId(record.finding_id)} ↑
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function ArchitectureView({ graph, findings, onOpenFinding, focus }: ArchitectureViewProps) {
+  const layout = useMemo(() => layoutArchitecture(graph), [graph]);
+  const byId = useMemo(
+    () => new Map(findings.map((finding) => [finding.record.finding_id, finding])),
+    [findings],
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusedFindingId, setFocusedFindingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focus) return;
+    const holder = layout.nodes.find((node) => node.findings.includes(focus.findingId));
+    setSelectedId(holder?.id ?? null);
+    setFocusedFindingId(holder ? null : focus.findingId);
+  }, [focus, layout]);
+
+  const selected = layout.nodes.find((node) => node.id === selectedId) ?? null;
+  const connected = useMemo(() => {
+    if (!selectedId) return null;
+    const ids = new Set([selectedId]);
+    for (const edge of layout.edges) {
+      if (edge.from === selectedId) ids.add(edge.to);
+      if (edge.to === selectedId) ids.add(edge.from);
+    }
+    return ids;
+  }, [layout, selectedId]);
+  const names = useMemo(
+    () => new Map(layout.nodes.map((node) => [node.id, `${node.label} ${node.name}`])),
+    [layout],
+  );
+  const placedCount = layout.nodes.reduce((total, node) => total + node.findings.length, 0);
+
+  function select(node: PlacedNode) {
+    setFocusedFindingId(null);
+    setSelectedId((current) => (current === node.id ? null : node.id));
+  }
 
   return (
     <section
@@ -28,218 +115,178 @@ export function ArchitectureView({ onOpenFinding }: ArchitectureViewProps) {
       <div className="section-heading-row">
         <div>
           <span className="section-kicker">System context</span>
-          <h2 id="architecture-heading">Architecture impact</h2>
-          <p>Overlay only the changes supported by this report’s findings.</p>
-        </div>
-        <span className="concept-label">Fixture-only concept</span>
-      </div>
-
-      <div
-        className="architecture-shell"
-        data-view={view}
-        data-highlight={highlightedFindingId ?? undefined}
-      >
-        <div className="architecture-toolbar">
-          <div className="segmented-control" role="group" aria-label="Architecture view">
-            <button
-              type="button"
-              aria-pressed={view === "submitted"}
-              onClick={() => setView("submitted")}
-            >
-              Submitted design
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === "recommended"}
-              onClick={() => setView("recommended")}
-            >
-              Recommended changes
-            </button>
-          </div>
-          <p role="status">
-            {view === "submitted"
-              ? "Showing resources and gaps observable in submitted Terraform."
-              : "Showing four bounded changes linked to report findings."}
+          <h2 id="architecture-heading">Architecture</h2>
+          <p>
+            What the submitted Terraform creates, how its resources reference each other, and where
+            each finding sits. Select a resource to see its findings.
           </p>
         </div>
+        <span className="concept-label">
+          {layout.nodes.length} resources · {layout.edges.length} links
+        </span>
+      </div>
 
+      <div className="architecture-shell">
+        <p className="diagram-swipe-hint" aria-hidden="true">
+          Swipe sideways to see the whole diagram →
+        </p>
         <div className="architecture-canvas">
-          <svg
-            className="architecture-svg"
-            viewBox="0 0 1000 470"
-            role="img"
-            aria-labelledby="architecture-title architecture-description"
+          <div
+            className="architecture-board"
+            style={{ width: layout.width, height: layout.height }}
+            data-selecting={selectedId ? "true" : undefined}
           >
-            <title id="architecture-title">Payments API architecture</title>
-            <desc id="architecture-description">
-              Internet traffic enters API Gateway and Lambda. Lambda uses an IAM role and connects
-              to an RDS database and S3 audit-log bucket. The recommended view overlays changes
-              supported by four findings.
-            </desc>
-            <defs>
-              <marker
-                id="architecture-arrow"
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="7"
-                markerHeight="7"
-                orient="auto-start-reverse"
+            {layout.lanes.map(({ lane, x }) => (
+              <span
+                key={lane}
+                className="architecture-lane-label"
+                style={{ left: x, width: NODE_WIDTH }}
               >
-                <path d="M 0 0 L 10 5 L 0 10 z" className="arrow-head" />
-              </marker>
-            </defs>
-
-            <path className="diagram-edge" d="M140 220 H190" />
-            <path className="diagram-edge" d="M340 220 H405" />
-            <path className="diagram-edge" d="M565 205 C620 205 620 110 680 110" />
-            <path className="diagram-edge" d="M565 235 C620 235 620 280 680 280" />
-            <path className="diagram-edge" d="M485 355 V260" />
-
-            <g>
-              <rect className="diagram-node" x="20" y="180" width="120" height="80" />
-              <text className="diagram-title" x="80" y="215">
-                Internet
-              </text>
-              <text className="diagram-meta" x="80" y="238">
-                HTTPS traffic
-              </text>
-            </g>
-            <g>
-              <rect className="diagram-node" x="190" y="180" width="150" height="80" />
-              <text className="diagram-title" x="265" y="215">
-                API Gateway
-              </text>
-              <text className="diagram-meta" x="265" y="238">
-                public API
-              </text>
-            </g>
-            <g>
-              <rect className="diagram-node" x="405" y="180" width="160" height="80" />
-              <text className="diagram-title" x="485" y="215">
-                Payments Lambda
-              </text>
-              <text className="diagram-meta" x="485" y="238">
-                application logic
-              </text>
-            </g>
-            <g className="diagram-target" data-finding="finding-004">
-              <rect className="diagram-node" x="680" y="70" width="180" height="80" />
-              <text className="diagram-title" x="770" y="105">
-                Amazon RDS
-              </text>
-              <text className="diagram-meta" x="770" y="128">
-                payments-db
-              </text>
-            </g>
-            <g className="diagram-target" data-finding="finding-001">
-              <rect className="diagram-node" x="680" y="240" width="180" height="80" />
-              <text className="diagram-title" x="770" y="275">
-                Amazon S3
-              </text>
-              <text className="diagram-meta" x="770" y="298">
-                audit-log bucket
-              </text>
-            </g>
-            <g className="diagram-target" data-finding="finding-002">
-              <rect className="diagram-node" x="405" y="355" width="160" height="80" />
-              <text className="diagram-title" x="485" y="390">
-                IAM role
-              </text>
-              <text className="diagram-meta" x="485" y="413">
-                lambda-exec-payments
-              </text>
-            </g>
-
-            <g className={view === "submitted" ? "" : "diagram-hidden"}>
-              <rect className="diagram-marker risk" x="677" y="37" width="186" height="25" />
-              <text className="diagram-marker-text risk" x="770" y="54">
-                F-004 · SINGLE-AZ
-              </text>
-              <rect className="diagram-marker risk" x="677" y="207" width="186" height="25" />
-              <text className="diagram-marker-text risk" x="770" y="224">
-                F-001 · BPA NOT DECLARED
-              </text>
-              <rect className="diagram-marker risk" x="402" y="322" width="166" height="25" />
-              <text className="diagram-marker-text risk" x="485" y="339">
-                F-002 · S3:* ON *
-              </text>
-              <g className="diagram-target" data-finding="finding-003">
-                <rect className="diagram-node missing" x="680" y="355" width="180" height="80" />
-                <text className="diagram-title" x="770" y="390">
-                  CloudTrail
-                </text>
-                <text className="diagram-meta" x="770" y="413">
-                  F-003 · not observable
-                </text>
-              </g>
-            </g>
-
-            <g className={view === "recommended" ? "" : "diagram-hidden"}>
-              <rect className="diagram-change-outline" x="680" y="70" width="180" height="80" />
-              <rect className="diagram-marker change" x="677" y="37" width="186" height="25" />
-              <text className="diagram-marker-text change" x="770" y="54">
-                MOD · MULTI-AZ
-              </text>
-              <rect className="diagram-change-outline" x="680" y="240" width="180" height="80" />
-              <rect className="diagram-marker change" x="677" y="207" width="186" height="25" />
-              <text className="diagram-marker-text change" x="770" y="224">
-                ADD · BLOCK PUBLIC ACCESS
-              </text>
-              <rect className="diagram-change-outline" x="405" y="355" width="160" height="80" />
-              <rect className="diagram-marker change" x="402" y="322" width="166" height="25" />
-              <text className="diagram-marker-text change" x="485" y="339">
-                MOD · LEAST PRIVILEGE
-              </text>
-              <g className="diagram-target" data-finding="finding-003">
-                <rect className="diagram-node added" x="680" y="355" width="180" height="80" />
-                <text className="diagram-title" x="770" y="390">
-                  CloudTrail
-                </text>
-                <text className="diagram-meta" x="770" y="413">
-                  ADD · multi-Region trail
-                </text>
-              </g>
-            </g>
-          </svg>
+                {laneLabels[lane]}
+              </span>
+            ))}
+            <svg
+              className="architecture-edges"
+              width={layout.width}
+              height={layout.height}
+              aria-hidden="true"
+            >
+              <defs>
+                <marker
+                  id="architecture-arrow"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" className="arrow-head" />
+                </marker>
+              </defs>
+              {layout.edges.map((edge) => (
+                <path
+                  key={`${edge.from}->${edge.to}`}
+                  className={
+                    selectedId && (edge.from === selectedId || edge.to === selectedId)
+                      ? "architecture-edge active"
+                      : "architecture-edge"
+                  }
+                  d={edge.path}
+                />
+              ))}
+            </svg>
+            {layout.nodes.map((node) => {
+              const priority = topPriority(node.findings, byId);
+              const copies = copiesLabel(node.copies);
+              const count = node.findings.length;
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  className="architecture-node"
+                  data-lane={node.lane}
+                  data-dim={connected && !connected.has(node.id) ? "true" : undefined}
+                  aria-pressed={selectedId === node.id}
+                  aria-label={`${node.label} ${node.name}${
+                    node.module ? ` in ${node.module}` : ""
+                  }, ${count} finding${count === 1 ? "" : "s"}`}
+                  title={node.module ? `${node.module}/${node.name}` : node.name}
+                  style={{ left: node.x, top: node.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
+                  onClick={() => select(node)}
+                >
+                  <span className="architecture-node-type">
+                    {node.label}
+                    {copies && <em>{copies}</em>}
+                  </span>
+                  <strong>{node.name}</strong>
+                  {node.module && <span className="architecture-node-module">{node.module}</span>}
+                  {count > 0 && priority && (
+                    <span className={`architecture-badge ${priority}`} aria-hidden="true">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="diagram-legend" aria-label="Diagram legend">
           <span>
-            <i className="legend-swatch" /> Submitted resource
+            <i className="architecture-badge high">n</i> High risk
           </span>
           <span>
-            <i className="legend-swatch risk" /> Finding or evidence gap
+            <i className="architecture-badge review">n</i> Needs review
           </span>
           <span>
-            <i className="legend-swatch change" /> Finding-supported change
+            <i className="architecture-badge unknown">n</i> Unknown
           </span>
+          <span>
+            <i className="architecture-badge confirmed">n</i> Confirmed fine
+          </span>
+          <span>Arrow: one resource references the other in the code</span>
         </div>
       </div>
 
-      <div className="architecture-links" aria-label="Diagram findings">
-        {architectureFindings.map((finding) => (
-          <button
-            type="button"
-            key={finding.id}
-            aria-pressed={selectedFindingId === finding.id}
-            onMouseEnter={() => setHoveredFindingId(finding.id)}
-            onMouseLeave={() => setHoveredFindingId(null)}
-            onFocus={() => setHoveredFindingId(finding.id)}
-            onBlur={() => setHoveredFindingId(null)}
-            onClick={() => {
-              setSelectedFindingId(finding.id);
-              onOpenFinding(finding.id);
-            }}
-          >
-            {finding.label}
-            <span>Open finding ↑</span>
-          </button>
-        ))}
+      <div className="architecture-panel" aria-live="polite">
+        {selected ? (
+          <>
+            <h3>
+              {selected.label} · {selected.name}
+              {copiesLabel(selected.copies) && <em> {copiesLabel(selected.copies)}</em>}
+            </h3>
+            {selected.module && <p className="architecture-meta">Module: {selected.module}</p>}
+            {selected.details.length > 0 && (
+              <p className="architecture-meta">Configured by: {selected.details.join(", ")}</p>
+            )}
+            {connected && connected.size > 1 && (
+              <p className="architecture-meta">
+                Linked to:{" "}
+                {[...connected]
+                  .filter((id) => id !== selected.id)
+                  .map((id) => names.get(id))
+                  .join(", ")}
+              </p>
+            )}
+            {selected.findings.length > 0 ? (
+              <FindingButtons ids={selected.findings} byId={byId} onOpenFinding={onOpenFinding} />
+            ) : (
+              <p className="architecture-meta">No findings name this resource.</p>
+            )}
+          </>
+        ) : (
+          <p className="architecture-meta">
+            {placedCount > 0
+              ? "Select a resource with a badge to list the findings about it."
+              : "No finding names a specific resource in this review."}
+          </p>
+        )}
       </div>
+
+      {graph.account_findings.length > 0 && (
+        <div
+          className="architecture-account"
+          data-focused={
+            focusedFindingId && graph.account_findings.includes(focusedFindingId)
+              ? "true"
+              : undefined
+          }
+        >
+          <h3>Not tied to one resource</h3>
+          <p className="architecture-meta">
+            Findings about something missing (no CloudTrail trail, for example) or about the design
+            as a whole.
+          </p>
+          <FindingButtons ids={graph.account_findings} byId={byId} onOpenFinding={onOpenFinding} />
+        </div>
+      )}
+
       <p className="review-boundary">
-        <strong>Boundary:</strong> This fixture visualizes submitted Terraform plus bounded,
-        finding-supported changes. In-product diagram generation remains deferred past v1.
+        <strong>How this is drawn:</strong> straight from the submitted Terraform, without a model.
+        Settings resources (a bucket&rsquo;s encryption block, a policy attachment) are folded into
+        the resource they configure. Links are references in the code, not observed traffic.
+        {graph.truncated && " This diagram shows the first 60 resources only."}
       </p>
     </section>
   );

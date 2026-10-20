@@ -1,10 +1,10 @@
 # Terraform module: frontend-hosting
 # Phase A of the frontend deploy (Work-Project-Deployment-Roadmap.md):
 # S3 + CloudFront static hosting for frontend/out (Next.js static export,
-# ADR-0016), reachable at CloudFront's default *.cloudfront.net domain.
-# No custom domain / ACM cert / alternate domain names yet — that's
-# Phase B (archibrief.dev, currently on Cloudflare DNS) and deliberately
-# out of scope here.
+# ADR-0016). Reachable at CloudFront's default *.cloudfront.net domain
+# and, since Phase B (2026-10-14), optionally at custom domains via
+# var.aliases + var.certificate_arn (an ACM cert in us-east-1). Both
+# default to off, which keeps the default certificate and domain.
 #
 # The bucket is private; CloudFront reaches it only via Origin Access
 # Control (OAC), not the older OAI or a public bucket policy. This module
@@ -54,15 +54,28 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 # injects an inline hydration bootstrap script and the app has no
 # server to mint per-request CSP nonces — still blocks third-party script
 #/iframe injection, which is the actual XSS/clickjacking exposure this
-# closes. connect-src is 'self'-only since Phase A ships with no live API
-# wired; revisit when a real API origin/custom domain exists (Phase B).
+# closes. Phase B (2026-10-12): connect-src now allows the API Gateway
+# origin — a wildcard subdomain pattern on *.execute-api.<region>.
+# amazonaws.com rather than the literal api_id, specifically to avoid a
+# circular module dependency (api_gateway already depends on this
+# module's cloudfront_domain_name for its own CORS config) — and the S3
+# global endpoint (*.s3.amazonaws.com), since ADR-0045's direct-upload
+# flow has the browser POST the archive straight to a presigned S3 URL,
+# a third origin the frontend talks to beyond API Gateway and itself.
+# Found by actually walking the live submission flow one blocked
+# connect-src entry at a time (API Gateway, then this), not by auditing
+# the frontend's full fetch-call surface upfront — worth a final check
+# there isn't a fourth. style-src/font-src allow Google Fonts
+# (app/globals.css's @import) — found missing the same session
+# connect-src was, both blocked by this same CSP with no console-visible
+# connection to the earlier CORS fix.
 resource "aws_cloudfront_response_headers_policy" "frontend_security" {
   name = "${var.name_prefix}-frontend-security-headers"
 
   security_headers_config {
     content_security_policy {
       override                = true
-      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ${var.api_origin_pattern} https://*.s3.amazonaws.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     }
     frame_options {
       override     = true
@@ -89,6 +102,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   default_root_object = "index.html"
   price_class         = var.price_class
   comment             = "${var.name_prefix}-frontend"
+  aliases             = var.aliases
 
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -152,8 +166,14 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
+  # var.certificate_arn null keeps CloudFront's default certificate, and
+  # var.aliases must then be empty — CloudFront itself enforces that
+  # pairing. Set both to serve the custom domain(s).
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = var.certificate_arn == null
+    acm_certificate_arn            = var.certificate_arn
+    ssl_support_method             = var.certificate_arn == null ? null : "sni-only"
+    minimum_protocol_version       = var.certificate_arn == null ? null : "TLSv1.2_2021"
   }
 
   tags = var.tags

@@ -1,11 +1,15 @@
 import type { ReportFinding } from "@/lib/contracts";
 import { confidenceLabel, formatFindingId } from "@/lib/workflow";
+import type { ReviewerNote } from "@/lib/demos";
 
 interface FindingDetailProps {
   finding: ReportFinding;
   onAsk: (finding: ReportFinding) => void;
-  onShowArchitecture: (findingId: string) => void;
+  // Absent when the report has no architecture diagram.
+  onShowArchitecture?: (findingId: string) => void;
   onGoDeeper: (findingId: string) => Promise<void>;
+  // A demo's hand-check note on this finding (lib/demos.ts), if any.
+  reviewerNote?: ReviewerNote | null;
 }
 
 function percentage(value: number): string {
@@ -17,6 +21,7 @@ export function FindingDetail({
   onAsk,
   onShowArchitecture,
   onGoDeeper,
+  reviewerNote = null,
 }: FindingDetailProps) {
   return (
     <article className="finding-detail" id="finding-detail" aria-live="polite">
@@ -35,6 +40,13 @@ export function FindingDetail({
           </span>
         </div>
       </div>
+
+      {reviewerNote && (
+        <aside className="reviewer-note" aria-label="Reviewer note">
+          <strong>Reviewer note · {reviewerNote.verdict}</strong>
+          <p>{reviewerNote.note}</p>
+        </aside>
+      )}
 
       <section className="detail-section">
         <h4>Observed evidence</h4>
@@ -197,7 +209,7 @@ export function FindingDetail({
             Go deeper
           </button>
         )}
-        {record.finding_id !== "finding-005" && record.finding_id !== "finding-006" && (
+        {onShowArchitecture && (
           <button
             className="button secondary"
             type="button"

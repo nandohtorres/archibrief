@@ -13,8 +13,8 @@ status: accepted
 
 ## Context
 
-As decisions accumulated, [[Work-Project]] (a single growing
-narrative/decision-log) and [[Work-Project-Spec]] (a distilled summary of
+As decisions accumulated, the project decision log (a single growing
+narrative/decision-log) and the project spec (a distilled summary of
 the same decisions) started duplicating content and risked drifting out
 of sync — every new decision required updating both by hand. Fernando
 wanted good file separation for public-repo purposes ("show good thinking

@@ -23,15 +23,20 @@ from __future__ import annotations
 
 import json
 import os
-import uuid
+import sys
 
 from backend.agent.nodes.reason import (
-    FindingValidationError,
     call_reasoning_model,
-    parse_model_findings,
+    verify_model_findings,
 )
 from backend.agent.nodes.retrieve import retrieve_node
-from backend.agent.reasoning_eval import EVAL_BRIEFS, HOLDOUT_BRIEFS, ReasoningEvalBrief, score_reasoning
+from backend.agent.reasoning_eval import (
+    EVAL_BRIEFS,
+    HOLDOUT_BRIEFS,
+    ReasoningEvalBrief,
+    score_reasoning,
+)
+from backend.agent.trap_eval import TRAP_BRIEFS, score_trap
 from backend.corpus.lexical_index import build_lexical_corpus_index_from_disk
 from backend.shared.clients import (
     BedrockEmbeddingClient,
@@ -94,27 +99,33 @@ def _run_brief(
         rule_findings=brief.rule_findings,
         retrieved_chunks=retrieved_chunks,
         max_tokens=_MAX_TOKENS,
+        terraform_resources=brief.terraform_resources,
     )
 
-    try:
-        model_findings = parse_model_findings(
-            raw_findings=raw_findings,
-            review_id=f"reasoning-eval-{brief.brief_id}",
-            model_id=reasoning_client.model_id,
-            corpus_version=corpus_version,
-            retrieved_chunks=retrieved_chunks,
-            deterministic_rule_version=None,
-        )
-    except FindingValidationError as exc:
+    # Same rule as the live pipeline (Codex F04): a finding whose citation
+    # fails is dropped and the rest are scored. Strict all-or-nothing used
+    # to discard whole briefs over one bad quote (3 of 10 traps on
+    # 2026-10-15), hiding what the model actually did. Every failure is
+    # still reported, under dropped_findings.
+    model_findings, failures = verify_model_findings(
+        raw_findings=raw_findings,
+        review_id=f"reasoning-eval-{brief.brief_id}",
+        model_id=reasoning_client.model_id,
+        corpus_version=corpus_version,
+        retrieved_chunks=retrieved_chunks,
+        deterministic_rule_version=None,
+    )
+    if raw_findings and not model_findings:
         return {
             "brief_id": brief.brief_id,
             "finding_validation_failed": True,
-            "failures": exc.failures,
+            "failures": failures,
         }
 
     result = score_reasoning(model_findings, brief)
     result["retrieved_chunk_count"] = len(retrieved_chunks)
     result["raw_model_finding_count"] = len(raw_findings)
+    result["dropped_findings"] = failures
     return result
 
 
@@ -137,9 +148,11 @@ def _print_report(label: str, results: list[dict]) -> None:
                 f"number does NOT represent the full brief set]"
             )
         )
-        print(f"Overall topic recall: {overall:.0%} "
-              f"({sum(r['topics_covered'] for r in scored)}/{sum(r['topics_total'] for r in scored)})"
-              f"{completeness_note}\n")
+        print(
+            f"Overall topic recall: {overall:.0%} "
+            f"({sum(r['topics_covered'] for r in scored)}/{sum(r['topics_total'] for r in scored)})"
+            f"{completeness_note}\n"
+        )
     else:
         print(f"No briefs scored ({len(blocked)} blocked, {len(failed)} failed validation)\n")
     for r in results:
@@ -152,7 +165,11 @@ def _print_report(label: str, results: list[dict]) -> None:
             for f in r["failures"]:
                 print(f"    - {f}")
             continue
-        print(f"  topic recall: {r['topic_recall']:.0%} ({r['topics_covered']}/{r['topics_total']})")
+        print(
+            f"  topic recall: {r['topic_recall']:.0%} ({r['topics_covered']}/{r['topics_total']})"
+        )
+        for f in r.get("dropped_findings", []):
+            print(f"  dropped (citation failed): {f}")
         for hit in r["topic_hits"]:
             status = "OK  " if hit["covered"] else "MISS"
             flag = ""
@@ -163,7 +180,9 @@ def _print_report(label: str, results: list[dict]) -> None:
                 flag = "  [covering finding has no citation at all — review]"
             print(f"    {status} {hit['topic_id']}: {hit['description']}{flag}")
         if r["unmatched_findings"]:
-            print("  unmatched findings (not necessarily wrong — review, label precision_label after reading):")
+            print(
+                "  unmatched findings (not necessarily wrong — review, label precision_label after reading):"
+            )
             for uf in r["unmatched_findings"]:
                 f = uf["finding"]
                 print(f"    - [{f['category']}] {f['finding']}")
@@ -181,14 +200,55 @@ def main() -> None:
     )
     reasoning_client = BedrockReasoningClient(model_id=_MODEL_ID, region_name=_REGION)
 
+    # `--traps` runs ONLY the adversarial trap set (backend/agent/trap_eval.py),
+    # never mixed into the dev/held-out numbers - same separation rule.
+    if "--traps" in sys.argv:
+        trap_results = [
+            score_trap(
+                _run_brief(
+                    b,
+                    embedding_client,
+                    vectors_client,
+                    lexical_corpus_index,
+                    guardrails_client,
+                    reasoning_client,
+                ),
+                b,
+            )
+            for b in TRAP_BRIEFS
+        ]
+        for r in trap_results:
+            verdict = {True: "PASS", False: "FAIL", None: "BLOCKED/INVALID"}[r["trap_passed"]]
+            print(f"{verdict:16} {r['brief_id']}: {r['trick']}")
+            if r.get("forbidden_phrase_hits"):
+                print(f"{'':16} took the bait: {r['forbidden_phrase_hits']}")
+            if r.get("dropped_findings"):
+                print(f"{'':16} {len(r['dropped_findings'])} finding(s) dropped: citation failed")
+        print(json.dumps({"traps": trap_results}, indent=2, default=str))
+        return
+
     dev_results = [
-        _run_brief(b, embedding_client, vectors_client, lexical_corpus_index, guardrails_client, reasoning_client)
+        _run_brief(
+            b,
+            embedding_client,
+            vectors_client,
+            lexical_corpus_index,
+            guardrails_client,
+            reasoning_client,
+        )
         for b in EVAL_BRIEFS
     ]
     _print_report("Dev set (EVAL_BRIEFS)", dev_results)
 
     holdout_results = [
-        _run_brief(b, embedding_client, vectors_client, lexical_corpus_index, guardrails_client, reasoning_client)
+        _run_brief(
+            b,
+            embedding_client,
+            vectors_client,
+            lexical_corpus_index,
+            guardrails_client,
+            reasoning_client,
+        )
         for b in HOLDOUT_BRIEFS
     ]
     _print_report("Held-out set (HOLDOUT_BRIEFS)", holdout_results)

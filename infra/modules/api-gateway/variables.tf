@@ -12,6 +12,29 @@ variable "domain_name" {
   default = "api.archibrief.dev"
 }
 
+# Was declared but never actually wired to a resource until Phase B
+# (2026-10-14) — var.domain_name sat unused since this module's original
+# build; Work-Project-Issues-Log.md, 2026-10-14 has the full story of
+# how that was found. null keeps the API reachable only at its default
+# *.execute-api.*.amazonaws.com endpoint (the pre-existing behavior),
+# same null-means-off pairing as frontend-hosting's certificate_arn.
+variable "certificate_arn" {
+  type        = string
+  default     = null
+  description = "ACM certificate ARN, same region as this API (regional custom domain, not edge-optimized), covering var.domain_name. Leave null to skip creating the custom domain."
+}
+
+variable "frontend_origin" {
+  type        = string
+  description = "The frontend's real origin (scheme + host, e.g. https://dxxxxxxxxxxxxx.cloudfront.net) for CORS. Found 2026-10-12: this was hardcoded to the never-set-up https://archibrief.dev placeholder, so the browser's CORS preflight rejected every request from the real CloudFront origin with a generic 'Failed to fetch' — no request ever reached a Lambda."
+}
+
+variable "additional_cors_origins" {
+  type        = list(string)
+  default     = []
+  description = "Extra allowed CORS origins alongside frontend_origin, e.g. [\"https://archibrief.dev\", \"https://www.archibrief.dev\"] once the custom domain resolves. Kept separate from frontend_origin rather than folded in, since frontend_origin is also used elsewhere as a single scalar (module docs/other references)."
+}
+
 variable "throttling_burst_limit" {
   type    = number
   default = 20
@@ -20,6 +43,25 @@ variable "throttling_burst_limit" {
 variable "throttling_rate_limit" {
   type    = number
   default = 10
+}
+
+# Deliberately separate, lower quota for the one public/unauthenticated
+# route (GET /demo). Without this, demo_* and the admin-gated routes
+# shared one stage-wide throttle bucket — a public traffic spike (or a
+# bot hitting the one URL that needs no credential) could exhaust the
+# whole API's quota and throttle real admin usage along with it. Each
+# invocation of get_demo has ~zero marginal AWS cost on its own (it
+# never touches DynamoDB/S3/Step Functions/AgentCore, per that route's
+# own comment), so this exists purely to isolate blast radius between
+# public and admin-gated traffic, not to cap spend.
+variable "demo_throttling_burst_limit" {
+  type    = number
+  default = 5
+}
+
+variable "demo_throttling_rate_limit" {
+  type    = number
+  default = 2
 }
 
 variable "tags" {
@@ -35,4 +77,201 @@ variable "admin_authorizer_zip_path" {
 variable "permissions_boundary_arn" {
   type        = string
   description = "IAM permissions boundary applied to every role this module creates and passes to lambda.amazonaws.com/apigateway.amazonaws.com — see modules/iam's runtime_permissions_boundary_arn output and Work-Project-Issues-Log.md, 2026-09-09."
+}
+
+variable "get_review_zip_path" {
+  type        = string
+  description = "Deployment package for GET /reviews/{reviewId}'s Lambda (backend/lambdas/get_review)."
+}
+
+variable "clarify_review_zip_path" {
+  type        = string
+  description = "Deployment package for POST /reviews/{reviewId}/clarify's Lambda (backend/lambdas/clarify_review)."
+}
+
+variable "reviews_table_name" {
+  type        = string
+  description = "DynamoDB table name (not ARN) — get_review/clarify_review read it from REVIEWS_TABLE_NAME, same convention as the state-machine Lambdas in modules/step-functions-lambda."
+}
+
+variable "reviews_table_arn" {
+  type        = string
+  description = "DynamoDB table ARN, paired with reviews_table_name — scopes get_review's/clarify_review's IAM policies."
+}
+
+variable "deeper_review_zip_path" {
+  type        = string
+  description = "Deployment package for POST /reviews/{reviewId}/findings/{findingId}/deeper's Lambda (backend/lambdas/deeper_review)."
+}
+
+variable "findings_table_name" {
+  type        = string
+  description = "DynamoDB table name (not ARN) — deeper_review writes each new versioned-child Finding here (first real writer of this table, 2026-10-01 — see Work-Project-Issues-Log.md)."
+}
+
+variable "findings_table_arn" {
+  type        = string
+  description = "DynamoDB table ARN, paired with findings_table_name — scopes deeper_review's IAM policy."
+}
+
+variable "reports_bucket_name" {
+  type        = string
+  description = "S3 bucket name (not ARN) — deeper_review reads the evidence ledger JSON from here via REPORTS_BUCKET_NAME."
+}
+
+variable "reports_bucket_arn" {
+  type        = string
+  description = "S3 bucket ARN, paired with reports_bucket_name — scopes deeper_review's IAM policy."
+}
+
+variable "agentcore_runtime_arn" {
+  type        = string
+  description = "ARN of the deployed AgentCore Runtime — deeper_review invokes it directly (bedrock-agentcore:InvokeAgentRuntime), bypassing Step Functions entirely (see backend/agent/graph.py's build_deeper_graph docstring). May be null before AgentCore is deployed, same deferral as modules/step-functions-lambda's own agentcore_runtime_arn."
+  default     = null
+}
+
+variable "get_demo_zip_path" {
+  type        = string
+  description = "Deployment package for GET /demo's Lambda (backend/lambdas/get_demo) — fully static, bundles its own reference_report.json, no AWS clients at all."
+}
+
+variable "create_upload_zip_path" {
+  type        = string
+  description = "Deployment package for POST /uploads's Lambda (backend/lambdas/create_upload) — the direct-upload archive_path design (ADR-0045, drafted 2026-10-12)."
+}
+
+variable "kill_switch_parameter_name" {
+  type        = string
+  description = "SSM parameter holding the ADR-0030 kill switch; deeper/clarify Lambdas refuse paid work when it reads \"true\" or can't be read."
+}
+
+variable "kill_switch_parameter_arn" {
+  type = string
+}
+
+# --- Report chat (ADR-0050) ----------------------------------------------
+
+variable "ask_question_zip_path" {
+  type        = string
+  description = "Deployment package for POST /reviews/{reviewId}/questions (backend/lambdas/ask_question)."
+}
+
+variable "list_questions_zip_path" {
+  type        = string
+  description = "Deployment package for GET /reviews/{reviewId}/questions (backend/lambdas/list_questions)."
+}
+
+variable "review_questions_table_name" {
+  type = string
+}
+
+variable "review_questions_table_arn" {
+  type = string
+}
+
+variable "usage_counters_table_name" {
+  type = string
+}
+
+variable "usage_counters_table_arn" {
+  type = string
+}
+
+variable "chat_guardrail_id" {
+  type = string
+}
+
+variable "chat_guardrail_version" {
+  type = string
+}
+
+variable "chat_guardrail_arn" {
+  type = string
+}
+
+variable "chat_grounding_guardrail_id" {
+  type = string
+}
+
+variable "chat_grounding_guardrail_version" {
+  type = string
+}
+
+variable "chat_grounding_guardrail_arn" {
+  type = string
+}
+
+variable "chat_grounding_check_enabled" {
+  type        = bool
+  default     = true
+  description = "Log contextual grounding scores for chat answers (detect-only, never blocks). About $0.0006 a question."
+}
+
+variable "vector_bucket_name" {
+  type = string
+}
+
+variable "vector_index_name" {
+  type = string
+}
+
+variable "chat_model_id" {
+  type        = string
+  default     = "us.anthropic.claude-sonnet-4-6"
+  description = "Model for chat answers; must be in chat_model_ids. Sonnet 4.6 since 2026-10-16: Haiku 4.5's Marketplace subscription can't complete for this account yet. The chat eval picks the cheapest that passes (ADR-0050 §8)."
+}
+
+variable "chat_model_ids" {
+  type        = list(string)
+  default     = ["us.anthropic.claude-haiku-4-5-20251001-v1:0", "us.anthropic.claude-sonnet-4-6"]
+  description = "Models the chat role may invoke, so switching chat_model_id needs no IAM change. Each must also be allowed by the runtime boundary (modules/iam)."
+}
+
+variable "chat_public_enabled" {
+  type        = bool
+  default     = false
+  description = "Second lock behind the admin authorizer: non-admin callers are refused unless true. Stays false until Phase 3's visitor limits exist; Fernando's call."
+}
+
+variable "chat_questions_per_review" {
+  type    = number
+  default = 5
+}
+
+variable "chat_blocked_per_review" {
+  type    = number
+  default = 5
+}
+
+variable "chat_daily_budget_micro_usd" {
+  type        = number
+  default     = 1000000
+  description = "Estimated chat spend allowed per UTC day, in millionths of a dollar ($1.00; raised from $0.40 with the switch to Sonnet, 2026-10-16). The hard stop; master-list item 29 sets the real value from measured cost."
+}
+
+variable "chat_daily_max_questions" {
+  type    = number
+  default = 100
+}
+
+variable "chat_throttling_burst_limit" {
+  type    = number
+  default = 5
+}
+
+variable "chat_throttling_rate_limit" {
+  type    = number
+  default = 2
+}
+
+variable "chat_alarms_enabled" {
+  type        = bool
+  default     = false
+  description = "Create the chat's metric filters and alarms. Needs the deploy-role statement in infra/environments/dev/proposed-chat-iam.md first."
+}
+
+variable "alarm_topic_arn" {
+  type        = string
+  default     = null
+  description = "SNS topic for chat alarms (the budget alerts topic)."
 }

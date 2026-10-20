@@ -1,0 +1,552 @@
+{
+  "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+  "owner_id": "admin",
+  "status": "complete",
+  "terraform_repo_ref": "github.com/CMSgov/cdap@e3b2849",
+  "created_at": "2026-10-15T21:03:58.420174+00:00",
+  "cost_estimate_tier": "high",
+  "baseline_answers": [
+    {
+      "field": "regulatory_data_residency",
+      "label": "Regulatory and data residency",
+      "outcome": "answered",
+      "value": "HIPAA (protected health information) and federal FISMA controls; data stays in the US.",
+      "policy_version": "preflight_defaults@2026-09-08"
+    },
+    {
+      "field": "expected_traffic_scale",
+      "label": "Traffic and scale",
+      "outcome": "answered",
+      "value": "moderate partner API traffic from allowlisted IP ranges, single-region",
+      "policy_version": "preflight_defaults@2026-09-08"
+    },
+    {
+      "field": "availability_criticality",
+      "label": "Availability target",
+      "outcome": "answered",
+      "value": "99.9% target; downtime delays partners but isn't life-critical",
+      "policy_version": "preflight_defaults@2026-09-08"
+    }
+  ],
+  "findings": [
+    {
+      "record": {
+        "finding_id": "4c93e0fb-6304-4d22-9aa0-966623888c6d",
+        "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+        "category": "observability",
+        "type": "deterministic-rule-result",
+        "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+        "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "API activity in the account would not be recorded for audit/incident response.",
+        "recommendation": "Add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+        "framework_mapping": [
+          "AWS Well-Architected: Operational Excellence Pillar",
+          "CIS Controls v8: 8.5"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T21:02:54.254265Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "7ffe34ac-cb93-43d7-ba30-679d035d976e",
+        "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+        "category": "exposure",
+        "type": "deterministic-rule-result",
+        "finding": "Public access to S3 bucket 'services/bucket-access-logs/bucket_access_logs' is not fully blocked",
+        "evidence": "resource \"aws_s3_bucket\" \"services/bucket-access-logs/bucket_access_logs\" at terraform/services/bucket-access-logs/main.tf line 3: block_public_acls is not enabled; block_public_policy is not enabled; ignore_public_acls is not enabled; restrict_public_buckets is not enabled (Trivy AWS-0086, AWS-0087, AWS-0091, AWS-0093)",
+        "citation": null,
+        "confidence": 1.0,
+        "confidence_inputs": {
+          "evidence_directness": 1.0,
+          "source_agreement": 1.0,
+          "rule_determinism": 1.0
+        },
+        "risk_impact": "A later ACL or bucket-policy change could expose the bucket's contents to the internet.",
+        "recommendation": "Attach aws_s3_bucket_public_access_block with block_public_acls, block_public_policy, ignore_public_acls and restrict_public_buckets all set to true.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC08-BP04",
+          "Trivy AWS-0086",
+          "Trivy AWS-0087",
+          "Trivy AWS-0091",
+          "Trivy AWS-0093"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "lightweight",
+        "model_id": null,
+        "prompt_version": null,
+        "corpus_version": null,
+        "retrieved_chunk_ids": [],
+        "deterministic_rule_version": "rule_engine@2026-10-15b+trivy@0.76.0",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T21:02:54.254367Z"
+      },
+      "presentation": {
+        "priority": "high",
+        "short_label": "High risk"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "c684c845-928f-4aee-9ae6-b47b84ecc634",
+        "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+        "category": "encryption",
+        "type": "fact",
+        "finding": "Both KMS keys have automatic key rotation enabled, aligning with Well-Architected data-protection guidance for PHI workloads.",
+        "evidence": "Two KMS keys (primary and secondary) are present in Terraform with enable_key_rotation: true and deletion_window_in_days: 30. The AWS Well-Architected Security Pillar lists AWS KMS as a key service for data protection. Automatic annual key rotation is a HIPAA/FISMA-aligned control for PHI encryption key lifecycle management.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-security-pillar",
+          "chunk_id": "waf-security-pillar-0561",
+          "content_hash": "a6b336ad0601e667764a0862de52fbba46ace7ff97f95aad1c516b9ff78c72f3",
+          "heading_path": "Data protection > Data classification > SEC07-BP03 Automate identification and classification",
+          "exact_text_span": "AWS Key Management Service (AWS KMS)",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.82,
+        "confidence_inputs": {
+          "evidence_directness": 0.7,
+          "source_agreement": 0.85,
+          "rule_determinism": 0.9
+        },
+        "risk_impact": "Keys that aren't rotated or are over-privileged could allow unauthorized decryption of Medicare claims PHI.",
+        "recommendation": "Confirm that KMS key policies follow least-privilege (restrict CreateGrant and key usage to only the services/roles that require them) and that the secondary key is used in a disaster-recovery or cross-region replication context so both keys contribute to availability targets.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC08-BP01",
+          "HIPAA \u00a7164.312(a)(2)(iv)",
+          "FISMA NIST SP 800-53 SC-12"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0561",
+          "waf-operational-excellence-pillar-0381",
+          "waf-security-pillar-0360",
+          "waf-security-pillar-0373",
+          "waf-cost-optimization-pillar-0174",
+          "waf-security-pillar-0647",
+          "waf-security-pillar-0740",
+          "waf-reliability-pillar-0638"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T21:03:53.826418Z"
+      },
+      "presentation": {
+        "priority": "confirmed",
+        "short_label": "Confirmed"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "109c426a-8cd9-4aa7-a906-80190c403742",
+        "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+        "category": "exposure",
+        "type": "inference",
+        "finding": "WAFv2 is deployed with IPv4 and IPv6 IP-set allowlisting and logging enabled, providing layer-7 access control aligned with partner-only access requirements; however, no AWS Shield Advanced resource is present, leaving DDoS mitigation at Shield Standard only.",
+        "evidence": "Terraform includes aws_wafv2_web_acl, aws_wafv2_ip_set (IPv4 and IPv6), aws_wafv2_web_acl_association, and aws_wafv2_web_acl_logging_configuration. The WAF is backed by a CloudWatch log resource policy. This implements IP-allowlisting at layer 7 for partner traffic. The Security Pillar discusses AWS Shield for DDoS protection as a complementary control alongside WAF.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-security-pillar",
+          "chunk_id": "waf-security-pillar-0740",
+          "content_hash": "41dcdd0988d868d197346329d3d4c72615f9c427777acc3f2b94d021b6cf0e41",
+          "heading_path": "Incident response > Preparation > SEC10-BP02 Develop incident management plans",
+          "exact_text_span": "AWS o\ufb00ers AWS Shield, which provides a managed distributed denial of service (DDoS) \nprotection service that safeguards web applications running on AWS. Shield provides always-\non detection and automatic inline mitigations that can minimize application downtime and \nlatency",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.78,
+        "confidence_inputs": {
+          "evidence_directness": 0.65,
+          "source_agreement": 0.85,
+          "rule_determinism": 0.8
+        },
+        "risk_impact": "Without Shield Advanced, sustained volumetric DDoS attacks could exhaust Shield Standard thresholds and cause availability degradation, delaying partner data pulls and potentially violating 99.9% SLA commitments.",
+        "recommendation": "Evaluate enabling AWS Shield Advanced on the WAF-protected resources. For a FISMA-covered workload carrying Medicare PHI, Shield Advanced's DDoS response team access, cost protection, and enhanced detection strengthen the defense posture and support the 99.9% availability target. At minimum, confirm Shield Standard DDoS thresholds are acceptable given partner traffic volumes.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC05-BP01",
+          "SEC05-BP02",
+          "NIST SP 800-53 SC-5"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Rely on CloudFront geo-restriction alone",
+            "reason_rejected": "CloudFront is not confirmed in scope; WAF IP allowlisting is the implemented control."
+          },
+          {
+            "option": "Network-layer IP filtering via NACLs only",
+            "reason_rejected": "NACLs operate at layer 4 and cannot inspect HTTP; WAF provides layer-7 protection including rate-limiting and rule sets."
+          }
+        ],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0561",
+          "waf-operational-excellence-pillar-0381",
+          "waf-security-pillar-0360",
+          "waf-security-pillar-0373",
+          "waf-cost-optimization-pillar-0174",
+          "waf-security-pillar-0647",
+          "waf-security-pillar-0740",
+          "waf-reliability-pillar-0638"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T21:03:53.837060Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "c8e05434-f498-4d2d-bcae-449edc8ab97e",
+        "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+        "category": "observability",
+        "type": "fact",
+        "finding": "The access-log S3 bucket is configured with versioning, object lock, lifecycle management, and server-side encryption, providing a strong tamper-resistant foundation for HIPAA \u00a7164.312(b) audit log retention.",
+        "evidence": "The access-log S3 bucket has versioning enabled, an object lock configuration resource, a lifecycle configuration, and server-side encryption configured. The Security Pillar references S3 Object Lock under data protection references (\"Locking Objects Using Amazon S3 Object Lock\"). Versioning and object lock together provide tamper-evident audit log storage aligned with HIPAA \u00a7164.312(b) audit control requirements.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-security-pillar",
+          "chunk_id": "waf-security-pillar-0647",
+          "content_hash": "f8a620928f05de92ae88c6bcc48e2380d23cf607052a14a6c48f33c1d8489651",
+          "heading_path": "Data protection > Protecting data in transit",
+          "exact_text_span": "Locking Objects Using Amazon S3 Object Lock",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.8,
+        "confidence_inputs": {
+          "evidence_directness": 0.65,
+          "source_agreement": 0.85,
+          "rule_determinism": 0.85
+        },
+        "risk_impact": "If object lock is in Governance mode or has an insufficient retention period, PHI access audit logs could be deleted or modified, creating HIPAA and FISMA compliance gaps.",
+        "recommendation": "Verify the object lock configuration sets a Compliance (not Governance) mode retention period aligned with your HIPAA record-retention policy (typically 6 years). Also confirm the lifecycle configuration transitions logs to a cost-effective storage class (e.g., S3 Glacier) after the active audit window.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC08-BP02",
+          "HIPAA \u00a7164.312(b)",
+          "FISMA NIST SP 800-53 AU-9"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Enable server-side encryption only",
+            "reason_rejected": "Encryption at rest without object lock does not prevent deletion or overwrite of audit evidence, which is required for HIPAA audit controls."
+          }
+        ],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0561",
+          "waf-operational-excellence-pillar-0381",
+          "waf-security-pillar-0360",
+          "waf-security-pillar-0373",
+          "waf-cost-optimization-pillar-0174",
+          "waf-security-pillar-0647",
+          "waf-security-pillar-0740",
+          "waf-reliability-pillar-0638"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T21:03:53.838516Z"
+      },
+      "presentation": {
+        "priority": "confirmed",
+        "short_label": "Confirmed"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "9dacdaed-4075-43aa-bc54-fcae707bb67b",
+        "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+        "category": "encryption",
+        "type": "inference",
+        "finding": "Server-side encryption is configured on the access-log S3 bucket, but the Terraform settings extracted do not confirm whether the customer-managed KMS key (rather than AWS-managed SSE-S3) is the encryption provider.",
+        "evidence": "An aws_s3_bucket_server_side_encryption_configuration resource is present for the access-log bucket, and the workload has customer-managed KMS keys defined. The Security Pillar references 'AWS KMS Cryptographic Details Whitepaper' and 'Overview of managing access to your AWS KMS resources' in the context of S3 data protection. The specific KMS key used for bucket encryption is not listed in the extracted settings.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-security-pillar",
+          "chunk_id": "waf-security-pillar-0647",
+          "content_hash": "f8a620928f05de92ae88c6bcc48e2380d23cf607052a14a6c48f33c1d8489651",
+          "heading_path": "Data protection > Protecting data in transit",
+          "exact_text_span": "AWS KMS Cryptographic Details Whitepaper",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.75,
+        "confidence_inputs": {
+          "evidence_directness": 0.6,
+          "source_agreement": 0.85,
+          "rule_determinism": 0.75
+        },
+        "risk_impact": "Using the AWS-managed key or SSE-S3 reduces audit visibility into key usage and removes the ability to enforce key-policy-based access controls on PHI audit logs.",
+        "recommendation": "Verify that aws_s3_bucket_server_side_encryption_configuration references the customer-managed KMS key (services/kms-keys/primary or secondary) rather than aws:kms with the AWS-managed key or AES256. Using a CMK provides auditability and key-policy control required for HIPAA/FISMA PHI workloads.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC08-BP01",
+          "HIPAA \u00a7164.312(a)(2)(iv)"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Accept default S3 server-side encryption (SSE-S3)",
+            "reason_rejected": "SSE-S3 doesn't provide the customer-controlled key lifecycle and audit trail that HIPAA and FISMA expect for PHI-adjacent data."
+          },
+          {
+            "option": "Leave encryption unmanaged",
+            "reason_rejected": "Unacceptable for PHI workloads under HIPAA \u00a7164.312(a)(2)(iv)."
+          }
+        ],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0561",
+          "waf-operational-excellence-pillar-0381",
+          "waf-security-pillar-0360",
+          "waf-security-pillar-0373",
+          "waf-cost-optimization-pillar-0174",
+          "waf-security-pillar-0647",
+          "waf-security-pillar-0740",
+          "waf-reliability-pillar-0638"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T21:03:53.839534Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "ade46b43-d232-4874-aee0-631426150e03",
+        "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+        "category": "iam",
+        "type": "inference",
+        "finding": "The workload grants access to three distinct external partner segments; the Terraform scope does not show IAM role or STS configurations governing partner API authentication, creating an observable gap in verifying SEC03-BP09 (least-privilege third-party access) compliance.",
+        "evidence": "The workload serves three external partner groups (ACOs, Part D sponsors, providers) via internet-facing APIs restricted to allowlisted IPs. The Security Pillar's SEC03-BP09 addresses sharing resources securely with third parties, recommending least-privilege IAM roles with temporary credentials and external IDs in trust policies instead of long-term credentials.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/security-pillar/wellarchitected-security-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-security-pillar",
+          "chunk_id": "waf-security-pillar-0360",
+          "content_hash": "473abd4571cd2a5bd52fa86b3f42c8055edcca8d2dc5791c79783690dae8b741",
+          "heading_path": "Identity and access management > Permissions management > SEC03-BP09 Share resources securely with a third party",
+          "exact_text_span": "The permission management for the third-\nparty managed system should follow the practice of just-in-time access using the principle of least \nprivilege with temporary credentials. By working closely with a third party, you can reduce the \nscope of impact and risk of unintended access together.",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.72,
+        "confidence_inputs": {
+          "evidence_directness": 0.6,
+          "source_agreement": 0.85,
+          "rule_determinism": 0.7
+        },
+        "risk_impact": "Overly broad or shared credentials could allow one compromised partner to access another partner's Medicare claims data, constituting a HIPAA breach.",
+        "recommendation": "Confirm that each partner category (ACO, Part D sponsor, provider) uses separate IAM roles or API authentication mechanisms with scoped permissions. Use external IDs in trust policies for cross-account access and avoid issuing long-term static API keys. Segment IAM policies per partner API (BCDA, AB2D, DPC) so a compromised credential for one API cannot access another.",
+        "framework_mapping": [
+          "AWS Well-Architected: Security Pillar",
+          "SEC03-BP09",
+          "HIPAA \u00a7164.312(d)",
+          "FISMA NIST SP 800-53 AC-3"
+        ],
+        "alternatives_considered": [
+          {
+            "option": "Use IAM roles for all third-party access",
+            "reason_rejected": "IAM roles alone are addressed in the WAF guidance but the brief mentions specific partner IP ranges; both network and IAM controls are needed in combination."
+          },
+          {
+            "option": "VPN-only access",
+            "reason_rejected": "The brief states the APIs are internet-facing with IP allowlisting, not VPN-based."
+          }
+        ],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0561",
+          "waf-operational-excellence-pillar-0381",
+          "waf-security-pillar-0360",
+          "waf-security-pillar-0373",
+          "waf-cost-optimization-pillar-0174",
+          "waf-security-pillar-0647",
+          "waf-security-pillar-0740",
+          "waf-reliability-pillar-0638"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T21:03:53.849437Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "4454b72d-f729-41d7-b273-0667fc1ee571",
+        "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+        "category": "recovery",
+        "type": "inference",
+        "finding": "AWS Backup resources are declared but their schedule, retention windows, vault configuration, and cross-region copy rules are not exposed in the extracted settings, making it impossible to confirm alignment with the 99.9% availability target's recovery objectives.",
+        "evidence": "An aws_backup_plan and aws_backup_selection are present, indicating an AWS Backup policy is configured. However, no specific backup settings (vault, schedule, retention period, cross-region copy) are surfaced in the extracted Terraform settings. The Reliability Pillar notes that infrastructure provisioned via IaC tools (CloudFormation, CDK) allows safe, repeatable restoration.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/reliability-pillar/wellarchitected-reliability-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-reliability-pillar",
+          "chunk_id": "waf-reliability-pillar-0638",
+          "content_hash": "8e807b1f0ea6a0c19111412444f990f8dfd02e1fca3cec2bc27478625affbea6",
+          "heading_path": "Change management > Implement change > REL08-BP04 Deploy using immutable infrastructure",
+          "exact_text_span": "AWS CDK uses CloudFormation in the background to provision \nresources in a safe, repeatable manner.",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.65,
+        "confidence_inputs": {
+          "evidence_directness": 0.5,
+          "source_agreement": 0.75,
+          "rule_determinism": 0.7
+        },
+        "risk_impact": "Undocumented or misconfigured backup schedules and retention periods could leave the platform unable to meet its 99.9% availability target after data loss or corruption, and could violate HIPAA record-retention obligations.",
+        "recommendation": "Review and document the backup plan's RPO (recovery point objective) and RTO (recovery time objective) against the 99.9% SLA. For a HIPAA workload, ensure backup vaults are encrypted with the CMK, a cross-region copy rule exists for disaster recovery, and a retention period of at least 6 years is set for PHI-adjacent backups per HIPAA record retention requirements.",
+        "framework_mapping": [
+          "AWS Well-Architected: Reliability Pillar",
+          "REL09-BP01",
+          "REL09-BP02",
+          "FISMA NIST SP 800-53 CP-9"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0561",
+          "waf-operational-excellence-pillar-0381",
+          "waf-security-pillar-0360",
+          "waf-security-pillar-0373",
+          "waf-cost-optimization-pillar-0174",
+          "waf-security-pillar-0647",
+          "waf-security-pillar-0740",
+          "waf-reliability-pillar-0638"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T21:03:53.852597Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    },
+    {
+      "record": {
+        "finding_id": "c89a5c02-0b75-407b-b71c-fd379e931602",
+        "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
+        "category": "observability",
+        "type": "inference",
+        "finding": "WAF request logging and Datadog Synthetics monitoring are present, indicating a baseline observability posture; however, there is no evidence in the Terraform of EventBridge rules or AWS Health API integration to route WAF events or infrastructure health events into an ITSM/incident management workflow.",
+        "evidence": "WAFv2 logging is configured (aws_wafv2_web_acl_logging_configuration), and a Datadog Synthetics security group is present, indicating active external monitoring. The Operational Excellence Pillar recommends integrating with monitoring and alerting tools through Amazon EventBridge or AWS Health API and tracking health events in ITSM tools. A remote_management security group and a zscaler_private/zscaler_public pair suggest operational access paths are defined.",
+        "citation": {
+          "source_url": "https://docs.aws.amazon.com/pdfs/wellarchitected/latest/operational-excellence-pillar/wellarchitected-operational-excellence-pillar.pdf",
+          "source_edition": null,
+          "retrieved_at": "2026-09-15T18:26:03.560486Z",
+          "canonical_url": null,
+          "document_id": "waf-operational-excellence-pillar",
+          "chunk_id": "waf-operational-excellence-pillar-0381",
+          "content_hash": "9ecaf3563841554b5bc8760911a85780f0c1e6a91081975fd4768bed575dacb3",
+          "heading_path": "Prepare > Implement observability > OPS04-BP04 Implement dependency telemetry",
+          "exact_text_span": "Plan and track progress on health events that require action by integrating with change \nmanagement or ITSM tools (like Jira or ServiceNow) that you may already use through\n\nAmazon EventBridge or the AWS Health API.",
+          "parser_version": "1.4.0",
+          "corpus_version": "v3"
+        },
+        "confidence": 0.7,
+        "confidence_inputs": {
+          "evidence_directness": 0.6,
+          "source_agreement": 0.8,
+          "rule_determinism": 0.7
+        },
+        "risk_impact": "Without automated event routing, KMS key issues, WAF rule misconfigurations, or backup failures affecting PHI availability could go undetected until partner-reported failures, risking both SLA breach and FISMA audit findings.",
+        "recommendation": "Add EventBridge rules to forward WAF sampled-request metrics and AWS Health events (e.g., KMS key expiry notifications, Backup job failures) to the team's incident management system. This ensures PHI-impacting events are tracked and resolved within SLA-defined timeframes and supports FISMA IR (Incident Response) controls.",
+        "framework_mapping": [
+          "AWS Well-Architected: Operational Excellence Pillar",
+          "OPS04-BP04",
+          "FISMA NIST SP 800-53 IR-6"
+        ],
+        "alternatives_considered": [],
+        "depth_level": "deep",
+        "model_id": "us.anthropic.claude-sonnet-4-6",
+        "prompt_version": "reason_prompt@2026-10-15d",
+        "corpus_version": "unknown",
+        "retrieved_chunk_ids": [
+          "waf-security-pillar-0561",
+          "waf-operational-excellence-pillar-0381",
+          "waf-security-pillar-0360",
+          "waf-security-pillar-0373",
+          "waf-cost-optimization-pillar-0174",
+          "waf-security-pillar-0647",
+          "waf-security-pillar-0740",
+          "waf-reliability-pillar-0638"
+        ],
+        "deterministic_rule_version": "rule_engine@2026-10-15b",
+        "parent_finding_id": null,
+        "created_at": "2026-10-15T21:03:53.860154Z"
+      },
+      "presentation": {
+        "priority": "review",
+        "short_label": "Review"
+      }
+    }
+  ]
+}

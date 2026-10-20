@@ -10,7 +10,7 @@ status: accepted
 # ADR 0011: Rate Limiting and Cost Controls From Day One
 
 **Status:** Accepted (2026-09-02) — **framing superseded by
-[[Work-Project-ADR-0030-Rate-Limiting-Reframed]]** (2026-09-03): the
+[ADR-0030](Work-Project-ADR-0030-Rate-Limiting-Reframed.md)** (2026-09-03): the
 day-one requirement itself stands, but "AWS-level limits as guaranteed
 ceiling" was corrected.
 
@@ -38,4 +38,4 @@ version — not progressive hardening added later, once core logic works.
 
 ## Full reasoning
 
-See [[Work-Project]] §"Locked decisions" (security bullet).
+See the project decision log §"Locked decisions" (security bullet).

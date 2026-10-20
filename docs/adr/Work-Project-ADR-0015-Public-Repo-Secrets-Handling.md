@@ -10,14 +10,14 @@ status: accepted
 # ADR 0015: Public Repo Strategy and Secrets Handling
 
 **Status:** Accepted (2026-09-03) — **amended by
-[[Work-Project-ADR-0042-Minor-Amendments-Batch]]** (2026-09-03): the
+[ADR-0042](Work-Project-ADR-0042-Minor-Amendments-Batch.md)** (2026-09-03): the
 one-real-repo strategy stands; broadens the secrets denylist and adds
 GitHub secret scanning/push protection alongside local/CI gitleaks.
 
 ## Context
 
-Project will be published publicly on GitHub so hiring managers can
-review real code. Considered whether a separate "dummy"/skeleton repo
+Project will be published publicly on GitHub so the real code can be
+reviewed. Considered whether a separate "dummy"/skeleton repo
 should sit alongside the real one to avoid exposing sensitive details.
 
 ## Decision
@@ -45,5 +45,5 @@ Fernando's real AWS account.
 ## Full reasoning
 
 See conversation 2026-09-02/09-03 on file organization and public-repo
-readiness (not yet copied into [[Work-Project]] narrative — flagged as a
+readiness (not yet copied into the project decision log narrative — flagged as a
 to-do).

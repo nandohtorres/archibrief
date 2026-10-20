@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useMemo,
   useRef,
   useState,
@@ -8,13 +9,19 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import type { ReportFinding, ReviewReport } from "@/lib/contracts";
+import type { ChatTurn, DemoChat, ReportFinding, ReviewReport } from "@/lib/contracts";
+import { isArchitectureGraph, type ArchitectureGraph } from "@/lib/architecture";
 import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
+import { reviewerNotesById, type DemoEntry } from "@/lib/demos";
+import { buildReportHtml, downloadFile } from "@/lib/chat";
 import {
   filterAndSortFindings,
   formatFindingId,
+  reportSourceLabels,
+  reportTitle,
   type FindingFilter,
   type FindingSort,
+  type ReportSource,
 } from "@/lib/workflow";
 import { ArchitectureView } from "./architecture-view";
 import { FindingDetail } from "./finding-detail";
@@ -23,6 +30,15 @@ import { ReportQuestions } from "./report-questions";
 
 interface ReportWorkspaceProps {
   report: ReviewReport;
+  source: ReportSource;
+  adminKey: string;
+  // The demo's index entry (source, license, reviewer notes) and its
+  // pregenerated suggested answers, when this is a demo review.
+  demo?: DemoEntry | null;
+  demoChat?: DemoChat | null;
+  // A demo's diagram, from its saved file. Other reports carry their own
+  // (report.architecture); a report without one shows no diagram.
+  architecture?: ArchitectureGraph | null;
   onNewReview: () => void;
 }
 
@@ -30,29 +46,45 @@ const DEFAULT_DETAIL_PANE_WIDTH = 75;
 const MIN_DETAIL_PANE_WIDTH = 45;
 const MAX_DETAIL_PANE_WIDTH = 85;
 
-export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
+export function ReportWorkspace({
+  report,
+  source,
+  adminKey,
+  demo = null,
+  demoChat = null,
+  architecture: demoArchitecture = null,
+  onNewReview,
+}: ReportWorkspaceProps) {
+  const reviewerNotes = useMemo(() => reviewerNotesById(demo), [demo]);
+  const architecture =
+    demoArchitecture ?? (isArchitectureGraph(report.architecture) ? report.architecture : null);
+  // A demo has a real title; other reports are named from their repository label.
+  const title = demo ? demo.title : reportTitle(report.terraform_repo_ref);
   const [view, setView] = useState<"technical" | "stakeholder">("technical");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FindingFilter>("all");
   const [sort, setSort] = useState<FindingSort>("priority");
+  const [findings, setFindings] = useState<ReportFinding[]>(report.findings);
+  const [architectureFocus, setArchitectureFocus] = useState<{
+    findingId: string;
+    at: number;
+  } | null>(null);
   const [selectedId, setSelectedId] = useState(report.findings[0]?.record.finding_id ?? "");
   const [status, setStatus] = useState("");
   const [questionSeed, setQuestionSeed] = useState("");
+  const [seedFindingId, setSeedFindingId] = useState("");
+  const [transcript, setTranscript] = useState<ChatTurn[]>([]);
   const [detailPaneWidth, setDetailPaneWidth] = useState(DEFAULT_DETAIL_PANE_WIDTH);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const visibleFindings = useMemo(
-    () => filterAndSortFindings(report.findings, query, filter, sort),
-    [report.findings, query, filter, sort],
+    () => filterAndSortFindings(findings, query, filter, sort),
+    [findings, query, filter, sort],
   );
   const selected =
     visibleFindings.find(({ record }) => record.finding_id === selectedId) ?? visibleFindings[0];
-  const highCount = report.findings.filter(
-    ({ presentation }) => presentation.priority === "high",
-  ).length;
-  const assumptionCount = report.findings.filter(
-    ({ record }) => record.type === "assumption",
-  ).length;
+  const highCount = findings.filter(({ presentation }) => presentation.priority === "high").length;
+  const assumptionCount = findings.filter(({ record }) => record.type === "assumption").length;
 
   function selectFinding(findingId: string) {
     setDetailPaneWidth(DEFAULT_DETAIL_PANE_WIDTH);
@@ -114,20 +146,30 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
   }
 
   function askAboutFinding(finding: ReportFinding) {
-    setQuestionSeed(
-      `Explain ${formatFindingId(finding.record.finding_id)}: ${finding.record.finding}`,
-    );
+    setQuestionSeed(`Explain this finding: ${finding.record.finding}`);
+    setSeedFindingId(finding.record.finding_id);
     window.requestAnimationFrame(() =>
       document.getElementById("ask-review")?.scrollIntoView({ block: "start" }),
     );
   }
 
+  const consumeQuestionSeed = useCallback(() => setQuestionSeed(""), []);
+
   function showOnArchitecture(findingId: string) {
-    setStatus(`${formatFindingId(findingId)} is represented in the architecture-impact section.`);
+    setArchitectureFocus({ findingId, at: Date.now() });
+    setStatus(`${formatFindingId(findingId)} is shown in the architecture section.`);
     document.getElementById("architecture-impact")?.scrollIntoView({ block: "start" });
   }
 
   async function goDeeper(findingId: string) {
+    // The sample is precomputed and has no stored review behind it, so
+    // there is nothing to take deeper (and no paid run to start).
+    if (source === "sample" || source === "demo") {
+      setStatus(
+        `Going deeper runs a new analysis on your own reviews. ${formatFindingId(findingId)} is part of the ${source === "demo" ? "saved demo review" : "precomputed sample"}.`,
+      );
+      return;
+    }
     if (!getApiBaseUrl()) {
       setStatus(
         `Fixture only: ${formatFindingId(findingId)} would create a versioned child finding. The endpoint is not deployed.`,
@@ -135,22 +177,48 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
       return;
     }
     try {
-      await requestDeeperFinding(report.review_id, findingId);
-      setStatus(`A deeper versioned child was requested for ${formatFindingId(findingId)}.`);
+      const result = (await requestDeeperFinding(report.review_id, findingId, adminKey)) as {
+        findings: ReportFinding[];
+      };
+      const newFindings = result.findings ?? [];
+      if (newFindings.length === 0) {
+        setStatus(`The deeper request for ${formatFindingId(findingId)} returned no new findings.`);
+        return;
+      }
+      setFindings((current) => [...current, ...newFindings]);
+      selectFinding(newFindings[0].record.finding_id);
+      setStatus(
+        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} added below ${formatFindingId(findingId)}.`,
+      );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "The deeper-analysis request failed.");
     }
   }
 
   function exportLedger() {
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${report.review_id}-evidence-ledger.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setStatus("Fixture evidence ledger exported as JSON.");
+    // The raw data, plus the conversation in the same shape as
+    // GET /reviews/{id}/questions (ADR-0050 §10).
+    downloadFile(
+      `${report.review_id}-evidence-ledger.json`,
+      JSON.stringify({ ...report, findings, chat_transcript: transcript }, null, 2),
+      "application/json",
+    );
+    setStatus(
+      source === "fixture"
+        ? "Fixture evidence ledger exported as JSON."
+        : "Evidence ledger exported as JSON.",
+    );
+  }
+
+  function downloadReport() {
+    // One self-contained, escaped HTML file with the findings and the
+    // conversation; Print → PDF works from it (ADR-0050 §10).
+    downloadFile(
+      `${report.review_id}-report.html`,
+      buildReportHtml({ ...report, findings }, transcript, title),
+      "text/html",
+    );
+    setStatus("Report downloaded with this conversation.");
   }
 
   return (
@@ -158,8 +226,8 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
       <div className="report-summary">
         <header className="report-header">
           <div>
-            <span className="report-overline">Complete · fixture evidence ledger</span>
-            <h1 id="report-heading">payments-api architecture review</h1>
+            <span className="report-overline">{reportSourceLabels[source]}</span>
+            <h1 id="report-heading">{title}</h1>
             <p>
               {report.terraform_repo_ref} ·{" "}
               {new Date(report.created_at).toLocaleString("en-US", {
@@ -180,7 +248,10 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
             >
               Ask questions ↓
             </button>
-            <button className="button primary" type="button" onClick={exportLedger}>
+            <button className="button primary" type="button" onClick={downloadReport}>
+              Download report
+            </button>
+            <button className="button secondary" type="button" onClick={exportLedger}>
               Export ledger
             </button>
             <button className="button quiet" type="button" onClick={onNewReview}>
@@ -188,12 +259,34 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
             </button>
           </div>
         </header>
+        {demo && (
+          <aside className="demo-provenance" aria-label="About this demo">
+            <p>
+              <strong>Source:</strong>{" "}
+              <a href={demo.sourceUrl} target="_blank" rel="noopener noreferrer">
+                {demo.source}
+              </a>{" "}
+              · {demo.license}
+            </p>
+            <p>{demo.disclaimer}</p>
+            <p>
+              Every finding was checked by hand against the code.
+              {reviewerNotes.size > 0
+                ? ` ${reviewerNotes.size === 1 ? "One finding carries" : `${reviewerNotes.size} findings carry`} a reviewer note from that check.`
+                : " The check found nothing to correct."}
+            </p>
+          </aside>
+        )}
 
         <div className="report-metrics" aria-label="Report summary">
           <Metric
             label="Total findings"
-            value={String(report.findings.length)}
-            detail="Across the complete fixture ledger"
+            value={String(findings.length)}
+            detail={
+              source === "fixture"
+                ? "Across the complete fixture ledger"
+                : "Across the full evidence ledger"
+            }
           />
           <Metric
             label="Needs action"
@@ -266,7 +359,7 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
                     aria-pressed={filter === value}
                     onClick={() => setFilter(value)}
                   >
-                    {value === "all" ? `All (${report.findings.length})` : value}
+                    {value === "all" ? `All (${findings.length})` : value}
                   </button>
                 ),
               )}
@@ -352,8 +445,9 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
                 />
                 <FindingDetail
                   finding={selected}
+                  reviewerNote={reviewerNotes.get(selected.record.finding_id) ?? null}
                   onAsk={askAboutFinding}
-                  onShowArchitecture={showOnArchitecture}
+                  onShowArchitecture={architecture ? showOnArchitecture : undefined}
                   onGoDeeper={goDeeper}
                 />
               </div>
@@ -387,6 +481,8 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
           >
             <GuidedReport
               report={report}
+              reviewerNotes={reviewerNotes}
+              titled={demo !== null}
               onOpenTechnicalFinding={openTechnicalFinding}
               onAsk={askAboutFinding}
             />
@@ -400,17 +496,31 @@ export function ReportWorkspace({ report, onNewReview }: ReportWorkspaceProps) {
         )}
       </div>
 
-      <div className="report-content">
-        <ArchitectureView onOpenFinding={openTechnicalFinding} />
-      </div>
+      {architecture && (
+        <div className="report-content">
+          <ArchitectureView
+            graph={architecture}
+            findings={findings}
+            focus={architectureFocus}
+            onOpenFinding={openTechnicalFinding}
+          />
+        </div>
+      )}
 
       <div className="report-content">
         <ReportQuestions
-          findings={report.findings}
+          reviewId={report.review_id}
+          source={source}
+          adminKey={adminKey}
+          findings={findings}
           selectedFindingId={selectedId}
           questionSeed={questionSeed}
-          onQuestionSeedConsumed={() => setQuestionSeed("")}
+          seedFindingId={seedFindingId}
+          demoChat={demoChat}
+          onQuestionSeedConsumed={consumeQuestionSeed}
           onOpenFinding={openTechnicalFinding}
+          onTranscriptChange={setTranscript}
+          onDownload={downloadReport}
         />
         <div className="snapshot-bar">
           Snapshot · rules 2026.09.1 · corpus 2026-09-06 · prompt 1.4 where used · static review

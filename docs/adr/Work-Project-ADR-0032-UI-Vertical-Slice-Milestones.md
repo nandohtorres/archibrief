@@ -23,16 +23,16 @@ Replace the percentage with concrete, buildable milestones: an early
 vertical slice containing submission, preflight interaction, progress
 display, one complete typed finding with citation display, failure/empty
 states, and the responsive shell. Use contract-generated fixtures (from
-[[Work-Project-System-Design]]'s data models) while the backend is
+the system design notes' data models) while the backend is
 incomplete. Defer decorative refinement and screens without a working
 data contract behind them.
 
 ## Consequences
 
 - Same underlying goal as ADR-0013 (Fernando as his own first UX tester,
-  early) — now expressed as something [[Work-Project-Build-Plan]] can
+  early) — now expressed as something the build plan can
   actually check off.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0013."
+See an independent design review §"ADR-0013."

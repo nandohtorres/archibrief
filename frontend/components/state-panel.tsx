@@ -1,10 +1,11 @@
 interface FailurePanelProps {
   message: string;
   onRetry: () => void;
-  onUseFixture: () => void;
+  onOpenSample: () => void;
+  sampleLoading: boolean;
 }
 
-export function FailurePanel({ message, onRetry, onUseFixture }: FailurePanelProps) {
+export function FailurePanel({ message, onRetry, onOpenSample, sampleLoading }: FailurePanelProps) {
   return (
     <section className="flow-card state-card failure-state" aria-labelledby="failure-heading">
       <span className="state-icon" aria-hidden="true">
@@ -16,16 +17,21 @@ export function FailurePanel({ message, onRetry, onUseFixture }: FailurePanelPro
       <div className="state-detail">
         <strong>Nothing was silently treated as complete.</strong>
         <span>
-          The current deployed pipeline does not yet have AgentCore or status retrieval. A failed
-          run must remain visibly failed rather than returning a partial report as authoritative.
+          ArchiBrief never returns a partial or simulated report as authoritative — a failed or
+          incomplete run stays visibly failed until real evidence says otherwise.
         </span>
       </div>
       <div className="form-actions centered">
         <button className="button secondary" type="button" onClick={onRetry}>
           Edit submission
         </button>
-        <button className="button primary" type="button" onClick={onUseFixture}>
-          Open complete fixture report
+        <button
+          className="button primary"
+          type="button"
+          onClick={onOpenSample}
+          disabled={sampleLoading}
+        >
+          {sampleLoading ? "Loading sample…" : "View the sample review"}
         </button>
       </div>
     </section>

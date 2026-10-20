@@ -10,8 +10,8 @@ status: accepted
 # ADR 0014: Hugging Face Capability, No Self-Training
 
 **Status:** Accepted (2026-09-02) — **implementation path superseded by
-[[Work-Project-ADR-0033-Hugging-Face-Path-Corrected]]** (2026-09-03): the
-resume-signal goal stands, but the proposed Custom Model Import path for
+[ADR-0033](Work-Project-ADR-0033-Hugging-Face-Path-Corrected.md)** (2026-09-03): the
+goal stands, but the proposed Custom Model Import path for
 Llama Prompt Guard 2 was factually broken (unsupported architecture).
 
 ## Context
@@ -37,12 +37,11 @@ pass.
 
 ## Consequences
 
-- Real "worked with Hugging Face models" resume credit without training
-  infrastructure cost or role-signal mismatch.
+- Real use of a Hugging Face model without training-infrastructure cost.
 - Stays inside the same AWS-native architecture (Custom Model Import
   scales to zero when idle, fits ADR-0011's cost controls).
 
 ## Full reasoning
 
-See [[Work-Project]] §"W1-W4 stack research findings" (Hugging Face
+See the project decision log §"W1-W4 stack research findings" (Hugging Face
 capability subsection).

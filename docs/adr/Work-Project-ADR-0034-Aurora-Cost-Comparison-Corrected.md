@@ -36,11 +36,11 @@ idempotent job creation.
 
 ## Consequences
 
-- [[Work-Project-System-Design]]'s DynamoDB data models section gains
+- the system design notes' DynamoDB data models section gains
   the ownership-check/TTL/idempotency requirements.
 - No architecture change — this ADR only corrects the stated reasoning.
 
 ## Full reasoning
 
-See [[Work-Project-ADR-Review-Codex]] §"ADR-0017" and the direct AWS
+See an independent design review §"ADR-0017" and the direct AWS
 Aurora Serverless v2 documentation verification performed 2026-09-03.
