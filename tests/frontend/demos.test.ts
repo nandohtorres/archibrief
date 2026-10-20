@@ -55,7 +55,7 @@ describe("demo reviews (lib/demos.ts)", () => {
       (d) => d.id === "breach-pattern",
     )!;
     const notes = reviewerNotesById(breach);
-    expect(notes.size).toBe(3);
+    expect(notes.size).toBe(5);
     expect(reviewerNotesById(null).size).toBe(0);
   });
 });

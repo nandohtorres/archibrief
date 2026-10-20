@@ -47,7 +47,7 @@ from backend.shared.models.finding import (
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
 from backend.shared.trivy_checks import TRIVY_OWNED_CONCERNS, TRUSTED_CHECKS
 
-RULE_VERSION = "rule_engine@2026-10-20"
+RULE_VERSION = "rule_engine@2026-10-20.2"
 
 ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}
@@ -221,8 +221,13 @@ def rule_s3_encryption(parsed: dict, review_id: str) -> list[Finding]:
                     FindingCategory.ENCRYPTION,
                     f"S3 bucket '{name}' has no server-side encryption configuration",
                     f'resource "aws_s3_bucket" "{name}" found with no matching SSE configuration',
-                    "Data at rest is unencrypted, violating baseline data-protection expectations.",
-                    "Attach aws_s3_bucket_server_side_encryption_configuration with SSE-KMS or SSE-S3.",
+                    "The bucket's encryption is not declared, so it can't be reviewed or kept "
+                    "consistent. S3 has encrypted new objects with SSE-S3 by default since "
+                    "January 2023, so this alone does not mean data is unencrypted; objects "
+                    "written earlier, and any need for a customer-managed KMS key, need checking.",
+                    "Attach aws_s3_bucket_server_side_encryption_configuration to declare the "
+                    "intended encryption: SSE-S3, or SSE-KMS where you need to control who can "
+                    "decrypt.",
                     ["AWS Well-Architected: Security Pillar", "SEC08-BP02"],
                 )
             )
@@ -870,8 +875,12 @@ def rule_cloudtrail_present(parsed: dict, review_id: str) -> list[Finding]:
             FindingCategory.OBSERVABILITY,
             "No aws_cloudtrail resource found in the submitted Terraform",
             "No resource of type aws_cloudtrail present in parsed configuration",
-            "API activity in the account would not be recorded for audit/incident response.",
-            "Add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+            "This code defines no trail. One may be managed elsewhere, such as an organization "
+            "trail. If none exists, CloudTrail keeps only 90 days of management events in Event "
+            "history, with no long-term record and no data events (such as S3 object reads) "
+            "for audit or incident response.",
+            "Confirm whether an organization or account trail already exists. If not, add an "
+            "aws_cloudtrail resource covering all regions with log file validation enabled.",
             ["AWS Well-Architected: Operational Excellence Pillar", "CIS Controls v8: 8.5"],
         )
     ]

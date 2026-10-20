@@ -28,6 +28,16 @@
           "findingId": "d4831d89-2615-442e-bf98-81d30627e116",
           "verdict": "weak citation",
           "note": "The attack chain is correct and is the key finding, but the quoted guidance is about traffic staying on the AWS network, not about credential theft."
+        },
+        {
+          "findingId": "600b9ca4-c98e-4386-a9d6-de27672b7067",
+          "verdict": "overstated",
+          "note": "Configuration correct, risk overstated. S3 has encrypted new objects with SSE-S3 by default since January 2023, so a missing setting doesn't mean the data is unencrypted. What's missing is a declared choice, and a customer-managed key for card data. The rule's wording is fixed."
+        },
+        {
+          "findingId": "cb07d6a3-579d-4501-a42c-1b344acbc411",
+          "verdict": "overstated",
+          "note": "Correct for this code, but overstated. A trail may be managed elsewhere, and CloudTrail keeps 90 days of management events without one. The real gap, if no other trail exists, is long-term history and data events. The rule's wording is fixed."
         }
       ]
     },
@@ -47,6 +57,11 @@
           "findingId": "4454b72d-f729-41d7-b273-0667fc1ee571",
           "verdict": "incomplete",
           "note": "The code sets four backup rules (every 4 hours kept 1 day and copied to a second vault; daily kept 7; weekly kept 35; monthly kept 90). The model couldn't see them because backup plans weren't in its resource summary then; they are now."
+        },
+        {
+          "findingId": "4c93e0fb-6304-4d22-9aa0-966623888c6d",
+          "verdict": "overstated",
+          "note": "Correct for this code, but overstated. A trail may be managed elsewhere, and CloudTrail keeps 90 days of management events without one. The real gap, if no other trail exists, is long-term history and data events. The rule's wording is fixed."
         }
       ]
     },
@@ -66,6 +81,21 @@
           "findingId": "f0c95c6a-2aa1-4dec-8d6a-cc2faebf69dd",
           "verdict": "wrong",
           "note": "All three clusters set copy_tags_to_snapshot = true. The setting wasn't in the model's resource summary; it is now."
+        },
+        {
+          "findingId": "a2192a0b-4448-40bf-afb3-fbb2414cf994",
+          "verdict": "overstated",
+          "note": "Correct for this code, but overstated. A trail may be managed elsewhere, and CloudTrail keeps 90 days of management events without one. The real gap, if no other trail exists, is long-term history and data events. The rule's wording is fixed."
+        },
+        {
+          "findingId": "f733eeb9-95af-4a11-a214-233823c13248",
+          "verdict": "overstated",
+          "note": "IAM database authentication is off, but that doesn't prove passwords are shared. The fix's claim is wrong: AWS says CloudTrail doesn't log IAM database sign-ins; per-connection records need the database's own logs."
+        },
+        {
+          "findingId": "e8b1caad-d6d6-494c-bec7-775c6a9d67b7",
+          "verdict": "weak citation",
+          "note": "Two AZs is correct, but RDS.15 asks for multiple AZs, which two already meet. A third AZ is an optional resilience gain, not a failed control."
         }
       ]
     }

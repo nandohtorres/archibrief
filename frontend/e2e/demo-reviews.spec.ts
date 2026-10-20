@@ -26,7 +26,7 @@ test.describe("demo reviews from saved files", () => {
       /^https:\/\/github\.com\/RhinoSecurityLabs\//,
     );
     await expect(provenance).toContainText("not Capital One's code");
-    await expect(provenance).toContainText("3 findings carry a reviewer note");
+    await expect(provenance).toContainText("5 findings carry a reviewer note");
 
     // The stakeholder view shows the note on the finding the model got wrong.
     await page.getByRole("tab", { name: /Guided Report/ }).click();
