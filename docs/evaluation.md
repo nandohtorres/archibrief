@@ -19,8 +19,7 @@ accessibility limits. It includes a machine-readable per-case result summary.
 | Playwright | 57 passed, including the accessibility, keyboard, viewport and resilience specs | `cd frontend; npx playwright test` |
 
 None of these is a model-quality measurement. The local frontend run used
-Node v24.14.0, outside `frontend/package.json`'s supported Node 20/22 range;
-`npm ci` completed, and CI repeats the suites on a supported runtime.
+Node v24.14.0, and CI repeats the suites on Node 24.
 
 ## Deterministic traps
 

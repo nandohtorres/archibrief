@@ -44,7 +44,7 @@ The frontend exposes progress, clarification, findings, a stakeholder view of th
 
 ## Local development
 
-Backend dependencies and development extras are declared in `backend/pyproject.toml` (Python 3.12+). Frontend commands are in `frontend/package.json` (Node 20 or 22). With dependencies installed, from the repository root:
+Backend dependencies and development extras are declared in `backend/pyproject.toml` (Python 3.12+). Frontend commands are in `frontend/package.json` (Node 22 or 24). With dependencies installed, from the repository root:
 
 ```text
 python -m pytest tests/backend -q
