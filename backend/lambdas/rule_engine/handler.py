@@ -47,7 +47,7 @@ from backend.shared.models.finding import (
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
 from backend.shared.trivy_checks import TRIVY_OWNED_CONCERNS, TRUSTED_CHECKS
 
-RULE_VERSION = "rule_engine@2026-10-15b"
+RULE_VERSION = "rule_engine@2026-10-20"
 
 ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}
@@ -73,6 +73,7 @@ def _finding(
     framework_mapping: list[str],
     rule_version: str = RULE_VERSION,
     finding_type: FindingType = FindingType.DETERMINISTIC_RULE_RESULT,
+    concern_name: str | None = None,
 ) -> Finding:
     return Finding(
         finding_id=str(uuid.uuid4()),
@@ -91,6 +92,7 @@ def _finding(
         framework_mapping=framework_mapping,
         depth_level="lightweight",
         deterministic_rule_version=rule_version,
+        concern=concern_name,
     )
 
 
@@ -1017,6 +1019,7 @@ def scanner_findings(scanner: dict, parsed: dict, review_id: str) -> list[Findin
                 checks[0].recommendation,
                 [*checks[0].framework, *(f"Trivy {i}" for i in ids)],
                 rule_version=version,
+                concern_name=checks[0].concern,
             )
         )
     return findings
@@ -1048,7 +1051,9 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
     for rule in ALL_RULES:
         if trivy_ran and _RULE_CONCERNS.get(rule) in TRIVY_OWNED_CONCERNS:
             continue
-        findings.extend(rule(working, review_id))
+        # The stakeholder view's catalog is keyed by concern.
+        name = _RULE_CONCERNS.get(rule)
+        findings.extend(f.model_copy(update={"concern": name}) for f in rule(working, review_id))
     if trivy_ran:
         findings.extend(scanner_findings(scanner, working, review_id))
     elif scanner is not None:

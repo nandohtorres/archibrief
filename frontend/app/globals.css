@@ -1687,6 +1687,260 @@ h4 {
   margin-bottom: var(--space-1);
 }
 
+/* Stakeholder view: budget summary and cost boxes. Every figure comes
+   from the backend's price table (backend/shared/stakeholder). */
+.budget-summary {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+}
+
+.budget-summary h3 {
+  margin: 0;
+  color: var(--stakeholder);
+  font: italic 600 1.25rem/1.35 var(--font-serif);
+}
+
+.budget-headline {
+  margin: 0.25rem 0 var(--space-2);
+  color: var(--text-muted);
+}
+
+.budget-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.budget-stats > div {
+  padding: var(--space-2);
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
+}
+
+.budget-stats span,
+.cost-box > span {
+  display: block;
+  color: var(--text-faint);
+  font: 700 0.66rem/1.4 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.budget-stats strong {
+  display: block;
+  margin: 0.25rem 0 0.1rem;
+  font: 600 1.5rem/1.2 var(--font-serif);
+}
+
+.budget-stats strong small {
+  color: var(--text-muted);
+  font: 500 0.85rem var(--font-body);
+}
+
+.budget-stats p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.budget-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+
+.budget-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.budget-table th,
+.budget-table td {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--surface-2);
+  text-align: left;
+  vertical-align: top;
+}
+
+.budget-table th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font: 700 0.66rem/1.4 var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.budget-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.budget-table td.num {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.budget-table td small {
+  display: block;
+  color: var(--text-faint);
+  font: 500 0.7rem/1.4 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.budget-row-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.budget-row-link:hover {
+  text-decoration-color: currentColor;
+}
+
+.budget-note {
+  margin: var(--space-1) 0 0;
+  color: var(--text-faint);
+  font-size: 0.78rem;
+}
+
+.verdict-tag {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font: 700 0.64rem/1.5 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.verdict-tag.urgent {
+  background: var(--critical-bg);
+  color: var(--critical);
+}
+
+.verdict-tag.quick {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.verdict-tag.worth {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.verdict-tag.optional,
+.verdict-tag.none {
+  background: var(--unknown-bg);
+  color: var(--unknown);
+}
+
+.plain-terms {
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-m);
+  background: var(--stakeholder-tint);
+}
+
+.guided-finding-body .plain-terms h4 {
+  margin-top: 0.25rem;
+}
+
+.cost-boxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+.cost-box {
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+
+.cost-box.fix {
+  border-top: 4px solid var(--success);
+}
+
+.cost-box.risk {
+  border-top: 4px solid var(--critical);
+}
+
+.cost-box strong {
+  display: block;
+  margin: 0.25rem 0;
+  font: 600 1.15rem/1.3 var(--font-serif);
+}
+
+.cost-box p,
+.cost-box ul {
+  margin: 0.4rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.cost-box ul {
+  padding-left: 1.1rem;
+}
+
+.cost-source {
+  font-size: 0.78rem;
+}
+
+.card-technical {
+  color: var(--text-faint);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 680px) {
+  .budget-stats,
+  .cost-boxes {
+    grid-template-columns: 1fr;
+  }
+
+  .budget-summary {
+    padding: var(--space-2);
+  }
+
+  /* One block per fix instead of a cramped four-column table. */
+  .budget-table thead {
+    display: none;
+  }
+
+  .budget-table,
+  .budget-table tbody,
+  .budget-table tr,
+  .budget-table td {
+    display: block;
+  }
+
+  .budget-table tr {
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--surface-2);
+  }
+
+  .budget-table td {
+    padding: 0.1rem 0;
+    border: 0;
+  }
+
+  .budget-table td.num::before {
+    content: attr(data-label) ": ";
+    color: var(--text-faint);
+  }
+}
+
 .plain-confidence {
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-m);

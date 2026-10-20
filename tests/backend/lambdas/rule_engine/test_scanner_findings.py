@@ -108,3 +108,10 @@ def test_open_database_port_on_standalone_rule_is_archibriefs_even_with_trivy():
     }
     findings = run_rules(parsed, "r1", scanner=_scanner())
     assert any("'pg'" in f.finding and "5432" in f.finding for f in findings)
+
+
+def test_findings_carry_their_concern_for_the_stakeholder_view():
+    scanner = _scanner(_result("AWS-0086", "aws_s3_bucket_public_access_block", "exports_block", 8))
+    findings = run_rules(PARSED, "r1", scanner=scanner)
+    assert {f.concern for f in findings if "Trivy" in f.evidence} == {"s3_public_access"}
+    assert all(f.concern for f in run_rules(PARSED, "r1"))

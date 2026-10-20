@@ -70,6 +70,12 @@ export interface Finding {
   retrieved_chunk_ids: string[];
   deterministic_rule_version: string | null;
   parent_finding_id: string | null;
+  // What a rule finding is about (e.g. "rds_multi_az"). Older reviews
+  // don't have it.
+  concern?: string | null;
+  // The model's plain-language explanation; the stakeholder card built
+  // from it is ReportFinding.stakeholder.
+  plain?: unknown;
   created_at: string;
 }
 
@@ -78,9 +84,93 @@ export interface FindingPresentation {
   short_label: string;
 }
 
+export type Severity = "critical" | "high" | "medium" | "low";
+export type Verdict = "fix-today" | "quick-win" | "worth-the-money" | "when-budget-allows";
+
+// backend/shared/stakeholder/brief.py. Every dollar figure comes from
+// the backend's dated price table, never from the model.
+export interface PricedLine {
+  label: string;
+  monthly_low: number;
+  // null: depends on usage, or on a size the price table doesn't list.
+  monthly_high: number | null;
+  basis: string;
+  source_url: string;
+}
+
+export interface FixCost {
+  monthly_known: number;
+  has_unpriced: boolean;
+  lines: PricedLine[];
+  effort_hours_low: number;
+  effort_hours_high: number;
+  effort_label: string;
+  caveat: string | null;
+}
+
+export interface CostOfInaction {
+  headline: string;
+  detail: string;
+  source_name: string | null;
+  source_url: string | null;
+  // How to estimate it, when there's no published figure to cite.
+  method: string | null;
+}
+
+export interface StakeholderCard {
+  // "rule": the catalog's hand-written text; "model": written by the
+  // model; "reviewer": written by hand for a demo.
+  source: "rule" | "model" | "reviewer";
+  concern: string | null;
+  subject: string | null;
+  severity: Severity;
+  title: string;
+  analogy: string;
+  what_could_happen: string;
+  action: string;
+  needs_action: boolean;
+  verdict: Verdict | null;
+  verdict_label: string | null;
+  fix: FixCost | null;
+  inaction: CostOfInaction | null;
+}
+
+export interface BudgetRow {
+  finding_id: string;
+  title: string;
+  subject: string | null;
+  severity: Severity;
+  verdict: Verdict;
+  verdict_label: string;
+  monthly_known: number;
+  has_unpriced: boolean;
+  effort_label: string;
+}
+
+export interface BudgetSummary {
+  item_count: number;
+  free_count: number;
+  monthly_known: number;
+  monthly_recommended: number;
+  recommended_has_unpriced: boolean;
+  monthly_optional: number;
+  unpriced_items: string[];
+  effort_hours_low: number;
+  effort_hours_high: number;
+  effort_label: string;
+  verdict_counts: Record<Verdict, number>;
+  rows: BudgetRow[];
+  prices_as_of: string;
+  price_region: string;
+  note: string;
+}
+
 export interface ReportFinding {
   record: Finding;
   presentation: FindingPresentation;
+  // The plain-language card. Absent for findings with nothing to say in
+  // plain terms, and for reviews saved before the stakeholder view.
+  stakeholder?: StakeholderCard;
 }
 
 export interface BaselineAnswer {
@@ -100,6 +190,8 @@ export interface ReviewReport {
   cost_estimate_tier: "low" | "medium" | "high";
   baseline_answers: BaselineAnswer[];
   findings: ReportFinding[];
+  // Totals across every finding that needs action. Absent on older reviews.
+  budget?: BudgetSummary;
   // The diagram built from the code (lib/architecture.ts). Older reviews
   // have none. Checked with isArchitectureGraph before use.
   architecture?: unknown;
@@ -349,4 +441,46 @@ export function isQuestionsTranscript(value: unknown): value is QuestionsTranscr
     Array.isArray(candidate.suggested) &&
     typeof candidate.questions_remaining === "number"
   );
+}
+
+// A demo's stakeholder view (public/demos/stakeholder/<id>.json, built by
+// scripts/build_demo_stakeholder.py), kept apart from the saved report.
+export interface StakeholderView {
+  review_id: string;
+  blocks: Record<string, StakeholderCard>;
+  budget: BudgetSummary;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isStakeholderCard(value: unknown): value is StakeholderCard {
+  if (!isRecord(value)) return false;
+  const textFields = ["title", "analogy", "what_could_happen", "action"];
+  if (!textFields.every((field) => typeof value[field] === "string")) return false;
+  if (typeof value.needs_action !== "boolean") return false;
+  return value.needs_action ? isRecord(value.fix) && isRecord(value.inaction) : true;
+}
+
+export function isStakeholderView(value: unknown): value is StakeholderView {
+  if (!isRecord(value) || typeof value.review_id !== "string") return false;
+  if (!isRecord(value.blocks) || !Object.values(value.blocks).every(isStakeholderCard)) {
+    return false;
+  }
+  const budget = value.budget;
+  return isRecord(budget) && Array.isArray(budget.rows) && typeof budget.monthly_known === "number";
+}
+
+// Puts a stakeholder view's cards and budget onto the report they were
+// built from.
+export function withStakeholderView(report: ReviewReport, view: StakeholderView): ReviewReport {
+  return {
+    ...report,
+    budget: view.budget,
+    findings: report.findings.map((finding) => {
+      const card = view.blocks[finding.record.finding_id];
+      return card ? { ...finding, stakeholder: card } : finding;
+    }),
+  };
 }

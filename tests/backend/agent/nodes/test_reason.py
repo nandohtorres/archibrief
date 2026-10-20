@@ -490,3 +490,83 @@ def test_reason_node_sends_the_resource_summary_to_the_model():
 def test_missing_resource_summary_sends_an_empty_list_not_null():
     content = build_user_content("brief", [], [])
     assert content["terraform_resources"] == {"resources": [], "truncated": False}
+
+
+# --- Plain-language explanation (stakeholder view) ---------------------------
+
+_PLAIN = {
+    "title": "Data is locked",
+    "analogy": "Like a safe.",
+    "what_could_happen": "Little.",
+    "action": "Keep it.",
+    "needs_action": True,
+    "severity": "high",
+    "harm": "data_breach",
+    "fix_components": [
+        {"item": "ec2_instance", "quantity": 2, "size": "t3.micro"},
+        {"item": "kms_key", "quantity": 1, "size": None},
+    ],
+    "effort_hours_low": 1,
+    "effort_hours_high": 3,
+}
+_TERRAFORM = {
+    "resources": [{"type": "aws_instance", "name": "web", "settings": {"instance_type": "t3.micro"}}]
+}
+
+
+def _with_plain(plain: object, terraform_resources: dict | None = _TERRAFORM):
+    [finding] = parse_model_findings(
+        [_valid_finding_item(plain=plain)],
+        review_id="r1",
+        model_id="m",
+        corpus_version="c",
+        retrieved_chunks=[_chunk("chunk-a", "Encrypt data at rest using AWS KMS customer managed keys.")],
+        deterministic_rule_version=None,
+        terraform_resources=terraform_resources,
+    )
+    return finding.plain
+
+
+def test_plain_explanation_is_kept_with_the_model_as_author():
+    plain = _with_plain(_PLAIN)
+    assert plain.written_by == "model"
+    assert [c.size for c in plain.fix_components] == ["t3.micro", None]
+    assert plain.harm == "data_breach"
+
+
+def test_plain_text_naming_a_price_is_dropped_but_the_finding_is_kept():
+    for text in ("This costs $25 a month.", "About 30 USD.", "roughly US$ 4"):
+        assert _with_plain({**_PLAIN, "action": text}) is None
+
+
+def test_a_size_the_terraform_doesnt_use_is_cleared_so_it_shows_unpriced():
+    plain = _with_plain(_PLAIN, terraform_resources=None)
+    assert plain.fix_components[0].size is None
+
+
+def test_unknown_price_items_or_harms_drop_the_plain_block():
+    assert _with_plain({**_PLAIN, "fix_components": [{"item": "gold_bars", "quantity": 1}]}) is None
+    assert _with_plain({**_PLAIN, "harm": "the end of the world"}) is None
+    assert _with_plain({**_PLAIN, "effort_hours_low": 9, "effort_hours_high": 1}) is None
+    assert _with_plain("not an object") is None
+    assert _with_plain({**_PLAIN, "harm": "none"}).harm is None
+
+
+def test_schema_requires_the_plain_block():
+    from backend.agent.nodes.reason import _FINDING_INPUT_SCHEMA
+
+    item = _FINDING_INPUT_SCHEMA["properties"]["findings"]["items"]
+    assert "plain" in item["required"]
+    assert "never write a dollar amount" in SYSTEM_PROMPT.lower()
+
+
+def test_plain_text_naming_a_price_in_other_forms_is_dropped():
+    for text in ("one thousand dollars", "€500", "500 a month", "about 5k", "£20/mo"):
+        assert _with_plain({**_PLAIN, "analogy": text}) is None, text
+
+
+def test_model_fixes_cant_add_shield_advanced_or_large_quantities():
+    big = [{"item": "ec2_instance", "quantity": 20, "size": "t3.micro"}]
+    assert _with_plain({**_PLAIN, "fix_components": big}) is None
+    shield = [{"item": "shield_advanced", "quantity": 1, "size": None}]
+    assert _with_plain({**_PLAIN, "fix_components": shield}) is None

@@ -1,5 +1,11 @@
 import { isArchitectureGraph, type ArchitectureGraph } from "./architecture";
-import { isChatTurn, type DemoChat, type ReviewReport } from "./contracts";
+import {
+  isChatTurn,
+  isStakeholderView,
+  withStakeholderView,
+  type DemoChat,
+  type ReviewReport,
+} from "./contracts";
 
 // Free demo reviews of real, public Terraform (docs/demos.md). Everything
 // is a static file next to the site: visiting never starts a paid review.
@@ -8,6 +14,8 @@ import { isChatTurn, type DemoChat, type ReviewReport } from "./contracts";
 //   public/demos/chats/<id>.json     pregenerated suggested answers
 //   public/demos/architecture/<id>.json  the diagram, built from the code
 //                                    (scripts/build_demo_architectures.py)
+//   public/demos/stakeholder/<id>.json   plain terms, costs and budget
+//                                    (scripts/build_demo_stakeholder.py)
 
 export interface ReviewerNote {
   findingId: string;
@@ -96,9 +104,20 @@ export async function fetchDemoIndex(): Promise<DemoEntry[]> {
 }
 
 export async function fetchDemo(entry: DemoEntry): Promise<LoadedDemo> {
-  const report = (await getJson(`reports/${entry.id}.json`)) as ReviewReport;
-  if (!Array.isArray(report?.findings) || !isString(report.review_id)) {
+  const saved = (await getJson(`reports/${entry.id}.json`)) as ReviewReport;
+  if (!Array.isArray(saved?.findings) || !isString(saved.review_id)) {
     throw new Error(`reports/${entry.id}.json: not a review`);
+  }
+  // Optional like the chat: without it the stakeholder view shows the
+  // findings' own text.
+  let report = saved;
+  try {
+    const candidate = await getJson(`stakeholder/${entry.id}.json`);
+    if (isStakeholderView(candidate) && candidate.review_id === saved.review_id) {
+      report = withStakeholderView(saved, candidate);
+    }
+  } catch {
+    report = saved;
   }
   // The chat answers are optional: a demo without them still opens.
   let chat: DemoChat | null = null;
