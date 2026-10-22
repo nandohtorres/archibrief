@@ -17,7 +17,7 @@ from backend.lambdas.rule_engine.architecture import (
     build_architecture,
     lane_of,
 )
-from backend.shared.terraform_scope import MAX_DISPLAY_NAME
+from backend.shared.terraform_scope import MAX_DISPLAY_NAME, display_name
 
 NETWORK = """
 resource "aws_vpc" "main" {
@@ -231,7 +231,11 @@ def test_submitted_names_are_truncated(tmp_path):
     )
     (node,) = graph["nodes"]
     assert len(node["name"]) <= MAX_DISPLAY_NAME
-    assert node["name"].endswith("…")
+    assert node["name"] == display_name(long_name)
+    other = build_architecture(
+        _parse(tmp_path, f'resource "aws_s3_bucket" "{long_name}_other" {{}}'), []
+    )
+    assert node["name"] != other["nodes"][0]["name"]
 
 
 def test_lane_uses_the_longest_prefix():
