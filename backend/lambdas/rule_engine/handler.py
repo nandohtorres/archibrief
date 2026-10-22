@@ -781,9 +781,21 @@ def _profile_role(profile_ref: object, body: dict, parsed: dict) -> str | None:
     return _role_key(profile.get("role"), profile, parsed)
 
 
-def _account_requires_imdsv2(parsed: dict) -> bool:
+def _account_requires_imdsv2(parsed: dict, instance: dict) -> bool:
+    # The same provider identity and resource-level region prove a shared
+    # account/region scope without guessing credentials or provider defaults.
+    # Different aliases may share a region, but may also assume other roles.
+    def scope(body: dict) -> tuple[object, object, str]:
+        module = module_of(body)
+        return (
+            resolve(body.get("provider", "${aws}"), parsed, module),
+            resolve(body.get("region"), parsed, module),
+            module,
+        )
+
     return any(
         resolve(body.get("http_tokens"), parsed, module_of(body)) == "required"
+        and scope(body) == scope(instance)
         for _, body in _resources(parsed, "aws_ec2_instance_metadata_defaults")
     )
 
@@ -796,8 +808,6 @@ def rule_ec2_imdsv2_required(parsed: dict, review_id: str) -> list[Finding]:
     account default, which the code doesn't show, unless the code sets
     that account default itself (aws_ec2_instance_metadata_defaults).
     """
-    if _account_requires_imdsv2(parsed):
-        return []
     broad_roles = _broad_compute_roles(parsed)
     findings = []
     for resource_type in ("aws_instance", "aws_launch_template"):
@@ -808,6 +818,8 @@ def rule_ec2_imdsv2_required(parsed: dict, review_id: str) -> list[Finding]:
             if tokens == "required":
                 continue
             if resolve(options.get("http_endpoint"), parsed, module) == "disabled":
+                continue
+            if tokens is None and _account_requires_imdsv2(parsed, body):
                 continue
             name = display_name(key)
             setting = "is not set" if tokens is None else 'is not "required"'
