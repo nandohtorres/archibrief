@@ -10,7 +10,7 @@ Everything a demo needs lives in `frontend/public/demos/`:
 | File | What it is |
 |---|---|
 | `<id>.tar` | The reviewed `.tf` files, unchanged, plus `SOURCE.md` (repository, commit, license) and the project's license file |
-| `demos.json` | Title, source link pinned to the commit, license, disclaimer and the workload brief for each demo |
+| `demos.json` | Title, source link pinned to the commit, license, disclaimer and the workload brief for each demo; plus the site's display labels: `badge` and `shows` (the landing card: what kind of code it is and what the review shows) and `shortTitle` and `tag` (the submission form's example strip) |
 | `reports/<id>.json` | The saved report, exactly as `GET /reviews/{id}` returned it |
 
 `scripts/build_demo_archives.py` rebuilds the archives from the pinned
