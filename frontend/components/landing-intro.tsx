@@ -75,7 +75,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
           AWS Terraform · architecture review that explains itself
         </span>
         <h1 id="landing-heading">
-          Know what&apos;s wrong with your AWS design, <em>and why it matters.</em>
+          A second opinion on your AWS architecture, <em>with the receipts.</em>
         </h1>
         <p className="landing-lede">
           ArchiBrief reads your Terraform and a short brief about the workload, then explains in
@@ -95,7 +95,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
               <span aria-hidden="true">→</span>
             </button>
             <a className="button secondary" href="#submit">
-              Review your own Terraform
+              Submit your own Terraform
             </a>
           </div>
           <ul className="landing-badges">
@@ -105,21 +105,6 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
           </ul>
         </div>
       </div>
-
-      <section
-        className="landing-section landing-band"
-        id="samples"
-        aria-labelledby="samples-heading"
-      >
-        <div className="landing-section-head">
-          <h2 id="samples-heading">Real reviews of real public code</h2>
-          <p>
-            Three open-source AWS projects, reviewed by ArchiBrief and then checked by hand. Where
-            the AI got something wrong, the review says so.
-          </p>
-        </div>
-        {demos}
-      </section>
 
       <section className="landing-section" id="readers" aria-labelledby="readers-heading">
         <div className="landing-section-head">
@@ -290,6 +275,21 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
             </li>
           </ol>
         </div>
+      </section>
+
+      <section
+        className="landing-section landing-band"
+        id="samples"
+        aria-labelledby="samples-heading"
+      >
+        <div className="landing-section-head">
+          <h2 id="samples-heading">Real reviews of real public code</h2>
+          <p>
+            Three open-source AWS projects, reviewed by ArchiBrief and then checked by hand. Where
+            the AI got something wrong, the review says so.
+          </p>
+        </div>
+        {demos}
       </section>
     </div>
   );

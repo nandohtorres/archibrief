@@ -23,9 +23,9 @@ const previews: Array<{ screen: AppScreen; label: string }> = [
 ];
 
 const sections: Array<{ id: string; label: string }> = [
-  { id: "samples", label: "Sample reviews" },
   { id: "how", label: "How it works" },
-  { id: "submit", label: "Review yours" },
+  { id: "samples", label: "Demo" },
+  { id: "submit", label: "Submit yours" },
 ];
 
 const nextTheme: Record<ThemeChoice, ThemeChoice> = {

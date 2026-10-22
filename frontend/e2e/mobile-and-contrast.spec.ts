@@ -79,7 +79,7 @@ test.describe("phone layout at 390px", () => {
     await page.goto(FIXTURE_URL);
     // The hero's actions are on the first screen: "See a real review" opens
     // the featured demo, the link goes to the submission form.
-    for (const name of [/See a real review/, /Review your own Terraform/]) {
+    for (const name of [/See a real review/, /Submit your own Terraform/]) {
       const action = page
         .locator(".landing-actions")
         .getByRole(name.source.startsWith("See") ? "button" : "link", { name });

@@ -7,7 +7,7 @@ import { fillSubmission } from "./support/submission";
 test.describe("landing page", () => {
   test("shows the pitch, the real demos and the full submission form", async ({ page }) => {
     await page.goto(LIVE_URL);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("why it matters");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("with the receipts");
     await expect(
       page.getByRole("heading", { name: "Real reviews of real public code" }),
     ).toBeVisible();
@@ -17,7 +17,7 @@ test.describe("landing page", () => {
     await expect(page.locator(".owner-only-note")).toContainText("owner-only for now");
     await expect(page.getByLabel("Admin key")).toBeVisible();
 
-    await page.getByRole("link", { name: "Review your own Terraform" }).click();
+    await page.getByRole("link", { name: "Submit your own Terraform" }).click();
     await expect(page).toHaveURL(/#submit$/);
   });
 
@@ -69,7 +69,7 @@ test.describe("landing page", () => {
     await page.getByRole("button", { name: "See a real review" }).click();
     await expect(page.locator("#report-heading")).toBeVisible();
     await page.getByRole("button", { name: "ArchiBrief home" }).click();
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("why it matters");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("with the receipts");
     await expect(page.locator("#report-heading")).toHaveCount(0);
     expect(await page.evaluate(() => window.scrollY)).toBeLessThan(50);
   });
