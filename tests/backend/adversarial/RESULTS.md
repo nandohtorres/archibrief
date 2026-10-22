@@ -1,5 +1,10 @@
 # Adversarial run: results and defects
 
+**Update, 2026-10-22:** the original baseline record below is retained.
+See [After fixes](#after-fixes-2026-10-22) and [the fix report](FIX_REPORT.md)
+for the completed local fixes and current results. Descriptions of defects
+and uncommitted files in the baseline section describe the original run.
+
 **Run:** 2026-10-20, worktree branch `mobile-laptop/test/adversarial-fixtures`
 (based on `963c887`). Backend venv Python 3.14; offline Trivy 0.76.0
 (`--skip-check-update`, the scanner's own isolated environment). No AWS,
@@ -438,3 +443,84 @@ New, all under `tests/backend/adversarial/`, uncommitted: `README.md`,
 `model_eval/SCORING.md`, `model_eval/inputs/*.json` (26), and
 `results/results.json` and `results/results_table.md`. No application code
 changed.
+
+## After fixes, 2026-10-22
+
+All B1-B20 were independently confirmed and addressed on
+`mobile-laptop/fix/adversarial-bugs`, worktree `archibrief-adversarial-fixes`.
+Code ends at `320ffeb`. No push, merge, deployment, AWS call, model call or
+Terraform command was made. The frozen answer key and hash are unchanged.
+
+| Check | Original baseline | After fixes |
+|---|---:|---:|
+| Existing backend, including traps | 710 passed / 4 skipped | 776 passed / 4 skipped |
+| Adversarial pytest, both modes including boundaries and post-freeze probes | 154 passed / 81 failed | 217 passed / 18 failed |
+| Families 1-9, rules raw | 64 pass / 38 fail | 93 pass / 9 fail |
+| Families 1-9, offline Trivy raw | 65 pass / 37 fail | 93 pass / 9 fail |
+| Previously passing raw checks that regressed | n/a | 0 |
+| Non-coverage frozen checks still failing | n/a | 0 |
+
+Category counts below use the adjudicated denominator and are identical
+in both modes after fixes. Acceptable-either-way checks are recorded,
+not credited as defect detection.
+
+| Category | Before rules | Before Trivy | After rules | After Trivy |
+|---|---:|---:|---:|---:|
+| Rule-covered recall | 16/24 | 16/24 | 24/24 | 24/24 |
+| False claims avoided | 25/29 | 25/29 | 29/29 | 29/29 |
+| Attribution | 4/6 | 4/6 | 6/6 | 6/6 |
+| Uncertainty disclosed | 1/8 | 2/8 | 8/8 | 8/8 |
+| Other evidence handling | 13/20 | 13/20 | 20/20 | 20/20 |
+| Coverage-gap expectations | 0/13 | 0/13 | 0/13 | 0/13 |
+| Acceptable either way | 2/2 | 2/2 | 2/2 | 2/2 |
+
+These are fixture results, not recall on arbitrary Terraform or model-quality
+measurements. Four of the coverage probes still pass raw because they only
+find empty summary entries; adjudication retains the four failures.
+
+### Remaining failures and limits
+
+The 18 pytest failures are nine `coverage_gap` checks in each mode:
+F04-D-07 (route-table reachability); F05-D-02/03 and F05-C-01/02
+(AZ/Region placement); F07-D-03/04/05 (public function URLs, unauthenticated
+API paths and the corresponding graph edge); F08-D-02 (DynamoDB TTL).
+The four weak passing probes are F06-D-03/F06-I-01 (backup selections)
+and F08-D-01/F08-I-01 (lifecycle settings). None is skipped or marked xfail.
+These are additional coverage features, not unresolved B1-B20 checks.
+
+Local module evaluation supports explicit singleton calls, literal/selected
+inputs and the bounded resolver's expressions. Non-singleton/unknown
+cardinality, missing/remote modules, module outputs, unsupported expressions
+and provider inheritance are not a full Terraform evaluation. Unsupported
+calls/inputs/providers receive coverage notices; unknown parent inputs never
+fall back to child defaults. Rootless multi-directory archives are explicitly
+independent static slices. Child scanner evidence is not mistaken for root
+or instantiated-module evidence; own rules run instead, with a disclosure.
+
+The four pre-existing backend skips need the gitignored local corpus data
+(`tests/backend/corpus/test_eval*.py`). No skip was added for a fix.
+Frontend wording was checked with the existing Prettier installation;
+the frontend build/browser suite and Linux deployment package were not run.
+
+### Evidence, review and paid work
+
+Baseline artifacts are preserved as
+`results/baseline-2026-10-20-results.json` and
+`results/baseline-2026-10-20-results_table.md`, also at commit `16438e8`.
+Current artifacts are `results/results.json` and `results/results_table.md`.
+`run_adversarial.py` regenerated all 26 `model_eval/inputs/*.json`; each is
+still explicitly **NOT RUN**. The original wrong-reason/vacuous IMDS and
+principal passes now have direct positive controls and updated verification
+notes. Notes cannot turn a failing raw check into a pass.
+
+Code and security reviewers inspected the complete branch diff and used
+focused repros. Their scanner attribution, source identity, unknown-input,
+Unicode escape, packaging and effective-byte-budget findings were addressed
+with regression tests. Both reported no remaining concrete blocker in their
+reviewed corrections. This is local source/test evidence, not certification
+of the deployed system.
+
+Still requires a separately authorized paid evaluation: the 26 reasoning
+inputs, Guardrails, Validate's treatment of real model output, retrieval and
+citation semantic support, report chat, AgentCore and the deployed workflow.
+Commands, dispositions, test paths and commits: [FIX_REPORT.md](FIX_REPORT.md).

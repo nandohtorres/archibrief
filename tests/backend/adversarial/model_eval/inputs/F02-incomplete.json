@@ -6,7 +6,7 @@
  "workload_brief": "Runtime role policy supplied at deploy time.",
  "rule_findings": [
   {
-   "finding_id": "88a1c938-2821-4e7b-8114-01119295882f",
+   "finding_id": "0a3b77f7-81d5-42ce-8609-fa6112720e1e",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -25,7 +25,7 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
  },
  "scoring": "model_eval/SCORING.md#iam-policy-mirror-maze"
 }

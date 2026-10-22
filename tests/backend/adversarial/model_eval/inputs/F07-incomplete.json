@@ -6,7 +6,7 @@
  "workload_brief": "Function URL auth mode supplied per environment.",
  "rule_findings": [
   {
-   "finding_id": "af90f902-e70e-44a3-8fec-dbd70fd6e2cf",
+   "finding_id": "94c59e5b-38e8-451a-b51e-6d81f60cec0c",
    "category": "cost",
    "type": "deterministic-rule-result",
    "finding": "Lambda function 'inference' has no reserved_concurrent_executions set",
@@ -16,7 +16,7 @@
    "concern": "lambda_concurrency"
   },
   {
-   "finding_id": "fc33a529-0528-476c-9ce2-aec6cc6b0aca",
+   "finding_id": "6b7a3fd6-4078-4a31-a4c7-8204fdb60824",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -51,7 +51,7 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
  },
  "scoring": "model_eval/SCORING.md#public-ai-api-cost-trap"
 }

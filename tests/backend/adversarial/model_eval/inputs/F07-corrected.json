@@ -6,7 +6,7 @@
  "workload_brief": "AI chat API behind CloudFront and WAF, keys required, throttled.",
  "rule_findings": [
   {
-   "finding_id": "f99f0b6e-fc8c-4bec-b9b8-8460c9485cf5",
+   "finding_id": "22077f8c-9ebc-4620-add6-fd20000d40d9",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -124,7 +124,7 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
  },
  "scoring": "model_eval/SCORING.md#public-ai-api-cost-trap"
 }

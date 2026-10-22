@@ -62,7 +62,9 @@ def extract_archive(archive_path: str, dest_dir: str) -> list[str]:
             if not member.isfile():
                 continue
             suffix = PurePosixPath(member.name).suffix
-            if suffix not in ALLOWED_SUFFIXES:
+            basename = PurePosixPath(member.name).name
+            variable_json = basename == "terraform.tfvars.json" or basename.endswith(".auto.tfvars.json")
+            if suffix not in ALLOWED_SUFFIXES and not variable_json:
                 continue
             archive.extract(member, path=dest_dir, filter="data")
             extracted.append(os.path.join(dest_dir, member.name))

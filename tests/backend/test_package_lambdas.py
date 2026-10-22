@@ -32,6 +32,10 @@ PACKAGER = _load_package_script()
 LAMBDA_SPECS = PACKAGER.LAMBDA_SPECS
 
 
+def test_scan_package_includes_structural_hcl_parser_dependency():
+    assert any(package.startswith("python-hcl2") for package in LAMBDA_SPECS["scan"]["packages"])
+
+
 def _module_file(module: str) -> Path | None:
     base = ROOT / Path(*module.split("."))
     if base.with_suffix(".py").is_file():

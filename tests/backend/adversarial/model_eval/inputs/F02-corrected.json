@@ -6,7 +6,7 @@
  "workload_brief": "Internal reporting platform. Partner account 111122223333 assumes a role with an external ID. Report buckets are read through one VPC endpoint.",
  "rule_findings": [
   {
-   "finding_id": "85e66fec-4987-4506-ae84-36ef3e2d2902",
+   "finding_id": "5d75dfdc-9828-4469-b106-3c7a834f046a",
    "category": "exposure",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'reports' has no aws_s3_bucket_public_access_block resource",
@@ -16,7 +16,7 @@
    "concern": "s3_public_access"
   },
   {
-   "finding_id": "6835f59e-4ccd-4fef-9094-8c7e5a31a7c3",
+   "finding_id": "aa9205e4-06c5-41f3-95a9-417b5784a385",
    "category": "exposure",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'exports' has no aws_s3_bucket_public_access_block resource",
@@ -26,7 +26,7 @@
    "concern": "s3_public_access"
   },
   {
-   "finding_id": "6fb426be-9750-47ad-a427-49b2c0494b47",
+   "finding_id": "915b224c-906a-46d5-87ba-fd4fca5bd696",
    "category": "exposure",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'media' has no aws_s3_bucket_public_access_block resource",
@@ -36,7 +36,7 @@
    "concern": "s3_public_access"
   },
   {
-   "finding_id": "002b2488-f107-48d4-acf9-98f70fa4984c",
+   "finding_id": "e7e99cf4-00d5-4a02-975d-0dc7f599891b",
    "category": "encryption",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'reports' has no server-side encryption configuration",
@@ -46,7 +46,7 @@
    "concern": "s3_encryption"
   },
   {
-   "finding_id": "4d195e9f-79d2-4b61-a7e6-cfec9e7d292a",
+   "finding_id": "8e5d9774-16df-43b3-8689-5fcd5115bd9c",
    "category": "encryption",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'exports' has no server-side encryption configuration",
@@ -56,7 +56,7 @@
    "concern": "s3_encryption"
   },
   {
-   "finding_id": "bdf69b12-bf98-489c-86f6-16d2868ac7c5",
+   "finding_id": "cdbc2d60-a6a8-4a77-ae73-04e9d44a942c",
    "category": "encryption",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'media' has no server-side encryption configuration",
@@ -66,7 +66,7 @@
    "concern": "s3_encryption"
   },
   {
-   "finding_id": "37a63532-daa2-4163-a71e-ad4032b82841",
+   "finding_id": "2c1ed7cb-2be0-45a7-ac78-412abaeed108",
    "category": "recovery",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'reports' does not have versioning enabled",
@@ -76,7 +76,7 @@
    "concern": "s3_versioning"
   },
   {
-   "finding_id": "174755ce-fe9e-4fcf-9a03-b7c424c6e726",
+   "finding_id": "8a49355b-8746-4617-afd6-4e374342a415",
    "category": "recovery",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'exports' does not have versioning enabled",
@@ -86,7 +86,7 @@
    "concern": "s3_versioning"
   },
   {
-   "finding_id": "b19579c1-e596-4c15-bdaf-eda3e8f29321",
+   "finding_id": "a9befe02-afc7-4df8-9b7e-08c506f596ae",
    "category": "recovery",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'media' does not have versioning enabled",
@@ -96,7 +96,7 @@
    "concern": "s3_versioning"
   },
   {
-   "finding_id": "bcd00e1c-4fd4-4420-8044-0af73cd0ee68",
+   "finding_id": "a4b2813a-9dcd-4972-866a-95bfd182e1dc",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -104,16 +104,6 @@
    "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
    "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
    "concern": "cloudtrail_present"
-  },
-  {
-   "finding_id": "a741172e-fc74-4b98-9b0d-52f8a6a51629",
-   "category": "iam",
-   "type": "deterministic-rule-result",
-   "finding": "IAM role 'partner_doc' assume-role policy has no external-id/federation condition",
-   "evidence": "resource \"aws_iam_role\" \"partner_doc\" trusts an AWS principal with no sts:ExternalId, MFA or organization condition",
-   "risk_impact": "Anyone in the trusted account who can call sts:AssumeRole can use this role.",
-   "recommendation": "Add an sts:ExternalId, aws:MultiFactorAuthPresent or aws:PrincipalOrgID condition.",
-   "concern": "iam_trust"
   }
  ],
  "terraform_resources": {
@@ -180,7 +170,7 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
  },
  "scoring": "model_eval/SCORING.md#iam-policy-mirror-maze"
 }

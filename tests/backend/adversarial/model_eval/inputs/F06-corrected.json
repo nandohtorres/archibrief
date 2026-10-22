@@ -6,7 +6,7 @@
  "workload_brief": "Ledger and sandbox databases backed up nightly with a copy to a second vault.",
  "rule_findings": [
   {
-   "finding_id": "f1a0a981-163a-4f15-b787-ec4d65e1779e",
+   "finding_id": "69751499-dc3d-47e2-b05e-ae77918fb3f1",
    "category": "availability",
    "type": "deterministic-rule-result",
    "finding": "RDS instance 'dev_sandbox' is not configured multi_az",
@@ -16,7 +16,7 @@
    "concern": "rds_multi_az"
   },
   {
-   "finding_id": "af37d5f3-8fdf-4a12-9bce-e94766e11d64",
+   "finding_id": "e87ca1b5-aa6c-4a90-ba7a-a3ab0720e4ab",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -61,7 +61,9 @@
       "copied_to_another_vault": true,
       "continuous_backup": "not set (default: false)"
      }
-    ]
+    ],
+    "rules_total": 4,
+    "rules_truncated": false
    },
    {
     "type": "aws_backup_selection",
@@ -114,7 +116,7 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
  },
  "scoring": "model_eval/SCORING.md#backup-plan-without-protection"
 }

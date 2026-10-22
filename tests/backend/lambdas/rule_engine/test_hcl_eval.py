@@ -1,9 +1,56 @@
 from backend.lambdas.rule_engine.hcl_eval import (
     is_created,
     policy_statements,
+    render_policy_document,
     resolve,
     truthy,
 )
+
+
+def test_unsupported_hcl_string_escape_stays_unresolved_instead_of_crashing():
+    expression = r'${true ? "\U00000030" : "x"}'
+    assert resolve(expression, {}) == expression
+
+
+def test_duplicate_wildcard_principals_have_provider_set_semantics():
+    for principals in (
+        [{"type": "*", "identifiers": ["*", "*"]}],
+        [{"type": "*", "identifiers": ["*"]}] * 2,
+    ):
+        document = {"statement": [{"principals": principals, "actions": ["s3:GetObject"], "resources": ["*"]}]}
+        assert render_policy_document(document, {}, "")["Statement"][0]["Principal"] == "*"
+
+
+def test_policy_document_preserves_conditions_and_complement_elements():
+    document = {"statement": [{
+        "not_actions": ["iam:*"], "not_resources": ["arn:aws:s3:::excluded/*"],
+        "not_principals": [{"type": "AWS", "identifiers": ["arn:aws:iam::123456789012:root"]}],
+        "condition": [
+            {"test": "StringEquals", "variable": "sts:ExternalId", "values": ["partner-a"]},
+            {"test": "StringEquals", "variable": "sts:ExternalId", "values": ["partner-b"]},
+            {"test": "Bool", "variable": "aws:SecureTransport", "values": ["true"]},
+        ],
+    }]}
+    statement = render_policy_document(document, {}, "")["Statement"][0]
+    assert statement["NotAction"] == ["iam:*"]
+    assert statement["NotResource"] == ["arn:aws:s3:::excluded/*"]
+    assert "Action" not in statement and "Resource" not in statement
+    assert statement["NotPrincipal"]["AWS"] == ["arn:aws:iam::123456789012:root"]
+    assert statement["Condition"] == {
+        "StringEquals": {"sts:ExternalId": ["partner-a", "partner-b"]},
+        "Bool": {"aws:SecureTransport": ["true"]},
+    }
+
+
+def test_policy_document_normalizes_wildcard_principal_without_losing_conditions():
+    document = {"statement": [{
+        "actions": ["s3:GetObject"], "resources": ["*"],
+        "principals": [{"type": "*", "identifiers": ["*"]}],
+        "condition": [{"test": "StringEquals", "variable": "aws:SourceVpce", "values": ["vpce-123"]}],
+    }]}
+    statement = render_policy_document(document, {}, "")["Statement"][0]
+    assert statement["Principal"] == "*"
+    assert statement["Condition"]["StringEquals"]["aws:SourceVpce"] == ["vpce-123"]
 
 ADMIN = [{"Effect": "Allow", "Action": "*", "Resource": "*"}]
 
@@ -65,3 +112,22 @@ def test_count_zero_and_empty_for_each_are_not_created():
     assert is_created({"for_each": {}}, parsed) is False
     assert is_created({"count": 2}, parsed) is True
     assert is_created({"count": "${var.unknown}"}, parsed) is True
+
+
+def test_conditional_counts_resolve_only_known_boolean_conditions():
+    parsed = {"variables": {"enabled": {"default": False}}}
+    assert resolve("${var.enabled ? 1 : 0}", parsed) == 0
+    assert is_created({"count": "${var.enabled ? 1 : 0}"}, parsed) is False
+    assert resolve("${true ? 2 : 0}", parsed) == 2
+    assert resolve("${var.missing ? 1 : 0}", parsed) == "${var.missing ? 1 : 0}"
+
+
+def test_unknown_creation_is_qualified_in_rule_findings():
+    from backend.lambdas.rule_engine.handler import run_rules
+
+    parsed = {"resources": {"aws_db_instance": {"maybe": {
+        "count": "${var.unknown ? 1 : 0}", "publicly_accessible": True
+    }}}}
+    findings = [f for f in run_rules(parsed, "unknown-count") if "'maybe'" in f.finding]
+    assert findings
+    assert all("if created" in f.finding.lower() for f in findings)

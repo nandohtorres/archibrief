@@ -6,7 +6,7 @@
  "workload_brief": "Public AI chat API behind CloudFront and WAF. Spend is capped at $50/month by the budget; each user is limited to 100 requests a day by the usage plan.",
  "rule_findings": [
   {
-   "finding_id": "5ba5c7e3-ecba-4a62-b3b4-7a412e81e8d1",
+   "finding_id": "d259488b-6ba6-4df5-b8a1-8b6dfc83be02",
    "category": "cost",
    "type": "deterministic-rule-result",
    "finding": "Lambda function 'inference' has no reserved_concurrent_executions set",
@@ -16,7 +16,7 @@
    "concern": "lambda_concurrency"
   },
   {
-   "finding_id": "418d0fb3-b29b-4f04-8187-857ffe5d3116",
+   "finding_id": "e2abecd7-2de2-445c-bca1-f41995343b16",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -26,7 +26,7 @@
    "concern": "cloudtrail_present"
   },
   {
-   "finding_id": "cc9e1e35-71d2-40f6-bd5c-01fda9d23334",
+   "finding_id": "14dbab73-198a-4aba-a026-4e1fe0011db1",
    "category": "cost",
    "type": "deterministic-rule-result",
    "finding": "API Gateway stage(s) present with no aws_api_gateway_method_settings for throttling",
@@ -144,7 +144,7 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
  },
  "scoring": "model_eval/SCORING.md#public-ai-api-cost-trap"
 }

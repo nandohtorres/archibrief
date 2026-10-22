@@ -52,7 +52,8 @@ python -m pytest tests/backend/traps -q                                # existin
 ```
 
 Failing tests are the findings. None is marked xfail or skipped to make the
-run look clean. Expect about 81 failures across both modes (RESULTS.md).
+run look clean. The original baseline had 81 failures; after B1-B20 fixes,
+18 remain, all declared coverage gaps. See RESULTS.md and FIX_REPORT.md.
 
 ## Safety
 
@@ -61,8 +62,9 @@ run look clean. Expect about 81 failures across both modes (RESULTS.md).
   comment and checked against the docs below.
 - Trivy runs through the scanner's own `run_trivy`: `--skip-check-update`,
   a clean environment, and HTTP(S) proxies pointed at a closed port.
-- Every remote module source uses the reserved `.invalid` TLD, so nothing
-  can be fetched even if a source escapes neutralization (one does: B6).
+- Every remote module source uses the reserved `.invalid` TLD. B6's
+  original one-line-source bypass is fixed by structural neutralization;
+  the scanner still runs offline in its existing isolation.
 - Instruction text and secret markers are inert synthetic strings
   (`SYNTHETIC-SECRET-DO-NOT-LEAK-*`).
 - Scanner failures are simulated by patching `subprocess.run`; no

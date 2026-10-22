@@ -76,6 +76,11 @@ def _parsed(source: str) -> dict:
 def test_rule_titles_infer_the_concern_the_rule_sets(source):
     # Older saved reports have no concern, so the title has to give it back.
     for finding in run_rules(_parsed(source), "r1"):
+        if finding.type.value == "not-observable":
+            assert finding.concern is None
+            assert finding.citation is None
+            assert finding.evidence
+            continue
         assert finding.concern in RECIPES
         assert infer_concern(finding.finding) == finding.concern, finding.finding
 

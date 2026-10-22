@@ -6,37 +6,37 @@
  "workload_brief": "Ledger service. The database tier lives in private subnets and must not be reachable from the internet; operators use a bastion.",
  "rule_findings": [
   {
-   "finding_id": "0fce358e-bcf0-4440-aaaa-b9b37e92ce4a",
+   "finding_id": "9215de7a-453b-43ee-a083-10bbbfd9934b",
    "category": "exposure",
    "type": "deterministic-rule-result",
    "finding": "Security group rule 'bastion_v6' allows ::/0 ingress to sensitive port(s) [22]",
    "evidence": "resource \"aws_security_group\" \"bastion_v6\" allows ::/0 for ports 22-22",
-   "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
+   "risk_impact": "This rule permits internet-source traffic on sensitive ports if attached to a resource. Actual reachability also depends on routing and listeners.",
    "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
    "concern": "sg_open_ingress"
   },
   {
-   "finding_id": "79044a4d-6a76-4bc5-a3f5-deb2ad2e5aeb",
+   "finding_id": "5a4a03e1-e170-4f15-a3b3-1edd1f436dc4",
    "category": "exposure",
    "type": "deterministic-rule-result",
    "finding": "Security group rule 'orphan_any' allows 0.0.0.0/0 ingress to sensitive port(s) [5432]",
    "evidence": "resource \"aws_security_group\" \"orphan_any\" allows 0.0.0.0/0 for ports 5432-5432",
-   "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
+   "risk_impact": "This rule permits internet-source traffic on sensitive ports if attached to a resource. Actual reachability also depends on routing and listeners.",
    "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
    "concern": "sg_open_ingress"
   },
   {
-   "finding_id": "6e865c17-2ab0-4d63-b009-90783ef8b555",
+   "finding_id": "275300e6-256d-41ae-9951-e364d870e3b3",
    "category": "exposure",
    "type": "deterministic-rule-result",
    "finding": "Security group rule 'modules/a_payments/db' allows 0.0.0.0/0 ingress to sensitive port(s) [5432]",
    "evidence": "resource \"aws_security_group\" \"modules/a_payments/db\" allows 0.0.0.0/0 for ports 5432-5432",
-   "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
+   "risk_impact": "This rule permits internet-source traffic on sensitive ports if attached to a resource. Actual reachability also depends on routing and listeners.",
    "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
    "concern": "sg_open_ingress"
   },
   {
-   "finding_id": "22027135-2a26-4553-b099-99ccca40a2a8",
+   "finding_id": "93a3a785-d6f5-494e-9f9b-a6c9a89ab317",
    "category": "exposure",
    "type": "deterministic-rule-result",
    "finding": "RDS instance 'ledger' is publicly accessible",
@@ -46,7 +46,7 @@
    "concern": "rds_public"
   },
   {
-   "finding_id": "cb8422c9-5f21-463f-a762-c90725602ebb",
+   "finding_id": "63ff5723-0ada-476c-a463-bcf71be14d78",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -54,6 +54,16 @@
    "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
    "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
    "concern": "cloudtrail_present"
+  },
+  {
+   "finding_id": "75d43798-22ad-42c5-8fba-7eac95729ec7",
+   "category": "observability",
+   "type": "not-observable",
+   "finding": "Terraform module or input coverage is incomplete",
+   "evidence": "Module 'payments': input value unresolved in parent scope; contents not evaluated; Module 'payments': provider inheritance and mappings are not evaluated; Module 'reporting': input value unresolved in parent scope; contents not evaluated; Module 'reporting': provider inheritance and mappings are not evaluated",
+   "risk_impact": "Unobserved inputs or modules may change this architecture's findings.",
+   "recommendation": "Supply the missing local configuration or inspect the disclosed gap separately.",
+   "concern": null
   }
  ],
  "terraform_resources": {
@@ -157,7 +167,13 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based.",
+  "not_observable": [
+   "Module 'payments': input value unresolved in parent scope; contents not evaluated",
+   "Module 'payments': provider inheritance and mappings are not evaluated",
+   "Module 'reporting': input value unresolved in parent scope; contents not evaluated",
+   "Module 'reporting': provider inheritance and mappings are not evaluated"
+  ]
  },
  "scoring": "model_eval/SCORING.md#private-subnet-public-path"
 }
