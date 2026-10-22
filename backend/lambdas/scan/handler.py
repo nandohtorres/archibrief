@@ -34,7 +34,7 @@ from pathlib import Path, PurePosixPath
 from backend.shared.archive import IngestRejected, extract_archive
 from backend.shared.clients import S3Client
 from backend.shared.terraform_scope import scoped_key
-from backend.shared.trivy_checks import TRUSTED_CHECK_IDS
+from backend.shared.trivy_checks import TRUSTED_CHECK_IDS, TRUSTED_CHECKS
 
 DEFAULT_TRIVY_PATH = "/opt/bin/trivy"
 SCAN_TIMEOUT_SECONDS = 60
@@ -142,7 +142,7 @@ def _module_for(target: Path, root: Path) -> str:
     return "" if relative == "." else PurePosixPath(*Path(relative).parts).as_posix()
 
 
-def trusted_results(report: dict, scan_dir: str, files: list[str]) -> list[dict]:
+def trusted_results(report: dict, scan_dir: str, files: list[str], *, bounded: bool = True) -> list[dict]:
     """Keep only trusted, failing checks, as small identifier-only records."""
     directories = [os.path.dirname(os.path.abspath(f)) for f in files]
     module_root = Path(os.path.commonpath(directories)) if directories else Path(scan_dir)
@@ -172,9 +172,17 @@ def trusted_results(report: dict, scan_dir: str, files: list[str]) -> list[dict]
                     "end_line": int(cause.get("EndLine") or 0),
                 }
             )
-            if len(results) >= MAX_RESULTS:
-                return results
-    return results
+    # Keep one result for each concern before retaining more of a noisy
+    # concern. Input order must not let hundreds of bucket checks hide RDS.
+    if len(results) <= MAX_RESULTS:
+        return results
+    first, rest, seen = [], [], set()
+    for result in results:
+        concern = TRUSTED_CHECKS[result["check_id"]].concern
+        (rest if concern in seen else first).append(result)
+        seen.add(concern)
+    ordered = first + rest
+    return ordered[:MAX_RESULTS] if bounded else ordered
 
 
 def scan_files(scan_dir: str, files: list[str], trivy_path: str | None = None) -> dict:
@@ -184,12 +192,15 @@ def scan_files(scan_dir: str, files: list[str], trivy_path: str | None = None) -
         return {"status": "unavailable", "tool": "trivy", "reason": "scanner_not_installed"}
     neutralized = neutralize_remote_sources(files, scan_dir)
     report = run_trivy(scan_dir, trivy_path)
+    results = trusted_results(report, scan_dir, files, bounded=False)
     return {
         "status": "ok",
         "tool": "trivy",
         "version": os.environ.get("TRIVY_VERSION", "unknown"),
         "neutralized_sources": neutralized,
-        "results": trusted_results(report, scan_dir, files),
+        "results": results[:MAX_RESULTS],
+        "results_total": len(results),
+        "truncated": len(results) > MAX_RESULTS,
     }
 
 

@@ -150,6 +150,32 @@ def test_results_are_capped(tmp_path, monkeypatch):
     assert len(trusted_results(report, str(tmp_path), files)) == 3
 
 
+def test_partial_scan_discloses_totals_and_falls_back_for_omitted_concerns(tmp_path, monkeypatch):
+    from backend.lambdas.rule_engine.handler import run_rules
+
+    monkeypatch.setattr(scan, "MAX_RESULTS", 3)
+    files = [_write(tmp_path / "main.tf", "")]
+    report = _report("main.tf", [
+        *[_item("AWS-0090", f"aws_s3_bucket.b{i}") for i in range(4)],
+        _item("AWS-0180", "aws_db_instance.ledger"),
+    ])
+    monkeypatch.setattr(scan, "run_trivy", lambda *_a, **_k: report)
+    result = scan.scan_files(str(tmp_path), files, trivy_path=__file__)
+    assert result["truncated"] is True
+    assert result["results_total"] == 5
+    assert len(result["results"]) == 3
+    parsed = {"resources": {
+        "aws_db_instance": {"ledger": {"publicly_accessible": True}},
+        "aws_security_group": {"admin": {"ingress": [{
+            "from_port": 22, "to_port": 22, "cidr_blocks": ["0.0.0.0/0"]
+        }]}},
+    }}
+    findings = run_rules(parsed, "partial", scanner=result)
+    assert any("ledger" in f.finding and "publicly accessible" in f.finding for f in findings)
+    assert any("admin" in f.finding and "22" in f.finding for f in findings)
+    assert any(f.type.value == "not-observable" and "truncat" in f.finding for f in findings)
+
+
 def test_missing_binary_reports_unavailable(tmp_path):
     files = [_write(tmp_path / "main.tf", "")]
 
