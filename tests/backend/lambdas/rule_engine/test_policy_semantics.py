@@ -33,6 +33,10 @@ def test_allow_complement_grants_are_reported_without_claiming_full_admin(statem
     findings = [f for f in run_rules(parsed, "complements") if f.concern == "iam_wildcard"]
     assert findings
     assert all("full admin" not in f.finding for f in findings)
+    if "NotResource" in statement:
+        assert all("on all resources" not in f.finding for f in findings)
+        assert all('on Resource "*"' not in f.evidence for f in findings)
+        assert all("NotResource" in f.evidence for f in findings)
 
 
 def test_compute_role_boundary_qualifies_effective_permissions():

@@ -142,6 +142,21 @@ def test_results_are_module_scoped_and_unsafe_names_dropped(tmp_path):
     assert [r["resource_key"] for r in results] == ["b/logs", "a/inner"]
 
 
+def test_module_only_cause_is_reported_at_module_scope_without_a_phantom_resource(tmp_path):
+    from backend.lambdas.rule_engine.handler import run_rules
+
+    files = [_write(tmp_path / "main.tf", "")]
+    results = trusted_results(_report("main.tf", [_item("AWS-0107", "module.edge_lab")]), str(tmp_path), files)
+    assert results[0]["scope"] == "module"
+    assert results[0]["resource_key"] == "edge_lab"
+    findings = run_rules({"resources": {}}, "module-cause", {"status": "ok", "results": results})
+    relevant = [f for f in findings if "edge_lab" in f.finding]
+    assert relevant
+    assert all('resource "module"' not in f.evidence for f in relevant)
+    assert any("attribution" in f.evidence for f in relevant)
+    assert any(f.type.value == "not-observable" and "attribut" in f.finding for f in findings)
+
+
 def test_counted_and_for_each_resources_keep_their_results(tmp_path):
     # Trivy reports count/for_each instances as name[0] / name["key"].
     # These were dropped as unsafe names, so e.g. FEC's publicly

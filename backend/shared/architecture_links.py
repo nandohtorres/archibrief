@@ -134,6 +134,9 @@ def _place(nodes: dict[str, dict], findings: list[dict]) -> list[str]:
         lowered = text.lower()
         hits: set[str] = set()
         declared = _DECLARED.findall(text)
+        if str(finding.get("evidence", "")).startswith("Module call '"):
+            unplaced.append(finding_id)
+            continue
         for resource_type, name in declared:
             hits.update(n for n in by_name.get(name, []) if nodes[n]["type"] == resource_type)
         exact = {name for _type, name in declared}

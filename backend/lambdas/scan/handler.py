@@ -188,6 +188,16 @@ def trusted_results(report: dict, scan_dir: str, files: list[str], *, bounded: b
                 continue
             cause = item.get("CauseMetadata") or {}
             address = _INSTANCE_INDEX.sub("", str(cause.get("Resource", "")))
+            if re.fullmatch(r"module\.[A-Za-z0-9_-]+(?:\.module\.[A-Za-z0-9_-]+)*", address):
+                results.append({
+                    "check_id": check_id,
+                    "scope": "module",
+                    "resource_key": "/".join(address.split(".")[1::2]),
+                    "file": PurePosixPath(*Path(result.get("Target", "")).parts).as_posix(),
+                    "start_line": int(cause.get("StartLine") or 0),
+                    "end_line": int(cause.get("EndLine") or 0),
+                })
+                continue
             resource_type, _, name = address.rpartition(".")
             # Module-called resources come back as module.x.type.name; the
             # last two segments identify the resource.

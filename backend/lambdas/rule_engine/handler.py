@@ -642,14 +642,17 @@ def rule_iam_policy_wildcard_action_resource(parsed: dict, review_id: str) -> li
         name = display_name(key)
         if "*" in grants:
             text = f"IAM policy '{name}' grants wildcard Action \"*\" on all resources (full admin)"
+        elif any("NotResource" in grant for grant in grants):
+            text = f"IAM policy '{name}' grants broad permissions using a NotResource complement"
         else:
             text = f"IAM policy '{name}' grants wildcard {', '.join(grants)} on all resources"
+        scope = "NotResource exclusions" if any("NotResource" in g for g in grants) else 'Resource "*"'
         findings.append(
             _finding(
                 review_id,
                 FindingCategory.IAM,
                 text,
-                f'resource "{resource_type}" "{name}" allows {", ".join(grants)} on Resource "*"',
+                f'resource "{resource_type}" "{name}" allows {", ".join(grants)} with {scope}',
                 "Overly broad permissions violate least privilege and widen blast radius on compromise.",
                 "Scope the policy to the specific actions and resource ARNs the role actually needs.",
                 ["AWS Well-Architected: Security Pillar", "SEC03-BP02", "CIS Controls v8: 5.4"],
@@ -1060,7 +1063,7 @@ def _subject_key(result: dict, parsed: dict) -> str:
     """The resource a Trivy result is really about. A public access block
     result is reported against its bucket (trap t10)."""
     key = result["resource_key"]
-    if result["resource_type"] != "aws_s3_bucket_public_access_block":
+    if result.get("resource_type") != "aws_s3_bucket_public_access_block":
         return key
     body = parsed.get("resources", {}).get("aws_s3_bucket_public_access_block", {}).get(key)
     if isinstance(body, dict):
@@ -1076,10 +1079,10 @@ def scanner_findings(scanner: dict, parsed: dict, review_id: str) -> list[Findin
         check = TRUSTED_CHECKS.get(result.get("check_id", ""))
         if check is None:
             continue
-        grouped.setdefault((check.concern, _subject_key(result, parsed)), []).append(result)
+        grouped.setdefault((check.concern, result.get("scope", "resource"), _subject_key(result, parsed)), []).append(result)
 
     findings = []
-    for (_, key), results in grouped.items():
+    for (_, scope, key), results in grouped.items():
         checks = [TRUSTED_CHECKS[r["check_id"]] for r in results]
         first = results[0]
         name = display_name(key)
@@ -1089,13 +1092,23 @@ def scanner_findings(scanner: dict, parsed: dict, review_id: str) -> list[Findin
         if lines:
             location += f" line {lines[0]}" if len(lines) == 1 else f" lines {lines[0]}-{lines[-1]}"
         details = "; ".join(dict.fromkeys(c.detail for c in checks))
+        title = checks[0].title.format(name=name)
+        evidence = (
+            f'resource "{first.get("resource_type")}" "{display_name(first["resource_key"])}" '
+            f"at {location}: {details} (Trivy {', '.join(ids)})"
+        )
+        if scope == "module":
+            title = f"Module call '{name}' has a scanner finding for {checks[0].concern}"
+            evidence = (
+                f"Module call '{name}' at {location}: {details} "
+                f"(Trivy {', '.join(ids)}); exact resource attribution unavailable"
+            )
         findings.append(
             _finding(
                 review_id,
                 FindingCategory(checks[0].category),
-                checks[0].title.format(name=name),
-                f'resource "{first["resource_type"]}" "{display_name(first["resource_key"])}" '
-                f"at {location}: {details} (Trivy {', '.join(ids)})",
+                title,
+                evidence,
                 checks[0].risk,
                 checks[0].recommendation,
                 [*checks[0].framework, *(f"Trivy {i}" for i in ids)],
@@ -1127,7 +1140,8 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
     falls back to every rule, and the report says so.
     """
     trivy_ran = bool(scanner) and scanner.get("status") == "ok"
-    complete_scan = trivy_ran and not scanner.get("truncated", False)
+    partial_attribution = trivy_ran and any(r.get("scope") == "module" for r in scanner.get("results", []))
+    complete_scan = trivy_ran and not scanner.get("truncated", False) and not partial_attribution
     working = {**parsed, _TRIVY_RAN: complete_scan}
     findings: list[Finding] = []
     for rule in ALL_RULES:
@@ -1145,7 +1159,7 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
                 for own in findings
             ):
                 findings.append(finding)
-        if not complete_scan:
+        if scanner.get("truncated", False):
             findings.append(_finding(
                 review_id, FindingCategory.OBSERVABILITY,
                 "Trivy results were truncated; ArchiBrief's own rules also ran",
@@ -1153,6 +1167,15 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
                 f"{scanner.get('results_total', 'unknown')} trusted scanner results",
                 "Scanner-only issues may be omitted; this is not a complete scan.",
                 "Review a smaller configuration slice to obtain complete scanner coverage.",
+                [], finding_type=FindingType.NOT_OBSERVABLE,
+            ))
+        if partial_attribution:
+            findings.append(_finding(
+                review_id, FindingCategory.OBSERVABILITY,
+                "Some Trivy findings have only module-level attribution; ArchiBrief's own rules also ran",
+                "Scanner results identify a module call without an exact resource attribution",
+                "The affected resource cannot be identified reliably from these scanner results.",
+                "Inspect the module's resources before acting on its scanner findings.",
                 [], finding_type=FindingType.NOT_OBSERVABLE,
             ))
     elif scanner is not None:
