@@ -106,7 +106,11 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
         </div>
       </div>
 
-      <section className="landing-section" id="readers" aria-labelledby="readers-heading">
+      <section
+        className="landing-section landing-band"
+        id="readers"
+        aria-labelledby="readers-heading"
+      >
         <div className="landing-section-head">
           <h2 id="readers-heading">One review, two readers</h2>
           <p>Built for the engineer who fixes it and the person who has to say yes.</p>
