@@ -403,4 +403,7 @@ def build_resource_summary(parsed: dict) -> dict:
                 entry["rules_total"] = sum(isinstance(rule, dict) for rule in raw_rules)
                 entry["rules_truncated"] = entry["rules_total"] > len(entry["rules"])
             entries.append(entry)
-    return {"resources": entries, "truncated": total > len(entries), "note": COVERAGE_NOTE}
+    result = {"resources": entries, "truncated": total > len(entries), "note": COVERAGE_NOTE}
+    if parsed.get("not_observable"):
+        result["not_observable"] = parsed["not_observable"]
+    return result

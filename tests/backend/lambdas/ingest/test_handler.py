@@ -128,12 +128,12 @@ def test_rejected_terraform_never_echoes_content_or_host_paths(tmp_path, capsys,
 def test_parse_terraform_flags_remote_module_not_observable(tmp_path):
     tf_file = tmp_path / "main.tf"
     tf_file.write_text(
-        'resource "aws_lambda_function" "fn" {\n'
+        'module "remote" {\n'
         '  source = "git::https://example.com/module.git"\n'
         "}\n"
     )
     parsed = parse_terraform_files([str(tf_file)])
-    assert "aws_lambda_function.fn" in parsed.not_observable
+    assert any("remote" in gap and "unavailable" in gap for gap in parsed.not_observable)
 
 
 # Adversarial regression (ADR-0038): "instructions hidden in Terraform

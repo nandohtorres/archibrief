@@ -12,6 +12,7 @@ anything Terraform-side.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
@@ -31,7 +32,8 @@ from backend.shared.archive import (  # noqa: F401  (re-exported for callers/tes
     extract_archive,
 )
 from backend.shared.clients import GuardrailsClient, S3Client
-from backend.shared.terraform_scope import MODULE_FIELD, scoped_key
+from backend.shared.hcl_eval import ResolutionBudgetExceeded, resolve
+from backend.shared.terraform_scope import MODULE_FIELD, display_name, scoped_key
 
 # with_comments=False: hcl2 defaults it to True, which attaches the raw
 # text of any adjacent `//` or `/* */` comment to the block body as
@@ -40,6 +42,7 @@ from backend.shared.terraform_scope import MODULE_FIELD, scoped_key
 # (ADR-0038). `#` comments are dropped by the lexer either way. Comments
 # are not part of the HCL data model, so nothing real is lost.
 _SERIALIZATION_OPTIONS = SerializationOptions(strip_string_quotes=True, with_comments=False)
+MAX_MODULE_EXPANSION_BYTES = 50 * 1024 * 1024
 
 
 @dataclass
@@ -57,6 +60,7 @@ class ParsedTerraform:
     # f03) instead of treating them as opaque strings.
     data: dict[str, dict[str, dict]] = field(default_factory=dict)
     locals: dict[str, object] = field(default_factory=dict)
+    module_evaluation: str = ""
 
 
 def _module_for(path: str, root: str) -> str:
@@ -76,6 +80,8 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
     directories = [os.path.dirname(os.path.abspath(p)) for p in file_paths]
     root = os.path.commonpath(directories) if directories else ""
     automatic_values: list[tuple[int, str, dict]] = []
+    module_calls: dict[str, dict[str, dict]] = {}
+    config_directories: set[str] = set()
 
     for index, path in enumerate(file_paths, start=1):
         with open(path, encoding="utf-8", errors="strict") as fh:
@@ -116,8 +122,9 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
                 for name, body in named.items():
                     key = scoped_key(module, name)
                     parsed.resources.setdefault(resource_type, {})[key] = _scoped_body(body, module)
-                    if _references_remote_module(body):
-                        parsed.not_observable.append(f"{resource_type}.{key}")
+        config_directories.add(module)
+        for block in document.get("module", []):
+            module_calls.setdefault(module, {}).update(block)
 
         for data_block in document.get("data", []):
             for data_type, named in data_block.items():
@@ -141,16 +148,155 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
         for name, value in values.items():
             if name in parsed.variables:
                 parsed.variables[name]["value"] = value
-    return parsed
+    return _evaluate_modules(parsed, module_calls, config_directories, root)
 
 
-def _references_remote_module(body: dict) -> bool:
-    source = body.get("source") if isinstance(body, dict) else None
-    if not isinstance(source, str):
-        return False
-    return source.startswith(
-        ("git::", "github.com", "registry.terraform.io", "http://", "https://")
-    )
+def _evaluate_modules(raw: ParsedTerraform, calls: dict, directories: set[str], root: str) -> ParsedTerraform:
+    """Walk only explicit, local singleton calls; unsupported work is disclosed.
+
+    Reuses the same bounded resolver as the rules. Never initializes a
+    module or fetches its source. Expansion has global and path bounds.
+    """
+    if "" not in directories:
+        raw.module_evaluation = "independent-slices"
+        raw.not_observable.append(
+            "No root configuration is present: directories are independent static slices, "
+            "not evidence that their resources are deployed together"
+        )
+        return raw
+    result = ParsedTerraform(files_parsed=raw.files_parsed, not_observable=raw.not_observable[:], module_evaluation="calls")
+    root_path = Path(root).resolve()
+    visited = 0
+    resource_total = 0
+    expanded_bytes = 0
+    byte_sizes: dict[int, int] = {}
+    omitted = object()
+    used_scopes: set[str] = set()
+
+    def gap(name: str, reason: str) -> None:
+        result.not_observable.append(f"Module '{display_name(name)}': {reason}; contents not evaluated")
+
+    def clone(value: object, scope: str, *, cache: bool = True) -> object:
+        nonlocal expanded_bytes
+        if not cache or id(value) not in byte_sizes:
+            size = len(json.dumps(value))
+            if cache:
+                byte_sizes[id(value)] = size
+        else:
+            size = byte_sizes[id(value)]
+        if expanded_bytes + size > MAX_MODULE_EXPANSION_BYTES:
+            gap(scope, "static expansion byte budget exceeded")
+            return omitted
+        expanded_bytes += size
+        return copy.deepcopy(value)
+
+    def input_value(value: object, scope: str) -> object:
+        nonlocal expanded_bytes
+        available = MAX_MODULE_EXPANSION_BYTES - expanded_bytes
+        budget = [available]
+        try:
+            resolved = resolve(value, vars(result), scope, _budget=budget)
+        except ResolutionBudgetExceeded:
+            expanded_bytes = MAX_MODULE_EXPANSION_BYTES
+            gap(scope, "static input resolution byte budget exceeded")
+            return "${unresolved.module_input}"
+        expanded_bytes += available - budget[0]
+        return resolved
+
+    def instantiate(source: str, scope: str, inputs: dict, ancestry: tuple[str, ...]) -> None:
+        nonlocal visited, resource_total
+        visited += 1
+        if visited > 64 or len(ancestry) > 6 or resource_total >= 1000:
+            gap(scope, "static expansion budget exceeded")
+            return
+        if source in ancestry:
+            gap(scope, "cyclic local module calls")
+            return
+        used_scopes.add(scope)
+        for key, body in raw.variables.items():
+            if key.rpartition("/")[0] == source:
+                name = key.rsplit("/", 1)[-1]
+                effective = {**body, **({"value": inputs[name]} if name in inputs else {})}
+                bound = clone(effective, scope, cache=False)
+                if bound is omitted:
+                    return
+                result.variables[scoped_key(scope, name)] = bound
+        for key, value in raw.locals.items():
+            if key.rpartition("/")[0] == source:
+                value = clone(value, scope)
+                if value is omitted:
+                    return
+                result.locals[scoped_key(scope, key.rsplit("/", 1)[-1])] = value
+        for field_name in ("resources", "data"):
+            for kind, bodies in getattr(raw, field_name).items():
+                for key, body in bodies.items():
+                    if key.rpartition("/")[0] != source:
+                        continue
+                    if resource_total >= 1000:
+                        gap(scope, "static resource budget exceeded")
+                        return
+                    resource_total += 1
+                    name = key.rsplit("/", 1)[-1]
+                    cloned = clone(body, scope)
+                    if cloned is omitted:
+                        return
+                    cloned[MODULE_FIELD] = scope
+                    if scope:
+                        # Provider inheritance/mapping is not evaluated. It
+                        # cannot prove a shared account/region default.
+                        cloned["__module_provider_unknown__"] = True
+                    getattr(result, field_name).setdefault(kind, {})[scoped_key(scope, name)] = cloned
+        for name, call in calls.get(source, {}).items():
+            call_name = scoped_key(scope, name)
+            if not isinstance(call, dict):
+                gap(call_name, "unsupported module declaration")
+                continue
+            if "count" in call:
+                count = input_value(call["count"], scope)
+                if type(count) is int and count == 0:
+                    continue
+                if type(count) is not int or count != 1:
+                    gap(call_name, "module count is unresolved or not singleton")
+                    continue
+            if "for_each" in call:
+                each = input_value(call["for_each"], scope)
+                if each == {} or each == []:
+                    continue
+                gap(call_name, "module for_each instances are not evaluated")
+                continue
+            source_value = call.get("source")
+            if not isinstance(source_value, str) or not source_value.startswith(("./", "../")) or "${" in source_value or "%{" in source_value:
+                gap(call_name, "remote or unresolved module source unavailable")
+                continue
+            target = (root_path / source / source_value).resolve()
+            if target != root_path and root_path not in target.parents:
+                gap(call_name, "module source outside submitted archive")
+                continue
+            relative = target.relative_to(root_path).as_posix()
+            relative = "" if relative == "." else relative
+            if relative not in directories:
+                gap(call_name, "local module files missing")
+                continue
+            bound_inputs = {}
+            for input_name, value in call.items():
+                if input_name in ("source", "version", "count", "for_each", "providers", "depends_on") or input_name.startswith("__"):
+                    continue
+                resolved = input_value(value, scope)
+                if "${" in json.dumps(resolved):
+                    gap(call_name, "input value unresolved in parent scope")
+                    resolved = "${unresolved.module_input}"
+                bound_inputs[input_name] = resolved
+            child_scope = relative
+            attempt = 0
+            while child_scope in used_scopes:
+                attempt += 1
+                child_scope = scoped_key(f"{call_name}_{attempt}", relative)
+            result.not_observable.append(
+                f"Module '{display_name(call_name)}': provider inheritance and mappings are not evaluated"
+            )
+            instantiate(relative, child_scope, bound_inputs, (*ancestry, source))
+    instantiate("", "", {}, ())
+    return result
 
 
 def _resolve_guardrails_client(
@@ -284,6 +430,7 @@ def _ingest(
         # Paths relative to the archive root; the temp dir is deleted after.
         "files_parsed": [os.path.relpath(p, dest_dir) for p in parsed.files_parsed],
         "not_observable": parsed.not_observable,
+        "module_evaluation": parsed.module_evaluation,
     }
     result = {
         "status": "parsed",

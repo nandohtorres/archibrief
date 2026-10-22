@@ -142,15 +142,20 @@ def test_results_are_module_scoped_and_unsafe_names_dropped(tmp_path):
     assert [r["resource_key"] for r in results] == ["b/logs", "a/inner"]
 
 
-def test_module_only_cause_is_reported_at_module_scope_without_a_phantom_resource(tmp_path):
+@pytest.mark.parametrize("address, key", [
+    ("module.edge_lab", "edge_lab"),
+    ("module.outer[0].module.inner[0]", "outer/inner"),
+    ('module.outer["a.b"].module.inner["x.y"]', "outer/inner"),
+])
+def test_module_only_cause_is_reported_at_module_scope_without_a_phantom_resource(tmp_path, address, key):
     from backend.lambdas.rule_engine.handler import run_rules
 
     files = [_write(tmp_path / "main.tf", "")]
-    results = trusted_results(_report("main.tf", [_item("AWS-0107", "module.edge_lab")]), str(tmp_path), files)
+    results = trusted_results(_report("main.tf", [_item("AWS-0107", address)]), str(tmp_path), files)
     assert results[0]["scope"] == "module"
-    assert results[0]["resource_key"] == "edge_lab"
+    assert results[0]["resource_key"] == key
     findings = run_rules({"resources": {}}, "module-cause", {"status": "ok", "results": results})
-    relevant = [f for f in findings if "edge_lab" in f.finding]
+    relevant = [f for f in findings if key in f.finding]
     assert relevant
     assert all('resource "module"' not in f.evidence for f in relevant)
     assert any("attribution" in f.evidence for f in relevant)

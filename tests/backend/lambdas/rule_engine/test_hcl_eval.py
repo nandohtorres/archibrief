@@ -7,6 +7,11 @@ from backend.lambdas.rule_engine.hcl_eval import (
 )
 
 
+def test_unsupported_hcl_string_escape_stays_unresolved_instead_of_crashing():
+    expression = r'${true ? "\U00000030" : "x"}'
+    assert resolve(expression, {}) == expression
+
+
 def test_duplicate_wildcard_principals_have_provider_set_semantics():
     for principals in (
         [{"type": "*", "identifiers": ["*", "*"]}],

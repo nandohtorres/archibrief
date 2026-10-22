@@ -49,7 +49,7 @@ _RESOURCE_TYPE = re.compile(r"^[a-z0-9_]+$")
 _RESOURCE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 # count / for_each instances: name[0] or name["key"]. The findings are
 # about the resource block, so the index is dropped.
-_INSTANCE_INDEX = re.compile(r'\[(?:\d+|"[^"\]]*")\]$')
+_INSTANCE_INDEX = re.compile(r'\[(?:\d+|"(?:[^"\\]|\\.)*")\]')
 
 
 def _log(review_id: str | None, stage: str, **fields: object) -> None:
@@ -213,6 +213,7 @@ def trusted_results(report: dict, scan_dir: str, files: list[str], *, bounded: b
                     "file": PurePosixPath(*Path(result.get("Target", "")).parts).as_posix(),
                     "start_line": int(cause.get("StartLine") or 0),
                     "end_line": int(cause.get("EndLine") or 0),
+                    **({"module_origin": True} if address.startswith("module.") else {}),
                 }
             )
     # Keep one result for each concern before retaining more of a noisy

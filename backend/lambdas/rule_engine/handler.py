@@ -654,7 +654,7 @@ def rule_iam_policy_wildcard_action_resource(parsed: dict, review_id: str) -> li
                 text,
                 f'resource "{resource_type}" "{name}" allows {", ".join(grants)} with {scope}',
                 "Overly broad permissions violate least privilege and widen blast radius on compromise.",
-                "Scope the policy to the specific actions and resource ARNs the role actually needs.",
+                "Scope the policy to the specific actions and resource ARNs the workload actually needs.",
                 ["AWS Well-Architected: Security Pillar", "SEC03-BP02", "CIS Controls v8: 5.4"],
             )
         )
@@ -848,6 +848,9 @@ def _account_requires_imdsv2(parsed: dict, instance: dict) -> bool:
     # The same provider identity and resource-level region prove a shared
     # account/region scope without guessing credentials or provider defaults.
     # Different aliases may share a region, but may also assume other roles.
+    if instance.get("__module_provider_unknown__"):
+        return False
+
     def scope(body: dict) -> tuple[object, object, str]:
         module = module_of(body)
         return (
@@ -1139,9 +1142,30 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
     every ArchiBrief rule runs. A scanner that reported "unavailable" also
     falls back to every rule, and the report says so.
     """
+    module_scan_partial = False
+    if scanner and scanner.get("status") == "ok" and parsed.get("module_evaluation") == "calls":
+        module_scan_partial = any(
+            module_of(body)
+            for bodies in parsed.get("resources", {}).values()
+            for body in bodies.values()
+        )
+        # Child scanner addresses use source directories, not bound call
+        # instances. They cannot establish input values or deployment.
+        retained = []
+        for result in scanner.get("results", []):
+            key = result.get("resource_key", "")
+            if result.get("scope") == "module" or result.get("module_origin") or "/" in key:
+                module_scan_partial = True
+                continue
+            body = parsed.get("resources", {}).get(result.get("resource_type"), {}).get(key)
+            if not isinstance(body, dict) or not is_created(body, parsed):
+                module_scan_partial = True
+                continue
+            retained.append(result)
+        scanner = {**scanner, "results": retained}
     trivy_ran = bool(scanner) and scanner.get("status") == "ok"
     partial_attribution = trivy_ran and any(r.get("scope") == "module" for r in scanner.get("results", []))
-    complete_scan = trivy_ran and not scanner.get("truncated", False) and not partial_attribution
+    complete_scan = trivy_ran and not scanner.get("truncated", False) and not partial_attribution and not module_scan_partial
     working = {**parsed, _TRIVY_RAN: complete_scan}
     findings: list[Finding] = []
     for rule in ALL_RULES:
@@ -1180,6 +1204,26 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
             ))
     elif scanner is not None:
         findings.append(_scanner_unavailable(review_id))
+    if module_scan_partial:
+        findings.append(_finding(
+            review_id, FindingCategory.OBSERVABILITY,
+            "Module scanner evidence could not be bound to evaluated resources; own rules also ran",
+            "Source-directory scanner results were excluded rather than attributed to module call instances",
+            "Module-specific scanner coverage is incomplete; supported local inputs were evaluated by own rules.",
+            "Review module resources and their bound inputs before relying on scanner-only coverage.",
+            [], finding_type=FindingType.NOT_OBSERVABLE,
+        ))
+    if gaps := parsed.get("not_observable", []):
+        # Ingest emits identifier-only module notices and fixed coverage
+        # descriptions. No source URL or expression is echoed here.
+        findings.append(_finding(
+            review_id, FindingCategory.OBSERVABILITY,
+            "Terraform module or input coverage is incomplete",
+            "; ".join(str(gap) for gap in gaps),
+            "Unobserved inputs or modules may change this architecture's findings.",
+            "Supply the missing local configuration or inspect the disclosed gap separately.",
+            [], finding_type=FindingType.NOT_OBSERVABLE,
+        ))
     unknown_creation = {
         f'resource "{kind}" "{display_name(key)}"'
         for kind, resources in parsed.get("resources", {}).items()

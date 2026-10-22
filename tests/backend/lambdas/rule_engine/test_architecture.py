@@ -203,7 +203,7 @@ def test_module_resources_keep_their_path_apart_from_the_name(tmp_path):
         'resource "aws_s3_bucket" "access_logs" {}', encoding="utf-8"
     )
     (tmp_path / "main.tf").write_text(
-        'resource "aws_s3_bucket" "root" {}', encoding="utf-8"
+        'resource "aws_s3_bucket" "root" {}\nmodule "logs" { source = "./services/logs" }', encoding="utf-8"
     )
     parsed = asdict(
         parse_terraform_files([str(tmp_path / "main.tf"), str(module / "main.tf")])
