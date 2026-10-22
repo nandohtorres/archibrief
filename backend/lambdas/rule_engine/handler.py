@@ -24,6 +24,7 @@ instead of guessing about settings no rule mentions.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 import uuid
@@ -269,6 +270,45 @@ def _is_public_principal(principal: object) -> bool:
     return False
 
 
+def _restricts_public_access(condition: object) -> bool:
+    """Only a proven positive identity/network restriction clears this check.
+
+    This is not a complete IAM evaluator. Unknown, negated, optional, or
+    wildcard restrictions cannot establish non-public access.
+    """
+    if not isinstance(condition, dict):
+        return False
+    keys = {
+        "aws:sourcevpce", "aws:sourcevpc", "aws:principalorgid",
+        "aws:principalaccount", "aws:principalarn", "aws:sourcearn", "aws:sourceaccount",
+    }
+    for operator, entries in condition.items():
+        if not isinstance(entries, dict):
+            continue
+        for key, raw_values in entries.items():
+            values = _as_list(raw_values)
+            if not values or not all(
+                isinstance(value, str) and value and not any(c in value for c in "*?$%&{}")
+                for value in values
+            ):
+                continue
+            if operator in {"StringEquals", "ArnEquals", "StringLike", "ArnLike"} and key.lower() in keys:
+                return True
+            if operator == "IpAddress" and key.lower() == "aws:sourceip":
+                try:
+                    networks = [ipaddress.ip_network(value) for value in values]
+                except ValueError:
+                    continue
+                collapsed = [
+                    network
+                    for version in (4, 6)
+                    for network in ipaddress.collapse_addresses(n for n in networks if n.version == version)
+                ]
+                if collapsed and all(network.prefixlen > 0 for network in collapsed):
+                    return True
+    return False
+
+
 @concern("s3_public_policy")
 def rule_s3_bucket_policy_public(parsed: dict, review_id: str) -> list[Finding]:
     """A bucket policy that allows anyone, whatever the bucket is called (trap t11)."""
@@ -280,7 +320,7 @@ def rule_s3_bucket_policy_public(parsed: dict, review_id: str) -> list[Finding]:
             for s in statements
             if s.get("Effect", "Allow") == "Allow"
             and _is_public_principal(s.get("Principal"))
-            and not s.get("Condition")
+            and not _restricts_public_access(s.get("Condition"))
         ]
         if not public:
             continue
@@ -293,8 +333,9 @@ def rule_s3_bucket_policy_public(parsed: dict, review_id: str) -> list[Finding]:
                 FindingCategory.EXPOSURE,
                 f"S3 bucket '{name}' has a bucket policy that allows anyone (Principal \"*\")",
                 f'resource "aws_s3_bucket_policy" "{display_name(key)}" allows Principal "*" '
-                f"with no condition for {', '.join(actions)[:120]}",
-                "Anyone on the internet can perform these actions on the bucket's objects.",
+                f"without a proven identity/network restriction for {', '.join(actions)[:120]}",
+                "The shown Allow statement permits public-principal access for matching requests; "
+                "effective access also depends on other policies and public-access settings.",
                 "Remove the public statement, or restrict it with a condition (for example a "
                 "CloudFront origin access control or a specific account).",
                 ["AWS Well-Architected: Security Pillar", "SEC08-BP04"],
@@ -398,7 +439,8 @@ def rule_security_group_open_ingress(parsed: dict, review_id: str) -> list[Findi
                 f"Security group rule '{name}' allows {cidr_text} ingress to sensitive port(s) "
                 f"{sorted(exposed)}",
                 f'resource "{resource_type}" "{name}" allows {cidr_text} for {span}',
-                "Sensitive management/database ports are reachable from the entire internet.",
+                "This rule permits internet-source traffic on sensitive ports if attached to a "
+                "resource. Actual reachability also depends on routing and listeners.",
                 "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
                 ["AWS Well-Architected: Security Pillar", "SEC05-BP02", "CIS Controls v8: 4.4"],
             )
@@ -569,8 +611,18 @@ def _wildcard_grants(statements: list[dict]) -> list[str]:
     for statement in statements:
         if statement.get("Effect", "Allow") != "Allow":
             continue
-        if "*" not in {str(r) for r in _as_list(statement.get("Resource"))}:
+        resources = {str(r) for r in _as_list(statement.get("Resource"))}
+        excluded_resources = _as_list(statement.get("NotResource"))
+        excluded_actions = _as_list(statement.get("NotAction"))
+        if excluded_resources and "*" not in excluded_resources:
+            if excluded_actions and "*" not in excluded_actions:
+                grants.append("NotAction on NotResource complement")
+            elif any(str(a) == "*" or str(a).endswith(":*") for a in _as_list(statement.get("Action"))):
+                grants.append("NotResource complement")
+        if "*" not in resources:
             continue
+        if excluded_actions and "*" not in excluded_actions:
+            grants.append("NotAction complement")
         for action in _as_list(statement.get("Action")):
             action = str(action)
             if action == "*" or action.endswith(":*"):
@@ -755,6 +807,15 @@ def rule_compute_role_broad_managed_policy(parsed: dict, review_id: str) -> list
     for key, labels in sorted(_broad_compute_roles(parsed).items()):
         name = display_name(key)
         policies = ", ".join(labels)
+        role = parsed.get("resources", {}).get("aws_iam_role", {}).get(key, {})
+        boundary = bool(role.get("permissions_boundary"))
+        risk = (
+            "These attached policies have broad scope. A permissions boundary is configured; "
+            "effective permissions require evaluating that boundary and other applicable policies."
+            if boundary else
+            "Anyone who gets code running on this compute, or tricks it into a "
+            "request forgery, can exercise the attached policies subject to other applicable IAM controls."
+        )
         findings.append(
             _finding(
                 review_id,
@@ -762,8 +823,7 @@ def rule_compute_role_broad_managed_policy(parsed: dict, review_id: str) -> list
                 f"IAM role '{name}' is used by running code and has {policies}",
                 f'resource "aws_iam_role" "{name}" trusts a compute service '
                 f"(EC2, Lambda, ECS tasks or EKS pods) and has {policies} attached",
-                "Anyone who gets code running on this compute, or tricks it into a "
-                "request forgery, gets these permissions across the whole account.",
+                risk,
                 "Replace the managed policy with a customer-managed one that names only "
                 "the actions and resource ARNs this workload uses.",
                 ["AWS Well-Architected: Security Pillar", "SEC03-BP02", "CIS Controls v8: 5.4"],
