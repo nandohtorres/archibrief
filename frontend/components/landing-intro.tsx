@@ -287,7 +287,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
         aria-labelledby="samples-heading"
       >
         <div className="landing-section-head">
-          <h2 id="samples-heading">Real reviews of real public code</h2>
+          <h2 id="samples-heading">Real reviews of AWS code</h2>
           <p>
             Three open-source AWS projects, reviewed by ArchiBrief and then checked by hand. Where
             the AI got something wrong, the review says so.

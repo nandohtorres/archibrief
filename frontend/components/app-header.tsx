@@ -39,7 +39,7 @@ const themeNames: Record<ThemeChoice, string> = {
 };
 
 // Stacked layers: the architecture a review looks through.
-function BrandEmblem() {
+export function BrandEmblem() {
   return (
     <svg className="brand-emblem" viewBox="0 0 32 32" aria-hidden="true">
       <path d="M16 3 29 10 16 17 3 10Z" fill="currentColor" />

@@ -41,7 +41,7 @@ export function DemoCards({ openingId, onOpen, variant = "compact" }: DemoCardsP
         {demos.map((demo) => (
           <article key={demo.id} className="landing-sample available">
             <div className="landing-tags">
-              <span className="landing-tag ready">Real public code</span>
+              <span className="landing-tag ready">{demo.badge ?? "Real public code"}</span>
               <span className="landing-tag hypo">
                 {demo.reviewerNotes?.length
                   ? `${demo.reviewerNotes.length} reviewer note${demo.reviewerNotes.length === 1 ? "" : "s"}`
@@ -49,7 +49,7 @@ export function DemoCards({ openingId, onOpen, variant = "compact" }: DemoCardsP
               </span>
             </div>
             <h3>{demo.title}</h3>
-            <p>{demo.subtitle}</p>
+            <p>{demo.shows ?? demo.subtitle}</p>
             <span className="landing-stack">
               {demo.source} · {demo.license}
             </span>

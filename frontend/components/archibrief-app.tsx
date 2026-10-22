@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppHeader } from "./app-header";
+import { AppHeader, BrandEmblem } from "./app-header";
 import { DemoCards } from "./demo-cards";
 import { FailurePanel } from "./state-panel";
 import { ClarifyStep } from "./clarify-step";
@@ -506,17 +506,33 @@ export function ArchiBriefApp() {
         )}
       </main>
       <footer className="site-footer">
-        <span>
-          ArchiBrief is an independent project, not affiliated with or endorsed by Amazon Web
-          Services.
-        </span>
-        <span>
-          {apiConfigured
-            ? "Static analysis only · never accesses your AWS account"
-            : "Fixture build · no live AWS access"}
-          {" · "}
-          <a href="/privacy.html">Privacy</a>
-        </span>
+        <div className="footer-brand">
+          <BrandEmblem />
+          <strong>ArchiBrief</strong>
+          <span>Your AWS architecture, briefed</span>
+        </div>
+        <ul className="site-footer-row">
+          {apiConfigured ? (
+            <>
+              <li>Static analysis only</li>
+              <li>Never accesses your AWS account</li>
+            </>
+          ) : (
+            <li>Fixture build · no live AWS access</li>
+          )}
+          <li>
+            <a href="/privacy.html">Privacy</a>
+          </li>
+        </ul>
+        <p className="site-footer-legal">
+          Reviews are informational and provided as is, without warranty. They are not professional
+          security, legal or compliance advice. Demo code belongs to its authors and is shown under
+          the license listed with each demo.
+        </p>
+        <p className="site-footer-copy">
+          © 2026 Fernando Torres · An independent project, not affiliated with or endorsed by Amazon
+          Web Services. AWS and Terraform are trademarks of their respective owners.
+        </p>
       </footer>
     </div>
   );

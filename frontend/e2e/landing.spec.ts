@@ -8,9 +8,7 @@ test.describe("landing page", () => {
   test("shows the pitch, the real demos and the full submission form", async ({ page }) => {
     await page.goto(LIVE_URL);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("with the receipts");
-    await expect(
-      page.getByRole("heading", { name: "Real reviews of real public code" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Real reviews of AWS code" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "One review, two readers" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Submit your Terraform" })).toBeVisible();
     // Visitors are told new reviews are owner-only before they reach the key field.
