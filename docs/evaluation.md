@@ -13,7 +13,8 @@ all four categories; mobile 93 performance, 100 in the rest).
 
 | Suite | Result | Command |
 |---|---|---|
-| Backend | 805 passed | `python -m pytest tests/backend -q --tb=short -p no:cacheprovider` |
+| Backend | 871 passed | `python -m pytest tests/backend --ignore=tests/backend/adversarial -q --tb=short -p no:cacheprovider` |
+| Adversarial suite | 217 passed, 18 failed: the 18 are documented coverage gaps, kept failing on purpose ([FIX_REPORT](../tests/backend/adversarial/FIX_REPORT.md)) | `python -m pytest tests/backend/adversarial -q -p no:cacheprovider` |
 | Frontend unit | 73 passed in 12 files | `cd frontend; npm test` (tests in `tests/frontend/`) |
 | Playwright | 68 passed, including accessibility, keyboard, viewport, contrast and resilience specs | `cd frontend; npx playwright test` |
 | Deterministic traps | 60, included in the backend run | `python -m pytest tests/backend/traps -q -p no:cacheprovider` |
