@@ -15,6 +15,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from botocore.exceptions import ReadTimeoutError
+
 from backend.agent.nodes.retrieve import vector_search
 from backend.chat.context import ReviewContext
 from backend.chat.pricing import GROUNDING_MICRO_USD_PER_UNIT, model_cost_micro_usd, text_units
@@ -52,7 +54,9 @@ MODEL_CONNECT_TIMEOUT_SECONDS = 1.0
 
 def model_read_timeout(deadline: float) -> float:
     left = deadline - time.monotonic() - MODEL_CONNECT_TIMEOUT_SECONDS
-    return max(MIN_MODEL_READ_TIMEOUT_SECONDS, min(MODEL_READ_TIMEOUT_SECONDS, left))
+    if left < MIN_MODEL_READ_TIMEOUT_SECONDS:
+        raise ReadTimeoutError(endpoint_url="chat-model-deadline")
+    return min(MODEL_READ_TIMEOUT_SECONDS, left)
 
 
 @dataclass
@@ -144,11 +148,12 @@ def answer_question(
     ):
         source = "\n\n".join(verified.cited_text)[:GROUNDING_SOURCE_CHARS]
         answer_text = "\n\n".join(p["text"] for p in verified.paragraphs)
+        # Even a timed-out check may be billed; retain its estimate.
+        cost += GROUNDING_MICRO_USD_PER_UNIT * text_units(
+            len(source) + len(question) + len(answer_text)
+        )
         try:
             grounding = clients.grounding.grounding_scores(source, question[:1000], answer_text)
-            cost += GROUNDING_MICRO_USD_PER_UNIT * text_units(
-                len(source) + len(question) + len(answer_text)
-            )
         except Exception:  # noqa: BLE001 - detect-only; never blocks an answer
             grounding = {}
 

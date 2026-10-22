@@ -19,7 +19,7 @@ from .chunking import chunk_document
 from .normalize import normalize_html
 from .normalize_pdf import normalize_pdf
 
-_USER_AGENT = "Mozilla/5.0 (ArchiBrief corpus ingest; portfolio project)"
+_USER_AGENT = "Mozilla/5.0 (ArchiBrief corpus ingest)"
 _DATA_DIR = Path(__file__).parent / "data"
 # Bump whenever re-ingestion can change chunk content, boundaries or content_type
 # labels (see normalize_pdf.py's _PARSER_VERSION and chunking.py's _CHUNKER_VERSION).

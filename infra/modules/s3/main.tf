@@ -42,9 +42,10 @@ resource "aws_s3_bucket_cors_configuration" "source_of_truth" {
   bucket = aws_s3_bucket.source_of_truth.id
 
   cors_rule {
-    allowed_methods = ["POST"]
+    allowed_methods = ["POST", "PUT"]
     allowed_origins = concat([var.frontend_origin], var.additional_cors_origins)
     allowed_headers = ["*"]
+    expose_headers  = ["x-amz-version-id", "x-amz-checksum-sha256"]
     max_age_seconds = 3000
   }
 }

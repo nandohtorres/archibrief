@@ -1,4 +1,4 @@
-"""Builds the deployment zip for each Lambda listed in LAMBDA_SPECS.
+"""Build the deployment ZIP for each Lambda listed in LAMBDA_SPECS.
 
 `terraform plan` needs every Lambda's build/*.zip to exist, since
 aws_lambda_function's `filename` must point at a real file. Each zip
@@ -52,8 +52,43 @@ _ZIP_FILE_MODE = (0o100644 & 0xFFFF) << 16  # regular file, rw-r--r--
 # (transitively — e.g. deeper_review imports validate.handler, which
 # imports pydantic), not guessed from the Lambda's name.
 LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
+    "review_worker": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/review_worker/__init__.py",
+            "backend/lambdas/review_worker/handler.py",
+            "backend/shared/__init__.py",
+            "backend/shared/clients/__init__.py",
+            "backend/shared/admission.py",
+            "backend/shared/retention.py",
+            "backend/shared/kill_switch.py",
+        ],
+        "packages": ["boto3"],
+    },
+    "submit_review": {
+        "sources": [
+            "backend/shared/http.py",
+            "backend/__init__.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/submit_review/__init__.py",
+            "backend/lambdas/submit_review/handler.py",
+            "backend/shared/__init__.py",
+            "backend/shared/clients/__init__.py",
+            "backend/shared/admission.py",
+            "backend/shared/public_access.py",
+            "backend/shared/retention.py",
+            "backend/shared/kill_switch.py",
+        ],
+        "packages": ["boto3"],
+    },
     "create_upload": {
         "sources": [
+            "backend/shared/http.py",
+            "backend/shared/uploads.py",
+            "backend/shared/retention.py",
+            "backend/shared/public_access.py",
+            "backend/shared/admission.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/create_upload/__init__.py",
@@ -62,20 +97,24 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/clients/__init__.py",
             "backend/shared/http.py",
         ],
-        "packages": [],
+        "packages": ["boto3"],
     },
     "clarify_review": {
         "sources": [
+            "backend/shared/http.py",
+            "backend/shared/public_access.py",
+            "backend/shared/admission.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/clarify_review/__init__.py",
             "backend/lambdas/clarify_review/handler.py",
+            "backend/shared/retention.py",
             "backend/shared/__init__.py",
             "backend/shared/clients/__init__.py",
             "backend/shared/kill_switch.py",
             "backend/shared/http.py",
         ],
-        "packages": [],
+        "packages": ["boto3"],
     },
     "mark_review_failed": {
         "sources": [
@@ -99,6 +138,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "get_demo": {
         "sources": [
+            "backend/shared/__init__.py",
+            "backend/shared/http.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/get_demo/__init__.py",
@@ -111,10 +152,14 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "get_review": {
         "sources": [
+            "backend/shared/http.py",
+            "backend/shared/public_access.py",
+            "backend/shared/admission.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/get_review/__init__.py",
             "backend/lambdas/get_review/handler.py",
+            "backend/shared/retention.py",
             "backend/shared/__init__.py",
             "backend/shared/clients/__init__.py",
             "backend/shared/report.py",
@@ -175,6 +220,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/audit/__init__.py",
             "backend/lambdas/audit/handler.py",
+            "backend/shared/retention.py",
             "backend/shared/__init__.py",
             "backend/shared/clients/__init__.py",
         ],
@@ -186,6 +232,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/finalize/__init__.py",
             "backend/lambdas/finalize/handler.py",
+            "backend/shared/retention.py",
             "backend/agent/__init__.py",
             "backend/agent/nodes/__init__.py",
             "backend/agent/nodes/preflight.py",
@@ -217,10 +264,14 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "deeper_review": {
         "sources": [
+            "backend/shared/http.py",
+            "backend/shared/public_access.py",
+            "backend/shared/admission.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/deeper_review/__init__.py",
             "backend/lambdas/deeper_review/handler.py",
+            "backend/shared/retention.py",
             "backend/lambdas/validate/__init__.py",
             "backend/lambdas/validate/handler.py",
             "backend/shared/__init__.py",
@@ -245,10 +296,12 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # avoids the pydantic models. boto3 is bundled here (the same pin as
     # the AgentCore runtime lock) because it calls S3 Vectors, and AWS no
     # longer publishes which boto3 the python3.12 runtime carries in each
-    # Region: an older one wouldn't know the s3vectors client
-    # (code review 2026-10-16).
+    # Region: an older one wouldn't know the s3vectors client.
     "ask_question": {
         "sources": [
+            "backend/shared/http.py",
+            "backend/shared/public_access.py",
+            "backend/shared/admission.py",
             "backend/__init__.py",
             "backend/agent/__init__.py",
             "backend/agent/nodes/__init__.py",
@@ -265,6 +318,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/ask_question/__init__.py",
             "backend/lambdas/ask_question/handler.py",
+            "backend/shared/retention.py",
             "backend/shared/__init__.py",
             "backend/shared/citations.py",
             "backend/shared/clients/__init__.py",
@@ -277,6 +331,9 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # Read-only transcript; no model code bundled.
     "list_questions": {
         "sources": [
+            "backend/shared/http.py",
+            "backend/shared/public_access.py",
+            "backend/shared/admission.py",
             "backend/__init__.py",
             "backend/chat/__init__.py",
             "backend/chat/access.py",
@@ -285,6 +342,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/list_questions/__init__.py",
             "backend/lambdas/list_questions/handler.py",
+            "backend/shared/retention.py",
             "backend/shared/__init__.py",
             "backend/shared/clients/__init__.py",
             "backend/shared/sanitize.py",

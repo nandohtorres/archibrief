@@ -1,6 +1,6 @@
 # Trap: publicly accessible Aurora instances created with count. Trivy
 # reports them as name[0], name[1], which the Scan step used to drop
-# (found on FEC's public Terraform, 2026-10-15).
+# (seen in FEC's public Terraform).
 resource "aws_rds_cluster" "main" {
   cluster_identifier = "main"
   engine             = "aurora-postgresql"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppHeader, BrandEmblem } from "./app-header";
 import { DemoCards } from "./demo-cards";
 import { FailurePanel } from "./state-panel";
@@ -21,9 +21,17 @@ import {
   submitReview,
   uploadArchiveToS3,
 } from "@/lib/api";
+import { archiveDigest } from "@/lib/review-access";
+import { publicSubmissionEnabled } from "@/lib/public-access";
 import { loadAdminKey, saveAdminKey } from "@/lib/admin-key";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
-import type { DemoChat, PreflightField, ReviewReport, ReviewStatusPointer } from "@/lib/contracts";
+import type {
+  DemoChat,
+  PreflightField,
+  ReviewReport,
+  ReviewStatusPointer,
+  SubmitReviewRequest,
+} from "@/lib/contracts";
 import type { ArchitectureGraph } from "@/lib/architecture";
 import { FEATURED_DEMO_ID, fetchDemo, fetchDemoIndex, type DemoEntry } from "@/lib/demos";
 import {
@@ -75,6 +83,11 @@ export function ArchiBriefApp() {
   const [failureMessage, setFailureMessage] = useState(
     "The fixture failure state shows how ArchiBrief responds when a pipeline stage cannot complete.",
   );
+  const pendingSubmission = useRef<{
+    fingerprint: string;
+    nonce: string;
+    request?: SubmitReviewRequest;
+  } | null>(null);
   const apiConfigured = Boolean(getApiBaseUrl());
 
   useEffect(() => {
@@ -202,7 +215,7 @@ export function ArchiBriefApp() {
     // Owner-only for now (ADR-0047): every submit
     // route already requires the admin key server-side; this just answers
     // a visitor plainly instead of sending a request that would fail.
-    if (apiConfigured && !adminKey.trim()) {
+    if (apiConfigured && !adminKey.trim() && !publicSubmissionEnabled) {
       setSubmitNotice(OWNER_ONLY_NOTICE);
       return;
     }
@@ -223,39 +236,43 @@ export function ArchiBriefApp() {
 
     setSubmitting(true);
     try {
-      // review_id doubles as the idempotency token server-side (no
-      // separate idempotencyKey field exists — see lib/contracts.ts).
-      // retrieval_query has no
-      // separate input in this step, so it defaults to the workload
-      // brief text itself, the same fallback deeper_review's handler
-      // uses when no narrower technical query is available.
-      const reviewId = makeIdempotencyKey();
-
-      // ADR-0045: the archive goes straight to S3 via a
-      // presigned POST, tied to reviewId before the review itself exists
-      // anywhere server-side — only the resulting key is sent to
-      // POST /reviews, never the file bytes.
-      const upload = await requestUpload({ review_id: reviewId }, adminKey);
-      await uploadArchiveToS3(upload, values.archiveFile);
-
-      const response = await submitReview(
-        {
-          review_id: reviewId,
+      const digest = await archiveDigest(values.archiveFile);
+      const fingerprint = JSON.stringify([digest, values.terraformRepoRef, values.workloadBrief]);
+      if (pendingSubmission.current?.fingerprint !== fingerprint) {
+        pendingSubmission.current = { fingerprint, nonce: makeIdempotencyKey() };
+      }
+      const pending = pendingSubmission.current;
+      if (!pending.request) {
+        const upload = await requestUpload(
+          {
+            archive_size: values.archiveFile.size,
+            archive_sha256: digest,
+            client_request_id: pending.nonce,
+            ...(values.turnstileToken ? { turnstile_token: values.turnstileToken } : {}),
+          },
+          adminKey,
+        );
+        const version = await uploadArchiveToS3(upload, values.archiveFile);
+        pending.request = {
+          review_id: upload.reviewId ?? pending.nonce,
+          ...(version ? { archive_version_id: version } : {}),
           archive_s3_key: upload.archiveKey,
           terraform_repo_ref: values.terraformRepoRef,
           workload_brief: values.workloadBrief,
           retrieval_query: values.workloadBrief,
           baseline_answers: {},
-        },
-        adminKey,
-      );
+        };
+      }
+      const response = await submitReview(pending.request, adminKey);
       setLiveReviewId(response.reviewId);
       setLiveCurrentStage(null);
       setProgressMode("live");
       setScreen("progress");
     } catch (error) {
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
-        setSubmitNotice(KEY_REJECTED_NOTICE);
+        setSubmitNotice(
+          publicSubmissionEnabled && !adminKey.trim() ? error.message : KEY_REJECTED_NOTICE,
+        );
         return;
       }
       setFailureMessage(

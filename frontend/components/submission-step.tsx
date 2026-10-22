@@ -1,4 +1,6 @@
-import { useState, type DragEvent, type FormEvent, type ReactNode } from "react";
+import { useState, useEffect, useRef, type DragEvent, type FormEvent, type ReactNode } from "react";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { publicSubmissionEnabled, turnstileSiteKey } from "@/lib/public-access";
 
 import { createTar } from "@/lib/tar";
 import { defaultReportName } from "@/lib/workflow";
@@ -19,6 +21,7 @@ export interface SubmissionValues {
   // live-API mode; the fixture flow never reads it. Pasted Terraform is
   // turned into this archive on submit.
   archiveFile: File | null;
+  turnstileToken?: string;
 }
 
 type Source = "upload" | "paste";
@@ -103,6 +106,18 @@ export function SubmissionStep({
   demos = null,
 }: SubmissionStepProps) {
   const [values, setValues] = useState(initialValues);
+  const challenge = useRef<TurnstileInstance>(null);
+  const wasSubmitting = useRef(false);
+  const [challengeToken, setChallengeToken] = useState("");
+  const [challengeError, setChallengeError] = useState(false);
+  const challengeRequired = apiConfigured && publicSubmissionEnabled && !adminKey.trim();
+  useEffect(() => {
+    if (wasSubmitting.current && !submitting) {
+      challenge.current?.reset();
+      setChallengeToken("");
+    }
+    wasSubmitting.current = submitting;
+  }, [submitting]);
   const [source, setSource] = useState<Source>("upload");
   const [pasted, setPasted] = useState("");
   const [attempted, setAttempted] = useState(false);
@@ -150,11 +165,11 @@ export function SubmissionStep({
     }
     if (source === "paste") {
       if (pasted.trim().length < 20 || pastedBytes > MAX_PASTE_BYTES) return;
-      await onSubmit(named(pastedArchive(pasted)));
+      await onSubmit({ ...named(pastedArchive(pasted)), turnstileToken: challengeToken });
       return;
     }
     if (!values.archiveFile) return;
-    await onSubmit(named(values.archiveFile));
+    await onSubmit({ ...named(values.archiveFile), turnstileToken: challengeToken });
   }
 
   return (
@@ -318,6 +333,31 @@ export function SubmissionStep({
           )}
         </div>
 
+        {challengeRequired && (
+          <div>
+            <p>
+              Complete verification to start a review. Keep this tab open to retain access to your
+              report.
+            </p>
+            <Turnstile
+              ref={challenge}
+              siteKey={turnstileSiteKey}
+              options={{ action: "archibrief-upload" }}
+              onSuccess={(token) => {
+                setChallengeToken(token);
+                setChallengeError(false);
+              }}
+              onExpire={() => setChallengeToken("")}
+              onError={() => {
+                setChallengeToken("");
+                setChallengeError(true);
+              }}
+            />
+            {challengeError && (
+              <p role="alert">Verification is unavailable. Please try again shortly.</p>
+            )}
+          </div>
+        )}
         <div className="form-actions">
           {apiConfigured ? (
             <div className="admin-key-control">
@@ -349,7 +389,11 @@ export function SubmissionStep({
               Load reference fixture
             </button>
           )}
-          <button className="button primary" type="submit" disabled={submitting}>
+          <button
+            className="button primary"
+            type="submit"
+            disabled={submitting || (challengeRequired && !challengeToken)}
+          >
             {submitting ? "Submitting…" : apiConfigured ? "Start review" : "Continue with fixture"}
           </button>
         </div>

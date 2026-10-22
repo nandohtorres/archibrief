@@ -1,6 +1,6 @@
 """Add the resource summary to reviews stored before Finalize kept it.
 
-From 2026-10-15 Finalize writes RuleEngine's resource summary (ADR-0049)
+Finalize writes RuleEngine's resource summary (ADR-0049)
 into each review's evidence ledger, so the report chat answers from the
 same facts the review saw (ADR-0050). Reviews stored before that, the
 demos among them, have none, and the chat says settings aren't

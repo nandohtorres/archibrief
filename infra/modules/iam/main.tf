@@ -65,6 +65,22 @@ data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "runtime_permissions_boundary" {
   statement {
+    sid       = "AllowServiceMediatedStorageEncryption"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey"]
+    resources = ["arn:aws:kms:*:${data.aws_caller_identity.current.account_id}:key/*"]
+    condition {
+      test     = "StringLike"
+      variable = "kms:ViaService"
+      values   = ["s3.*.amazonaws.com", "ssm.*.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "kms:CallerAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+  statement {
     sid    = "AllowProjectDataAccess"
     effect = "Allow"
     actions = [
@@ -74,6 +90,7 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
       "dynamodb:DeleteItem",
       "dynamodb:Query",
       "s3:GetObject",
+      "s3:GetObjectVersion",
       "s3:PutObject",
       "s3:DeleteObject",
       "s3:ListBucket",

@@ -103,6 +103,9 @@ def test_handler_merges_pointer_item_instead_of_replacing_it(monkeypatch):
     assert stored["terraformRepoRef"] == "github.com/example/infra"
     assert stored["idempotencyKey"] == "r1"
     assert stored["createdAt"] == "2026-10-01T00:00:00Z"
+    from backend.shared.retention import review_expires_at
+
+    assert stored["ttl"] == review_expires_at({"createdAt": stored["createdAt"]})
     assert "reportS3Key" in stored
 
 

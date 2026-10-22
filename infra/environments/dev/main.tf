@@ -108,6 +108,8 @@ module "step_functions_lambda" {
   guardrail_version          = module.guardrails.guardrail_version
   kill_switch_parameter_name = module.kill_switch.parameter_name
   kill_switch_parameter_arn  = module.kill_switch.parameter_arn
+  usage_counters_table_name  = module.dynamodb.usage_counters_table_name
+  usage_counters_table_arn   = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.usage_counters_table_name}"
   tags                       = var.tags
 }
 
@@ -126,6 +128,13 @@ module "frontend_hosting" {
 }
 
 module "api_gateway" {
+  verified_public_api_id           = var.verified_public_api_id
+  public_edge_enabled              = var.public_edge_enabled
+  public_access_enabled            = var.public_access_enabled
+  chat_public_enabled              = var.public_access_enabled
+  turnstile_secret_parameter_arn   = var.turnstile_secret_parameter_arn
+  turnstile_secret_parameter_name  = var.turnstile_secret_parameter_name
+  turnstile_hostname               = var.domain
   source                     = "../../modules/api-gateway"
   name_prefix                = "${var.name_prefix}-${var.environment}"
   state_machine_arn          = module.step_functions_lambda.state_machine_arn

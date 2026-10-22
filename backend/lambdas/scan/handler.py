@@ -201,7 +201,12 @@ def handler(event: dict, _context: object, s3_client: S3Client | None = None) ->
         client = s3_client or S3Client(bucket=event["report_bucket"])
         archive_path = os.path.join(work_dir, "archive.tar")
         with open(archive_path, "wb") as fh:
-            fh.write(client.get_object(event["archive_s3_key"]))
+            version = event.get("archive_s3_version")
+            fh.write(
+                client.get_object(event["archive_s3_key"], version_id=version)
+                if version
+                else client.get_object(event["archive_s3_key"])
+            )
         scan_dir = os.path.join(work_dir, "files")
         files = extract_archive(archive_path, scan_dir)
         result = scan_files(scan_dir, files)

@@ -119,3 +119,11 @@ variable "lambda_log_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "usage_counters_table_name" {
+  type = string
+}
+
+variable "usage_counters_table_arn" {
+  type = string
+}

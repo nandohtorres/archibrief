@@ -1,8 +1,7 @@
 # Evaluation evidence
 
-Measured locally with no AWS calls or paid model runs; test counts reflect the
-code after the chat, demo cards and launch accessibility specs landed. CI runs
-the same suites on every pull request.
+Measured locally with no AWS calls or paid model runs. CI runs the same
+suites on every pull request.
 
 The [browser evaluation](evidence/browser-results.md) records all
 Playwright counts, the initial failures, the final axe-only rerun, and automated
@@ -12,16 +11,23 @@ all four categories; mobile 93 performance, 100 in the rest).
 
 ## Free test results
 
-| Suite | Result | Source and command |
+| Suite | Result | Command |
 |---|---|---|
-| Backend | 713 passed, 1 skipped | `python -m pytest tests/backend -q --tb=short` |
-| Frontend unit | 69 passed in 11 files | `cd frontend; npm test`; tests in `tests/frontend/` |
-| Deterministic traps | 60 collected; included in the passing backend run | `python -m pytest tests/backend/traps --collect-only -q -p no:cacheprovider` |
-| Stubbed chat trap checks | 26 collected; included in the passing backend run | Same collection command with `tests/backend/chat/test_traps_stubbed.py` |
-| Playwright | 61 passed in each of Chromium, Firefox and WebKit, including the accessibility, keyboard, viewport and resilience specs | `cd frontend; npx playwright test` |
+| Backend | 805 passed | `python -m pytest tests/backend -q --tb=short -p no:cacheprovider` |
+| Frontend unit | 73 passed in 12 files | `cd frontend; npm test` (tests in `tests/frontend/`) |
+| Playwright | 68 passed, including accessibility, keyboard, viewport, contrast and resilience specs | `cd frontend; npx playwright test` |
+| Deterministic traps | 60, included in the backend run | `python -m pytest tests/backend/traps -q -p no:cacheprovider` |
+| Stubbed chat trap checks | 26, included in the backend run | `python -m pytest tests/backend/chat/test_traps_stubbed.py -q` |
+| Lint and types | Ruff, ESLint, TypeScript and Prettier pass | `ruff check backend scripts`; `npm run lint`; `npm run typecheck` |
 
-None of these is a model-quality measurement. The local frontend run used
-Node v24.14.0, and CI repeats the suites on Node 24.
+Four backend tests need the gitignored ingested corpus and one Trivy unit
+test is Linux-only; they skip where those aren't available. Earlier runs are recorded in
+[`hardening-checks.json`](evidence/hardening-checks.json),
+[`publication-checks.json`](evidence/publication-checks.json) and
+[`public-admission-checks.json`](evidence/public-admission-checks.json).
+
+None of these is a model-quality measurement; they test deterministic code
+and mocked integrations. CI runs the same suites on Python 3.12 and Node 24.
 
 ## Deterministic traps
 
@@ -121,7 +127,7 @@ presence figure must never be marketed as 100% factual accuracy.
 
 Run the free suites above. Trivy-backed tests use the offline flags in
 `backend/lambdas/scan/handler.py`, including `--skip-check-update`; no Terraform
-execution is needed. Corpus-dependent skips mean this run did not validate the
+execution is needed. Corpus-dependent tests skip without the
 gitignored corpus. Keep development and holdout model results separate.
 
 The paid runners are `backend/agent/validate_reasoning_eval.py --traps` and
@@ -130,3 +136,7 @@ future run. A useful future artifact should preserve model/prompt/corpus
 versions, all attempted findings/citations, rejected findings, blocked briefs,
 and per-case verdicts so survival, coverage and semantic support cannot be
 mistaken for one another.
+
+Both runners now offer `--plan` without constructing AWS clients and require
+`--confirm-paid` for execution. See the [evaluation runbook](evaluation-runbook.md)
+for case counts, partial batches and the remaining budget/authorization boundary.

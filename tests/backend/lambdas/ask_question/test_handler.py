@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from pathlib import Path
 
 import boto3
 import pytest
@@ -18,6 +19,7 @@ import backend.lambdas.ask_question.handler as handler_module
 from backend.chat.answer import ChatClients
 from backend.chat.verify import REFUSAL_TEXTS
 from backend.shared.clients import GuardrailVerdict, ModelOutputTruncated
+from backend.shared.public_access import token_hash, visitor_key
 from tests.backend.chat.conftest import LEDGER, RULE_FINDING_ID
 
 ADMIN_KEY = "admin-secret"
@@ -121,7 +123,12 @@ def env(monkeypatch):
         resource = boto3.resource("dynamodb", region_name=region)
         reviews = resource.Table("reviews")
         reviews.put_item(
-            Item={"reviewId": "r1", "status": "complete", "reportS3Key": LEDGER_KEY}
+            Item={
+                "reviewId": "r1",
+                "status": "complete",
+                "reportS3Key": LEDGER_KEY,
+                "ttl": int(time.time()) + 86400,
+            }
         )
 
         for name, value in {
@@ -135,8 +142,20 @@ def env(monkeypatch):
             "CHAT_CANARY": CANARY,
             "CHAT_PUBLIC_ENABLED": "false",
             "AWS_DEFAULT_REGION": "us-east-1",
+            "PUBLIC_ACCESS_ENABLED": "true",
+            "VISITOR_HASH_KEY": "test-visitor-hash-key-32-characters-long",
         }.items():
             monkeypatch.setenv(name, value)
+
+        reviews.update_item(
+            Key={"reviewId": "r1"},
+            UpdateExpression="SET visitorKey = :v, readTokenHash = :r, writeTokenHash = :w",
+            ExpressionAttributeValues={
+                ":v": visitor_key(_event({}, admin=False)),
+                ":r": token_hash("r" * 43),
+                ":w": token_hash("w" * 43),
+            },
+        )
 
         reasoning = FakeReasoning()
         monkeypatch.setattr(
@@ -162,12 +181,17 @@ def env(monkeypatch):
 
 
 def _event(body, admin=True, review_id="r1", raw=None):
-    headers = {"content-type": "application/json"}
+    headers = {
+        "content-type": "application/json",
+        "x-review-read-token": "r" * 43,
+        "x-review-write-token": "w" * 43,
+    }
     if admin:
         headers["x-admin-key"] = ADMIN_KEY
     return {
         "pathParameters": {"reviewId": review_id},
         "headers": headers,
+        "requestContext": {"http": {"sourceIp": "192.0.2.10"}},
         "body": raw if raw is not None else json.dumps(body),
     }
 
@@ -183,6 +207,25 @@ def _call(body, **kwargs):
 
 def _review(env):
     return env.reviews.get_item(Key={"reviewId": "r1"})["Item"]
+
+
+def test_handler_defaults_match_the_deployment_contract():
+    import hcl2
+    from hcl2.utils import SerializationOptions
+
+    root = Path(__file__).resolve().parents[4]
+    with (root / "infra/modules/api-gateway/variables.tf").open() as source:
+        config = hcl2.load(
+            source, serialization_options=SerializationOptions(strip_string_quotes=True)
+        )
+    variables = {
+        key: value for entry in config["variable"] for key, value in entry.items()
+    }
+    assert variables["chat_model_id"]["default"] == handler_module.DEFAULT_MODEL_ID
+    assert (
+        variables["chat_daily_budget_micro_usd"]["default"]
+        == handler_module.DEFAULT_DAILY_BUDGET_MICRO_USD
+    )
 
 
 def test_answers_a_question_with_resolved_citations(env, capsys):
@@ -222,6 +265,71 @@ def test_answers_a_question_with_resolved_citations(env, capsys):
     assert "Narrow the role" not in json.dumps(lines)
 
 
+def _daily_counters(env):
+    items = env.counters.scan()["Items"]
+    return {item["counterKey"].split("#")[-1]: item for item in items}
+
+
+def test_screening_has_an_atomic_reservation_before_the_paid_call(env, monkeypatch):
+    def assess(self, text):
+        counters = _daily_counters(env)
+        assert counters["chat_spent_micro_usd"]["spent"] == 300
+        assert counters["chat_questions"]["n"] == 1
+        assert "questionsUsed" not in _review(env)
+        return GuardrailVerdict(blocked=False, filters=[])
+
+    monkeypatch.setattr(FakeGuardrails, "assess", assess)
+    assert _call(_ask())[0] == 200
+    assert _daily_counters(env)["chat_questions"]["n"] == 1
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_blocked_and_failed_screening_remain_charged_without_a_question_slot(
+    env, failure
+):
+    FakeGuardrails.verdict = GuardrailVerdict(blocked=True, filters=["PROMPT_ATTACK"])
+    if failure:
+        FakeGuardrails.raises = RuntimeError("guardrail unavailable")
+    request = _ask()
+    assert _call(request)[0] == (503 if failure else 200)
+    counters = _daily_counters(env)
+    assert counters["chat_spent_micro_usd"]["spent"] == 300
+    assert counters["chat_questions"]["n"] == 1
+    assert env.reasoning.calls == []
+    assert "questionsUsed" not in _review(env)
+    if not failure:
+        assert _call(request)[0] == 200
+        assert FakeGuardrails.calls == 1
+        assert _daily_counters(env) == counters
+
+
+def test_losing_atomic_admission_does_not_call_guardrails(env, monkeypatch):
+    # A stale preliminary read cannot authorize a paid call.
+    monkeypatch.setattr(handler_module, "_precheck", lambda *args: None)
+    monkeypatch.setenv("CHAT_DAILY_MAX_QUESTIONS", "0")
+    assert _call(_ask())[0] == 429
+    assert FakeGuardrails.calls == 0
+    assert env.reasoning.calls == []
+    assert env.counters.scan()["Items"] == []
+
+
+def test_an_abandoned_screening_claim_can_be_retried_after_the_lease(env):
+    request = _ask()
+    now = int(time.time())
+    env.questions.put_item(
+        Item={
+            "reviewId": "r1",
+            "questionKey": "Q#" + request["client_request_id"],
+            "status": "screening",
+            "screeningClaim": "abandoned",
+            "createdAt": now - 100,
+            "ttl": now + 3600,
+        }
+    )
+    assert _call(request)[0] == 200
+    assert len(env.reasoning.calls) == 1
+
+
 def test_the_cached_prompt_holds_the_review_and_the_turn_holds_the_question(env):
     _call(_ask("What should I fix first?"))
     (call,) = env.reasoning.calls
@@ -239,6 +347,110 @@ def test_a_repeated_request_id_replays_without_a_second_call(env):
     assert first == second
     assert len(env.reasoning.calls) == 1
     assert _review(env)["questionsUsed"] == 1
+
+
+@pytest.mark.parametrize("expiry", [0, "invalid", None])
+def test_an_expired_or_invalid_cached_answer_cannot_be_replayed(env, expiry):
+    request = _ask()
+    assert _call(request)[0] == 200
+    key = {"reviewId": "r1", "questionKey": f"Q#{request['client_request_id']}"}
+    if expiry is None:
+        env.questions.update_item(
+            Key=key,
+            UpdateExpression="REMOVE #expiry",
+            ExpressionAttributeNames={"#expiry": "ttl"},
+        )
+    else:
+        env.questions.update_item(
+            Key=key,
+            UpdateExpression="SET #expiry = :v",
+            ExpressionAttributeNames={"#expiry": "ttl"},
+            ExpressionAttributeValues={":v": expiry},
+        )
+    status, response = _call(request)
+    assert (status, response["error"]) == (410, "request_expired")
+    assert len(env.reasoning.calls) == 1
+    assert FakeGuardrails.calls == 1
+
+
+def test_an_expired_suggestion_is_regenerated_instead_of_serving_old_content(env):
+    env.questions.put_item(
+        Item={
+            "reviewId": "r1",
+            "questionKey": "S#s3",
+            "status": "answered",
+            "answer": [{"text": "Expired content.", "citations": []}],
+            "createdAt": 1,
+            "ttl": 2,
+        }
+    )
+    status, response = _call(
+        {"client_request_id": str(uuid.uuid4()), "suggested_id": "s3"}
+    )
+    assert status == 200
+    assert "Expired content" not in json.dumps(response)
+    assert len(env.reasoning.calls) == 1
+
+
+def test_copying_a_live_suggestion_does_not_extend_its_expiry(env):
+    expires = int(time.time()) + 3600
+    env.questions.put_item(
+        Item={
+            "reviewId": "r1",
+            "questionKey": "S#s3",
+            "status": "answered",
+            "answer": [{"text": "Stored.", "citations": []}],
+            "createdAt": 1,
+            "ttl": expires,
+        }
+    )
+    status, response = _call(
+        {"client_request_id": str(uuid.uuid4()), "suggested_id": "s3"}
+    )
+    assert status == 200
+    item = env.questions.get_item(
+        Key={"reviewId": "r1", "questionKey": "Q#" + response["question_id"]}
+    )["Item"]
+    assert item["ttl"] == expires
+    assert env.reasoning.calls == []
+
+
+def test_expired_review_denies_replay_and_new_paid_work(env):
+    request = _ask()
+    assert _call(request)[0] == 200
+    env.reviews.update_item(
+        Key={"reviewId": "r1"},
+        UpdateExpression="SET #t = :t",
+        ExpressionAttributeNames={"#t": "ttl"},
+        ExpressionAttributeValues={":t": 1},
+    )
+    assert _call(request)[0] == 404
+    assert _call(_ask())[0] == 404
+    assert FakeGuardrails.calls == 1
+    assert len(env.reasoning.calls) == 1
+
+
+def test_new_question_cannot_outlive_its_review(env):
+    assert _call(_ask())[0] == 200
+    question = env.questions.scan()["Items"][0]
+    assert question["ttl"] == _review(env)["ttl"]
+
+
+def test_changed_question_cannot_reuse_an_admitted_request_id(env):
+    request = _ask()
+    assert _call(request)[0] == 200
+    status, body = _call({**request, "question": "Different question?"})
+    assert (status, body["error"]) == (409, "request_conflict")
+    assert len(env.reasoning.calls) == 1
+
+
+def test_shared_budget_blocks_chat_before_screening(env, monkeypatch):
+    # The public budget doesn't apply to the admin; the admin allowance does.
+    monkeypatch.setenv("PAID_DAILY_BUDGET_MICRO_USD", "1")
+    monkeypatch.setenv("PAID_ADMIN_DAILY_BUDGET_MICRO_USD", "1")
+    assert _call(_ask())[0] == 429
+    assert FakeGuardrails.calls == 0
+    assert env.reasoning.calls == []
 
 
 def test_history_comes_from_the_server_and_only_verified_text(env):
@@ -315,7 +527,9 @@ def test_the_kill_switch_stops_everyone_including_admin(env):
 def test_missing_and_unfinished_reviews(env):
     status, body = _call(_ask(), review_id="nope")
     assert (status, body["error"]) == (404, "review_not_found")
-    env.reviews.put_item(Item={"reviewId": "r2", "status": "pending"})
+    env.reviews.put_item(
+        Item={"reviewId": "r2", "status": "pending", "ttl": int(time.time()) + 86400}
+    )
     status, body = _call(_ask(), review_id="r2")
     assert (status, body["error"]) == (409, "review_not_complete")
     status, body = _call(_ask(), review_id="../r1")

@@ -25,9 +25,9 @@ the repo):
 1. **Option A is the landing page**, built into the app above the
    existing review flow: hero, then samples, then how it works, then
    limits, and finally the "Review your own Terraform" section, which
-   holds the existing submission form. B and C stay in the repo; their
-   supporting sections (B's finding preview and "what it checks" grid,
-   C's step-by-step flow) may be folded in later.
+   holds the existing submission form. Supporting ideas from B and C
+   (the finding preview, checks grid and step-by-step flow) may be
+   incorporated without retaining the prototype files.
 2. **The full submission form is on the public page, but only the
    owner can submit, until public submissions open** (ADR-0046, Phase 3).
    - The admin key field stays in the header until explicitly removed.

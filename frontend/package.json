@@ -2,9 +2,9 @@
   "name": "archibrief-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "ArchiBrief frontend \u2014 Next.js, static/client-first rendering (ADR-0016/0042)",
+  "description": "ArchiBrief frontend — Next.js, static/client-first rendering (ADR-0016/0042)",
   "engines": {
-    "node": "22.x || 24.x"
+    "node": "^22.12.0 || 24.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -21,6 +21,7 @@
     "lighthouse": "node e2e/dev-server.mjs live --build-only && npx --yes @lhci/cli@0.15.1 autorun"
   },
   "dependencies": {
+    "@marsidev/react-turnstile": "1.6.2",
     "next": "^15.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
@@ -32,7 +33,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^15.0.0",
+    "eslint-config-next": "^15.5.28",
     "prettier": "^3.9.10",
     "serve": "^14.2.0",
     "typescript": "^5.6.0",
@@ -41,6 +42,7 @@
   },
   "overrides": {
     "postcss": "^8.5.28",
-    "compression": "^1.8.2"
+    "compression": "^1.8.2",
+    "tmp": "^0.2.7"
   }
 }

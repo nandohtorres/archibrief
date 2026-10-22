@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-17",
+  "base_commit": "9871be0",
+  "backend": {
+    "tests": 705,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 5
+  },
+  "backend_source": "backend/build/public-admission-pytest.xml",
+  "frontend_unit": {
+    "passed": 58,
+    "files": 11,
+    "source": "npm test terminal output"
+  },
+  "browser": {
+    "startTime": "2026-10-17T12:02:30.941Z",
+    "duration": 84028.624,
+    "expected": 66,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "browser_source": "backend/build/public-admission-playwright.json",
+  "production_audit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "production_audit_source": "backend/build/public-admission-npm-production.json",
+  "offline_trivy": {
+    "public-admission-trivy": {
+      "targets": 12,
+      "unignored_high_critical": 0,
+      "source": "backend/build/public-admission-trivy.json"
+    },
+    "public-edge-trivy": {
+      "targets": 13,
+      "unignored_high_critical": 0,
+      "source": "backend/build/public-edge-trivy.json"
+    }
+  },
+  "hcl_files_parsed": 56,
+  "terraform_commands_run": false,
+  "aws_calls_run": false,
+  "paid_evaluation_run": false,
+  "known_test_lint_findings": 15
+}
