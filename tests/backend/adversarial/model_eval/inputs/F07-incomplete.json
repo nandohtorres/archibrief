@@ -1,0 +1,57 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F07-incomplete",
+ "family": "public-ai-api-cost-trap",
+ "variant": "incomplete",
+ "workload_brief": "Function URL auth mode supplied per environment.",
+ "rule_findings": [
+  {
+   "finding_id": "af90f902-e70e-44a3-8fec-dbd70fd6e2cf",
+   "category": "cost",
+   "type": "deterministic-rule-result",
+   "finding": "Lambda function 'inference' has no reserved_concurrent_executions set",
+   "evidence": "resource \"aws_lambda_function\" \"inference\" has no reserved_concurrent_executions attribute",
+   "risk_impact": "Unbounded concurrency exposes the function (and downstream cost) to runaway invocation.",
+   "recommendation": "Set reserved_concurrent_executions to a deliberate cap.",
+   "concern": "lambda_concurrency"
+  },
+  {
+   "finding_id": "fc33a529-0528-476c-9ce2-aec6cc6b0aca",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_iam_role",
+    "name": "inference",
+    "settings": {}
+   },
+   {
+    "type": "aws_lambda_function",
+    "name": "inference",
+    "settings": {
+     "runtime": "python3.12",
+     "memory_size": "not set (default: 128)",
+     "timeout": 300,
+     "reserved_concurrent_executions": "not set (default: -1)",
+     "tracing_config.mode": "not set (default: PassThrough)"
+    }
+   },
+   {
+    "type": "aws_lambda_function_url",
+    "name": "inference_direct",
+    "settings": {}
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+ },
+ "scoring": "model_eval/SCORING.md#public-ai-api-cost-trap"
+}

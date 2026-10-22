@@ -1,0 +1,136 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F08-corrected",
+ "family": "seven-day-deletion-fiction",
+ "variant": "corrected",
+ "workload_brief": "Document upload service. Current versions expire after 7 days; noncurrent versions a day later; backups kept 7 days.",
+ "rule_findings": [
+  {
+   "finding_id": "df91fa97-10d3-4d61-9594-20dd8f5e332b",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_backup_plan",
+    "name": "uploads",
+    "settings": {},
+    "rules": [
+     {
+      "schedule": "cron(0 5 * * ? *)",
+      "delete_after_days": 7,
+      "cold_storage_after_days": "not set",
+      "copied_to_another_vault": false,
+      "continuous_backup": "not set (default: false)"
+     }
+    ]
+   },
+   {
+    "type": "aws_backup_selection",
+    "name": "uploads",
+    "settings": {}
+   },
+   {
+    "type": "aws_backup_vault",
+    "name": "main",
+    "settings": {}
+   },
+   {
+    "type": "aws_cloudwatch_log_group",
+    "name": "api",
+    "settings": {
+     "retention_in_days": 7
+    }
+   },
+   {
+    "type": "aws_dynamodb_table",
+    "name": "sessions",
+    "settings": {
+     "billing_mode": "PAY_PER_REQUEST",
+     "point_in_time_recovery.enabled": true,
+     "server_side_encryption.enabled": "not set",
+     "deletion_protection_enabled": "not set (default: false)"
+    }
+   },
+   {
+    "type": "aws_s3_bucket",
+    "name": "uploads",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket",
+    "name": "uploads_replica",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket_lifecycle_configuration",
+    "name": "uploads",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket_lifecycle_configuration",
+    "name": "uploads_replica",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket_public_access_block",
+    "name": "uploads",
+    "settings": {
+     "block_public_acls": true,
+     "block_public_policy": true,
+     "ignore_public_acls": true,
+     "restrict_public_buckets": true
+    }
+   },
+   {
+    "type": "aws_s3_bucket_public_access_block",
+    "name": "uploads_replica",
+    "settings": {
+     "block_public_acls": true,
+     "block_public_policy": true,
+     "ignore_public_acls": true,
+     "restrict_public_buckets": true
+    }
+   },
+   {
+    "type": "aws_s3_bucket_server_side_encryption_configuration",
+    "name": "uploads",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket_server_side_encryption_configuration",
+    "name": "uploads_replica",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket_versioning",
+    "name": "uploads",
+    "settings": {
+     "versioning_configuration.status": "Enabled"
+    }
+   },
+   {
+    "type": "aws_s3_bucket_versioning",
+    "name": "uploads_replica",
+    "settings": {
+     "versioning_configuration.status": "Enabled"
+    }
+   },
+   {
+    "type": "aws_sfn_state_machine",
+    "name": "pipeline",
+    "settings": {}
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+ },
+ "scoring": "model_eval/SCORING.md#seven-day-deletion-fiction"
+}

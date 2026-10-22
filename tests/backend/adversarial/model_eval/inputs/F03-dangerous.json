@@ -1,0 +1,110 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F03-dangerous",
+ "family": "imdsv2-default-override",
+ "variant": "dangerous",
+ "workload_brief": "Web proxy and API servers in us-east-1, batch workers in us-west-2.",
+ "rule_findings": [
+  {
+   "finding_id": "590d2eed-fc2f-4228-b8ed-4540b9d2dfc8",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  },
+  {
+   "finding_id": "17567061-6b0d-472b-974f-73338e6b5fe8",
+   "category": "iam",
+   "type": "deterministic-rule-result",
+   "finding": "IAM role 'proxy_role' is used by running code and has AmazonS3FullAccess",
+   "evidence": "resource \"aws_iam_role\" \"proxy_role\" trusts a compute service (EC2, Lambda, ECS tasks or EKS pods) and has AmazonS3FullAccess attached",
+   "risk_impact": "Anyone who gets code running on this compute, or tricks it into a request forgery, gets these permissions across the whole account.",
+   "recommendation": "Replace the managed policy with a customer-managed one that names only the actions and resource ARNs this workload uses.",
+   "concern": "iam_compute_broad_managed"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_ec2_instance_metadata_defaults",
+    "name": "east",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_instance_profile",
+    "name": "api",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_instance_profile",
+    "name": "proxy",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role",
+    "name": "api_role",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role",
+    "name": "proxy_role",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role_policy_attachment",
+    "name": "proxy_s3_full",
+    "settings": {}
+   },
+   {
+    "type": "aws_instance",
+    "name": "legacy_proxy",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "optional",
+     "root_block_device.encrypted": "not set"
+    }
+   },
+   {
+    "type": "aws_instance",
+    "name": "modern_api",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "required",
+     "root_block_device.encrypted": "not set"
+    }
+   },
+   {
+    "type": "aws_instance",
+    "name": "sealed_batch",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "not set",
+     "root_block_device.encrypted": "not set"
+    }
+   },
+   {
+    "type": "aws_instance",
+    "name": "west_worker",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "not set",
+     "root_block_device.encrypted": "not set"
+    }
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+ },
+ "scoring": "model_eval/SCORING.md#imdsv2-default-override"
+}
