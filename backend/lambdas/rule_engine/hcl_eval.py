@@ -121,7 +121,8 @@ def render_policy_document(document: dict, parsed: dict, module: str, depth: int
                 if isinstance(principal, dict):
                     kind = principal.get("type", "AWS")
                     identifiers = _as_list(resolve(principal.get("identifiers", []), parsed, module, depth))
-                    principals.setdefault(kind, []).extend(identifiers)
+                    merged = principals.setdefault(kind, [])
+                    merged.extend(identifier for identifier in identifiers if identifier not in merged)
             if principals:
                 statement[target] = "*" if principals == {"*": ["*"]} else principals
         conditions: dict = {}

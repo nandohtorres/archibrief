@@ -7,6 +7,15 @@ from backend.lambdas.rule_engine.hcl_eval import (
 )
 
 
+def test_duplicate_wildcard_principals_have_provider_set_semantics():
+    for principals in (
+        [{"type": "*", "identifiers": ["*", "*"]}],
+        [{"type": "*", "identifiers": ["*"]}] * 2,
+    ):
+        document = {"statement": [{"principals": principals, "actions": ["s3:GetObject"], "resources": ["*"]}]}
+        assert render_policy_document(document, {}, "")["Statement"][0]["Principal"] == "*"
+
+
 def test_policy_document_preserves_conditions_and_complement_elements():
     document = {"statement": [{
         "not_actions": ["iam:*"], "not_resources": ["arn:aws:s3:::excluded/*"],
