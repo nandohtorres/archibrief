@@ -1,9 +1,42 @@
 from backend.lambdas.rule_engine.hcl_eval import (
     is_created,
     policy_statements,
+    render_policy_document,
     resolve,
     truthy,
 )
+
+
+def test_policy_document_preserves_conditions_and_complement_elements():
+    document = {"statement": [{
+        "not_actions": ["iam:*"], "not_resources": ["arn:aws:s3:::excluded/*"],
+        "not_principals": [{"type": "AWS", "identifiers": ["arn:aws:iam::123456789012:root"]}],
+        "condition": [
+            {"test": "StringEquals", "variable": "sts:ExternalId", "values": ["partner-a"]},
+            {"test": "StringEquals", "variable": "sts:ExternalId", "values": ["partner-b"]},
+            {"test": "Bool", "variable": "aws:SecureTransport", "values": ["true"]},
+        ],
+    }]}
+    statement = render_policy_document(document, {}, "")["Statement"][0]
+    assert statement["NotAction"] == ["iam:*"]
+    assert statement["NotResource"] == ["arn:aws:s3:::excluded/*"]
+    assert "Action" not in statement and "Resource" not in statement
+    assert statement["NotPrincipal"]["AWS"] == ["arn:aws:iam::123456789012:root"]
+    assert statement["Condition"] == {
+        "StringEquals": {"sts:ExternalId": ["partner-a", "partner-b"]},
+        "Bool": {"aws:SecureTransport": ["true"]},
+    }
+
+
+def test_policy_document_normalizes_wildcard_principal_without_losing_conditions():
+    document = {"statement": [{
+        "actions": ["s3:GetObject"], "resources": ["*"],
+        "principals": [{"type": "*", "identifiers": ["*"]}],
+        "condition": [{"test": "StringEquals", "variable": "aws:SourceVpce", "values": ["vpce-123"]}],
+    }]}
+    statement = render_policy_document(document, {}, "")["Statement"][0]
+    assert statement["Principal"] == "*"
+    assert statement["Condition"]["StringEquals"]["aws:SourceVpce"] == ["vpce-123"]
 
 ADMIN = [{"Effect": "Allow", "Action": "*", "Resource": "*"}]
 

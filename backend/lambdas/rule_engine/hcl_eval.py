@@ -90,17 +90,33 @@ def render_policy_document(document: dict, parsed: dict, module: str, depth: int
             continue
         statement: dict = {
             "Effect": resolve(block.get("effect", "Allow"), parsed, module, depth),
-            "Action": resolve(block.get("actions", []), parsed, module, depth),
-            "Resource": resolve(block.get("resources", []), parsed, module, depth),
         }
-        principals = {}
-        for principal in _as_list(block.get("principals")):
-            if isinstance(principal, dict):
-                principals[principal.get("type", "AWS")] = resolve(
-                    principal.get("identifiers", []), parsed, module, depth
-                )
-        if principals:
-            statement["Principal"] = principals
+        for source, target in (
+            ("actions", "Action"), ("not_actions", "NotAction"),
+            ("resources", "Resource"), ("not_resources", "NotResource"),
+        ):
+            if source in block:
+                statement[target] = resolve(block[source], parsed, module, depth)
+        for source, target in (("principals", "Principal"), ("not_principals", "NotPrincipal")):
+            principals: dict = {}
+            for principal in _as_list(block.get(source)):
+                if isinstance(principal, dict):
+                    kind = principal.get("type", "AWS")
+                    identifiers = _as_list(resolve(principal.get("identifiers", []), parsed, module, depth))
+                    principals.setdefault(kind, []).extend(identifiers)
+            if principals:
+                statement[target] = "*" if principals == {"*": ["*"]} else principals
+        conditions: dict = {}
+        for condition in _as_list(block.get("condition")):
+            if not isinstance(condition, dict):
+                continue
+            test = condition.get("test")
+            variable = condition.get("variable")
+            if isinstance(test, str) and isinstance(variable, str):
+                values = _as_list(resolve(condition.get("values", []), parsed, module, depth))
+                conditions.setdefault(test, {}).setdefault(variable, []).extend(values)
+        if conditions:
+            statement["Condition"] = conditions
         statements.append(statement)
     return {"Version": "2012-10-17", "Statement": statements}
 
