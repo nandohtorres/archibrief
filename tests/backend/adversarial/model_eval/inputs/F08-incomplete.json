@@ -1,0 +1,66 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F08-incomplete",
+ "family": "seven-day-deletion-fiction",
+ "variant": "incomplete",
+ "workload_brief": "Upload expiry is configured per environment.",
+ "rule_findings": [
+  {
+   "finding_id": "457221ad-0c19-4d5e-a0b6-b7031a02e4e3",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'uploads' has no aws_s3_bucket_public_access_block resource",
+   "evidence": "resource \"aws_s3_bucket\" \"uploads\" found with no matching public access block",
+   "risk_impact": "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
+   "recommendation": "Attach aws_s3_bucket_public_access_block with all four settings enabled.",
+   "concern": "s3_public_access"
+  },
+  {
+   "finding_id": "bb92477e-a52d-403b-856f-5b050ad09ccb",
+   "category": "encryption",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'uploads' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"uploads\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "concern": "s3_encryption"
+  },
+  {
+   "finding_id": "26b94cc9-dcb6-4670-837e-0252e8010ec0",
+   "category": "recovery",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'uploads' does not have versioning enabled",
+   "evidence": "resource \"aws_s3_bucket\" \"uploads\" found with no enabled versioning configuration",
+   "risk_impact": "Accidental or malicious object deletion/overwrite cannot be recovered.",
+   "recommendation": "Enable aws_s3_bucket_versioning with status = \"Enabled\".",
+   "concern": "s3_versioning"
+  },
+  {
+   "finding_id": "1727b258-1aca-439c-92bd-e33d14b4e020",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_s3_bucket",
+    "name": "uploads",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket_lifecycle_configuration",
+    "name": "uploads",
+    "settings": {}
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+ },
+ "scoring": "model_eval/SCORING.md#seven-day-deletion-fiction"
+}

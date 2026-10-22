@@ -1,0 +1,150 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F07-dangerous",
+ "family": "public-ai-api-cost-trap",
+ "variant": "dangerous",
+ "workload_brief": "Public AI chat API behind CloudFront and WAF. Spend is capped at $50/month by the budget; each user is limited to 100 requests a day by the usage plan.",
+ "rule_findings": [
+  {
+   "finding_id": "5ba5c7e3-ecba-4a62-b3b4-7a412e81e8d1",
+   "category": "cost",
+   "type": "deterministic-rule-result",
+   "finding": "Lambda function 'inference' has no reserved_concurrent_executions set",
+   "evidence": "resource \"aws_lambda_function\" \"inference\" has no reserved_concurrent_executions attribute",
+   "risk_impact": "Unbounded concurrency exposes the function (and downstream cost) to runaway invocation.",
+   "recommendation": "Set reserved_concurrent_executions to a deliberate cap.",
+   "concern": "lambda_concurrency"
+  },
+  {
+   "finding_id": "418d0fb3-b29b-4f04-8187-857ffe5d3116",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  },
+  {
+   "finding_id": "cc9e1e35-71d2-40f6-bd5c-01fda9d23334",
+   "category": "cost",
+   "type": "deterministic-rule-result",
+   "finding": "API Gateway stage(s) present with no aws_api_gateway_method_settings for throttling",
+   "evidence": "resource \"aws_api_gateway_stage\" found with no matching aws_api_gateway_method_settings resource",
+   "risk_impact": "Without throttling limits, a traffic spike or abuse pattern can drive unbounded cost/load.",
+   "recommendation": "Add aws_api_gateway_method_settings with throttling_burst_limit/throttling_rate_limit set.",
+   "concern": "apigw_throttling"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_api_gateway_authorizer",
+    "name": "token",
+    "settings": {}
+   },
+   {
+    "type": "aws_api_gateway_deployment",
+    "name": "prod",
+    "settings": {}
+   },
+   {
+    "type": "aws_api_gateway_method",
+    "name": "post_batch",
+    "settings": {}
+   },
+   {
+    "type": "aws_api_gateway_method",
+    "name": "post_chat",
+    "settings": {}
+   },
+   {
+    "type": "aws_api_gateway_resource",
+    "name": "batch",
+    "settings": {}
+   },
+   {
+    "type": "aws_api_gateway_resource",
+    "name": "chat",
+    "settings": {}
+   },
+   {
+    "type": "aws_api_gateway_rest_api",
+    "name": "llm",
+    "settings": {}
+   },
+   {
+    "type": "aws_api_gateway_stage",
+    "name": "prod",
+    "settings": {
+     "xray_tracing_enabled": "not set (default: false)"
+    }
+   },
+   {
+    "type": "aws_api_gateway_usage_plan",
+    "name": "free_tier",
+    "settings": {}
+   },
+   {
+    "type": "aws_budgets_budget",
+    "name": "monthly",
+    "settings": {}
+   },
+   {
+    "type": "aws_cloudfront_distribution",
+    "name": "edge",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role",
+    "name": "inference",
+    "settings": {}
+   },
+   {
+    "type": "aws_lambda_event_source_mapping",
+    "name": "jobs",
+    "settings": {}
+   },
+   {
+    "type": "aws_lambda_function",
+    "name": "inference",
+    "settings": {
+     "runtime": "python3.12",
+     "memory_size": "not set (default: 128)",
+     "timeout": 300,
+     "reserved_concurrent_executions": "not set (default: -1)",
+     "tracing_config.mode": "not set (default: PassThrough)"
+    }
+   },
+   {
+    "type": "aws_lambda_function_url",
+    "name": "inference_direct",
+    "settings": {}
+   },
+   {
+    "type": "aws_sqs_queue",
+    "name": "jobs",
+    "settings": {
+     "sqs_managed_sse_enabled": "not set",
+     "message_retention_seconds": "not set (default: 345600)"
+    }
+   },
+   {
+    "type": "aws_sqs_queue",
+    "name": "jobs_dlq",
+    "settings": {
+     "sqs_managed_sse_enabled": "not set",
+     "message_retention_seconds": "not set (default: 345600)"
+    }
+   },
+   {
+    "type": "aws_wafv2_web_acl",
+    "name": "edge",
+    "settings": {}
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+ },
+ "scoring": "model_eval/SCORING.md#public-ai-api-cost-trap"
+}

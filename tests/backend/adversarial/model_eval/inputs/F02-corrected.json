@@ -1,0 +1,186 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F02-corrected",
+ "family": "iam-policy-mirror-maze",
+ "variant": "corrected",
+ "workload_brief": "Internal reporting platform. Partner account 111122223333 assumes a role with an external ID. Report buckets are read through one VPC endpoint.",
+ "rule_findings": [
+  {
+   "finding_id": "85e66fec-4987-4506-ae84-36ef3e2d2902",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'reports' has no aws_s3_bucket_public_access_block resource",
+   "evidence": "resource \"aws_s3_bucket\" \"reports\" found with no matching public access block",
+   "risk_impact": "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
+   "recommendation": "Attach aws_s3_bucket_public_access_block with all four settings enabled.",
+   "concern": "s3_public_access"
+  },
+  {
+   "finding_id": "6835f59e-4ccd-4fef-9094-8c7e5a31a7c3",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'exports' has no aws_s3_bucket_public_access_block resource",
+   "evidence": "resource \"aws_s3_bucket\" \"exports\" found with no matching public access block",
+   "risk_impact": "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
+   "recommendation": "Attach aws_s3_bucket_public_access_block with all four settings enabled.",
+   "concern": "s3_public_access"
+  },
+  {
+   "finding_id": "6fb426be-9750-47ad-a427-49b2c0494b47",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'media' has no aws_s3_bucket_public_access_block resource",
+   "evidence": "resource \"aws_s3_bucket\" \"media\" found with no matching public access block",
+   "risk_impact": "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
+   "recommendation": "Attach aws_s3_bucket_public_access_block with all four settings enabled.",
+   "concern": "s3_public_access"
+  },
+  {
+   "finding_id": "002b2488-f107-48d4-acf9-98f70fa4984c",
+   "category": "encryption",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'reports' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"reports\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "concern": "s3_encryption"
+  },
+  {
+   "finding_id": "4d195e9f-79d2-4b61-a7e6-cfec9e7d292a",
+   "category": "encryption",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'exports' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"exports\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "concern": "s3_encryption"
+  },
+  {
+   "finding_id": "bdf69b12-bf98-489c-86f6-16d2868ac7c5",
+   "category": "encryption",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'media' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"media\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "concern": "s3_encryption"
+  },
+  {
+   "finding_id": "37a63532-daa2-4163-a71e-ad4032b82841",
+   "category": "recovery",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'reports' does not have versioning enabled",
+   "evidence": "resource \"aws_s3_bucket\" \"reports\" found with no enabled versioning configuration",
+   "risk_impact": "Accidental or malicious object deletion/overwrite cannot be recovered.",
+   "recommendation": "Enable aws_s3_bucket_versioning with status = \"Enabled\".",
+   "concern": "s3_versioning"
+  },
+  {
+   "finding_id": "174755ce-fe9e-4fcf-9a03-b7c424c6e726",
+   "category": "recovery",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'exports' does not have versioning enabled",
+   "evidence": "resource \"aws_s3_bucket\" \"exports\" found with no enabled versioning configuration",
+   "risk_impact": "Accidental or malicious object deletion/overwrite cannot be recovered.",
+   "recommendation": "Enable aws_s3_bucket_versioning with status = \"Enabled\".",
+   "concern": "s3_versioning"
+  },
+  {
+   "finding_id": "b19579c1-e596-4c15-bdaf-eda3e8f29321",
+   "category": "recovery",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'media' does not have versioning enabled",
+   "evidence": "resource \"aws_s3_bucket\" \"media\" found with no enabled versioning configuration",
+   "risk_impact": "Accidental or malicious object deletion/overwrite cannot be recovered.",
+   "recommendation": "Enable aws_s3_bucket_versioning with status = \"Enabled\".",
+   "concern": "s3_versioning"
+  },
+  {
+   "finding_id": "bcd00e1c-4fd4-4420-8044-0af73cd0ee68",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  },
+  {
+   "finding_id": "a741172e-fc74-4b98-9b0d-52f8a6a51629",
+   "category": "iam",
+   "type": "deterministic-rule-result",
+   "finding": "IAM role 'partner_doc' assume-role policy has no external-id/federation condition",
+   "evidence": "resource \"aws_iam_role\" \"partner_doc\" trusts an AWS principal with no sts:ExternalId, MFA or organization condition",
+   "risk_impact": "Anyone in the trusted account who can call sts:AssumeRole can use this role.",
+   "recommendation": "Add an sts:ExternalId, aws:MultiFactorAuthPresent or aws:PrincipalOrgID condition.",
+   "concern": "iam_trust"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_iam_policy",
+    "name": "deny_all_guardrail",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_policy",
+    "name": "reports_reader",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_policy",
+    "name": "reports_reader_doc",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role",
+    "name": "partner_doc",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role",
+    "name": "partner_json",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role",
+    "name": "scoped_worker",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role_policy_attachment",
+    "name": "scoped_worker_reader",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket",
+    "name": "exports",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket",
+    "name": "media",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket",
+    "name": "reports",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket_policy",
+    "name": "exports_vpce_document",
+    "settings": {}
+   },
+   {
+    "type": "aws_s3_bucket_policy",
+    "name": "reports_vpce_json",
+    "settings": {}
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+ },
+ "scoring": "model_eval/SCORING.md#iam-policy-mirror-maze"
+}

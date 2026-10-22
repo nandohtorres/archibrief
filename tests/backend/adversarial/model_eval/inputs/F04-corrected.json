@@ -1,0 +1,118 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F04-corrected",
+ "family": "private-subnet-public-path",
+ "variant": "corrected",
+ "workload_brief": "Ledger service. The database tier lives in private subnets and must not be reachable from the internet.",
+ "rule_findings": [
+  {
+   "finding_id": "f99cf285-9011-4649-a358-096adfa93879",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_db_instance",
+    "name": "ledger",
+    "settings": {
+     "engine": "postgres",
+     "instance_class": "db.t3.micro",
+     "multi_az": true,
+     "storage_encrypted": true,
+     "publicly_accessible": false,
+     "backup_retention_period": "not set (default: 1)",
+     "deletion_protection": "not set (default: false)",
+     "iam_database_authentication_enabled": "not set (default: false)",
+     "auto_minor_version_upgrade": "not set (default: true)",
+     "skip_final_snapshot": "not set (default: false)",
+     "copy_tags_to_snapshot": "not set (default: false)"
+    }
+   },
+   {
+    "type": "aws_db_subnet_group",
+    "name": "ledger",
+    "settings": {}
+   },
+   {
+    "type": "aws_instance",
+    "name": "bastion",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "required",
+     "root_block_device.encrypted": "not set"
+    }
+   },
+   {
+    "type": "aws_internet_gateway",
+    "name": "igw",
+    "settings": {}
+   },
+   {
+    "type": "aws_route_table",
+    "name": "private_rt",
+    "settings": {}
+   },
+   {
+    "type": "aws_route_table_association",
+    "name": "db_a",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "app",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "bastion_v6",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "db",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "modules/a_payments/db",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "modules/b_reporting/db",
+    "settings": {}
+   },
+   {
+    "type": "aws_subnet",
+    "name": "private_db_a",
+    "settings": {
+     "map_public_ip_on_launch": false
+    }
+   },
+   {
+    "type": "aws_subnet",
+    "name": "private_db_b",
+    "settings": {
+     "map_public_ip_on_launch": false
+    }
+   },
+   {
+    "type": "aws_vpc",
+    "name": "main",
+    "settings": {}
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+ },
+ "scoring": "model_eval/SCORING.md#private-subnet-public-path"
+}

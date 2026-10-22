@@ -1,0 +1,161 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F01-dangerous",
+ "family": "environment-shell-game",
+ "variant": "dangerous",
+ "workload_brief": "Order service for an online shop, production environment. Customer order data; the database must never be reachable from the internet.",
+ "rule_findings": [
+  {
+   "finding_id": "7f26e8a2-7a78-46f2-a39c-ce4e1443ba04",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'modules/archive/archive' has no aws_s3_bucket_public_access_block resource",
+   "evidence": "resource \"aws_s3_bucket\" \"modules/archive/archive\" found with no matching public access block",
+   "risk_impact": "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
+   "recommendation": "Attach aws_s3_bucket_public_access_block with all four settings enabled.",
+   "concern": "s3_public_access"
+  },
+  {
+   "finding_id": "82d80892-81db-4944-b97c-90f0c4e1c4c4",
+   "category": "encryption",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'modules/archive/archive' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"modules/archive/archive\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "concern": "s3_encryption"
+  },
+  {
+   "finding_id": "e8953a83-add7-4978-92f9-05e02fbe53b0",
+   "category": "recovery",
+   "type": "deterministic-rule-result",
+   "finding": "S3 bucket 'modules/archive/archive' does not have versioning enabled",
+   "evidence": "resource \"aws_s3_bucket\" \"modules/archive/archive\" found with no enabled versioning configuration",
+   "risk_impact": "Accidental or malicious object deletion/overwrite cannot be recovered.",
+   "recommendation": "Enable aws_s3_bucket_versioning with status = \"Enabled\".",
+   "concern": "s3_versioning"
+  },
+  {
+   "finding_id": "5b07a2a9-a6ac-4ae1-831c-d712be59a316",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "Security group rule 'debug' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
+   "evidence": "resource \"aws_security_group\" \"debug\" allows 0.0.0.0/0 for ports 22-22",
+   "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
+   "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
+   "concern": "sg_open_ingress"
+  },
+  {
+   "finding_id": "b2e992b7-9b42-4f1a-83fb-ee42ae92a7b8",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "Security group rule 'modules/unused_legacy/legacy_ssh' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
+   "evidence": "resource \"aws_security_group\" \"modules/unused_legacy/legacy_ssh\" allows 0.0.0.0/0 for ports 22-22",
+   "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
+   "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
+   "concern": "sg_open_ingress"
+  },
+  {
+   "finding_id": "2c914a5c-ffa2-470e-9fdc-b0802100ce50",
+   "category": "encryption",
+   "type": "deterministic-rule-result",
+   "finding": "RDS instance 'modules/unused_legacy/legacy_db' does not have storage_encrypted set",
+   "evidence": "resource \"aws_db_instance\" \"modules/unused_legacy/legacy_db\" has storage_encrypted = false or unset",
+   "risk_impact": "Database storage is unencrypted at rest.",
+   "recommendation": "Set storage_encrypted = true; note this cannot be changed after creation.",
+   "concern": "rds_encryption"
+  },
+  {
+   "finding_id": "1f225206-2e44-4021-b3cd-3ecbd9e73b7a",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "RDS instance 'modules/unused_legacy/legacy_db' is publicly accessible",
+   "evidence": "resource \"aws_db_instance\" \"modules/unused_legacy/legacy_db\" has publicly_accessible = true",
+   "risk_impact": "The database gets a public endpoint and is one security-group mistake from the internet.",
+   "recommendation": "Set publicly_accessible = false and reach the database from inside the VPC.",
+   "concern": "rds_public"
+  },
+  {
+   "finding_id": "c1ccf79a-03d7-4013-af02-ad7c77d2594e",
+   "category": "availability",
+   "type": "deterministic-rule-result",
+   "finding": "RDS instance 'modules/unused_legacy/legacy_db' is not configured multi_az",
+   "evidence": "resource \"aws_db_instance\" \"modules/unused_legacy/legacy_db\" has multi_az = false or unset",
+   "risk_impact": "A single AZ failure causes database unavailability.",
+   "recommendation": "Set multi_az = true if the workload's availability requirement warrants it.",
+   "concern": "rds_multi_az"
+  },
+  {
+   "finding_id": "67de6700-8cde-4135-b09f-350d289f265c",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_db_instance",
+    "name": "modules/unused_legacy/legacy_db",
+    "settings": {
+     "engine": "mysql",
+     "instance_class": "db.t3.micro",
+     "multi_az": "not set (default: false)",
+     "storage_encrypted": "not set (default: false)",
+     "publicly_accessible": true,
+     "backup_retention_period": "not set (default: 1)",
+     "deletion_protection": "not set (default: false)",
+     "iam_database_authentication_enabled": "not set (default: false)",
+     "auto_minor_version_upgrade": "not set (default: true)",
+     "skip_final_snapshot": "not set (default: false)",
+     "copy_tags_to_snapshot": "not set (default: false)"
+    }
+   },
+   {
+    "type": "aws_db_instance",
+    "name": "orders",
+    "settings": {
+     "engine": "postgres",
+     "instance_class": "db.t3.micro",
+     "multi_az": true,
+     "storage_encrypted": true,
+     "publicly_accessible": false,
+     "backup_retention_period": 7,
+     "deletion_protection": true,
+     "iam_database_authentication_enabled": "not set (default: false)",
+     "auto_minor_version_upgrade": "not set (default: true)",
+     "skip_final_snapshot": "not set (default: false)",
+     "copy_tags_to_snapshot": "not set (default: false)"
+    }
+   },
+   {
+    "type": "aws_s3_bucket",
+    "name": "modules/archive/archive",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "debug",
+    "settings": {},
+    "copies": "unknown"
+   },
+   {
+    "type": "aws_security_group",
+    "name": "modules/edge/admin",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "modules/unused_legacy/legacy_ssh",
+    "settings": {}
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+ },
+ "scoring": "model_eval/SCORING.md#environment-shell-game"
+}

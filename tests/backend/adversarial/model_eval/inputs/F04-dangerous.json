@@ -1,0 +1,163 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F04-dangerous",
+ "family": "private-subnet-public-path",
+ "variant": "dangerous",
+ "workload_brief": "Ledger service. The database tier lives in private subnets and must not be reachable from the internet; operators use a bastion.",
+ "rule_findings": [
+  {
+   "finding_id": "0fce358e-bcf0-4440-aaaa-b9b37e92ce4a",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "Security group rule 'bastion_v6' allows ::/0 ingress to sensitive port(s) [22]",
+   "evidence": "resource \"aws_security_group\" \"bastion_v6\" allows ::/0 for ports 22-22",
+   "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
+   "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
+   "concern": "sg_open_ingress"
+  },
+  {
+   "finding_id": "79044a4d-6a76-4bc5-a3f5-deb2ad2e5aeb",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "Security group rule 'orphan_any' allows 0.0.0.0/0 ingress to sensitive port(s) [5432]",
+   "evidence": "resource \"aws_security_group\" \"orphan_any\" allows 0.0.0.0/0 for ports 5432-5432",
+   "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
+   "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
+   "concern": "sg_open_ingress"
+  },
+  {
+   "finding_id": "6e865c17-2ab0-4d63-b009-90783ef8b555",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "Security group rule 'modules/a_payments/db' allows 0.0.0.0/0 ingress to sensitive port(s) [5432]",
+   "evidence": "resource \"aws_security_group\" \"modules/a_payments/db\" allows 0.0.0.0/0 for ports 5432-5432",
+   "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
+   "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
+   "concern": "sg_open_ingress"
+  },
+  {
+   "finding_id": "22027135-2a26-4553-b099-99ccca40a2a8",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "RDS instance 'ledger' is publicly accessible",
+   "evidence": "resource \"aws_db_instance\" \"ledger\" has publicly_accessible = true",
+   "risk_impact": "The database gets a public endpoint and is one security-group mistake from the internet.",
+   "recommendation": "Set publicly_accessible = false and reach the database from inside the VPC.",
+   "concern": "rds_public"
+  },
+  {
+   "finding_id": "cb8422c9-5f21-463f-a762-c90725602ebb",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_db_instance",
+    "name": "ledger",
+    "settings": {
+     "engine": "postgres",
+     "instance_class": "db.t3.micro",
+     "multi_az": true,
+     "storage_encrypted": true,
+     "publicly_accessible": true,
+     "backup_retention_period": "not set (default: 1)",
+     "deletion_protection": "not set (default: false)",
+     "iam_database_authentication_enabled": "not set (default: false)",
+     "auto_minor_version_upgrade": "not set (default: true)",
+     "skip_final_snapshot": "not set (default: false)",
+     "copy_tags_to_snapshot": "not set (default: false)"
+    }
+   },
+   {
+    "type": "aws_db_subnet_group",
+    "name": "ledger",
+    "settings": {}
+   },
+   {
+    "type": "aws_instance",
+    "name": "bastion",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "required",
+     "root_block_device.encrypted": "not set"
+    }
+   },
+   {
+    "type": "aws_internet_gateway",
+    "name": "igw",
+    "settings": {}
+   },
+   {
+    "type": "aws_route_table",
+    "name": "public_rt",
+    "settings": {}
+   },
+   {
+    "type": "aws_route_table_association",
+    "name": "db_a",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "app",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "bastion_v6",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "db",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "modules/a_payments/db",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "modules/b_reporting/db",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "orphan_any",
+    "settings": {}
+   },
+   {
+    "type": "aws_subnet",
+    "name": "private_db_a",
+    "settings": {
+     "map_public_ip_on_launch": false
+    }
+   },
+   {
+    "type": "aws_subnet",
+    "name": "private_db_b",
+    "settings": {
+     "map_public_ip_on_launch": false
+    }
+   },
+   {
+    "type": "aws_vpc",
+    "name": "main",
+    "settings": {}
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+ },
+ "scoring": "model_eval/SCORING.md#private-subnet-public-path"
+}
