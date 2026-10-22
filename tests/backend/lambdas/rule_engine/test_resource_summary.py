@@ -334,6 +334,24 @@ resource "aws_backup_plan" "this" {
     assert "IGNORE" not in json.dumps(build_resource_summary(parsed))
 
 
+def test_backup_rule_overflow_is_disclosed_and_keeps_the_only_short_retention_copy():
+    rules = [{"schedule": "cron(0 0 * * ? *)", "lifecycle": [{"delete_after": 35}]} for _ in range(10)]
+    rules.append({"schedule": "cron(0 0 * * ? *)", "lifecycle": [{"delete_after": 1}], "copy_action": [{}]})
+    parsed = {"resources": {"aws_backup_plan": {"plan": {"rule": rules}}}}
+    (entry,) = build_resource_summary(parsed)["resources"]
+    assert entry["rules_total"] == 11
+    assert entry["rules_truncated"] is True
+    assert len(entry["rules"]) == 10
+    assert any(rule["copied_to_another_vault"] and rule["delete_after_days"] == 1 for rule in entry["rules"])
+    assert "source_index" in entry["rules"][0]
+
+
+def test_log_retention_default_and_explicit_zero_mean_never_expires():
+    parsed = {"resources": {"aws_cloudwatch_log_group": {"default": {}, "explicit": {"retention_in_days": 0}}}}
+    entries = build_resource_summary(parsed)["resources"]
+    assert all("never expires" in str(entry["settings"]["retention_in_days"]) for entry in entries)
+
+
 def test_rds_cluster_snapshot_settings_are_stated(tmp_path):
     # Unstated, the model claimed copy_tags_to_snapshot wasn't confirmed
     # when the code set it on every cluster.
