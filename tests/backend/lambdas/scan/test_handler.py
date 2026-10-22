@@ -41,6 +41,32 @@ def test_remote_and_escaping_module_sources_are_neutralized(tmp_path):
     assert "# comment" in text  # rest of the line kept, so line numbers don't move
 
 
+def test_module_source_rewriting_is_structural_and_preserves_provider_sources(tmp_path):
+    text = (
+        'terraform {\n required_providers {\n aws = {\n source = "hashicorp/aws"\n }\n }\n}\n'
+        'locals {\n payload = <<DOC\nmodule "fake" { source = "https://example.invalid/fake" }\nDOC\n}\n'
+        'module "one" { source = "git::https://example.invalid/one.git" }\n'
+        'module "escaped" { source = "\\u002e\\u002e/escape" }\n'
+    )
+    path = _write(tmp_path / "main.tf", text)
+    assert neutralize_remote_sources([path], str(tmp_path)) == 2
+    rewritten = Path(path).read_text(encoding="utf-8")
+    assert 'source = "hashicorp/aws"' in rewritten
+    assert 'module "fake" { source = "https://example.invalid/fake" }' in rewritten
+    assert "example.invalid/one.git" not in rewritten
+    assert rewritten.count(NEUTRALIZED_SOURCE) == 2
+    assert rewritten.count("\n") == text.count("\n")
+
+
+def test_malformed_module_source_fails_before_the_scanner_runs(tmp_path, monkeypatch):
+    path = _write(tmp_path / "main.tf", 'module "broken" { source = "unterminated')
+    invoked = []
+    monkeypatch.setattr(scan, "run_trivy", lambda *_a, **_k: invoked.append(True))
+    with pytest.raises(ValueError, match="unsupported HCL"):
+        scan.scan_files(str(tmp_path), [path], trivy_path=__file__)
+    assert invoked == []
+
+
 def test_trivy_runs_without_aws_credentials_or_network(tmp_path, monkeypatch):
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret")

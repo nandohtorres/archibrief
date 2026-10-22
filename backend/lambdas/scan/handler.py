@@ -31,6 +31,8 @@ import tempfile
 import time
 from pathlib import Path, PurePosixPath
 
+import hcl2
+
 from backend.shared.archive import IngestRejected, extract_archive
 from backend.shared.clients import S3Client
 from backend.shared.terraform_scope import scoped_key
@@ -43,7 +45,6 @@ NEUTRALIZED_SOURCE = "./.archibrief-remote-module-removed"
 # A port nothing listens on: any HTTP(S) request Trivy attempts fails fast.
 _DEAD_PROXY = "http://127.0.0.1:9"
 
-_SOURCE_ATTRIBUTE = re.compile(r'^(\s*source\s*=\s*)"([^"]*)"(.*)$', re.MULTILINE)
 _RESOURCE_TYPE = re.compile(r"^[a-z0-9_]+$")
 _RESOURCE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 # count / for_each instances: name[0] or name["key"]. The findings are
@@ -68,19 +69,51 @@ def neutralize_remote_sources(files: list[str], root: str) -> int:
     changed = 0
     for file in files:
         path = Path(file)
+        if path.suffix != ".tf":
+            continue
         file_dir = path.parent.resolve()
-        text = path.read_text(encoding="utf-8")
-
-        def replace(match: re.Match[str], file_dir: Path = file_dir) -> str:
-            nonlocal changed
-            if _is_local_inside(match.group(2), file_dir, root_path):
-                return match.group(0)
-            changed += 1
-            return f'{match.group(1)}"{NEUTRALIZED_SOURCE}"{match.group(3)}'
-
-        new_text = _SOURCE_ATTRIBUTE.sub(replace, text)
+        with path.open(encoding="utf-8-sig", newline="") as fh:
+            text = fh.read()
+        # Positions come from the real grammar: braces in comments, strings
+        # and heredocs are not blocks. An unparseable source fails before
+        # Trivy starts, rather than trusting incomplete sanitization.
+        try:
+            tree = hcl2.parses(text).to_lark()
+        except Exception:  # noqa: BLE001 - parser failures must stop scanning without echoing input
+            raise ValueError("unsupported HCL for isolated scanning") from None
+        replacements = []
+        for block in tree.find_data("block"):
+            if str(block.children[0].children[0]) != "module":
+                continue
+            body = next(child for child in block.children if getattr(child, "data", None) == "body")
+            attributes = [
+                child for child in body.children
+                if getattr(child, "data", None) == "attribute"
+                and str(child.children[0].children[0]) == "source"
+            ]
+            if len(attributes) != 1:
+                raise ValueError("module source cannot be neutralized safely")
+            expression = attributes[0].children[-1]
+            start, end = expression.meta.start_pos, expression.meta.end_pos
+            raw = text[start:end]
+            try:
+                source = json.loads(raw)
+            except (ValueError, TypeError):
+                source = None
+            if (
+                isinstance(source, str) and "${" not in source and "%{" not in source
+                and _is_local_inside(source, file_dir, root_path)
+            ):
+                continue
+            replacement = json.dumps(NEUTRALIZED_SOURCE) + "\n" * raw.count("\n")
+            replacements.append((start, end, replacement))
+        new_text = text
+        for start, end, replacement in sorted(replacements, reverse=True):
+            new_text = new_text[:start] + replacement + new_text[end:]
+        changed += len(replacements)
         if new_text != text:
-            path.write_text(new_text, encoding="utf-8")
+            with path.open("w", encoding="utf-8", newline="") as fh:
+                fh.write(new_text)
     return changed
 
 
