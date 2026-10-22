@@ -85,7 +85,7 @@ _GENERIC_WORDS = frozenset(
     }
 )
 
-_DECLARED = re.compile(r'resource\s+"(aws_[a-z0-9_]+)"\s+"([A-Za-z0-9_-]+)"')
+_DECLARED = re.compile(r'resource\s+"(aws_[a-z0-9_]+)"\s+"([A-Za-z0-9_/-]+)"')
 
 
 def _finding_text(finding: dict) -> str:
@@ -153,7 +153,7 @@ def _place(nodes: dict[str, dict], findings: list[dict]) -> list[str]:
                     if phrase in lowered and nodes[node_id]["type"] == hinted_type
                 ]
             hits.update(node_ids)
-        if not hits:
+        if not hits and not declared:
             hits.update(_by_type_phrase(nodes, by_type, lowered))
         if not hits:
             unplaced.append(finding_id)
@@ -172,4 +172,15 @@ def link_findings(graph: dict, findings: list[dict[str, Any]]) -> dict:
     for node in nodes.values():
         node["findings"] = []
     linked["account_findings"] = _place(nodes, findings)
+    # Keep the legacy transport field, but do not call every unmatched
+    # finding account-wide: named resources may be omitted by graph bounds.
+    unplaced = set(linked["account_findings"])
+    linked["unplaced_scopes"] = {
+        str(f.get("finding_id", "")): (
+            "module" if str(f.get("evidence", "")).startswith("Module call '")
+            else "resource-not-shown" if _DECLARED.search(_finding_text(f))
+            else "unresolved-or-design"
+        )
+        for f in findings if str(f.get("finding_id", "")) in unplaced
+    }
     return linked

@@ -273,10 +273,10 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
               : undefined
           }
         >
-          <h3>Not tied to one resource</h3>
+          <h3>Findings outside the diagram</h3>
           <p className="architecture-meta">
-            Findings about something missing (no CloudTrail trail, for example) or about the design
-            as a whole.
+            Findings about resources omitted from this diagram, modules without exact resource
+            attribution, missing configuration, or the design as a whole.
           </p>
           <FindingButtons ids={graph.account_findings} byId={byId} onOpenFinding={onOpenFinding} />
         </div>

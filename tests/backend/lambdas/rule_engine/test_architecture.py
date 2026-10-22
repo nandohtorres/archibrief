@@ -238,6 +238,27 @@ def test_submitted_names_are_truncated(tmp_path):
     assert node["name"] != other["nodes"][0]["name"]
 
 
+def test_omitted_named_resource_is_not_pinned_to_another_resource_of_the_same_type(tmp_path):
+    parsed = _parse(tmp_path, 'resource "aws_s3_bucket" "visible" {}')
+    findings = [{
+        "finding_id": "missing", "finding": "Bucket configuration requires review",
+        "evidence": 'resource "aws_s3_bucket" "omitted" has no explicit encryption',
+    }]
+    graph = build_architecture(parsed, findings)
+    assert graph["nodes"][0]["findings"] == []
+    assert graph["account_findings"] == ["missing"]
+    assert graph["unplaced_scopes"] == {"missing": "resource-not-shown"}
+
+
+def test_module_scanner_findings_never_attach_by_generic_resource_type(tmp_path):
+    graph = build_architecture(_parse(tmp_path, 'resource "aws_security_group" "main" {}'), [{
+        "finding_id": "module", "finding": "Module call has a security group issue",
+        "evidence": "Module call 'edge_lab': exact resource attribution unavailable",
+    }])
+    assert graph["nodes"][0]["findings"] == []
+    assert graph["unplaced_scopes"] == {"module": "module"}
+
+
 def test_lane_uses_the_longest_prefix():
     assert lane_of("aws_vpc_endpoint") == "network"
     assert lane_of("aws_cloudwatch_log_group") == "monitoring"
