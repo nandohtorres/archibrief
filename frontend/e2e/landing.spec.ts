@@ -2,6 +2,7 @@
 // owner-only submissions until public submissions open (ADR-0047).
 import { expect, test } from "@playwright/test";
 import { FIXTURE_URL, LIVE_URL } from "../playwright.config";
+import { fillSubmission } from "./support/submission";
 
 test.describe("landing page", () => {
   test("shows the pitch, the real demos and the full submission form", async ({ page }) => {
@@ -29,7 +30,7 @@ test.describe("landing page", () => {
       await route.fulfill({ status: 500, body: "" });
     });
     await page.goto(LIVE_URL);
-    await page.getByRole("button", { name: /Payments platform/ }).click();
+    await fillSubmission(page);
     await page.getByRole("button", { name: "Start review" }).click();
 
     await expect(page.locator(".submit-notice")).toContainText("limited to the site owner");
@@ -47,7 +48,7 @@ test.describe("landing page", () => {
     );
     await page.goto(LIVE_URL);
     await page.getByLabel("Admin key").fill("wrong-key");
-    await page.getByRole("button", { name: /Payments platform/ }).click();
+    await fillSubmission(page);
     await page.getByRole("button", { name: "Start review" }).click();
 
     await expect(page.locator(".submit-notice")).toContainText("That key wasn't accepted");

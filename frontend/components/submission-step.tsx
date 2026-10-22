@@ -1,61 +1,16 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 
 import { createTar } from "@/lib/tar";
+import { defaultReportName } from "@/lib/workflow";
 
 // The "try it" section of the landing page: where the story turns into
 // the product. The submission form, plus:
-// - pre-made example architectures in plain words (pre-made, not
-//   generated live), each a real bundled Terraform archive;
+// - a small strip of finished demo reviews for visitors without Terraform
+//   (passed in as `demos`), set apart from the form by a divider;
 // - upload a .tar, or paste Terraform (turned into a .tar in the browser,
 //   lib/tar.ts, so it takes the same upload + ingest path);
 // - the admin key next to the submit button. Submitting stays owner-only
 //   until public submissions open (ADR-0046/0047).
-
-// Bundled examples: each loads a real Terraform archive
-// (frontend/public/fixtures/*.tar) plus a matching brief. Finding counts
-// were verified against the real rule engine when they were built.
-interface ExampleArchitecture {
-  id: string;
-  label: string;
-  size: string;
-  description: string;
-  fixturePath: string;
-  terraformRepoRef: string;
-  workloadBrief: string;
-}
-
-const examples: ExampleArchitecture[] = [
-  {
-    id: "detailed",
-    label: "Payments platform",
-    size: "Complex · 12 resources",
-    description: "Global payments with PCI-DSS and GDPR needs and a 99.95% availability target.",
-    fixturePath: "/fixtures/preset-detailed.tar",
-    terraformRepoRef: "github.com/example/complex-multi-service@abc1234",
-    workloadBrief:
-      "Customer payments platform processing roughly 500 requests/second at peak, globally. Must meet PCI-DSS and GDPR requirements; EU customer data must stay in the EU. Requires 99.95% availability with automated multi-region failover. Financial transaction logs are retained for 7 years for regulatory audit.",
-  },
-  {
-    id: "medium",
-    label: "Internal analytics dashboard",
-    size: "Medium · 6 resources",
-    description: "A business-hours tool for about 20 employees. Brief downtime is fine.",
-    fixturePath: "/fixtures/preset-medium.tar",
-    terraformRepoRef: "github.com/example/medium-analytics@def5678",
-    workloadBrief:
-      "Internal analytics dashboard used by roughly 20 employees during business hours. Moderate availability expectations — brief downtime is acceptable. No known regulatory constraints.",
-  },
-  {
-    id: "loose",
-    label: "Side project",
-    size: "Minimal · 1 resource",
-    description: "An early project with unclear requirements and very little configuration.",
-    fixturePath: "/fixtures/preset-loose.tar",
-    terraformRepoRef: "github.com/example/loose-sandbox@9a8b7c6",
-    workloadBrief:
-      "Side project, still figuring out the requirements. Not sure about traffic or compliance needs yet.",
-  },
-];
 
 export interface SubmissionValues {
   terraformRepoRef: string;
@@ -71,6 +26,8 @@ type Source = "upload" | "paste";
 // A pasted config this large is better uploaded as an archive.
 export const MAX_PASTE_BYTES = 200 * 1024;
 
+const ARCHIVE_SUFFIXES = [".tar", ".tar.gz", ".tgz"];
+
 interface SubmissionStepProps {
   apiConfigured: boolean;
   initialValues: SubmissionValues;
@@ -80,7 +37,7 @@ interface SubmissionStepProps {
   adminKey: string;
   onAdminKeyChange: (value: string) => void;
   onSubmit: (values: SubmissionValues) => Promise<void>;
-  // Finished demo reviews, shown above the example architectures.
+  // Finished demo reviews, shown above the form.
   demos?: ReactNode;
 }
 
@@ -96,6 +53,45 @@ export function pastedArchive(terraform: string): File {
   return new File([tar], "pasted-terraform.tar", { type: "application/x-tar" });
 }
 
+function isArchiveName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return ARCHIVE_SUFFIXES.some((suffix) => lower.endsWith(suffix));
+}
+
+function UploadIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 16V4M7 9l5-5 5 5" />
+      <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+    </svg>
+  );
+}
+
+function WarningIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3 2 20h20Z" />
+      <path d="M12 10v4M12 17h.01" />
+    </svg>
+  );
+}
+
 export function SubmissionStep({
   apiConfigured,
   initialValues,
@@ -109,13 +105,11 @@ export function SubmissionStep({
   const [values, setValues] = useState(initialValues);
   const [source, setSource] = useState<Source>("upload");
   const [pasted, setPasted] = useState("");
-  const [exampleId, setExampleId] = useState<string | null>(null);
   const [attempted, setAttempted] = useState(false);
-  const [loadingExampleId, setLoadingExampleId] = useState<string | null>(null);
-  const [exampleError, setExampleError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
 
   const pastedBytes = new TextEncoder().encode(pasted).length;
-  const repoError = attempted && values.terraformRepoRef.trim().length < 5;
   const briefError = attempted && values.workloadBrief.trim().length < 40;
   const archiveError = attempted && apiConfigured && source === "upload" && !values.archiveFile;
   const pasteError =
@@ -123,242 +117,207 @@ export function SubmissionStep({
     apiConfigured &&
     source === "paste" &&
     (pasted.trim().length < 20 || pastedBytes > MAX_PASTE_BYTES);
-  const loadedExample = examples.find((example) => example.id === exampleId);
 
-  async function loadExample(example: ExampleArchitecture) {
-    setLoadingExampleId(example.id);
-    setExampleError(null);
-    try {
-      const response = await fetch(example.fixturePath);
-      if (!response.ok) {
-        throw new Error(`Could not load the example archive (HTTP ${response.status}).`);
-      }
-      const blob = await response.blob();
-      const archiveFile = new File([blob], `${example.id}.tar`, { type: "application/x-tar" });
-      setValues({
-        terraformRepoRef: example.terraformRepoRef,
-        workloadBrief: example.workloadBrief,
-        archiveFile,
-      });
-      setSource("upload");
-      setExampleId(example.id);
-      setAttempted(false);
-    } catch (error) {
-      setExampleError(error instanceof Error ? error.message : "Could not load this example.");
-    } finally {
-      setLoadingExampleId(null);
+  function chooseArchive(file: File | null) {
+    setDropError(null);
+    setValues((current) => ({ ...current, archiveFile: file }));
+  }
+
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragging(false);
+    const file = event.dataTransfer.files[0];
+    if (!file) return;
+    if (!isArchiveName(file.name)) {
+      setDropError("That isn't a .tar or .tar.gz archive.");
+      return;
     }
+    chooseArchive(file);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAttempted(true);
-    if (values.terraformRepoRef.trim().length < 5 || values.workloadBrief.trim().length < 40) {
-      return;
-    }
+    if (values.workloadBrief.trim().length < 40) return;
+    const named = (archiveFile: File | null): SubmissionValues => ({
+      ...values,
+      archiveFile,
+      terraformRepoRef: values.terraformRepoRef.trim() || defaultReportName(source, archiveFile),
+    });
     if (!apiConfigured) {
-      await onSubmit(values);
+      await onSubmit(named(values.archiveFile));
       return;
     }
     if (source === "paste") {
       if (pasted.trim().length < 20 || pastedBytes > MAX_PASTE_BYTES) return;
-      await onSubmit({ ...values, archiveFile: pastedArchive(pasted) });
+      await onSubmit(named(pastedArchive(pasted)));
       return;
     }
     if (!values.archiveFile) return;
-    await onSubmit(values);
+    await onSubmit(named(values.archiveFile));
   }
 
   return (
     <section className="flow-card submission-card" aria-labelledby="submission-heading">
       <div className="step-kicker">Try it · Step 1 of 3</div>
       <h2 id="submission-heading">Review your own Terraform</h2>
-      <p className="owner-only-note">
-        <strong>New reviews are owner-only for now.</strong> The demo reviews above are open to
-        everyone; running a new one needs the site owner&apos;s key, because each review uses a paid
-        model.
-      </p>
       <p className="lede">
-        Upload or paste your Terraform, or start from an example architecture, and add a short brief
-        about the workload. ArchiBrief reads the code; it never runs Terraform or touches your AWS
-        account.
+        ArchiBrief reads the code; it never runs Terraform or touches your AWS account.{" "}
+        <span className="owner-only-note">
+          New reviews are owner-only for now, because each one uses a paid model.
+        </span>
       </p>
 
       <div className="boundary-callout">
-        <strong>Before you submit</strong>
+        <WarningIcon />
         <span>
-          Remove secrets and customer data. Modules pulled from elsewhere aren&apos;t reviewed; they
-          show up as gaps.
+          <strong>Before you submit:</strong> remove secrets and customer data. Modules pulled from
+          elsewhere aren&apos;t reviewed; they show up as gaps.
         </span>
       </div>
 
       {demos}
 
-      {apiConfigured && (
-        <>
-          <h3 className="example-heading" id="examples-heading">
-            Start from an example architecture
-          </h3>
-          <div className="preset-grid" role="group" aria-labelledby="examples-heading">
-            {examples.map((example) => (
-              <button
-                key={example.id}
-                type="button"
-                className={`button small secondary preset-button${exampleId === example.id ? " selected" : ""}`}
-                aria-pressed={exampleId === example.id}
-                disabled={loadingExampleId !== null}
-                onClick={() => loadExample(example)}
-              >
-                <strong>{loadingExampleId === example.id ? "Loading…" : example.label}</strong>
-                <small>{example.size}</small>
-                <span>{example.description}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {exampleError && (
-        <p className="field-error" role="alert">
-          {exampleError}
-        </p>
-      )}
-
       <form className="submission-form" onSubmit={handleSubmit} noValidate>
-        {apiConfigured && (
-          <fieldset className="source-toggle">
-            <legend>Your Terraform</legend>
-            <label>
-              <input
-                type="radio"
-                name="source"
-                value="upload"
-                checked={source === "upload"}
-                onChange={() => setSource("upload")}
-              />
-              Upload an archive
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="source"
-                value="paste"
-                checked={source === "paste"}
-                onChange={() => {
-                  setSource("paste");
-                  setExampleId(null);
+        <div className="form-field">
+          <label htmlFor="terraform-ref">
+            Report name <span>(optional)</span>
+          </label>
+          <input
+            id="terraform-ref"
+            name="terraformRepoRef"
+            value={values.terraformRepoRef}
+            aria-describedby="terraform-ref-help"
+            onChange={(event) => setValues({ ...values, terraformRepoRef: event.target.value })}
+            placeholder="my-repo@main"
+          />
+          <div id="terraform-ref-help" className="field-help">
+            Shown as the report&apos;s title. Left blank, we use the file name.
+          </div>
+        </div>
+
+        <fieldset className="form-field terraform-source">
+          <legend>Your Terraform</legend>
+          {apiConfigured && (
+            <div className="source-switch" role="radiogroup" aria-label="How to add it">
+              <label className={source === "upload" ? "selected" : undefined}>
+                <input
+                  type="radio"
+                  name="source"
+                  value="upload"
+                  checked={source === "upload"}
+                  onChange={() => setSource("upload")}
+                />
+                Upload file
+              </label>
+              <label className={source === "paste" ? "selected" : undefined}>
+                <input
+                  type="radio"
+                  name="source"
+                  value="paste"
+                  checked={source === "paste"}
+                  onChange={() => setSource("paste")}
+                />
+                Paste code
+              </label>
+            </div>
+          )}
+
+          {source === "upload" ? (
+            <>
+              <label
+                className={`dropzone${dragging ? " dragging" : ""}${archiveError ? " invalid" : ""}`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragging(true);
                 }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={handleDrop}
+              >
+                <input
+                  id="terraform-archive"
+                  name="archiveFile"
+                  type="file"
+                  accept=".tar,.tar.gz,.tgz"
+                  aria-invalid={archiveError}
+                  aria-describedby={
+                    archiveError ? "terraform-archive-error" : "terraform-archive-help"
+                  }
+                  onChange={(event) => chooseArchive(event.target.files?.[0] ?? null)}
+                />
+                <UploadIcon />
+                {values.archiveFile ? (
+                  <span className="dropzone-title">
+                    <strong>{values.archiveFile.name}</strong> · <u>choose another</u>
+                  </span>
+                ) : (
+                  <span className="dropzone-title">
+                    Drop a .tar or .tar.gz here, or <u>browse</u>
+                  </span>
+                )}
+                <span id="terraform-archive-help" className="dropzone-hint">
+                  {apiConfigured
+                    ? "Up to 20 MB · uploaded straight to storage"
+                    : "Only needed against a deployed API. The fixture flow doesn't need a real archive."}
+                </span>
+              </label>
+              {(archiveError || dropError) && (
+                <div id="terraform-archive-error" className="field-error" role="alert">
+                  {dropError ?? "Choose a Terraform archive to review."}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <textarea
+                id="terraform-paste"
+                name="terraformPaste"
+                className="code-input"
+                aria-label="Terraform code"
+                rows={12}
+                spellCheck={false}
+                value={pasted}
+                aria-invalid={pasteError}
+                aria-describedby={pasteError ? "terraform-paste-error" : "terraform-paste-help"}
+                onChange={(event) => setPasted(event.target.value)}
+                placeholder={'resource "aws_s3_bucket" "logs" {\n  bucket = "my-logs"\n}'}
               />
-              Paste Terraform
-            </label>
-          </fieldset>
-        )}
-
-        {source === "upload" ? (
-          <>
-            <label htmlFor="terraform-archive">
-              Terraform archive
-              <span>A .tar or .tar.gz of the configuration to review (max 20 MB)</span>
-            </label>
-            <input
-              id="terraform-archive"
-              name="archiveFile"
-              type="file"
-              accept=".tar,.tar.gz,.tgz"
-              aria-invalid={archiveError}
-              aria-describedby={archiveError ? "terraform-archive-error" : "terraform-archive-help"}
-              onChange={(event) => {
-                setValues({ ...values, archiveFile: event.target.files?.[0] ?? null });
-                setExampleId(null);
-              }}
-            />
-            <div id="terraform-archive-help" className="field-help">
-              {loadedExample
-                ? `Using the ${loadedExample.label} example. Choose a file to use your own instead.`
-                : apiConfigured
-                  ? "Uploaded straight to storage, never through this site's API."
-                  : "Only needed against a deployed API. The fixture flow doesn't need a real archive."}
-            </div>
-            {archiveError && (
-              <div id="terraform-archive-error" className="field-error" role="alert">
-                Choose a Terraform archive, or pick an example above.
+              <div id="terraform-paste-help" className="field-help">
+                Paste one or more .tf files&apos; contents; it&apos;s reviewed as main.tf.
               </div>
-            )}
-          </>
-        ) : (
-          <>
-            <label htmlFor="terraform-paste">
-              Terraform
-              <span>Paste one or more .tf files&apos; contents; it&apos;s reviewed as main.tf</span>
-            </label>
-            <textarea
-              id="terraform-paste"
-              name="terraformPaste"
-              className="code-input"
-              rows={12}
-              spellCheck={false}
-              value={pasted}
-              aria-invalid={pasteError}
-              aria-describedby={pasteError ? "terraform-paste-error" : "terraform-paste-help"}
-              onChange={(event) => setPasted(event.target.value)}
-              placeholder={'resource "aws_s3_bucket" "logs" {\n  bucket = "my-logs"\n}'}
-            />
-            <div id="terraform-paste-help" className="field-help">
-              Packed into an archive in your browser and uploaded the same way as a file.
+              {pasteError && (
+                <div id="terraform-paste-error" className="field-error" role="alert">
+                  {pastedBytes > MAX_PASTE_BYTES
+                    ? "That's too much to paste. Upload it as an archive instead."
+                    : "Paste the Terraform you want reviewed."}
+                </div>
+              )}
+            </>
+          )}
+        </fieldset>
+
+        <div className="form-field">
+          <label htmlFor="workload-brief">Workload brief</label>
+          <textarea
+            id="workload-brief"
+            name="workloadBrief"
+            rows={5}
+            value={values.workloadBrief}
+            aria-invalid={briefError}
+            aria-describedby={briefError ? "workload-brief-error" : "workload-brief-help"}
+            onChange={(event) => setValues({ ...values, workloadBrief: event.target.value })}
+            placeholder="What does it do, who uses it, how much traffic, uptime target, data sensitivity, compliance…"
+          />
+          <div id="workload-brief-help" className="field-help">
+            Used to find the right AWS guidance and decide what matters most. A few sentences is
+            enough.
+          </div>
+          {briefError && (
+            <div id="workload-brief-error" className="field-error" role="alert">
+              Add at least 40 characters of workload context.
             </div>
-            {pasteError && (
-              <div id="terraform-paste-error" className="field-error" role="alert">
-                {pastedBytes > MAX_PASTE_BYTES
-                  ? "That's too much to paste. Upload it as an archive instead."
-                  : "Paste the Terraform you want reviewed."}
-              </div>
-            )}
-          </>
-        )}
-
-        <label htmlFor="terraform-ref">
-          Name for the report
-          <span>A repository link, commit, or any name you&apos;ll recognize (label only)</span>
-        </label>
-        <input
-          id="terraform-ref"
-          name="terraformRepoRef"
-          value={values.terraformRepoRef}
-          aria-invalid={repoError}
-          aria-describedby={repoError ? "terraform-ref-error" : "terraform-ref-help"}
-          onChange={(event) => setValues({ ...values, terraformRepoRef: event.target.value })}
-          placeholder="github.com/organization/repository@commit"
-        />
-        <div id="terraform-ref-help" className="field-help">
-          Shown on your report only. ArchiBrief reviews the Terraform above, not this link.
+          )}
         </div>
-        {repoError && (
-          <div id="terraform-ref-error" className="field-error" role="alert">
-            Enter a name or reference of at least 5 characters.
-          </div>
-        )}
-
-        <label htmlFor="workload-brief">
-          Workload brief
-          <span>Purpose, traffic, availability, data sensitivity, and known constraints</span>
-        </label>
-        <textarea
-          id="workload-brief"
-          name="workloadBrief"
-          rows={6}
-          value={values.workloadBrief}
-          aria-invalid={briefError}
-          aria-describedby={briefError ? "workload-brief-error" : "workload-brief-help"}
-          onChange={(event) => setValues({ ...values, workloadBrief: event.target.value })}
-          placeholder="Describe what the system does and the constraints the review should evaluate…"
-        />
-        <div id="workload-brief-help" className="field-help">
-          A few sentences stop the review from guessing at missing business context.
-        </div>
-        {briefError && (
-          <div id="workload-brief-error" className="field-error" role="alert">
-            Add at least 40 characters of workload context.
-          </div>
-        )}
 
         <div className="form-actions">
           {apiConfigured ? (

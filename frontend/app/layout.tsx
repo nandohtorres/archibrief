@@ -63,7 +63,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html
       lang="en"
-      data-theme="system"
+      data-theme="light"
       className={`${plexSans.variable} ${plexMono.variable} ${sourceSerif.variable}`}
       suppressHydrationWarning
     >

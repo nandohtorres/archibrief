@@ -4,6 +4,7 @@
 // Never calls real AWS (each real question is a paid model call).
 import { expect, test, type Page } from "@playwright/test";
 import { LIVE_URL } from "../playwright.config";
+import { fillSubmission } from "./support/submission";
 import { fixtureReport } from "../lib/fixtures";
 
 const SUGGESTED = [
@@ -102,7 +103,7 @@ async function openLiveReport(
 
   await page.goto(LIVE_URL);
   await page.getByLabel("Admin key").fill("e2e-admin-key");
-  await page.getByRole("button", { name: /Payments platform/ }).click();
+  await fillSubmission(page);
   await page.getByRole("button", { name: "Start review" }).click();
   await expect(page.locator("#report-heading")).toBeVisible({ timeout: 20_000 });
   return asked;

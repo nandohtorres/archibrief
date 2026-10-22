@@ -27,7 +27,7 @@ export default function PrivacyPage() {
 
         <h2>What&apos;s stored in your browser</h2>
         <p>
-          Your theme choice (system, light or dark), in local storage on your device. There are no
+          Your theme choice (light or dark), in local storage on your device. There are no
           analytics, ads or tracking cookies.
         </p>
 

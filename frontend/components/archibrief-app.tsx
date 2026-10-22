@@ -34,7 +34,7 @@ import {
   type ReportSource,
 } from "@/lib/workflow";
 
-type ThemeChoice = "system" | "light" | "dark";
+type ThemeChoice = "light" | "dark";
 
 const OWNER_ONLY_NOTICE =
   "Submissions are limited to the site owner for now. Public submissions are coming soon. In the meantime, the sample review shows exactly what you'd get back.";
@@ -49,7 +49,7 @@ const emptySubmission: SubmissionValues = {
 
 export function ArchiBriefApp() {
   const [screen, setScreen] = useState<AppScreen>("submission");
-  const [theme, setTheme] = useState<ThemeChoice>("system");
+  const [theme, setTheme] = useState<ThemeChoice>("light");
   const [pendingSection, setPendingSection] = useState<string | null>(null);
   const [adminKey, setAdminKey] = useState("");
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
@@ -79,7 +79,7 @@ export function ArchiBriefApp() {
 
   useEffect(() => {
     const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
-    if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
+    if (stored === "light" || stored === "dark") setTheme(stored);
     // Tab-scoped, never localStorage — see lib/admin-key.ts.
     const storedKey = loadAdminKey(window.sessionStorage, window.localStorage);
     // A key typed or autofilled before the page's script loaded is in the
@@ -447,6 +447,7 @@ export function ArchiBriefApp() {
                 adminKey={adminKey}
                 onAdminKeyChange={handleAdminKeyChange}
                 onSubmit={handleSubmission}
+                demos={<DemoCards openingId={openingDemoId} onOpen={openDemo} />}
               />
             </div>
             <LandingClosing />

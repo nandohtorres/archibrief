@@ -123,6 +123,15 @@ export function reportTitle(terraformRepoRef: string): string {
   return name ? `${name} architecture review` : "Architecture review";
 }
 
+// The report name is optional on the form: left blank, the report is
+// named after the uploaded file ("payments.tar.gz" -> "payments"), or as
+// pasted Terraform.
+export function defaultReportName(source: "upload" | "paste", archiveFile: File | null): string {
+  if (source === "paste") return "Pasted Terraform";
+  const fileName = archiveFile?.name.replace(/\.(tar\.gz|tgz|tar)$/i, "").trim();
+  return fileName || "Untitled review";
+}
+
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
