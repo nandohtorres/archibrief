@@ -154,7 +154,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
         "packages": ["pydantic>=2.0", "python-hcl2>=6.0"],
     },
     # Runs the Trivy binary from the trivy layer (scripts/build_trivy_layer.py,
-    # ADR-0048). Standard library + boto3 (in the Lambda runtime) only.
+    # ADR-0048). Structural module-source neutralization uses python-hcl2;
+    # its version is pinned by lambda_constraints.txt.
     "scan": {
         "sources": [
             "backend/__init__.py",
@@ -167,7 +168,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/terraform_scope.py",
             "backend/shared/trivy_checks.py",
         ],
-        "packages": [],
+        "packages": ["python-hcl2>=6.0"],
     },
     "audit": {
         "sources": [
