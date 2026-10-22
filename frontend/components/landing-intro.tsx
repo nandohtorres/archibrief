@@ -72,7 +72,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
     <div className="landing">
       <div className="landing-hero">
         <span className="landing-kicker">
-          AWS Terraform · architecture review that explains itself
+          AWS Terraform reviews · for engineers and the people they report to
         </span>
         <h1 id="landing-heading">
           A second opinion on your AWS architecture, <em>with the receipts.</em>

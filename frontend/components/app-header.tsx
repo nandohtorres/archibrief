@@ -107,7 +107,10 @@ export function AppHeader({
           onClick={onHome}
         >
           <BrandEmblem />
-          <strong className="brand-name">ArchiBrief</strong>
+          <span className="brand-text">
+            <strong className="brand-name">ArchiBrief</strong>
+            <small className="brand-tagline">Your AWS architecture, briefed</small>
+          </span>
         </button>
         <div className="header-controls">
           {!apiConfigured && (

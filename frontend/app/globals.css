@@ -7,6 +7,7 @@
   --surface-2: #eaeff3;
   --surface-3: #dce5eb;
   --border: #c5d0d9;
+  --border-strong: #a9b7c3;
   --text: #131c24;
   --text-muted: #43596c;
   --text-faint: #566b7d;
@@ -49,6 +50,7 @@
     --surface-2: #232325;
     --surface-3: #2c2c2f;
     --border: #4a4a4f;
+    --border-strong: #616168;
     --text: #e2e2e2;
     --text-muted: #ababad;
     --text-faint: #98989b;
@@ -77,6 +79,7 @@
   --surface-2: #232325;
   --surface-3: #2c2c2f;
   --border: #4a4a4f;
+  --border-strong: #616168;
   --text: #e2e2e2;
   --text-muted: #ababad;
   --text-faint: #98989b;
@@ -226,6 +229,25 @@ h4 {
 .brand-name {
   font: 700 1.05rem/1 var(--font-mono);
   letter-spacing: -0.01em;
+}
+
+.brand-text {
+  display: grid;
+  gap: 0.25rem;
+  text-align: left;
+}
+
+.brand-tagline {
+  color: var(--text-faint);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+@media (max-width: 680px) {
+  .brand-tagline {
+    display: none;
+  }
 }
 
 .header-controls {
@@ -2780,7 +2802,7 @@ h4 {
   inset: 0 50%;
   width: 100vw;
   margin-left: -50vw;
-  border-block: 1px solid var(--border);
+  border-block: 1px solid var(--border-strong);
   background: var(--surface);
   content: "";
 }
