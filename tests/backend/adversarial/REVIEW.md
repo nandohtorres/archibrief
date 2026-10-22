@@ -51,6 +51,21 @@ isolated on `mobile-laptop/fix/adversarial-bugs`. Offline Trivy 0.76.0:
 - Arbitrary non-auto tfvars presence is not proof of CLI selection. Do not
   silently load it or pretend an execution environment was inspected.
 
-Code and security reviewers independently inspected the baseline; they will
-also review the full final branch diff. No model, Guardrails, deployed
+Code and security reviewers independently inspected the baseline and the
+full final branch diff. No model, Guardrails, deployed
 workflow or chat result is inferred from these deterministic checks.
+
+## Completed dispositions, 2026-10-22
+
+All twenty bug verdicts remain confirmed; none was rejected as intended
+behavior. Probe artifacts are separate from the bug verdicts. Every
+non-coverage frozen check now passes in both modes, with no passing-check
+regression. The [fix report](FIX_REPORT.md) maps every B-number to its local
+commit and regression paths; [RESULTS.md](RESULTS.md#after-fixes-2026-10-22)
+retains the baseline and shows the before/after metrics.
+
+B4/B5 use bounded local singleton module evaluation and explicit unsupported
+scope notices, rather than implementing Terraform execution. Missing,
+remote, recursive, non-singleton, unresolved and over-budget work is
+disclosed. Provider mappings remain unknown. Child scanner evidence cannot
+stand in for bound local-module evaluation. No remote module is fetched.

@@ -6,47 +6,7 @@
  "workload_brief": "Order service for an online shop, production environment. Customer order data; the database must never be reachable from the internet.",
  "rule_findings": [
   {
-   "finding_id": "d9af18ab-3529-40da-81f2-d96fcb75021d",
-   "category": "exposure",
-   "type": "deterministic-rule-result",
-   "finding": "S3 bucket 'modules/archive/archive' has no aws_s3_bucket_public_access_block resource",
-   "evidence": "resource \"aws_s3_bucket\" \"modules/archive/archive\" found with no matching public access block",
-   "risk_impact": "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
-   "recommendation": "Attach aws_s3_bucket_public_access_block with all four settings enabled.",
-   "concern": "s3_public_access"
-  },
-  {
-   "finding_id": "b705288b-c538-4de8-8cf4-ad614e4d07a9",
-   "category": "encryption",
-   "type": "deterministic-rule-result",
-   "finding": "S3 bucket 'modules/archive/archive' has no server-side encryption configuration",
-   "evidence": "resource \"aws_s3_bucket\" \"modules/archive/archive\" found with no matching SSE configuration",
-   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
-   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
-   "concern": "s3_encryption"
-  },
-  {
-   "finding_id": "379f097f-4829-42fd-8c90-9bd09e99bbc0",
-   "category": "recovery",
-   "type": "deterministic-rule-result",
-   "finding": "S3 bucket 'modules/archive/archive' does not have versioning enabled",
-   "evidence": "resource \"aws_s3_bucket\" \"modules/archive/archive\" found with no enabled versioning configuration",
-   "risk_impact": "Accidental or malicious object deletion/overwrite cannot be recovered.",
-   "recommendation": "Enable aws_s3_bucket_versioning with status = \"Enabled\".",
-   "concern": "s3_versioning"
-  },
-  {
-   "finding_id": "62ab64f2-36a0-41c7-89e0-97e35b536fe4",
-   "category": "exposure",
-   "type": "deterministic-rule-result",
-   "finding": "Security group rule 'debug' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
-   "evidence": "resource \"aws_security_group\" \"debug\" allows 0.0.0.0/0 for ports 22-22",
-   "risk_impact": "Sensitive management/database ports are reachable from the entire internet.",
-   "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
-   "concern": "sg_open_ingress"
-  },
-  {
-   "finding_id": "62d77c46-a0b2-4183-bd2b-8fe33ea72c39",
+   "finding_id": "68bccf85-a182-47ef-9398-6f3cf4acfe9d",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -54,6 +14,16 @@
    "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
    "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
    "concern": "cloudtrail_present"
+  },
+  {
+   "finding_id": "472d81d0-48e7-4a4a-b129-fe3b6c8fde3f",
+   "category": "observability",
+   "type": "not-observable",
+   "finding": "Terraform module or input coverage is incomplete",
+   "evidence": "Module 'edge_prod': provider inheritance and mappings are not evaluated; Module 'edge_lab': provider inheritance and mappings are not evaluated",
+   "risk_impact": "Unobserved inputs or modules may change this architecture's findings.",
+   "recommendation": "Supply the missing local configuration or inspect the disclosed gap separately.",
+   "concern": null
   }
  ],
  "terraform_resources": {
@@ -76,15 +46,9 @@
     }
    },
    {
-    "type": "aws_s3_bucket",
-    "name": "modules/archive/archive",
-    "settings": {}
-   },
-   {
     "type": "aws_security_group",
-    "name": "debug",
-    "settings": {},
-    "copies": "unknown"
+    "name": "edge_lab_1/modules/edge/admin",
+    "settings": {}
    },
    {
     "type": "aws_security_group",
@@ -93,7 +57,11 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based.",
+  "not_observable": [
+   "Module 'edge_prod': provider inheritance and mappings are not evaluated",
+   "Module 'edge_lab': provider inheritance and mappings are not evaluated"
+  ]
  },
  "scoring": "model_eval/SCORING.md#environment-shell-game"
 }

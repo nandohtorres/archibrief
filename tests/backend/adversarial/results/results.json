@@ -12,9 +12,9 @@
    "main.tf:1 (aws_db_instance.orders)",
    "production.auto.tfvars:2 (db_public)"
   ],
-  "observed": "no finding with [\"'orders'\", 'publicly accessible'] | summary orders.publicly_accessible = False",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: RDS instance 'orders' is publicly accessible",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -30,9 +30,9 @@
    "main.tf:1 (aws_db_instance.orders)",
    "production.auto.tfvars:2 (db_public)"
   ],
-  "observed": "no finding with [\"'orders'\", 'publicly accessible'] | summary orders.publicly_accessible = False",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: RDS instance 'orders' is publicly accessible",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -47,9 +47,9 @@
   "evidence": [
    "production.auto.tfvars:2 (db_public)"
   ],
-  "observed": "summary orders.publicly_accessible = False",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "summary orders.publicly_accessible = True",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -64,9 +64,9 @@
   "evidence": [
    "production.auto.tfvars:2 (db_public)"
   ],
-  "observed": "summary orders.publicly_accessible = False",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "summary orders.publicly_accessible = True",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -81,9 +81,9 @@
   "evidence": [
    "modules/unused_legacy/main.tf:2 (aws_security_group.legacy_ssh)"
   ],
-  "observed": "finding: Security group rule 'modules/unused_legacy/legacy_ssh' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['legacy_ssh']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -98,9 +98,9 @@
   "evidence": [
    "modules/unused_legacy/main.tf:2 (aws_security_group.legacy_ssh)"
   ],
-  "observed": "finding: Security group 'modules/unused_legacy/legacy_ssh' allows SSH or RDP from anywhere",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['legacy_ssh']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -115,9 +115,9 @@
   "evidence": [
    "modules/unused_legacy/main.tf:13 (aws_db_instance.legacy_db)"
   ],
-  "observed": "finding: RDS instance 'modules/unused_legacy/legacy_db' does not have storage_encrypted set",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['legacy_db']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -132,9 +132,9 @@
   "evidence": [
    "modules/unused_legacy/main.tf:13 (aws_db_instance.legacy_db)"
   ],
-  "observed": "finding: RDS instance 'modules/unused_legacy/legacy_db' is not configured multi_az",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['legacy_db']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -152,7 +152,7 @@
   "observed": "no summary entry aws_db_instance.unused_legacy/legacy_db",
   "verdict": "pass",
   "adjudicated": "pass",
-  "note": ""
+  "note": "Frozen probe uses the wrong uncalled-module path; exact exclusion is covered by test_module_evaluation.py."
  },
  {
   "case": "F01-dangerous",
@@ -169,7 +169,7 @@
   "observed": "no summary entry aws_db_instance.unused_legacy/legacy_db",
   "verdict": "pass",
   "adjudicated": "pass",
-  "note": ""
+  "note": "Frozen probe uses the wrong uncalled-module path; exact exclusion is covered by test_module_evaluation.py."
  },
  {
   "case": "F01-dangerous",
@@ -184,9 +184,9 @@
    "main.tf:29 (module.archive)",
    "modules/archive/main.tf:1 (aws_s3_bucket.archive)"
   ],
-  "observed": "finding: S3 bucket 'modules/archive/archive' has no aws_s3_bucket_public_access_block resource",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['archive/archive']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -202,9 +202,9 @@
    "main.tf:29 (module.archive)",
    "modules/archive/main.tf:1 (aws_s3_bucket.archive)"
   ],
-  "observed": "finding: S3 bucket 'modules/archive/archive' has no server-side encryption configuration",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['archive/archive']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -220,9 +220,9 @@
    "main.tf:40 (module.edge_lab)",
    "modules/edge/main.tf:6 (aws_security_group.admin)"
   ],
-  "observed": "no finding with ['edge/admin'] | not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: Security group rule 'edge_lab_1/modules/edge/admin' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -238,9 +238,9 @@
    "main.tf:40 (module.edge_lab)",
    "modules/edge/main.tf:6 (aws_security_group.admin)"
   ],
-  "observed": "no finding with ['edge/admin'] | not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: Security group rule 'edge_lab_1/modules/edge/admin' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -256,9 +256,9 @@
    "main.tf:16 (aws_security_group.debug)",
    "variables.tf:6 (variable.enable_debug_sg)"
   ],
-  "observed": "finding: Security group rule 'debug' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with [\"'debug'\"]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -291,9 +291,9 @@
   "evidence": [
    "main.tf:46 (module.network)"
   ],
-  "observed": "not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "not_observable = [\"Module 'edge_prod': provider inheritance and mappings are not evaluated\", \"Module 'edge_lab': provider inheritance and mappings are not evaluated\", \"Module 'network': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'legacy_git': remote or unresolved module source unavailable; contents not evaluated\"]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -308,9 +308,9 @@
   "evidence": [
    "main.tf:46 (module.network)"
   ],
-  "observed": "not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "not_observable = [\"Module 'edge_prod': provider inheritance and mappings are not evaluated\", \"Module 'edge_lab': provider inheritance and mappings are not evaluated\", \"Module 'network': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'legacy_git': remote or unresolved module source unavailable; contents not evaluated\"]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -325,9 +325,9 @@
   "evidence": [
    "main.tf:51 (module.legacy_git)"
   ],
-  "observed": "not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "not_observable = [\"Module 'edge_prod': provider inheritance and mappings are not evaluated\", \"Module 'edge_lab': provider inheritance and mappings are not evaluated\", \"Module 'network': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'legacy_git': remote or unresolved module source unavailable; contents not evaluated\"]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -342,9 +342,9 @@
   "evidence": [
    "main.tf:51 (module.legacy_git)"
   ],
-  "observed": "not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "not_observable = [\"Module 'edge_prod': provider inheritance and mappings are not evaluated\", \"Module 'edge_lab': provider inheritance and mappings are not evaluated\", \"Module 'network': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'legacy_git': remote or unresolved module source unavailable; contents not evaluated\"]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -461,9 +461,9 @@
   "evidence": [
    "main.tf:29 (module.archive)"
   ],
-  "observed": "finding: S3 bucket 'modules/archive/archive' has no aws_s3_bucket_public_access_block resource",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['archive/archive']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -478,9 +478,9 @@
   "evidence": [
    "main.tf:29 (module.archive)"
   ],
-  "observed": "finding: S3 bucket 'modules/archive/archive' has no server-side encryption configuration",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['archive/archive']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -563,9 +563,9 @@
   "evidence": [
    "main.tf:27 (module.network)"
   ],
-  "observed": "not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "not_observable = [\"Module 'network': remote or unresolved module source unavailable; contents not evaluated\"]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -580,9 +580,9 @@
   "evidence": [
    "main.tf:27 (module.network)"
   ],
-  "observed": "not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "not_observable = [\"Module 'network': remote or unresolved module source unavailable; contents not evaluated\"]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -736,8 +736,8 @@
   ],
   "observed": "no finding with [\"'exports'\", 'allows anyone']",
   "verdict": "pass",
-  "adjudicated": "pass (wrong reason)",
-  "note": "Not flagged only because a policy document's principals type \"*\" isn't recognised as public at all (post-freeze probe 1); the dropped Condition never mattered."
+  "adjudicated": "pass",
+  "note": "Now passes for the restrictive Condition; anonymous document twin is separately detected by the post-freeze probe."
  },
  {
   "case": "F02-dangerous",
@@ -754,8 +754,8 @@
   ],
   "observed": "no finding with [\"'exports'\", 'allows anyone']",
   "verdict": "pass",
-  "adjudicated": "pass (wrong reason)",
-  "note": "Not flagged only because a policy document's principals type \"*\" isn't recognised as public at all (post-freeze probe 1); the dropped Condition never mattered."
+  "adjudicated": "pass",
+  "note": "Now passes for the restrictive Condition; anonymous document twin is separately detected by the post-freeze probe."
  },
  {
   "case": "F02-dangerous",
@@ -769,9 +769,9 @@
   "evidence": [
    "bucket_policies.tf:54 (aws_s3_bucket_policy.media_https_only)"
   ],
-  "observed": "no finding with [\"'media'\", 'allows anyone']",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: S3 bucket 'media' has a bucket policy that allows anyone (Principal \"*\")",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -786,9 +786,9 @@
   "evidence": [
    "bucket_policies.tf:54 (aws_s3_bucket_policy.media_https_only)"
   ],
-  "observed": "no finding with [\"'media'\", 'allows anyone']",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: S3 bucket 'media' has a bucket policy that allows anyone (Principal \"*\")",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -838,9 +838,9 @@
    "trust.tf:15 (data.aws_iam_policy_document.partner_trust)",
    "trust.tf:33 (aws_iam_role.partner_doc)"
   ],
-  "observed": "finding: IAM role 'partner_doc' assume-role policy has no external-id/federation condition",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with [\"'partner_doc'\", 'external-id']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -856,9 +856,9 @@
    "trust.tf:15 (data.aws_iam_policy_document.partner_trust)",
    "trust.tf:33 (aws_iam_role.partner_doc)"
   ],
-  "observed": "finding: IAM role 'partner_doc' assume-role policy has no external-id/federation condition",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with [\"'partner_doc'\", 'external-id']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -907,9 +907,9 @@
   "evidence": [
    "broad_statements.tf:11 (aws_iam_policy.almost_admin)"
   ],
-  "observed": "no finding with [\"'almost_admin'\"]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: IAM policy 'almost_admin' grants wildcard NotAction complement on all resources",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -924,9 +924,9 @@
   "evidence": [
    "broad_statements.tf:11 (aws_iam_policy.almost_admin)"
   ],
-  "observed": "no finding with [\"'almost_admin'\"]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: IAM policy 'almost_admin' grants wildcard NotAction complement on all resources",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -941,9 +941,9 @@
   "evidence": [
    "broad_statements.tf:19 (data.aws_iam_policy_document.almost_admin_doc)"
   ],
-  "observed": "no finding with [\"'almost_admin_doc'\"]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: IAM policy 'almost_admin_doc' grants wildcard NotAction complement on all resources",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -958,9 +958,9 @@
   "evidence": [
    "broad_statements.tf:19 (data.aws_iam_policy_document.almost_admin_doc)"
   ],
-  "observed": "no finding with [\"'almost_admin_doc'\"]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: IAM policy 'almost_admin_doc' grants wildcard NotAction complement on all resources",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -975,9 +975,9 @@
   "evidence": [
    "broad_statements.tf:33 (aws_iam_policy.s3_everything_else)"
   ],
-  "observed": "no finding with [\"'s3_everything_else'\"]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: IAM policy 's3_everything_else' grants broad permissions using a NotResource complement",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -992,9 +992,9 @@
   "evidence": [
    "broad_statements.tf:33 (aws_iam_policy.s3_everything_else)"
   ],
-  "observed": "no finding with [\"'s3_everything_else'\"]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: IAM policy 's3_everything_else' grants broad permissions using a NotResource complement",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1010,9 +1010,9 @@
    "boundary.tf:12 (aws_iam_role.bounded_worker)",
    "boundary.tf:4 (aws_iam_policy.read_only_boundary)"
   ],
-  "observed": "finding: IAM role 'bounded_worker' is used by running code and has AdministratorAccess",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['bounded_worker', 'whole account']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1028,9 +1028,9 @@
    "boundary.tf:12 (aws_iam_role.bounded_worker)",
    "boundary.tf:4 (aws_iam_policy.read_only_boundary)"
   ],
-  "observed": "finding: IAM role 'bounded_worker' is used by running code and has AdministratorAccess",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['bounded_worker', 'whole account']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1079,10 +1079,10 @@
   "evidence": [
    "broad_statements.tf:42 (aws_iam_policy.orphan_wildcard)"
   ],
-  "observed": "finding: IAM policy 'orphan_wildcard' grants wildcard s3:* on all resources",
-  "verdict": "fail",
+  "observed": "no finding with ['orphan_wildcard', 'role']",
+  "verdict": "pass",
   "adjudicated": "pass",
-  "note": "Probe artifact: 'role' matched the rule's generic recommendation text ('...the role actually needs'), not a claim that the policy is attached."
+  "note": "Generic recommendation now says workload, avoiding the original role-word probe artifact; no attachment is inferred."
  },
  {
   "case": "F02-dangerous",
@@ -1096,10 +1096,10 @@
   "evidence": [
    "broad_statements.tf:42 (aws_iam_policy.orphan_wildcard)"
   ],
-  "observed": "finding: IAM policy 'orphan_wildcard' grants wildcard s3:* on all resources",
-  "verdict": "fail",
+  "observed": "no finding with ['orphan_wildcard', 'role']",
+  "verdict": "pass",
   "adjudicated": "pass",
-  "note": "Probe artifact: 'role' matched the rule's generic recommendation text ('...the role actually needs'), not a claim that the policy is attached."
+  "note": "Generic recommendation now says workload, avoiding the original role-word probe artifact; no attachment is inferred."
  },
  {
   "case": "F02-corrected",
@@ -1181,9 +1181,9 @@
   "evidence": [
    "trust.tf:15 (data.aws_iam_policy_document.partner_trust)"
   ],
-  "observed": "finding: IAM role 'partner_doc' assume-role policy has no external-id/federation condition",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with [\"'partner_doc'\", 'external-id']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1198,9 +1198,9 @@
   "evidence": [
    "trust.tf:15 (data.aws_iam_policy_document.partner_trust)"
   ],
-  "observed": "finding: IAM role 'partner_doc' assume-role policy has no external-id/federation condition",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with [\"'partner_doc'\", 'external-id']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1318,9 +1318,9 @@
    "main.tf:69 (aws_instance.legacy_proxy)",
    "main.tf:25 (aws_ec2_instance_metadata_defaults.east)"
   ],
-  "observed": "no finding with ['legacy_proxy', 'IMDSv2']",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: EC2 instance 'legacy_proxy' does not require IMDSv2 tokens",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1336,9 +1336,9 @@
    "main.tf:69 (aws_instance.legacy_proxy)",
    "main.tf:25 (aws_ec2_instance_metadata_defaults.east)"
   ],
-  "observed": "no finding with ['legacy_proxy', 'IMDSv2']",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: EC2 instance 'legacy_proxy' does not require IMDSv2 tokens",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1354,9 +1354,9 @@
    "main.tf:47 (aws_iam_instance_profile.proxy)",
    "main.tf:42 (aws_iam_role_policy_attachment.proxy_s3_full)"
   ],
-  "observed": "no finding with ['legacy_proxy', 'proxy_role']",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: EC2 instance 'legacy_proxy' does not require IMDSv2 tokens",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1372,9 +1372,9 @@
    "main.tf:47 (aws_iam_instance_profile.proxy)",
    "main.tf:42 (aws_iam_role_policy_attachment.proxy_s3_full)"
   ],
-  "observed": "no finding with ['legacy_proxy', 'proxy_role']",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: EC2 instance 'legacy_proxy' does not require IMDSv2 tokens",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1390,9 +1390,9 @@
    "main.tf:102 (aws_instance.west_worker)",
    "main.tf:20 (provider.aws.west)"
   ],
-  "observed": "no finding with ['west_worker', 'IMDSv2']",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: EC2 instance 'west_worker' does not require IMDSv2 tokens",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1408,9 +1408,9 @@
    "main.tf:102 (aws_instance.west_worker)",
    "main.tf:20 (provider.aws.west)"
   ],
-  "observed": "no finding with ['west_worker', 'IMDSv2']",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "finding: EC2 instance 'west_worker' does not require IMDSv2 tokens",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1427,8 +1427,8 @@
   ],
   "observed": "no finding with ['modern_api', 'IMDSv2']",
   "verdict": "pass",
-  "adjudicated": "pass (vacuous)",
-  "note": "Every IMDS finding is suppressed by the account default (B2)."
+  "adjudicated": "pass",
+  "note": "Nonvacuous: legacy_proxy and west_worker are detected in the same fixture; modern_api requires tokens."
  },
  {
   "case": "F03-dangerous",
@@ -1444,8 +1444,8 @@
   ],
   "observed": "no finding with ['modern_api', 'IMDSv2']",
   "verdict": "pass",
-  "adjudicated": "pass (vacuous)",
-  "note": "Every IMDS finding is suppressed by the account default (B2)."
+  "adjudicated": "pass",
+  "note": "Nonvacuous: legacy_proxy and west_worker are detected in the same fixture; modern_api requires tokens."
  },
  {
   "case": "F03-dangerous",
@@ -1461,8 +1461,8 @@
   ],
   "observed": "no finding with ['sealed_batch', 'IMDSv2']",
   "verdict": "pass",
-  "adjudicated": "pass (vacuous)",
-  "note": "Every IMDS finding is suppressed by the account default (B2)."
+  "adjudicated": "pass",
+  "note": "Nonvacuous: legacy_proxy and west_worker are detected; sealed_batch disables the metadata endpoint."
  },
  {
   "case": "F03-dangerous",
@@ -1478,8 +1478,8 @@
   ],
   "observed": "no finding with ['sealed_batch', 'IMDSv2']",
   "verdict": "pass",
-  "adjudicated": "pass (vacuous)",
-  "note": "Every IMDS finding is suppressed by the account default (B2)."
+  "adjudicated": "pass",
+  "note": "Nonvacuous: legacy_proxy and west_worker are detected; sealed_batch disables the metadata endpoint."
  },
  {
   "case": "F03-dangerous",
@@ -1495,8 +1495,8 @@
   ],
   "observed": "no finding with ['modern_api', 'proxy_role']",
   "verdict": "pass",
-  "adjudicated": "pass (vacuous)",
-  "note": "Every IMDS finding is suppressed by the account default (B2)."
+  "adjudicated": "pass",
+  "note": "Nonvacuous: legacy_proxy links to proxy_role; modern_api is not assigned that role."
  },
  {
   "case": "F03-dangerous",
@@ -1512,8 +1512,8 @@
   ],
   "observed": "no finding with ['modern_api', 'proxy_role']",
   "verdict": "pass",
-  "adjudicated": "pass (vacuous)",
-  "note": "Every IMDS finding is suppressed by the account default (B2)."
+  "adjudicated": "pass",
+  "note": "Nonvacuous: legacy_proxy links to proxy_role; modern_api is not assigned that role."
  },
  {
   "case": "F03-dangerous",
@@ -1716,7 +1716,7 @@
   "evidence": [
    "main.tf:87 (aws_security_group.bastion_v6)"
   ],
-  "observed": "finding: Security group 'bastion_v6' allows SSH or RDP from anywhere",
+  "observed": "finding: Security group rule 'bastion_v6' allows ::/0 ingress to sensitive port(s) [22]",
   "verdict": "pass",
   "adjudicated": "pass",
   "note": ""
@@ -1869,9 +1869,9 @@
   "evidence": [
    "main.tf:125 (aws_security_group.orphan_any)"
   ],
-  "observed": "finding: Security group rule 'orphan_any' allows 0.0.0.0/0 ingress to sensitive port(s) [5432]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['orphan_any', 'reachable']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -1886,9 +1886,9 @@
   "evidence": [
    "main.tf:125 (aws_security_group.orphan_any)"
   ],
-  "observed": "finding: Security group rule 'orphan_any' allows 0.0.0.0/0 ingress to sensitive port(s) [5432]",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "no finding with ['orphan_any', 'reachable']",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -2383,9 +2383,9 @@
   "evidence": [
    "main.tf:57 (aws_backup_plan.nightly)"
   ],
-  "observed": "summary shows 10 of 11 rules, truncation flag: False",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "summary shows 10 of 11 rules, truncation flag: True",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -2400,9 +2400,9 @@
   "evidence": [
    "main.tf:57 (aws_backup_plan.nightly)"
   ],
-  "observed": "summary shows 10 of 11 rules, truncation flag: False",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "summary shows 10 of 11 rules, truncation flag: True",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -2417,9 +2417,9 @@
   "evidence": [
    "main.tf:57 (aws_backup_plan.nightly)"
   ],
-  "observed": "summary nightly: {\"type\": \"aws_backup_plan\", \"name\": \"nightly\", \"settings\": {}, \"rules\": [{\"schedule\": \"cron(0 1 * * ? *)\", \"delete_after_days\": 35, \"cold_storage_after_days\": \"not set\", \"copied_to_another_vault\": fal",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "summary nightly: {\"type\": \"aws_backup_plan\", \"name\": \"nightly\", \"settings\": {}, \"rules\": [{\"schedule\": \"cron(0 3 ? * SUN *)\", \"delete_after_days\": 1, \"cold_storage_after_days\": \"not set\", \"copied_to_another_vault\": tr",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -2434,9 +2434,9 @@
   "evidence": [
    "main.tf:57 (aws_backup_plan.nightly)"
   ],
-  "observed": "summary nightly: {\"type\": \"aws_backup_plan\", \"name\": \"nightly\", \"settings\": {}, \"rules\": [{\"schedule\": \"cron(0 1 * * ? *)\", \"delete_after_days\": 35, \"cold_storage_after_days\": \"not set\", \"copied_to_another_vault\": fal",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "summary nightly: {\"type\": \"aws_backup_plan\", \"name\": \"nightly\", \"settings\": {}, \"rules\": [{\"schedule\": \"cron(0 3 ? * SUN *)\", \"delete_after_days\": 1, \"cold_storage_after_days\": \"not set\", \"copied_to_another_vault\": tr",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -2485,7 +2485,7 @@
   "evidence": [
    "main.tf:53 (aws_backup_vault.secondary)"
   ],
-  "observed": "summary nightly: {\"type\": \"aws_backup_plan\", \"name\": \"nightly\", \"settings\": {}, \"rules\": [{\"schedule\": \"cron(0 1 * * ? *)\", \"delete_after_days\": 35, \"cold_storage_after_days\": \"not set\", \"copied_to_another_vault\": fal",
+  "observed": "summary nightly: {\"type\": \"aws_backup_plan\", \"name\": \"nightly\", \"settings\": {}, \"rules\": [{\"schedule\": \"cron(0 3 ? * SUN *)\", \"delete_after_days\": 1, \"cold_storage_after_days\": \"not set\", \"copied_to_another_vault\": tr",
   "verdict": "pass",
   "adjudicated": "pass",
   "note": ""
@@ -2502,7 +2502,7 @@
   "evidence": [
    "main.tf:53 (aws_backup_vault.secondary)"
   ],
-  "observed": "summary nightly: {\"type\": \"aws_backup_plan\", \"name\": \"nightly\", \"settings\": {}, \"rules\": [{\"schedule\": \"cron(0 1 * * ? *)\", \"delete_after_days\": 35, \"cold_storage_after_days\": \"not set\", \"copied_to_another_vault\": fal",
+  "observed": "summary nightly: {\"type\": \"aws_backup_plan\", \"name\": \"nightly\", \"settings\": {}, \"rules\": [{\"schedule\": \"cron(0 3 ? * SUN *)\", \"delete_after_days\": 1, \"cold_storage_after_days\": \"not set\", \"copied_to_another_vault\": tr",
   "verdict": "pass",
   "adjudicated": "pass",
   "note": ""
@@ -2519,7 +2519,7 @@
   "evidence": [
    "main.tf:57 (aws_backup_plan.nightly)"
   ],
-  "observed": "summary shows 4 of 4 rules, truncation flag: False",
+  "observed": "summary shows 4 of 4 rules, truncation flag: True",
   "verdict": "pass",
   "adjudicated": "pass",
   "note": ""
@@ -2536,7 +2536,7 @@
   "evidence": [
    "main.tf:57 (aws_backup_plan.nightly)"
   ],
-  "observed": "summary shows 4 of 4 rules, truncation flag: False",
+  "observed": "summary shows 4 of 4 rules, truncation flag: True",
   "verdict": "pass",
   "adjudicated": "pass",
   "note": ""
@@ -2963,9 +2963,9 @@
   "evidence": [
    "main.tf:126 (aws_cloudwatch_log_group.api)"
   ],
-  "observed": "summary api.retention_in_days = 'not set (default: 0)'",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "summary api.retention_in_days = 'not set (default: never expires)'",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -2980,9 +2980,9 @@
   "evidence": [
    "main.tf:126 (aws_cloudwatch_log_group.api)"
   ],
-  "observed": "summary api.retention_in_days = 'not set (default: 0)'",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "summary api.retention_in_days = 'not set (default: never expires)'",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -3116,7 +3116,7 @@
   "evidence": [
    "main.tf:18 (aws_security_group.ops)"
   ],
-  "observed": "finding: Security group 'ops' allows SSH or RDP from anywhere",
+  "observed": "finding: Security group rule 'ops' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
   "verdict": "pass",
   "adjudicated": "pass",
   "note": ""
@@ -3236,9 +3236,9 @@
    "main.tf:63 (aws_s3_bucket.customer_records_archive_primary_region_a)",
    "main.tf:67 (aws_s3_bucket.customer_records_archive_primary_region_b)"
   ],
-  "observed": "display names: 'customer_records_archive_primar\u2026' vs 'customer_records_archive_primar\u2026'",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "display names: 'customer_records_archiv_601ef867' vs 'customer_records_archiv_bb8a26c9'",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -3254,9 +3254,9 @@
    "main.tf:63 (aws_s3_bucket.customer_records_archive_primary_region_a)",
    "main.tf:67 (aws_s3_bucket.customer_records_archive_primary_region_b)"
   ],
-  "observed": "display names: 'customer_records_archive_primar\u2026' vs 'customer_records_archive_primar\u2026'",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "display names: 'customer_records_archiv_601ef867' vs 'customer_records_archiv_bb8a26c9'",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -3346,9 +3346,9 @@
    "main.tf:127 (module.outside)",
    "main.tf:131 (module.registry)"
   ],
-  "observed": "left in place: module \"oneline\" { source = \"git::https://example.invalid/one-line.git\" }",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "all rewritten",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -3366,9 +3366,9 @@
    "main.tf:127 (module.outside)",
    "main.tf:131 (module.registry)"
   ],
-  "observed": "left in place: module \"oneline\" { source = \"git::https://example.invalid/one-line.git\" }",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "all rewritten",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -3383,9 +3383,9 @@
   "evidence": [
    "main.tf:121 (module.oneline)"
   ],
-  "observed": "not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "not_observable = [\"Module 'oneline': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'spaced': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'outside': module source outside submitted archive; contents not evaluated\", \"Module 'registry': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'inside': provider inheritance and mappings are not evaluated\"]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -3400,9 +3400,9 @@
   "evidence": [
    "main.tf:121 (module.oneline)"
   ],
-  "observed": "not_observable = []",
-  "verdict": "fail",
-  "adjudicated": "fail",
+  "observed": "not_observable = [\"Module 'oneline': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'spaced': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'outside': module source outside submitted archive; contents not evaluated\", \"Module 'registry': remote or unresolved module source unavailable; contents not evaluated\", \"Module 'inside': provider inheritance and mappings are not evaluated\"]",
+  "verdict": "pass",
+  "adjudicated": "pass",
   "note": ""
  },
  {
@@ -3468,7 +3468,7 @@
   "evidence": [
    "main.tf:18 (aws_security_group.ops)"
   ],
-  "observed": "finding: Security group 'ops' allows SSH or RDP from anywhere",
+  "observed": "finding: Security group rule 'ops' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
   "verdict": "pass",
   "adjudicated": "pass",
   "note": ""

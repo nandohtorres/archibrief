@@ -6,7 +6,7 @@
  "workload_brief": "Upload expiry is configured per environment.",
  "rule_findings": [
   {
-   "finding_id": "457221ad-0c19-4d5e-a0b6-b7031a02e4e3",
+   "finding_id": "f3b9a4dc-0a90-4978-ad2f-bb72b80e8775",
    "category": "exposure",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'uploads' has no aws_s3_bucket_public_access_block resource",
@@ -16,7 +16,7 @@
    "concern": "s3_public_access"
   },
   {
-   "finding_id": "bb92477e-a52d-403b-856f-5b050ad09ccb",
+   "finding_id": "de426ff3-b4ab-4cdc-ba97-9599c3c6256d",
    "category": "encryption",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'uploads' has no server-side encryption configuration",
@@ -26,7 +26,7 @@
    "concern": "s3_encryption"
   },
   {
-   "finding_id": "26b94cc9-dcb6-4670-837e-0252e8010ec0",
+   "finding_id": "4a945c93-25ea-4686-930c-0eb8e58a3626",
    "category": "recovery",
    "type": "deterministic-rule-result",
    "finding": "S3 bucket 'uploads' does not have versioning enabled",
@@ -36,7 +36,7 @@
    "concern": "s3_versioning"
   },
   {
-   "finding_id": "1727b258-1aca-439c-92bd-e33d14b4e020",
+   "finding_id": "e5d273bc-bbed-4dca-9274-7f61a4f336b2",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -60,7 +60,7 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
  },
  "scoring": "model_eval/SCORING.md#seven-day-deletion-fiction"
 }

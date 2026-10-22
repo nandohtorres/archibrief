@@ -6,7 +6,7 @@
  "workload_brief": "Web proxy and API servers in us-east-1.",
  "rule_findings": [
   {
-   "finding_id": "d05d242e-6f8c-47fe-b405-f9c5eb83e922",
+   "finding_id": "f86ae0d2-eb3f-4acc-a4b0-911472633225",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -16,12 +16,12 @@
    "concern": "cloudtrail_present"
   },
   {
-   "finding_id": "51d33bb6-b897-4164-819a-614a4f6131bc",
+   "finding_id": "6d0e5030-f5a0-4793-996b-c9485d1c7053",
    "category": "iam",
    "type": "deterministic-rule-result",
    "finding": "IAM role 'proxy_role' is used by running code and has AmazonS3FullAccess",
    "evidence": "resource \"aws_iam_role\" \"proxy_role\" trusts a compute service (EC2, Lambda, ECS tasks or EKS pods) and has AmazonS3FullAccess attached",
-   "risk_impact": "Anyone who gets code running on this compute, or tricks it into a request forgery, gets these permissions across the whole account.",
+   "risk_impact": "Anyone who gets code running on this compute, or tricks it into a request forgery, can exercise the attached policies subject to other applicable IAM controls.",
    "recommendation": "Replace the managed policy with a customer-managed one that names only the actions and resource ARNs this workload uses.",
    "concern": "iam_compute_broad_managed"
   }
@@ -93,7 +93,7 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
  },
  "scoring": "model_eval/SCORING.md#imdsv2-default-override"
 }

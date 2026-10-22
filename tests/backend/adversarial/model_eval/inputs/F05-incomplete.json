@@ -6,7 +6,7 @@
  "workload_brief": "Replica placement and DR Region are supplied per environment.",
  "rule_findings": [
   {
-   "finding_id": "cac43ca8-b1b3-445e-ab25-735cbeabb83d",
+   "finding_id": "09d6b672-7bf0-4e3d-ac2f-8912557bea31",
    "category": "availability",
    "type": "deterministic-rule-result",
    "finding": "RDS instance 'orders_replica' is not configured multi_az",
@@ -16,7 +16,7 @@
    "concern": "rds_multi_az"
   },
   {
-   "finding_id": "52214c1d-36e7-4b88-bb72-a1f3f8cb91b0",
+   "finding_id": "48adbbfa-975f-426b-8e84-b3d4a168f474",
    "category": "availability",
    "type": "deterministic-rule-result",
    "finding": "RDS instance 'orders_dr' is not configured multi_az",
@@ -26,7 +26,7 @@
    "concern": "rds_multi_az"
   },
   {
-   "finding_id": "9513f5e2-1544-4eaa-bf76-ddebe5cc8f23",
+   "finding_id": "c31abf2c-74c7-4556-a1ce-5b20ef1564bf",
    "category": "observability",
    "type": "deterministic-rule-result",
    "finding": "No aws_cloudtrail resource found in the submitted Terraform",
@@ -50,7 +50,9 @@
       "copied_to_another_vault": false,
       "continuous_backup": "not set (default: false)"
      }
-    ]
+    ],
+    "rules_total": 1,
+    "rules_truncated": false
    },
    {
     "type": "aws_backup_vault",
@@ -111,7 +113,7 @@
    }
   ],
   "truncated": false,
-  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault."
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
  },
  "scoring": "model_eval/SCORING.md#three-replicas-one-failure-domain"
 }

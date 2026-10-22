@@ -38,33 +38,6 @@ ATTRIBUTION = {"F02-D-15", "F03-D-02", "F03-D-06", "F04-D-04", "F04-D-05", "F09-
 
 # verdict -> (adjudicated verdict, note). Applied identically in both modes.
 ADJUDICATION: dict[str, tuple[str, str]] = {
-    "F02-D-15": (
-        "pass",
-        (
-            "Probe artifact: 'role' matched the rule's generic recommendation text "
-            "('...the role actually needs'), not a claim that the policy is attached."
-        ),
-    ),
-    "F02-D-05": (
-        "pass (wrong reason)",
-        (
-            "Not flagged only because a policy document's principals type \"*\" isn't "
-            "recognised as public at all (post-freeze probe 1); the dropped Condition "
-            "never mattered."
-        ),
-    ),
-    "F03-D-04": (
-        "pass (vacuous)",
-        "Every IMDS finding is suppressed by the account default (B2).",
-    ),
-    "F03-D-05": (
-        "pass (vacuous)",
-        "Every IMDS finding is suppressed by the account default (B2).",
-    ),
-    "F03-D-06": (
-        "pass (vacuous)",
-        "Every IMDS finding is suppressed by the account default (B2).",
-    ),
     "F06-D-03": (
         "fail",
         (
@@ -84,6 +57,16 @@ ADJUDICATION: dict[str, tuple[str, str]] = {
         ),
     ),
     "F08-I-01": ("fail", "Same as F08-D-01."),
+}
+
+# These add context only: they never turn a failing raw check into a pass.
+VERIFICATION_NOTES = {
+    "F01-D-05": "Frozen probe uses the wrong uncalled-module path; exact exclusion is covered by test_module_evaluation.py.",
+    "F02-D-05": "Now passes for the restrictive Condition; anonymous document twin is separately detected by the post-freeze probe.",
+    "F02-D-15": "Generic recommendation now says workload, avoiding the original role-word probe artifact; no attachment is inferred.",
+    "F03-D-04": "Nonvacuous: legacy_proxy and west_worker are detected in the same fixture; modern_api requires tokens.",
+    "F03-D-05": "Nonvacuous: legacy_proxy and west_worker are detected; sealed_batch disables the metadata endpoint.",
+    "F03-D-06": "Nonvacuous: legacy_proxy links to proxy_role; modern_api is not assigned that role.",
 }
 
 
@@ -130,6 +113,8 @@ def main() -> None:
                 matched, observed = probe(check["probe"], run, ctx)
                 raw = judge(check["kind"], matched)
                 adjudicated, note = ADJUDICATION.get(check["id"], (raw, ""))
+                if raw.startswith("pass") and check["id"] in VERIFICATION_NOTES:
+                    note = VERIFICATION_NOTES[check["id"]]
                 rows.append(
                     {
                         "case": case["id"],
