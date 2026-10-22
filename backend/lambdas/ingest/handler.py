@@ -75,17 +75,41 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
     parsed = ParsedTerraform()
     directories = [os.path.dirname(os.path.abspath(p)) for p in file_paths]
     root = os.path.commonpath(directories) if directories else ""
+    automatic_values: list[tuple[int, str, dict]] = []
 
-    for path in file_paths:
+    for index, path in enumerate(file_paths, start=1):
         with open(path, encoding="utf-8", errors="strict") as fh:
             try:
-                document = hcl2.load(fh, serialization_options=_SERIALIZATION_OPTIONS)
-            except UnicodeDecodeError as exc:
-                raise IngestRejected(f"unsupported encoding in {path}") from exc
-            except Exception as exc:  # hcl2 raises plain Exception/LarkError on bad syntax
-                raise IngestRejected(f"failed to parse {path}: {exc}") from exc
+                document = json.load(fh) if path.endswith(".json") else hcl2.load(
+                    fh, serialization_options=_SERIALIZATION_OPTIONS
+                )
+                if not isinstance(document, dict):
+                    raise TypeError("configuration must be an object")
+            except UnicodeDecodeError:
+                raise IngestRejected(f"unsupported encoding in Terraform file {index}") from None
+            except Exception as exc:  # noqa: BLE001 - all parser errors require sanitized rejection
+                # Parser messages include source tokens, source lines and
+                # absolute /tmp paths. Only trusted ordinals and numeric
+                # locations may reach logs or workflow execution history.
+                location = ""
+                line, column = getattr(exc, "line", None), getattr(exc, "column", None)
+                if type(line) is int and type(column) is int and line > 0 and column > 0:
+                    location = f" at line {line}, column {column}"
+                raise IngestRejected(f"failed to parse Terraform file {index}{location}") from None
 
         module = _module_for(path, root)
+        basename = os.path.basename(path)
+        if basename.endswith((".tfvars", ".tfvars.json")):
+            if not module and basename in ("terraform.tfvars", "terraform.tfvars.json"):
+                automatic_values.append((0 if basename == "terraform.tfvars" else 1, basename, document))
+            elif not module and basename.endswith((".auto.tfvars", ".auto.tfvars.json")):
+                automatic_values.append((2, basename, document))
+            elif not module:
+                parsed.not_observable.append(
+                    "Non-automatic variable files were not selected; CLI -var-file inputs are not evaluated"
+                )
+            parsed.files_parsed.append(path)
+            continue
 
         for resource_block in document.get("resource", []):
             for resource_type, named in resource_block.items():
@@ -113,6 +137,10 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
 
         parsed.files_parsed.append(path)
 
+    for _priority, _name, values in sorted(automatic_values, key=lambda entry: entry[:2]):
+        for name, value in values.items():
+            if name in parsed.variables:
+                parsed.variables[name]["value"] = value
     return parsed
 
 

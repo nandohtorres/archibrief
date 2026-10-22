@@ -54,8 +54,11 @@ def resolve(value: object, parsed: dict, module: str = "", depth: int = 0) -> ob
 
     if m := _VAR.match(expression):
         variable = _lookup_scoped(parsed.get("variables", {}), module, m.group(1))
-        if isinstance(variable, dict) and "default" in variable:
-            return resolve(variable["default"], parsed, module, depth + 1)
+        if isinstance(variable, dict):
+            if "value" in variable:
+                return resolve(variable["value"], parsed, module, depth + 1)
+            if "default" in variable:
+                return resolve(variable["default"], parsed, module, depth + 1)
         return value
     if m := _LOCAL.match(expression):
         local = _lookup_scoped(parsed.get("locals", {}), module, m.group(1))
