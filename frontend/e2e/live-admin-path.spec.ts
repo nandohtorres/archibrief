@@ -88,7 +88,7 @@ test.describe("admin-gated live critical path (mocked network)", () => {
     });
 
     await page.goto(LIVE_URL);
-    await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Submit your Terraform" })).toBeVisible();
     await page.getByLabel("Admin key").fill("e2e-admin-key");
 
     await fillSubmission(page);

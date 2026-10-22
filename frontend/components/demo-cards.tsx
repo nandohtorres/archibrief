@@ -76,7 +76,6 @@ export function DemoCards({ openingId, onOpen, variant = "compact" }: DemoCardsP
       <section className="demo-strip" aria-labelledby="demo-strip-heading">
         <div className="demo-strip-header">
           <h3 id="demo-strip-heading">No Terraform? Open a finished example</h3>
-          <span>Nothing to upload. Each opens its full report.</span>
         </div>
         <div className="demo-strip-grid">
           {demos.map((demo) => {

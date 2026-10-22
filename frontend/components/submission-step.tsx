@@ -159,8 +159,7 @@ export function SubmissionStep({
 
   return (
     <section className="flow-card submission-card" aria-labelledby="submission-heading">
-      <div className="step-kicker">Try it · Step 1 of 3</div>
-      <h2 id="submission-heading">Review your own Terraform</h2>
+      <h2 id="submission-heading">Submit your Terraform</h2>
       <p className="lede">
         ArchiBrief reads the code; it never runs Terraform or touches your AWS account.{" "}
         <span className="owner-only-note">

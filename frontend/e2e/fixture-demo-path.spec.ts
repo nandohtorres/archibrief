@@ -14,7 +14,7 @@ test.describe("fixture/demo critical path (no live API)", () => {
   }) => {
     await page.goto(FIXTURE_URL);
 
-    await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Submit your Terraform" })).toBeVisible();
     await page.getByRole("button", { name: "Load reference fixture" }).click();
     await page.getByRole("button", { name: "Continue with fixture" }).click();
 

@@ -12,7 +12,7 @@ test.describe("landing page", () => {
       page.getByRole("heading", { name: "Real reviews of real public code" }),
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "One review, two readers" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Submit your Terraform" })).toBeVisible();
     // Visitors are told new reviews are owner-only before they reach the key field.
     await expect(page.locator(".owner-only-note")).toContainText("owner-only for now");
     await expect(page.getByLabel("Admin key")).toBeVisible();
@@ -35,7 +35,7 @@ test.describe("landing page", () => {
 
     await expect(page.locator(".submit-notice")).toContainText("limited to the site owner");
     expect(called).toBe(false);
-    await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Submit your Terraform" })).toBeVisible();
   });
 
   test("a rejected key gets a plain message, not an error screen", async ({ page }) => {
