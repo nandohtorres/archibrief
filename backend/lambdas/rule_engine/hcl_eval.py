@@ -27,6 +27,8 @@ _VAR = re.compile(r"^var\.([A-Za-z0-9_-]+)$")
 _LOCAL = re.compile(r"^local\.([A-Za-z0-9_-]+)$")
 _POLICY_DOC = re.compile(r"^data\.aws_iam_policy_document\.([A-Za-z0-9_-]+)\.json$")
 _JSONENCODE = re.compile(r"^jsonencode\((.*)\)$", re.DOTALL)
+_ATOM = r"(?:var\.[A-Za-z0-9_-]+|local\.[A-Za-z0-9_-]+|true|false|\d+)"
+_CONDITIONAL = re.compile(rf"^({_ATOM})\s*\?\s*({_ATOM})\s*:\s*({_ATOM})$")
 # python-hcl2 keeps heredoc markers: "<<POLICY\n{...}\nPOLICY".
 _HEREDOC = re.compile(r"^<<-?([A-Za-z_][A-Za-z0-9_]*)\n(.*)\n\s*\1\s*$", re.DOTALL)
 
@@ -51,6 +53,19 @@ def resolve(value: object, parsed: dict, module: str = "", depth: int = 0) -> ob
     if not match:
         return value
     expression = match.group(1)
+
+    if conditional := _CONDITIONAL.fullmatch(expression.strip()):
+        def atom(text: str) -> object:
+            if text in ("true", "false"):
+                return text == "true"
+            if text.isdigit():
+                return int(text)
+            return resolve("${" + text + "}", parsed, module, depth + 1)
+
+        condition = atom(conditional.group(1))
+        if isinstance(condition, bool):
+            return atom(conditional.group(2 if condition else 3))
+        return value
 
     if m := _VAR.match(expression):
         variable = _lookup_scoped(parsed.get("variables", {}), module, m.group(1))

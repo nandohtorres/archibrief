@@ -37,7 +37,7 @@ from backend.lambdas.rule_engine.hcl_eval import (
     resolve,
     truthy,
 )
-from backend.lambdas.rule_engine.resource_summary import build_resource_summary
+from backend.lambdas.rule_engine.resource_summary import build_resource_summary, copies_of
 from backend.shared.clients import S3Client
 from backend.shared.models.finding import (
     ConfidenceInputs,
@@ -1157,6 +1157,19 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
             ))
     elif scanner is not None:
         findings.append(_scanner_unavailable(review_id))
+    unknown_creation = {
+        f'resource "{kind}" "{display_name(key)}"'
+        for kind, resources in parsed.get("resources", {}).items()
+        for key, body in resources.items()
+        if isinstance(body, dict) and copies_of(body, parsed, module_of(body)) == "unknown"
+    }
+    findings = [
+        finding.model_copy(update={
+            "finding": "If created: " + finding.finding,
+            "risk_impact": "Resource creation could not be resolved statically. " + finding.risk_impact,
+        }) if any(marker in finding.evidence for marker in unknown_creation) else finding
+        for finding in findings
+    ]
     return findings
 
 
