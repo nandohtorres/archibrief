@@ -6,12 +6,12 @@ permission to spend.
 
 ## Offline preview
 
-From the repository root, use the existing Python interpreter:
+From the repository root, with the backend dependencies installed:
 
 ```powershell
-..\archibrief\backend\.venv\Scripts\python.exe -m backend.agent.validate_reasoning_eval --plan
-..\archibrief\backend\.venv\Scripts\python.exe -m backend.agent.validate_reasoning_eval --plan --traps
-..\archibrief\backend\.venv\Scripts\python.exe -m backend.chat.chat_eval --plan --traps
+python -m backend.agent.validate_reasoning_eval --plan
+python -m backend.agent.validate_reasoning_eval --plan --traps
+python -m backend.chat.chat_eval --plan --traps
 ```
 
 These previews construct no AWS clients. They report selected case IDs, model,

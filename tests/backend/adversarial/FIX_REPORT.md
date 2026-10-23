@@ -1,14 +1,12 @@
-# Adversarial fixes: local handoff, 2026-10-22
+# Adversarial fixes, 2026-10-22
 
 All B1-B20 were confirmed and addressed. All frozen non-coverage checks
 pass in rules and offline Trivy modes; no previously passing raw check
 regressed. The complete adversarial suite still fails on documented
 coverage gaps. No frozen expectation was changed, weakened, xfailed or skipped.
 
-Worktree: `C:/Users/ferna/cursor projects/side-projects/archibrief-adversarial-fixes`.
-Branch: `mobile-laptop/fix/adversarial-bugs`. Baseline suite committed at
-`16438e8`; implementation ends at `320ffeb`. Everything is local, ready
-for review and a separately requested push. No merge or deployment happened.
+Baseline suite committed at `16438e8`; implementation ends at `320ffeb`.
+All results below come from local runs; no deployment was part of this work.
 
 ## Results
 
@@ -122,8 +120,9 @@ from the local tests. No Linux Trivy comparison or packet capture was run.
 
 ## Reproduce locally
 
-PowerShell, from the fix worktree. Use the existing venv; do not initialize
-Terraform or call AWS. Choose fresh pytest basetemp suffixes for reruns.
+PowerShell, from the repository root with the backend dependencies installed.
+Do not initialize Terraform or call AWS. Choose fresh pytest basetemp
+suffixes for reruns.
 
 ```powershell
 $jobTmp = Join-Path $env:TEMP 'archibrief-adversarial-recheck'
@@ -132,10 +131,9 @@ $env:TMP = $jobTmp
 $env:TEMP = $jobTmp
 $env:PYTHONDONTWRITEBYTECODE = '1'
 $env:TRIVY_PATH = (Get-Command trivy.exe).Source
-$pythonExe = '..\archibrief\backend\.venv\Scripts\python.exe'
-& $pythonExe -B -m pytest tests/backend --ignore=tests/backend/adversarial -q -p no:cacheprovider --basetemp "$jobTmp/backend"
-& $pythonExe -B -m pytest tests/backend/adversarial -q -p no:cacheprovider --basetemp "$jobTmp/adversarial"
-& $pythonExe -B -m tests.backend.adversarial.run_adversarial
+python -B -m pytest tests/backend --ignore=tests/backend/adversarial -q -p no:cacheprovider --basetemp "$jobTmp/backend"
+python -B -m pytest tests/backend/adversarial -q -p no:cacheprovider --basetemp "$jobTmp/adversarial"
+python -B -m tests.backend.adversarial.run_adversarial
 Get-FileHash tests/backend/adversarial/answer_key.json -Algorithm SHA256
 ```
 
@@ -148,7 +146,7 @@ existing scanner isolation and includes `--skip-check-update`.
 Original results: `results/baseline-2026-10-20-results.json` and
 `results/baseline-2026-10-20-results_table.md`; current results:
 `results/results.json` and `results/results_table.md`. The original suite
-and baseline also remain in commit `16438e8` and the original worktree.
+and baseline also remain in commit `16438e8`.
 
 ## Files touched after preserving the baseline
 

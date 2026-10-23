@@ -5,8 +5,7 @@ See [After fixes](#after-fixes-2026-10-22) and [the fix report](FIX_REPORT.md)
 for the completed local fixes and current results. Descriptions of defects
 and uncommitted files in the baseline section describe the original run.
 
-**Run:** 2026-10-20, worktree branch `mobile-laptop/test/adversarial-fixtures`
-(based on `963c887`). Backend venv Python 3.14; offline Trivy 0.76.0
+**Run:** 2026-10-20, based on `963c887`. Backend venv Python 3.14; offline Trivy 0.76.0
 (`--skip-check-update`, the scanner's own isolated environment). No AWS,
 model or terraform calls. Answer key frozen before evaluation (SHA-256
 `577c4343…`, README "Freeze record").
@@ -428,7 +427,7 @@ worth fixing before the paid run.
 - Terraform behaviour is pinned from documentation, not from `terraform plan`
   (no providers downloaded). The AWS facts were checked against AWS docs on
   2026-10-20.
-- In this worktree, 4 corpus-eval tests in the existing suite skip because
+- In this run, 4 corpus-eval tests in the existing suite skip because
   `backend/corpus/data/` is gitignored. The other 710 pass.
 - Some probes are string matches on finding text. F02-D-15 shows how that
   can misfire, which is why there is an adjudication column.
@@ -446,10 +445,9 @@ changed.
 
 ## After fixes, 2026-10-22
 
-All B1-B20 were independently confirmed and addressed on
-`mobile-laptop/fix/adversarial-bugs`, worktree `archibrief-adversarial-fixes`.
-Code ends at `320ffeb`. No push, merge, deployment, AWS call, model call or
-Terraform command was made. The frozen answer key and hash are unchanged.
+All B1-B20 were independently confirmed and addressed; code ends at
+`320ffeb`. No deployment, AWS call, model call or Terraform command was
+part of the fixes. The frozen answer key and hash are unchanged.
 
 | Check | Original baseline | After fixes |
 |---|---:|---:|

@@ -98,13 +98,14 @@ deletion deadline.
 Compact evidence: [public-admission-checks.json](evidence/public-admission-checks.json).
 The backend, frontend unit and Playwright suites cover the upload contract,
 admission races (sequentially; Moto is not thread-safe), capability checks,
-lost-response recovery and the browser upload flow. HCL was parsed but not
-run through `terraform validate`, and deployable ZIP builds weren't rebuilt.
+lost-response recovery and the browser upload flow. The backend changes are
+applied to the live account with every public flag off; a follow-up
+`terraform plan` shows no changes. The REST front door is not deployed yet.
 
 ## Before turning it on
 
-1. Run `terraform validate` and `plan`, and review the IAM, KMS and SSM
-   changes, ZIP builds and the worker's failure path.
+1. Plan and apply are done, with every public flag off. Still to check
+   against real services: the worker's failure path.
 2. Deploy the REST front door with anonymous access off. Check the WAF
    association, missing admin headers, CORS, checksum/version HEAD, the
    conditional PUT, and default-endpoint and other-stage bypasses against real

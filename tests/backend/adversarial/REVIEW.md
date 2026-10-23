@@ -1,7 +1,7 @@
 # Independent review, 2026-10-21
 
-Baseline preserved at `16438e8`; frozen key SHA-256 is unchanged. New work is
-isolated on `mobile-laptop/fix/adversarial-bugs`. Offline Trivy 0.76.0:
+Baseline preserved at `16438e8`; frozen key SHA-256 is unchanged. Fixes were
+made on a separate branch. Offline Trivy 0.76.0:
 81 failed / 154 passed, matching the reported adversarial baseline.
 
 | Bug | Verdict and independently checked evidence | Planned disposition |

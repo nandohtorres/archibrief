@@ -40,7 +40,7 @@ stands and `run_adversarial.py` records an adjudication note next to it
 
 ## Reproduce
 
-From the repository root, with the existing backend venv and an offline
+From the repository root, with the backend dependencies installed and an offline
 Trivy 0.76.0 (the version CI pins):
 
 ```bash
