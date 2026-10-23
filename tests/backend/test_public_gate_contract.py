@@ -82,6 +82,19 @@ def test_rest_stage_has_waf_and_http_submission_uses_admission():
     assert "submit_review" in integration["integration_uri"]
 
 
+def test_rest_front_door_relies_on_handler_gates_and_returns_cors_errors():
+    resources = {}
+    for item in _read("public-edge.tf")["resource"]:
+        for kind, values in item.items():
+            resources.setdefault(kind, {}).update(values)
+    # A header-based authorizer rejects visitors who send no header before
+    # the handler's own PUBLIC_ACCESS_ENABLED check runs.
+    assert "aws_api_gateway_authorizer" not in resources
+    assert resources["aws_api_gateway_method"]["public"]["authorization"] == "NONE"
+    response = resources["aws_api_gateway_gateway_response"]["public"]
+    assert "Access-Control-Allow-Origin" in str(response["response_parameters"])
+
+
 def test_workflow_definition_never_propagates_submission_fields():
     path = ROOT / "infra/modules/step-functions-lambda/main.tf"
     definition = (

@@ -1,5 +1,6 @@
-# Parallel Regional REST front door. The existing HTTP API stays admin-only.
-# Off by default; neither this flag nor public_access_enabled is enabled here.
+# Regional REST front door with WAF. The HTTP API stays admin-only until it is
+# retired. Off by default; neither this flag nor public_access_enabled is
+# enabled here.
 variable "public_edge_enabled" {
   type    = bool
   default = false
@@ -63,32 +64,16 @@ locals {
   public_preflight = { for key, route in local.public_routes : key => route if key != "history" }
 }
 
-resource "aws_api_gateway_authorizer" "public" {
-  count                            = var.public_edge_enabled ? 1 : 0
-  name                             = "admission-gate"
-  rest_api_id                      = aws_api_gateway_rest_api.public[0].id
-  type                             = "REQUEST"
-  authorizer_uri                   = aws_lambda_function.admin_authorizer.invoke_arn
-  identity_source                  = "method.request.header.x-admin-key"
-  authorizer_result_ttl_in_seconds = 0
-}
-
-resource "aws_lambda_permission" "public_authorizer" {
-  count         = var.public_edge_enabled ? 1 : 0
-  statement_id  = "AllowPublicRESTAuthorizer"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.admin_authorizer.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.public[0].execution_arn}/authorizers/*"
-}
-
+# No authorizer: every handler checks PUBLIC_ACCESS_ENABLED (and the chat
+# flag) itself, and refuses anonymous callers while it is off. A
+# header-based authorizer would also reject visitors who send no header
+# before the handler runs.
 resource "aws_api_gateway_method" "public" {
   for_each      = local.public_routes
   rest_api_id   = aws_api_gateway_rest_api.public[0].id
   resource_id   = each.value.resource
   http_method   = each.value.method
-  authorization = each.key == "demo" ? "NONE" : "CUSTOM"
-  authorizer_id = each.key == "demo" ? null : aws_api_gateway_authorizer.public[0].id
+  authorization = "NONE"
 }
 
 resource "aws_api_gateway_integration" "public" {
@@ -139,11 +124,25 @@ resource "aws_lambda_permission" "preflight" {
   source_arn    = "${aws_api_gateway_rest_api.public[0].execution_arn}/public/OPTIONS/*"
 }
 
+# Errors API Gateway answers itself (throttling, missing route, integration
+# failure) carry no CORS headers by default, so the browser would report a
+# CORS failure instead of the real status. These carry no review data, so
+# echoing the caller's Origin is safe.
+resource "aws_api_gateway_gateway_response" "public" {
+  for_each      = var.public_edge_enabled ? toset(["DEFAULT_4XX", "DEFAULT_5XX"]) : toset([])
+  rest_api_id   = aws_api_gateway_rest_api.public[0].id
+  response_type = each.key
+  response_parameters = {
+    "gatewayresponse.header.Access-Control-Allow-Origin" = "method.request.header.origin"
+    "gatewayresponse.header.Vary"                        = "'Origin'"
+  }
+}
+
 resource "aws_api_gateway_deployment" "public" {
   count       = var.public_edge_enabled ? 1 : 0
   rest_api_id = aws_api_gateway_rest_api.public[0].id
   triggers = {
-    routes = sha1(jsonencode([aws_api_gateway_integration.public, aws_api_gateway_integration.preflight, aws_api_gateway_authorizer.public]))
+    routes = sha1(jsonencode([aws_api_gateway_method.public, aws_api_gateway_integration.public, aws_api_gateway_integration.preflight, aws_api_gateway_gateway_response.public]))
   }
   lifecycle {
     create_before_destroy = true
@@ -209,7 +208,12 @@ resource "aws_wafv2_web_acl" "public" {
     name     = "per-ip-rate"
     priority = 2
     action {
-      block {}
+      block {
+        # 429, so the frontend can say "too many requests" rather than "forbidden".
+        custom_response {
+          response_code = 429
+        }
+      }
     }
     statement {
       rate_based_statement {

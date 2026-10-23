@@ -30,6 +30,9 @@ from backend.shared.retention import REVIEW_LIFETIME_SECONDS, review_is_live
 
 MAX_ARCHIVE_BYTES = 20 * 1024 * 1024
 UPLOAD_LEASE_SECONDS = 900
+# Fallbacks only; Terraform sets both (upload_limits in admission.tf).
+DEFAULT_UPLOADS_DAILY_MAX = 100
+DEFAULT_UPLOADS_VISITOR_DAILY_MAX = 1
 
 
 def reserve_upload(event: dict, payload: dict) -> dict:
@@ -113,12 +116,15 @@ def reserve_upload(event: dict, payload: dict) -> dict:
         }
     )
     for key, maximum in (
-        (f"uploads#global#{day}", positive_setting("UPLOADS_DAILY_MAX", 100)),
+        (
+            f"uploads#global#{day}",
+            positive_setting("UPLOADS_DAILY_MAX", DEFAULT_UPLOADS_DAILY_MAX),
+        ),
         (
             f"uploads#visitor#{visitor}#{day}",
             positive_setting(
                 "UPLOADS_ADMIN_DAILY_MAX" if is_admin(event) else "UPLOADS_VISITOR_DAILY_MAX",
-                100 if is_admin(event) else 1,
+                100 if is_admin(event) else DEFAULT_UPLOADS_VISITOR_DAILY_MAX,
             ),
         ),
     ):

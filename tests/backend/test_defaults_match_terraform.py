@@ -12,7 +12,7 @@ from pathlib import Path
 
 from backend.chat.access import DEFAULT_QUESTIONS_PER_REVIEW
 from backend.lambdas.ask_question import handler as ask_question
-from backend.shared import admission
+from backend.shared import admission, uploads
 
 ROOT = Path(__file__).resolve().parents[2]
 API = ROOT / "infra" / "modules" / "api-gateway"
@@ -82,3 +82,19 @@ def test_paid_limit_fallbacks_match_terraform_defaults():
         200_000,
         200_000,
     )
+
+
+def test_upload_limit_fallbacks_match_terraform_defaults():
+    text = (API / "admission.tf").read_text()
+    block = re.search(
+        r'variable "upload_limits" \{.*?default = \{(.*?)\n  \}', text, re.DOTALL
+    )
+    assert block
+    limits = {
+        key: int(value)
+        for key, value in re.findall(r"(\w+)\s*=\s*(\d+)", block.group(1))
+    }
+    assert limits == {
+        "global_daily": uploads.DEFAULT_UPLOADS_DAILY_MAX,
+        "visitor_daily": uploads.DEFAULT_UPLOADS_VISITOR_DAILY_MAX,
+    }
