@@ -87,7 +87,8 @@ def neutralize_remote_sources(files: list[str], root: str) -> int:
                 continue
             body = next(child for child in block.children if getattr(child, "data", None) == "body")
             attributes = [
-                child for child in body.children
+                child
+                for child in body.children
                 if getattr(child, "data", None) == "attribute"
                 and str(child.children[0].children[0]) == "source"
             ]
@@ -101,7 +102,9 @@ def neutralize_remote_sources(files: list[str], root: str) -> int:
             except (ValueError, TypeError):
                 source = None
             if (
-                isinstance(source, str) and "${" not in source and "%{" not in source
+                isinstance(source, str)
+                and "${" not in source
+                and "%{" not in source
                 and _is_local_inside(source, file_dir, root_path)
             ):
                 continue
@@ -175,7 +178,9 @@ def _module_for(target: Path, root: Path) -> str:
     return "" if relative == "." else PurePosixPath(*Path(relative).parts).as_posix()
 
 
-def trusted_results(report: dict, scan_dir: str, files: list[str], *, bounded: bool = True) -> list[dict]:
+def trusted_results(
+    report: dict, scan_dir: str, files: list[str], *, bounded: bool = True
+) -> list[dict]:
     """Keep only trusted, failing checks, as small identifier-only records."""
     directories = [os.path.dirname(os.path.abspath(f)) for f in files]
     module_root = Path(os.path.commonpath(directories)) if directories else Path(scan_dir)
@@ -189,14 +194,16 @@ def trusted_results(report: dict, scan_dir: str, files: list[str], *, bounded: b
             cause = item.get("CauseMetadata") or {}
             address = _INSTANCE_INDEX.sub("", str(cause.get("Resource", "")))
             if re.fullmatch(r"module\.[A-Za-z0-9_-]+(?:\.module\.[A-Za-z0-9_-]+)*", address):
-                results.append({
-                    "check_id": check_id,
-                    "scope": "module",
-                    "resource_key": "/".join(address.split(".")[1::2]),
-                    "file": PurePosixPath(*Path(result.get("Target", "")).parts).as_posix(),
-                    "start_line": int(cause.get("StartLine") or 0),
-                    "end_line": int(cause.get("EndLine") or 0),
-                })
+                results.append(
+                    {
+                        "check_id": check_id,
+                        "scope": "module",
+                        "resource_key": "/".join(address.split(".")[1::2]),
+                        "file": PurePosixPath(*Path(result.get("Target", "")).parts).as_posix(),
+                        "start_line": int(cause.get("StartLine") or 0),
+                        "end_line": int(cause.get("EndLine") or 0),
+                    }
+                )
                 continue
             resource_type, _, name = address.rpartition(".")
             # Module-called resources come back as module.x.type.name; the

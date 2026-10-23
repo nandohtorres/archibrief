@@ -177,10 +177,13 @@ def link_findings(graph: dict, findings: list[dict[str, Any]]) -> dict:
     unplaced = set(linked["account_findings"])
     linked["unplaced_scopes"] = {
         str(f.get("finding_id", "")): (
-            "module" if str(f.get("evidence", "")).startswith("Module call '")
-            else "resource-not-shown" if _DECLARED.search(_finding_text(f))
+            "module"
+            if str(f.get("evidence", "")).startswith("Module call '")
+            else "resource-not-shown"
+            if _DECLARED.search(_finding_text(f))
             else "unresolved-or-design"
         )
-        for f in findings if str(f.get("finding_id", "")) in unplaced
+        for f in findings
+        if str(f.get("finding_id", "")) in unplaced
     }
     return linked

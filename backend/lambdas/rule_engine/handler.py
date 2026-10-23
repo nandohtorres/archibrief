@@ -279,8 +279,13 @@ def _restricts_public_access(condition: object) -> bool:
     if not isinstance(condition, dict):
         return False
     keys = {
-        "aws:sourcevpce", "aws:sourcevpc", "aws:principalorgid",
-        "aws:principalaccount", "aws:principalarn", "aws:sourcearn", "aws:sourceaccount",
+        "aws:sourcevpce",
+        "aws:sourcevpc",
+        "aws:principalorgid",
+        "aws:principalaccount",
+        "aws:principalarn",
+        "aws:sourcearn",
+        "aws:sourceaccount",
     }
     for operator, entries in condition.items():
         if not isinstance(entries, dict):
@@ -292,7 +297,10 @@ def _restricts_public_access(condition: object) -> bool:
                 for value in values
             ):
                 continue
-            if operator in {"StringEquals", "ArnEquals", "StringLike", "ArnLike"} and key.lower() in keys:
+            if (
+                operator in {"StringEquals", "ArnEquals", "StringLike", "ArnLike"}
+                and key.lower() in keys
+            ):
                 return True
             if operator == "IpAddress" and key.lower() == "aws:sourceip":
                 try:
@@ -302,7 +310,9 @@ def _restricts_public_access(condition: object) -> bool:
                 collapsed = [
                     network
                     for version in (4, 6)
-                    for network in ipaddress.collapse_addresses(n for n in networks if n.version == version)
+                    for network in ipaddress.collapse_addresses(
+                        n for n in networks if n.version == version
+                    )
                 ]
                 if collapsed and all(network.prefixlen > 0 for network in collapsed):
                     return True
@@ -617,7 +627,9 @@ def _wildcard_grants(statements: list[dict]) -> list[str]:
         if excluded_resources and "*" not in excluded_resources:
             if excluded_actions and "*" not in excluded_actions:
                 grants.append("NotAction on NotResource complement")
-            elif any(str(a) == "*" or str(a).endswith(":*") for a in _as_list(statement.get("Action"))):
+            elif any(
+                str(a) == "*" or str(a).endswith(":*") for a in _as_list(statement.get("Action"))
+            ):
                 grants.append("NotResource complement")
         if "*" not in resources:
             continue
@@ -646,7 +658,9 @@ def rule_iam_policy_wildcard_action_resource(parsed: dict, review_id: str) -> li
             text = f"IAM policy '{name}' grants broad permissions using a NotResource complement"
         else:
             text = f"IAM policy '{name}' grants wildcard {', '.join(grants)} on all resources"
-        scope = "NotResource exclusions" if any("NotResource" in g for g in grants) else 'Resource "*"'
+        scope = (
+            "NotResource exclusions" if any("NotResource" in g for g in grants) else 'Resource "*"'
+        )
         findings.append(
             _finding(
                 review_id,
@@ -815,8 +829,8 @@ def rule_compute_role_broad_managed_policy(parsed: dict, review_id: str) -> list
         risk = (
             "These attached policies have broad scope. A permissions boundary is configured; "
             "effective permissions require evaluating that boundary and other applicable policies."
-            if boundary else
-            "Anyone who gets code running on this compute, or tricks it into a "
+            if boundary
+            else "Anyone who gets code running on this compute, or tricks it into a "
             "request forgery, can exercise the attached policies subject to other applicable IAM controls."
         )
         findings.append(
@@ -1082,7 +1096,9 @@ def scanner_findings(scanner: dict, parsed: dict, review_id: str) -> list[Findin
         check = TRUSTED_CHECKS.get(result.get("check_id", ""))
         if check is None:
             continue
-        grouped.setdefault((check.concern, result.get("scope", "resource"), _subject_key(result, parsed)), []).append(result)
+        grouped.setdefault(
+            (check.concern, result.get("scope", "resource"), _subject_key(result, parsed)), []
+        ).append(result)
 
     findings = []
     for (_, scope, key), results in grouped.items():
@@ -1164,8 +1180,15 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
             retained.append(result)
         scanner = {**scanner, "results": retained}
     trivy_ran = bool(scanner) and scanner.get("status") == "ok"
-    partial_attribution = trivy_ran and any(r.get("scope") == "module" for r in scanner.get("results", []))
-    complete_scan = trivy_ran and not scanner.get("truncated", False) and not partial_attribution and not module_scan_partial
+    partial_attribution = trivy_ran and any(
+        r.get("scope") == "module" for r in scanner.get("results", [])
+    )
+    complete_scan = (
+        trivy_ran
+        and not scanner.get("truncated", False)
+        and not partial_attribution
+        and not module_scan_partial
+    )
     working = {**parsed, _TRIVY_RAN: complete_scan}
     findings: list[Finding] = []
     for rule in ALL_RULES:
@@ -1184,46 +1207,62 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
             ):
                 findings.append(finding)
         if scanner.get("truncated", False):
-            findings.append(_finding(
-                review_id, FindingCategory.OBSERVABILITY,
-                "Trivy results were truncated; ArchiBrief's own rules also ran",
-                f"Retained {len(scanner.get('results', []))} of "
-                f"{scanner.get('results_total', 'unknown')} trusted scanner results",
-                "Scanner-only issues may be omitted; this is not a complete scan.",
-                "Review a smaller configuration slice to obtain complete scanner coverage.",
-                [], finding_type=FindingType.NOT_OBSERVABLE,
-            ))
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.OBSERVABILITY,
+                    "Trivy results were truncated; ArchiBrief's own rules also ran",
+                    f"Retained {len(scanner.get('results', []))} of "
+                    f"{scanner.get('results_total', 'unknown')} trusted scanner results",
+                    "Scanner-only issues may be omitted; this is not a complete scan.",
+                    "Review a smaller configuration slice to obtain complete scanner coverage.",
+                    [],
+                    finding_type=FindingType.NOT_OBSERVABLE,
+                )
+            )
         if partial_attribution:
-            findings.append(_finding(
-                review_id, FindingCategory.OBSERVABILITY,
-                "Some Trivy findings have only module-level attribution; ArchiBrief's own rules also ran",
-                "Scanner results identify a module call without an exact resource attribution",
-                "The affected resource cannot be identified reliably from these scanner results.",
-                "Inspect the module's resources before acting on its scanner findings.",
-                [], finding_type=FindingType.NOT_OBSERVABLE,
-            ))
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.OBSERVABILITY,
+                    "Some Trivy findings have only module-level attribution; ArchiBrief's own rules also ran",
+                    "Scanner results identify a module call without an exact resource attribution",
+                    "The affected resource cannot be identified reliably from these scanner results.",
+                    "Inspect the module's resources before acting on its scanner findings.",
+                    [],
+                    finding_type=FindingType.NOT_OBSERVABLE,
+                )
+            )
     elif scanner is not None:
         findings.append(_scanner_unavailable(review_id))
     if module_scan_partial:
-        findings.append(_finding(
-            review_id, FindingCategory.OBSERVABILITY,
-            "Module scanner evidence could not be bound to evaluated resources; own rules also ran",
-            "Source-directory scanner results were excluded rather than attributed to module call instances",
-            "Module-specific scanner coverage is incomplete; supported local inputs were evaluated by own rules.",
-            "Review module resources and their bound inputs before relying on scanner-only coverage.",
-            [], finding_type=FindingType.NOT_OBSERVABLE,
-        ))
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.OBSERVABILITY,
+                "Module scanner evidence could not be bound to evaluated resources; own rules also ran",
+                "Source-directory scanner results were excluded rather than attributed to module call instances",
+                "Module-specific scanner coverage is incomplete; supported local inputs were evaluated by own rules.",
+                "Review module resources and their bound inputs before relying on scanner-only coverage.",
+                [],
+                finding_type=FindingType.NOT_OBSERVABLE,
+            )
+        )
     if gaps := parsed.get("not_observable", []):
         # Ingest emits identifier-only module notices and fixed coverage
         # descriptions. No source URL or expression is echoed here.
-        findings.append(_finding(
-            review_id, FindingCategory.OBSERVABILITY,
-            "Terraform module or input coverage is incomplete",
-            "; ".join(str(gap) for gap in gaps),
-            "Unobserved inputs or modules may change this architecture's findings.",
-            "Supply the missing local configuration or inspect the disclosed gap separately.",
-            [], finding_type=FindingType.NOT_OBSERVABLE,
-        ))
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.OBSERVABILITY,
+                "Terraform module or input coverage is incomplete",
+                "; ".join(str(gap) for gap in gaps),
+                "Unobserved inputs or modules may change this architecture's findings.",
+                "Supply the missing local configuration or inspect the disclosed gap separately.",
+                [],
+                finding_type=FindingType.NOT_OBSERVABLE,
+            )
+        )
     unknown_creation = {
         f'resource "{kind}" "{display_name(key)}"'
         for kind, resources in parsed.get("resources", {}).items()
@@ -1231,10 +1270,15 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
         if isinstance(body, dict) and copies_of(body, parsed, module_of(body)) == "unknown"
     }
     findings = [
-        finding.model_copy(update={
-            "finding": "If created: " + finding.finding,
-            "risk_impact": "Resource creation could not be resolved statically. " + finding.risk_impact,
-        }) if any(marker in finding.evidence for marker in unknown_creation) else finding
+        finding.model_copy(
+            update={
+                "finding": "If created: " + finding.finding,
+                "risk_impact": "Resource creation could not be resolved statically. "
+                + finding.risk_impact,
+            }
+        )
+        if any(marker in finding.evidence for marker in unknown_creation)
+        else finding
         for finding in findings
     ]
     return findings

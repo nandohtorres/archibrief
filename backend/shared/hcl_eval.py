@@ -42,12 +42,21 @@ class ResolutionBudgetExceeded(ValueError):
     """A bounded caller must disclose unfinished static resolution."""
 
 
-def resolve(value: object, parsed: dict, module: str = "", depth: int = 0, *, _budget: list[int] | None = None) -> object:
+def resolve(
+    value: object,
+    parsed: dict,
+    module: str = "",
+    depth: int = 0,
+    *,
+    _budget: list[int] | None = None,
+) -> object:
     """Resolve var./local./policy-document/jsonencode references, recursively."""
     if _budget is not None:
         size = (
-            2 + len(value) if isinstance(value, list)
-            else 2 + sum(len(json.dumps(k)) + 2 for k in value) if isinstance(value, dict)
+            2 + len(value)
+            if isinstance(value, list)
+            else 2 + sum(len(json.dumps(k)) + 2 for k in value)
+            if isinstance(value, dict)
             else len(json.dumps(value))
         )
         _budget[0] -= size
@@ -68,6 +77,7 @@ def resolve(value: object, parsed: dict, module: str = "", depth: int = 0, *, _b
     expression = match.group(1)
 
     if conditional := _CONDITIONAL.fullmatch(expression.strip()):
+
         def atom(text: str) -> object:
             if text in ("true", "false"):
                 return text == "true"
@@ -97,7 +107,9 @@ def resolve(value: object, parsed: dict, module: str = "", depth: int = 0, *, _b
         return value
     if m := _LOCAL.match(expression):
         local = _lookup_scoped(parsed.get("locals", {}), module, m.group(1))
-        return value if local is None else resolve(local, parsed, module, depth + 1, _budget=_budget)
+        return (
+            value if local is None else resolve(local, parsed, module, depth + 1, _budget=_budget)
+        )
     if m := _POLICY_DOC.match(expression):
         if _budget is not None:
             return value  # Module inputs do not expand policy documents.
@@ -132,8 +144,10 @@ def render_policy_document(document: dict, parsed: dict, module: str, depth: int
             "Effect": resolve(block.get("effect", "Allow"), parsed, module, depth),
         }
         for source, target in (
-            ("actions", "Action"), ("not_actions", "NotAction"),
-            ("resources", "Resource"), ("not_resources", "NotResource"),
+            ("actions", "Action"),
+            ("not_actions", "NotAction"),
+            ("resources", "Resource"),
+            ("not_resources", "NotResource"),
         ):
             if source in block:
                 statement[target] = resolve(block[source], parsed, module, depth)
@@ -142,9 +156,13 @@ def render_policy_document(document: dict, parsed: dict, module: str, depth: int
             for principal in _as_list(block.get(source)):
                 if isinstance(principal, dict):
                     kind = principal.get("type", "AWS")
-                    identifiers = _as_list(resolve(principal.get("identifiers", []), parsed, module, depth))
+                    identifiers = _as_list(
+                        resolve(principal.get("identifiers", []), parsed, module, depth)
+                    )
                     merged = principals.setdefault(kind, [])
-                    merged.extend(identifier for identifier in identifiers if identifier not in merged)
+                    merged.extend(
+                        identifier for identifier in identifiers if identifier not in merged
+                    )
             if principals:
                 statement[target] = "*" if principals == {"*": ["*"]} else principals
         conditions: dict = {}

@@ -44,8 +44,8 @@ def display_name(key: str) -> str:
     for index, part in enumerate(parts):
         safe = _IDENTIFIER_UNSAFE.sub("", part)
         if safe != part or len(safe) > MAX_DISPLAY_NAME or not safe:
-            identity = "/".join(parts[:index + 1])
+            identity = "/".join(parts[: index + 1])
             suffix = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
-            safe = safe[:MAX_DISPLAY_NAME - 9] + "_" + suffix
+            safe = safe[: MAX_DISPLAY_NAME - 9] + "_" + suffix
         out.append(safe)
     return "/".join(out)

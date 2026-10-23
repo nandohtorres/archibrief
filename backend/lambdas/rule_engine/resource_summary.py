@@ -348,11 +348,15 @@ def _backup_rules(body: dict, parsed: dict, module: str) -> list[dict]:
     if len(out) <= MAX_BACKUP_RULES:
         return out
     indexed = list(enumerate(out, start=1))
-    indexed.sort(key=lambda item: (
-        not item[1]["copied_to_another_vault"],
-        item[1]["delete_after_days"] if isinstance(item[1]["delete_after_days"], int) else float("inf"),
-        item[0],
-    ))
+    indexed.sort(
+        key=lambda item: (
+            not item[1]["copied_to_another_vault"],
+            item[1]["delete_after_days"]
+            if isinstance(item[1]["delete_after_days"], int)
+            else float("inf"),
+            item[0],
+        )
+    )
     return [{**rule, "source_index": index} for index, rule in indexed[:MAX_BACKUP_RULES]]
 
 
@@ -390,7 +394,10 @@ def build_resource_summary(parsed: dict) -> dict:
                 else UNKNOWN
                 for path in SETTINGS.get(resource_type, ())
             }
-            if resource_type == "aws_cloudwatch_log_group" and settings.get("retention_in_days") == 0:
+            if (
+                resource_type == "aws_cloudwatch_log_group"
+                and settings.get("retention_in_days") == 0
+            ):
                 settings["retention_in_days"] = "never expires (configured: 0)"
             entry = {"type": resource_type, "name": display_name(key), "settings": settings}
             copies = copies_of(body, parsed, module) if isinstance(body, dict) else None

@@ -86,8 +86,10 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
     for index, path in enumerate(file_paths, start=1):
         with open(path, encoding="utf-8", errors="strict") as fh:
             try:
-                document = json.load(fh) if path.endswith(".json") else hcl2.load(
-                    fh, serialization_options=_SERIALIZATION_OPTIONS
+                document = (
+                    json.load(fh)
+                    if path.endswith(".json")
+                    else hcl2.load(fh, serialization_options=_SERIALIZATION_OPTIONS)
                 )
                 if not isinstance(document, dict):
                     raise TypeError("configuration must be an object")
@@ -107,7 +109,9 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
         basename = os.path.basename(path)
         if basename.endswith((".tfvars", ".tfvars.json")):
             if not module and basename in ("terraform.tfvars", "terraform.tfvars.json"):
-                automatic_values.append((0 if basename == "terraform.tfvars" else 1, basename, document))
+                automatic_values.append(
+                    (0 if basename == "terraform.tfvars" else 1, basename, document)
+                )
             elif not module and basename.endswith((".auto.tfvars", ".auto.tfvars.json")):
                 automatic_values.append((2, basename, document))
             elif not module:
@@ -151,7 +155,9 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
     return _evaluate_modules(parsed, module_calls, config_directories, root)
 
 
-def _evaluate_modules(raw: ParsedTerraform, calls: dict, directories: set[str], root: str) -> ParsedTerraform:
+def _evaluate_modules(
+    raw: ParsedTerraform, calls: dict, directories: set[str], root: str
+) -> ParsedTerraform:
     """Walk only explicit, local singleton calls; unsupported work is disclosed.
 
     Reuses the same bounded resolver as the rules. Never initializes a
@@ -164,7 +170,11 @@ def _evaluate_modules(raw: ParsedTerraform, calls: dict, directories: set[str], 
             "not evidence that their resources are deployed together"
         )
         return raw
-    result = ParsedTerraform(files_parsed=raw.files_parsed, not_observable=raw.not_observable[:], module_evaluation="calls")
+    result = ParsedTerraform(
+        files_parsed=raw.files_parsed,
+        not_observable=raw.not_observable[:],
+        module_evaluation="calls",
+    )
     root_path = Path(root).resolve()
     visited = 0
     resource_total = 0
@@ -174,7 +184,9 @@ def _evaluate_modules(raw: ParsedTerraform, calls: dict, directories: set[str], 
     used_scopes: set[str] = set()
 
     def gap(name: str, reason: str) -> None:
-        result.not_observable.append(f"Module '{display_name(name)}': {reason}; contents not evaluated")
+        result.not_observable.append(
+            f"Module '{display_name(name)}': {reason}; contents not evaluated"
+        )
 
     def clone(value: object, scope: str, *, cache: bool = True) -> object:
         nonlocal expanded_bytes
@@ -245,7 +257,9 @@ def _evaluate_modules(raw: ParsedTerraform, calls: dict, directories: set[str], 
                         # Provider inheritance/mapping is not evaluated. It
                         # cannot prove a shared account/region default.
                         cloned["__module_provider_unknown__"] = True
-                    getattr(result, field_name).setdefault(kind, {})[scoped_key(scope, name)] = cloned
+                    getattr(result, field_name).setdefault(kind, {})[scoped_key(scope, name)] = (
+                        cloned
+                    )
         for name, call in calls.get(source, {}).items():
             call_name = scoped_key(scope, name)
             if not isinstance(call, dict):
@@ -265,7 +279,12 @@ def _evaluate_modules(raw: ParsedTerraform, calls: dict, directories: set[str], 
                 gap(call_name, "module for_each instances are not evaluated")
                 continue
             source_value = call.get("source")
-            if not isinstance(source_value, str) or not source_value.startswith(("./", "../")) or "${" in source_value or "%{" in source_value:
+            if (
+                not isinstance(source_value, str)
+                or not source_value.startswith(("./", "../"))
+                or "${" in source_value
+                or "%{" in source_value
+            ):
                 gap(call_name, "remote or unresolved module source unavailable")
                 continue
             target = (root_path / source / source_value).resolve()
@@ -279,7 +298,14 @@ def _evaluate_modules(raw: ParsedTerraform, calls: dict, directories: set[str], 
                 continue
             bound_inputs = {}
             for input_name, value in call.items():
-                if input_name in ("source", "version", "count", "for_each", "providers", "depends_on") or input_name.startswith("__"):
+                if input_name in (
+                    "source",
+                    "version",
+                    "count",
+                    "for_each",
+                    "providers",
+                    "depends_on",
+                ) or input_name.startswith("__"):
                     continue
                 resolved = input_value(value, scope)
                 if "${" in json.dumps(resolved):
@@ -295,6 +321,7 @@ def _evaluate_modules(raw: ParsedTerraform, calls: dict, directories: set[str], 
                 f"Module '{display_name(call_name)}': provider inheritance and mappings are not evaluated"
             )
             instantiate(relative, child_scope, bound_inputs, (*ancestry, source))
+
     instantiate("", "", {}, ())
     return result
 
