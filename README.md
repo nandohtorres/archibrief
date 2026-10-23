@@ -1,14 +1,19 @@
 # ArchiBrief
 
-**Context-aware architecture review with receipts.**
+[![CI](https://github.com/nandohtorres/archibrief/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/nandohtorres/archibrief/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**Context-aware architecture review with receipts.** Live at [archibrief.dev](https://archibrief.dev).
 
 ArchiBrief combines static Terraform checks with a workload brief and retrieved AWS guidance. A public bucket means something different for public records than for cardholder data; availability advice needs a traffic profile and a target. The report puts the observed configuration, risk, recommendation, alternatives, and confidence alongside its evidence so a reviewer can challenge the result.
 
 ## Status
 
-**Deployed and admin-gated; public self-service is not open yet.** Anyone can open three finished demo reviews of real public Terraform (a security firm's breach lab, a Medicare data platform, and FEC databases). They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
+**Live, with three demo reviews anyone can open.** They cover real public Terraform: a security firm's breach lab, a Medicare data platform, and FEC databases. They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
 
-**Report chat is live, admin-only.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, quotas and a hard daily spend cap on chat. That cap covers chat only; no single cap spans every paid path yet. The demos' suggested questions were answered once and are served free. The paid chat evaluation is still pending. [Public access](docs/public-access-implementation.md) (uploads, abuse protection, spending limits) is built and tested but switched off until live validation and a paid evaluation are done.
+**Report chat is live.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, quotas and a hard daily spend cap. On the demos, anyone can read the suggested questions' answers, which were generated once and are served free. Asking new questions is owner-only for now.
+
+**New reviews are owner-run for now,** because each one calls a paid model. [Public submissions](docs/public-access-implementation.md) are built and tested, with uploads, a bot check and per-visitor and global spending limits. They stay switched off until live validation is done. Not yet done: a single spend cap across every paid path (the current hard cap covers chat), and the paid chat evaluation.
 
 ## How it works
 
