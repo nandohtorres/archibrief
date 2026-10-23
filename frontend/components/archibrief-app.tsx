@@ -540,6 +540,9 @@ export function ArchiBriefApp() {
           <li>
             <a href="/privacy.html">Privacy</a>
           </li>
+          <li>
+            <a href="https://github.com/nandohtorres/archibrief">Source on GitHub</a>
+          </li>
         </ul>
         <p className="site-footer-legal">
           Reviews are informational and provided as is, without warranty. They are not professional
