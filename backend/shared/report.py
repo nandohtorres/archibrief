@@ -98,7 +98,7 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
     }
     if view is not None:
         report["budget"] = view["budget"]
-    for field in ("report_projection", "deeper_reviews"):
+    for field in ("report_projection", "deeper_reviews", "deeper_jobs"):
         if field in ledger:
             report[field] = ledger[field]
     # The architecture diagram; older ledgers don't have one.

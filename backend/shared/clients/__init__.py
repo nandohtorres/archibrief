@@ -62,8 +62,8 @@ class DynamoDBClient:
         self._resource = boto3.resource("dynamodb", region_name=self.region_name)
         self._table = self._resource.Table(self.table_name)
 
-    def put_item(self, item: dict[str, Any]) -> None:
-        self._table.put_item(Item=_dynamodb_safe(item))
+    def put_item(self, item: dict[str, Any], **kwargs: Any) -> None:
+        self._table.put_item(Item=_dynamodb_safe(item), **kwargs)
 
     def get_item(self, key: dict[str, Any], *, consistent: bool = False) -> dict[str, Any] | None:
         response = self._table.get_item(Key=key, **({"ConsistentRead": True} if consistent else {}))

@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from backend.shared.analysis_quality import public_analysis_quality
 from backend.shared.architecture_links import link_findings
 from backend.shared.clients import DynamoDBClient
+from backend.shared.deeper_jobs import public_job
 from backend.shared.models.finding import Finding
 from backend.shared.retention import review_is_live
 
@@ -37,9 +38,14 @@ def assemble_current_ledger(
     excluded = 0
     runs = {}
     expected_batches = {}
+    jobs = []
     now = int(time.time()) if now is None else now
     for item in items:
         if not review_is_live(item, now=now):
+            continue
+        if item.get("kind") == "deeper-job":
+            if item.get("reviewId") == review_id and item.get("parent_finding_id") in parents:
+                jobs.append(public_job(item, now))
             continue
         if item.get("kind") == "deeper-result":
             if item.get("reviewId") == review_id and item.get("parent_finding_id") in parents:
@@ -73,11 +79,16 @@ def assemble_current_ledger(
         runs.setdefault(
             finding.parent_finding_id, public_analysis_quality(item.get("analysis_quality"))
         )
-    accepted_ids = {finding["finding_id"] for finding in accepted}
     incomplete = {
         parent
         for parent, expected in expected_batches.items()
-        if not expected.issubset(accepted_ids)
+        if not expected.issubset(
+            {
+                finding["finding_id"]
+                for finding in accepted
+                if finding["parent_finding_id"] == parent
+            }
+        )
     }
     if incomplete:
         removed = [finding for finding in accepted if finding["parent_finding_id"] in incomplete]
@@ -109,6 +120,7 @@ def assemble_current_ledger(
         {"parent_finding_id": parent, "analysis_quality": quality}
         for parent, quality in sorted(runs.items())
     ]
+    current["deeper_jobs"] = sorted(jobs, key=lambda job: job["parent_finding_id"])
     return current
 
 

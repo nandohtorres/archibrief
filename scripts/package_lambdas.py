@@ -160,6 +160,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/get_review/__init__.py",
             "backend/lambdas/get_review/handler.py",
+            "backend/shared/deeper_jobs.py",
             "backend/shared/review_projection.py",
             "backend/shared/architecture_links.py",
             "backend/shared/analysis_quality.py",
@@ -280,6 +281,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/deeper_review/__init__.py",
             "backend/lambdas/deeper_review/handler.py",
+            "backend/lambdas/deeper_review/worker.py",
+            "backend/shared/deeper_jobs.py",
             "backend/shared/analysis_quality.py",
             "backend/shared/assessment.py",
             "backend/shared/retention.py",
@@ -298,8 +301,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/report.py",
             "backend/shared/http.py",
         ],
-        # validate.handler imports pydantic directly for ValidationError.
-        "packages": ["pydantic>=2.0"],
+        # Both HTTP admission and the background worker use this package.
+        "packages": ["pydantic>=2.0", "boto3"],
     },
     # The report chat (ADR-0050). ask_question makes the one paid model
     # call; it reuses retrieve.vector_search, which needs only the shared
@@ -329,6 +332,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/ask_question/__init__.py",
             "backend/lambdas/ask_question/handler.py",
+            "backend/shared/deeper_jobs.py",
             "backend/shared/review_projection.py",
             "backend/shared/architecture_links.py",
             "backend/shared/models/__init__.py",
@@ -362,6 +366,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/list_questions/__init__.py",
             "backend/lambdas/list_questions/handler.py",
+            "backend/shared/deeper_jobs.py",
             "backend/shared/review_projection.py",
             "backend/shared/architecture_links.py",
             "backend/shared/models/__init__.py",

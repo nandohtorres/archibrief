@@ -56,6 +56,11 @@ async function readJson(response: Response): Promise<unknown> {
       upload_mismatch: "The uploaded file doesn't match this reservation. Start a new review.",
       upload_expired: "This upload reservation expired. Start a new review.",
       dispatch_unavailable: "The review could not start. Please retry the same submission.",
+      deeper_dispatch_unavailable:
+        "We couldn't confirm the deeper job started. Retry Go deeper to recover the same request.",
+      deeper_job_failed:
+        "Deeper analysis could not finish. Your original report and saved findings remain available.",
+      reviews_paused: "Reviews are temporarily paused. Please try again later.",
       operation_conflict: "This reservation belongs to a different submission. Start a new review.",
     };
     // 429 comes from API Gateway throttling or the WAF rate rule, not a handler.
@@ -159,9 +164,13 @@ export async function uploadArchiveToS3(
   throw new ApiRequestError("A bound upload reservation is required.", null);
 }
 
-export async function fetchReview(reviewId: string): Promise<ReviewReport | ReviewStatusPointer> {
+export async function fetchReview(
+  reviewId: string,
+  signal?: AbortSignal,
+): Promise<ReviewReport | ReviewStatusPointer> {
   const response = await fetch(`${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}`, {
     headers: requestHeaders(reviewId),
+    signal,
   });
   return (await readJson(response)) as ReviewReport | ReviewStatusPointer;
 }

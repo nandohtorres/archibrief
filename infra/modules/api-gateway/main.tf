@@ -140,8 +140,7 @@ resource "aws_lambda_function" "clarify_review" {
 
 # POST /reviews/{reviewId}/findings/{findingId}/deeper: a scoped
 # per-finding re-run, never the full pipeline (ADR-0023/ADR-0039). Not a
-# Step Functions integration: deeper_review.handler calls the AgentCore
-# Runtime directly through boto3 (AgentCoreRuntimeClient).
+# Standard workflow: HTTP admits a job; the background worker calls AgentCore.
 data "aws_iam_policy_document" "deeper_review_data_access" {
   statement {
     # ADR-0030 kill switch, checked before any paid work.
@@ -159,7 +158,7 @@ data "aws_iam_policy_document" "deeper_review_data_access" {
     # Query: return an already-stored deeper result instead of paying for
     # a second run.
     effect    = "Allow"
-    actions   = ["dynamodb:PutItem", "dynamodb:Query"]
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]
     resources = [var.findings_table_arn]
   }
   statement {
@@ -167,13 +166,10 @@ data "aws_iam_policy_document" "deeper_review_data_access" {
     actions   = ["s3:GetObject"]
     resources = ["${var.reports_bucket_arn}/*"]
   }
-  dynamic "statement" {
-    for_each = var.agentcore_runtime_arn == null ? [] : [1]
-    content {
-      effect    = "Allow"
-      actions   = ["bedrock-agentcore:InvokeAgentRuntime"]
-      resources = [var.agentcore_runtime_arn]
-    }
+  statement {
+    effect    = "Allow"
+    actions   = ["states:StartExecution"]
+    resources = [aws_sfn_state_machine.deeper.arn]
   }
 }
 
@@ -202,13 +198,8 @@ resource "aws_lambda_function" "deeper_review" {
   runtime          = "python3.12"
   filename         = var.deeper_review_zip_path
   source_code_hash = fileexists(var.deeper_review_zip_path) ? filebase64sha256(var.deeper_review_zip_path) : null
-  # Longer than get_review/clarify_review (3s/10s): this path makes a
-  # synchronous Bedrock-backed AgentCore call (retrieve + reason). Kept
-  # under the HTTP API's 30s integration limit; otherwise the gateway
-  # returns 503 while the Lambda keeps running and paying, and a client
-  # retry starts a second run. The handler's AgentCore read timeout (24s)
-  # sits under this.
-  timeout = 28
+  # Admission and idempotent dispatch only; the model runs outside HTTP.
+  timeout = 10
 
   environment {
     variables = merge(local.admission_environment, {
@@ -216,10 +207,7 @@ resource "aws_lambda_function" "deeper_review" {
       FINDINGS_TABLE_NAME        = var.findings_table_name
       KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
       REPORTS_BUCKET_NAME        = var.reports_bucket_name
-      # Same placeholder ARN as modules/step-functions-lambda's InvokeAgent
-      # task: the Lambda deploys without a runtime and fails only at
-      # invocation time.
-      AGENTCORE_RUNTIME_ARN = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
+      DEEPER_STATE_MACHINE_ARN   = aws_sfn_state_machine.deeper.arn
     })
   }
 

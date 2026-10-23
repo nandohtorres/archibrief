@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -13,6 +14,7 @@ import type {
   AnalysisQuality,
   ChatTurn,
   DemoChat,
+  DeeperJob,
   ReportFinding,
   ReviewReport,
 } from "@/lib/contracts";
@@ -80,6 +82,87 @@ export function ReportWorkspace({
   } | null>(null);
   const [selectedId, setSelectedId] = useState(report.findings[0]?.record.finding_id ?? "");
   const [status, setStatus] = useState("");
+  useEffect(() => {
+    const active =
+      report.deeper_jobs?.filter((job) => job.status === "pending" || job.status === "running") ??
+      [];
+    if (source !== "live" || active.length === 0) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    function timedOut() {
+      controller.abort();
+      clearTimeout(timer);
+      setReport((current) => ({
+        ...current,
+        deeper_jobs: current.deeper_jobs?.map((job) =>
+          active.some((a) => a.job_id === job.job_id)
+            ? { ...job, status: "failed", failure_code: "timed_out" }
+            : job,
+        ),
+      }));
+      setStatus(
+        "Deeper analysis did not finish within its allowed time. Your original report remains available.",
+      );
+    }
+    // Stop even if an individual status fetch never resolves.
+    const deadlineTimer = setTimeout(
+      timedOut,
+      Math.max(
+        0,
+        Math.min(8 * 60 * 1000, Math.max(...active.map((job) => job.deadline)) * 1000 - Date.now()),
+      ),
+    );
+    async function poll() {
+      if (active.every((job) => job.deadline * 1000 <= Date.now())) {
+        setReport((current) => ({
+          ...current,
+          deeper_jobs: current.deeper_jobs?.map((job) =>
+            active.some((a) => a.job_id === job.job_id)
+              ? { ...job, status: "failed", failure_code: "timed_out" }
+              : job,
+          ),
+        }));
+        setStatus(
+          "Deeper analysis did not finish within its allowed time. Your original report remains available.",
+        );
+        return;
+      }
+      try {
+        const refreshed = await fetchReview(report.review_id, controller.signal);
+        if (controller.signal.aborted) return;
+        if (!isReviewReport(refreshed)) throw new Error("Report status unavailable");
+        setReport(refreshed);
+        setFindings(refreshed.findings.map(withEvidenceLabel));
+        const finished = refreshed.deeper_jobs?.find(
+          (job) =>
+            active.some((a) => a.job_id === job.job_id) &&
+            (job.status === "complete" || job.status === "failed"),
+        );
+        if (finished) {
+          setStatus(
+            finished.status === "complete"
+              ? "Deeper analysis finished. The saved report has been refreshed."
+              : "Deeper analysis could not finish. Your original report and saved findings remain available.",
+          );
+          const child = refreshed.findings.find(
+            (f) => f.record.parent_finding_id === finished.parent_finding_id,
+          );
+          if (child)
+            setSelectedId((current) =>
+              current === finished.parent_finding_id ? child.record.finding_id : current,
+            );
+        }
+      } catch {
+        if (!controller.signal.aborted) timer = setTimeout(poll, 2000);
+      }
+    }
+    timer = setTimeout(poll, 2000);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+      clearTimeout(deadlineTimer);
+    };
+  }, [report.review_id, report.deeper_jobs, source]);
   const [questionSeed, setQuestionSeed] = useState("");
   const [seedFindingId, setSeedFindingId] = useState("");
   const [transcript, setTranscript] = useState<ChatTurn[]>([]);
@@ -195,9 +278,24 @@ export function ReportWorkspace({
     }
     try {
       const result = (await requestDeeperFinding(report.review_id, findingId)) as {
-        findings: ReportFinding[];
+        findings?: ReportFinding[];
         analysis_quality?: AnalysisQuality;
+        job?: DeeperJob;
       };
+      if (result.job) {
+        const job = result.job;
+        setReport((current) => ({
+          ...current,
+          deeper_jobs: [
+            ...(current.deeper_jobs ?? []).filter((saved) => saved.job_id !== job.job_id),
+            job,
+          ],
+        }));
+        setStatus(
+          "Deeper analysis is running in the background. You can keep using this report or reload to check its saved status.",
+        );
+        return;
+      }
       const newFindings = result.findings ?? [];
       if (newFindings.length === 0) {
         try {
@@ -375,6 +473,12 @@ export function ReportWorkspace({
         <aside className="scope-note" aria-label="Analysis quality">
           <strong>Analysis quality</strong>
           <p>{qualityMessage(report.analysis_quality)}</p>
+          {report.deeper_jobs?.map((job) => (
+            <p key={job.job_id}>
+              Deeper review of {formatFindingId(job.parent_finding_id)}: {job.status}.
+              {job.status === "failed" && " Your original report remains available."}
+            </p>
+          ))}
           {report.deeper_reviews?.map((run) => (
             <p key={run.parent_finding_id}>
               Deeper review of {formatFindingId(run.parent_finding_id)}:{" "}

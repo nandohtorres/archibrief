@@ -206,11 +206,20 @@ export interface ReviewReport {
     excluded_child_count: number;
   };
   deeper_reviews?: Array<{ parent_finding_id: string; analysis_quality: AnalysisQuality }>;
+  deeper_jobs?: DeeperJob[];
   // Totals across every finding that needs action. Absent on older reviews.
   budget?: BudgetSummary;
   // The diagram built from the code (lib/architecture.ts). Older reviews
   // have none. Checked with isArchitectureGraph before use.
   architecture?: unknown;
+}
+
+export interface DeeperJob {
+  job_id: string;
+  parent_finding_id: string;
+  status: "pending" | "running" | "complete" | "failed";
+  deadline: number;
+  failure_code: string | null;
 }
 
 export interface AnalysisStageCounts {

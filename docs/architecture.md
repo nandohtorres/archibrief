@@ -26,6 +26,7 @@ flowchart LR
     subgraph Orchestration["Orchestration"]
         SFN["Step Functions<br/>(Standard workflow)"]
         Worker["review_worker<br/>(content-bearing stages)"]
+        DeeperJob["Standard deeper workflow<br/>(identifiers only)"]
     end
 
     subgraph Compute["Bounded, stateless Lambdas"]
@@ -37,6 +38,7 @@ flowchart LR
         Finalize["Finalize"]
         Clarify["clarify_review /<br/>store_clarification_token"]
         Deeper["deeper_review"]
+        DeeperWorker["deeper worker"]
         GetReview["get_review"]
         GetDemo["get_demo"]
         CreateUpload["create_upload"]
@@ -77,6 +79,10 @@ flowchart LR
     Chat -->|saved children and transcript| DDB
     APIGW --> Clarify
     APIGW --> Deeper
+    Deeper --> DeeperJob --> DeeperWorker
+    DeeperWorker --> Retrieve
+    DeeperWorker --> DDB
+    DeeperWorker --> S3R
     APIGW --> CreateUpload
 
     SFN -->|review ID / phase / resume reference| Worker
@@ -240,7 +246,7 @@ new execution histories. The LangGraph PreflightGate → Retrieve → Reason gra
 runs in AgentCore, called by the worker. Earlier executions retain their
 historical definition/content; changing the source cannot erase old history.
 
-Deeper review bypasses the worker and calls the shorter AgentCore graph with
+Deeper HTTP admission dispatches its own Standard job, whose worker calls the shorter AgentCore graph with
 the stored resource summary, settled requirements, and bounded parent evidence
 and alternatives. Children and their completion marker commit together in
 DynamoDB. Report GET and chat use the same projection of original S3 evidence
@@ -248,6 +254,8 @@ plus live, validated children. The report rebuilds diagram and budget from that
 projection, and the browser refreshes it after a deeper result is saved.
 The S3 ledger stays unchanged. Output quality is recorded independently of job
 completion; all-rejected deeper results are retained for free idempotent replay.
-Deeper execution still has the existing short synchronous timeout. Moving it
-to an asynchronous job remains open; current source changes do not solve it.
-See the [report redesign review](reviews/2026-10-23-report-redesign.md).
+The HTTP handler never calls the model. Its durable worker permits one model
+attempt and commits results with job completion; the browser recovers status on
+reload. Job status is separate from retained-output quality. See the
+[asynchronous contract](reviews/2026-10-23-async-deeper.md) and
+[report redesign review](reviews/2026-10-23-report-redesign.md).

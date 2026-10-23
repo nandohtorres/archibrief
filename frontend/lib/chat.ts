@@ -252,6 +252,7 @@ export function buildReportHtml(
 <p class="meta">${escapeHtml(report.terraform_repo_ref)} · ${escapeHtml(report.created_at)} · review ${escapeHtml(report.review_id)}</p>
 <p class="meta">${escapeHtml(reportSnapshotLabel(report.findings))}</p>
 <h2>Analysis quality</h2><p>${escapeHtml(qualityMessage(report.analysis_quality))}</p>
+${(report.deeper_jobs ?? []).map((job) => `<p>Deeper review of ${escapeHtml(job.parent_finding_id)}: ${escapeHtml(job.status)}. Saved findings reflect completed work only.</p>`).join("")}
 ${(report.deeper_reviews ?? []).map((run) => `<p>Deeper review of ${escapeHtml(run.parent_finding_id)}: ${escapeHtml(qualityMessage(run.analysis_quality))}</p>`).join("")}
 ${report.report_projection?.excluded_child_count ? "<p>Some saved deeper findings could not be included. Report completeness and totals are limited.</p>" : ""}
 ${demo ? `<h2>Demo source and review corrections</h2><p>${escapeHtml(demo.source)} · ${escapeHtml(demo.license)}</p><p>${escapeHtml(demo.disclaimer)}</p>${safeHref(demo.sourceUrl) ? `<p><a href="${escapeHtml(safeHref(demo.sourceUrl))}">Original source</a></p>` : ""}<p>Original generated text is preserved. Reviewer notes correct or qualify it, including saved answers. Annotation format: demo-review@1; historical review date not recorded.</p>${notes.map(reviewerNoteHtml).join("")}` : ""}

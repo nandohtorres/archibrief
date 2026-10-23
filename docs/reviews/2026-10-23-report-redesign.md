@@ -73,9 +73,9 @@ original-budget fallback. Saved chat answers retain their historical evidence;
 new calls receive the current projection. Read roles gain only Query access to
 the findings table. Chat packages now include the pinned Finding validator.
 
-P05 is **not complete**: execution still uses the existing short synchronous
-AgentCore timeout. An asynchronous job contract/dispatch/recovery design remains
-next. P06 remediation grouping, P07–P09 evaluation architecture and budgeting,
+The subsequent [asynchronous job implementation](2026-10-23-async-deeper.md)
+replaces the short synchronous timeout and completes the remaining P05 source
+contract. P06 remediation grouping (now deferred by user instruction), P07–P09 evaluation architecture and budgeting,
 and P11–P16 typed facts/five coverage domains are also not implemented here.
 Budget totals still sum per finding and disclose overlapping work. No scores,
 paid-run results or deployment verification are implied by these source fixes.

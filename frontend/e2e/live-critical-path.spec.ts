@@ -189,16 +189,30 @@ test.describe("live critical path (mocked network)", () => {
       },
     };
     let saved = false;
+    let started = false;
+    let failRead = true;
+    const job = {
+      job_id: "deeper-job",
+      parent_finding_id: fixtureReport.findings[0].record.finding_id,
+      status: "running",
+      deadline: Math.floor(Date.now() / 1000) + 90,
+      failure_code: null,
+    };
     let paidRequests = 0;
     await page.route("**/mock-api/reviews", (route) =>
       route.fulfill({ json: { reviewId: REVIEW_ID, status: "pending" } }),
     );
-    await page.route(`**/mock-api/reviews/${REVIEW_ID}`, (route) =>
-      route.fulfill({
+    await page.route(`**/mock-api/reviews/${REVIEW_ID}`, (route) => {
+      if (saved && failRead) {
+        failRead = false;
+        return route.fulfill({ status: 503, json: {} });
+      }
+      return route.fulfill({
         json: {
           ...fixtureReport,
           review_id: REVIEW_ID,
           findings: saved ? [...fixtureReport.findings, child] : fixtureReport.findings,
+          deeper_jobs: started ? [{ ...job, status: saved ? "complete" : "running" }] : [],
           report_projection: {
             version: 1,
             children_available: true,
@@ -206,19 +220,26 @@ test.describe("live critical path (mocked network)", () => {
             excluded_child_count: 0,
           },
         },
-      }),
-    );
+      });
+    });
     await page.route(/\/mock-api\/reviews\/[^/]+\/findings\/[^/]+\/deeper$/, (route) => {
-      saved = true;
+      started = true;
       paidRequests++;
-      return route.fulfill({ json: { findings: [child] } });
+      return route.fulfill({
+        status: 202,
+        json: { status: "pending", job: { ...job, status: "pending" } },
+      });
     });
     await page.goto(PUBLIC_URL);
     await fillSubmission(page);
     await page.getByRole("button", { name: "Start review" }).click();
     await expect(page.locator("#report-heading")).toBeVisible();
     await page.getByRole("button", { name: "Go deeper", exact: true }).click();
-    await expect(page.getByText(/Deeper findings saved/)).toBeVisible();
+    await expect(page.getByText(/running in the background/)).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("Analysis quality")).toContainText("running");
+    saved = true;
+    await expect(page.getByText(/Deeper analysis finished/)).toBeVisible({ timeout: 12000 });
     await page.getByRole("tab", { name: /Guided Report/ }).click();
     await expect(page.getByText("Durable deeper bucket assessment", { exact: true })).toBeVisible();
     await page.reload();
@@ -234,5 +255,81 @@ test.describe("live critical path (mocked network)", () => {
       ),
     ).toBe(true);
     expect(paidRequests).toBe(1);
+  });
+
+  test("failed deeper jobs stay visible without another model request", async ({ page }) => {
+    await mockTurnstile(page);
+    await mockUpload(page);
+    let requested = 0;
+    const job = {
+      job_id: "failed-job",
+      parent_finding_id: fixtureReport.findings[0].record.finding_id,
+      deadline: Math.floor(Date.now() / 1000) + 60,
+      failure_code: "analysis_failed",
+    };
+    await page.route("**/mock-api/reviews", (route) =>
+      route.fulfill({ json: { reviewId: REVIEW_ID, status: "pending" } }),
+    );
+    await page.route(`**/mock-api/reviews/${REVIEW_ID}`, (route) =>
+      route.fulfill({
+        json: {
+          ...fixtureReport,
+          review_id: REVIEW_ID,
+          deeper_jobs: requested ? [{ ...job, status: "failed" }] : [],
+        },
+      }),
+    );
+    await page.route(/\/mock-api\/reviews\/[^/]+\/findings\/[^/]+\/deeper$/, (route) => {
+      requested++;
+      return route.fulfill({ status: 202, json: { job: { ...job, status: "pending" } } });
+    });
+    await page.goto(PUBLIC_URL);
+    await fillSubmission(page);
+    await page.getByRole("button", { name: "Start review" }).click();
+    await expect(page.locator("#report-heading")).toBeVisible();
+    await page.getByRole("button", { name: "Go deeper", exact: true }).click();
+    await expect(page.getByText(/Deeper analysis could not finish/)).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("Analysis quality")).toContainText("failed");
+    await expect(page.locator(".finding-list > li")).toHaveCount(fixtureReport.findings.length);
+    expect(requested).toBe(1);
+  });
+
+  test("a stalled status read cannot wait beyond the saved job deadline", async ({ page }) => {
+    await mockTurnstile(page);
+    await mockUpload(page);
+    let requested = 0;
+    await page.route("**/mock-api/reviews", (route) =>
+      route.fulfill({ json: { reviewId: REVIEW_ID, status: "pending" } }),
+    );
+    await page.route(`**/mock-api/reviews/${REVIEW_ID}`, async (route) => {
+      if (requested) return; // deliberately leave the read unresolved
+      await route.fulfill({ json: { ...fixtureReport, review_id: REVIEW_ID } });
+    });
+    await page.route(/\/mock-api\/reviews\/[^/]+\/findings\/[^/]+\/deeper$/, (route) => {
+      requested++;
+      return route.fulfill({
+        status: 202,
+        json: {
+          job: {
+            job_id: "stalled",
+            parent_finding_id: fixtureReport.findings[0].record.finding_id,
+            status: "pending",
+            failure_code: null,
+            deadline: Date.now() / 1000 + 4,
+          },
+        },
+      });
+    });
+    await page.goto(PUBLIC_URL);
+    await fillSubmission(page);
+    await page.getByRole("button", { name: "Start review" }).click();
+    await expect(page.locator("#report-heading")).toBeVisible();
+    await page.getByRole("button", { name: "Go deeper", exact: true }).click();
+    await expect(page.getByText(/did not finish within its allowed time/)).toBeVisible({
+      timeout: 8000,
+    });
+    await expect(page.getByLabel("Analysis quality")).toContainText("failed");
+    expect(requested).toBe(1);
   });
 });
