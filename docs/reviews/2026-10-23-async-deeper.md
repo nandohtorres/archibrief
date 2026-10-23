@@ -39,6 +39,9 @@ on reload, tolerates transient read failures, cancels obsolete requests, and
 aborts even a stalled fetch at the absolute deadline. Saved findings remain
 usable on failure. JSON and HTML retain job status; the original S3 ledger is
 never rewritten. Legacy synchronous success responses remain supported.
+An unreadable/stalled status response stops client polling without inventing a
+server-side job failure: the UI preserves the last saved status and says it
+could not confirm the result. Reload recovers the authoritative state.
 
 ## Deployment boundary
 

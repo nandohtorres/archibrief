@@ -326,10 +326,10 @@ test.describe("live critical path (mocked network)", () => {
     await page.getByRole("button", { name: "Start review" }).click();
     await expect(page.locator("#report-heading")).toBeVisible();
     await page.getByRole("button", { name: "Go deeper", exact: true }).click();
-    await expect(page.getByText(/did not finish within its allowed time/)).toBeVisible({
+    await expect(page.getByText(/couldn't confirm the deeper job's status in time/)).toBeVisible({
       timeout: 8000,
     });
-    await expect(page.getByLabel("Analysis quality")).toContainText("failed");
+    await expect(page.getByLabel("Analysis quality")).toContainText("pending");
     expect(requested).toBe(1);
   });
 });

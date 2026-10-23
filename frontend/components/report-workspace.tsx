@@ -92,16 +92,8 @@ export function ReportWorkspace({
     function timedOut() {
       controller.abort();
       clearTimeout(timer);
-      setReport((current) => ({
-        ...current,
-        deeper_jobs: current.deeper_jobs?.map((job) =>
-          active.some((a) => a.job_id === job.job_id)
-            ? { ...job, status: "failed", failure_code: "timed_out" }
-            : job,
-        ),
-      }));
       setStatus(
-        "Deeper analysis did not finish within its allowed time. Your original report remains available.",
+        "We couldn't confirm the deeper job's status in time. Your report remains available. Reload to check the saved result.",
       );
     }
     // Stop even if an individual status fetch never resolves.
@@ -114,17 +106,7 @@ export function ReportWorkspace({
     );
     async function poll() {
       if (active.every((job) => job.deadline * 1000 <= Date.now())) {
-        setReport((current) => ({
-          ...current,
-          deeper_jobs: current.deeper_jobs?.map((job) =>
-            active.some((a) => a.job_id === job.job_id)
-              ? { ...job, status: "failed", failure_code: "timed_out" }
-              : job,
-          ),
-        }));
-        setStatus(
-          "Deeper analysis did not finish within its allowed time. Your original report remains available.",
-        );
+        timedOut();
         return;
       }
       try {
