@@ -136,6 +136,12 @@ resource "aws_api_gateway_gateway_response" "public" {
     "gatewayresponse.header.Access-Control-Allow-Origin" = "method.request.header.origin"
     "gatewayresponse.header.Vary"                        = "'Origin'"
   }
+  # AWS restores this default template whenever it's left out, and the
+  # deployment trigger below hashes these responses, so it's declared to
+  # keep that hash stable during apply.
+  response_templates = {
+    "application/json" = "{\"message\":$context.error.messageString}"
+  }
 }
 
 resource "aws_api_gateway_deployment" "public" {
