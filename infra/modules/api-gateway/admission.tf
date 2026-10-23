@@ -22,7 +22,7 @@ variable "public_access_enabled" {
   type    = bool
   default = false
   validation {
-    condition = !var.public_access_enabled || (var.public_edge_enabled && var.verified_public_api_id != "" && var.turnstile_secret_parameter_arn != null && var.turnstile_secret_parameter_name != "" && var.turnstile_hostname != "")
+    condition     = !var.public_access_enabled || (var.public_edge_enabled && var.verified_public_api_id != "" && var.turnstile_secret_parameter_arn != null && var.turnstile_secret_parameter_name != "" && var.turnstile_hostname != "")
     error_message = "Public access requires the WAF REST front door and configured Turnstile verification."
   }
 }

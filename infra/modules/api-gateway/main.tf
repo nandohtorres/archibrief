@@ -82,9 +82,9 @@ resource "aws_lambda_function" "admin_authorizer" {
 
   environment {
     variables = {
-      ADMIN_KEY = random_password.admin_key.result
+      ADMIN_KEY             = random_password.admin_key.result
       PUBLIC_ACCESS_ENABLED = local.public_admitted ? "true" : "false"
-      PUBLIC_REST_API_ID = var.public_edge_enabled ? aws_api_gateway_rest_api.public[0].id : ""
+      PUBLIC_REST_API_ID    = var.public_edge_enabled ? aws_api_gateway_rest_api.public[0].id : ""
     }
   }
 
@@ -544,7 +544,7 @@ resource "aws_lambda_function" "create_upload" {
   environment {
     variables = merge(local.admission_environment, {
       REPORTS_BUCKET_NAME = var.reports_bucket_name
-      RESERVATION_KEY    = random_password.reservation.result
+      RESERVATION_KEY     = random_password.reservation.result
     })
   }
 

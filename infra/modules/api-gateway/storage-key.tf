@@ -15,9 +15,9 @@ resource "aws_iam_role_policy" "admission_storage_key" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = each.key == "deeper" ? ["kms:Decrypt"] : ["kms:Decrypt", "kms:GenerateDataKey"]
-      Resource = data.aws_kms_alias.source.target_key_arn
+      Effect    = "Allow"
+      Action    = each.key == "deeper" ? ["kms:Decrypt"] : ["kms:Decrypt", "kms:GenerateDataKey"]
+      Resource  = data.aws_kms_alias.source.target_key_arn
       Condition = { StringLike = { "kms:ViaService" = "s3.*.amazonaws.com" } }
     }]
   })

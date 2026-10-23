@@ -25,6 +25,6 @@ output "public_api_url" {
 }
 
 variable "verified_public_api_id" {
-  type = string
+  type    = string
   default = ""
 }

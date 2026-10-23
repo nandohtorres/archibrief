@@ -51,14 +51,14 @@ resource "aws_api_gateway_resource" "public_deeper" {
 
 locals {
   public_routes = var.public_edge_enabled ? {
-    upload   = { method = "POST", resource = aws_api_gateway_resource.public_root["uploads"].id, function = { invoke_arn = aws_lambda_function.create_upload.invoke_arn, function_name = aws_lambda_function.create_upload.function_name } }
-    submit   = { method = "POST", resource = aws_api_gateway_resource.public_root["reviews"].id, function = { invoke_arn = aws_lambda_function.submit_review.invoke_arn, function_name = aws_lambda_function.submit_review.function_name } }
-    read     = { method = "GET", resource = aws_api_gateway_resource.public_review[0].id, function = { invoke_arn = aws_lambda_function.get_review.invoke_arn, function_name = aws_lambda_function.get_review.function_name } }
-    clarify  = { method = "POST", resource = aws_api_gateway_resource.public_children["clarify"].id, function = { invoke_arn = aws_lambda_function.clarify_review.invoke_arn, function_name = aws_lambda_function.clarify_review.function_name } }
-    deeper   = { method = "POST", resource = aws_api_gateway_resource.public_deeper[0].id, function = { invoke_arn = aws_lambda_function.deeper_review.invoke_arn, function_name = aws_lambda_function.deeper_review.function_name } }
-    ask      = { method = "POST", resource = aws_api_gateway_resource.public_children["questions"].id, function = { invoke_arn = aws_lambda_function.chat["ask_question"].invoke_arn, function_name = aws_lambda_function.chat["ask_question"].function_name } }
-    history  = { method = "GET", resource = aws_api_gateway_resource.public_children["questions"].id, function = { invoke_arn = aws_lambda_function.chat["list_questions"].invoke_arn, function_name = aws_lambda_function.chat["list_questions"].function_name } }
-    demo     = { method = "GET", resource = aws_api_gateway_resource.public_root["demo"].id, function = { invoke_arn = aws_lambda_function.get_demo.invoke_arn, function_name = aws_lambda_function.get_demo.function_name } }
+    upload  = { method = "POST", resource = aws_api_gateway_resource.public_root["uploads"].id, function = { invoke_arn = aws_lambda_function.create_upload.invoke_arn, function_name = aws_lambda_function.create_upload.function_name } }
+    submit  = { method = "POST", resource = aws_api_gateway_resource.public_root["reviews"].id, function = { invoke_arn = aws_lambda_function.submit_review.invoke_arn, function_name = aws_lambda_function.submit_review.function_name } }
+    read    = { method = "GET", resource = aws_api_gateway_resource.public_review[0].id, function = { invoke_arn = aws_lambda_function.get_review.invoke_arn, function_name = aws_lambda_function.get_review.function_name } }
+    clarify = { method = "POST", resource = aws_api_gateway_resource.public_children["clarify"].id, function = { invoke_arn = aws_lambda_function.clarify_review.invoke_arn, function_name = aws_lambda_function.clarify_review.function_name } }
+    deeper  = { method = "POST", resource = aws_api_gateway_resource.public_deeper[0].id, function = { invoke_arn = aws_lambda_function.deeper_review.invoke_arn, function_name = aws_lambda_function.deeper_review.function_name } }
+    ask     = { method = "POST", resource = aws_api_gateway_resource.public_children["questions"].id, function = { invoke_arn = aws_lambda_function.chat["ask_question"].invoke_arn, function_name = aws_lambda_function.chat["ask_question"].function_name } }
+    history = { method = "GET", resource = aws_api_gateway_resource.public_children["questions"].id, function = { invoke_arn = aws_lambda_function.chat["list_questions"].invoke_arn, function_name = aws_lambda_function.chat["list_questions"].function_name } }
+    demo    = { method = "GET", resource = aws_api_gateway_resource.public_root["demo"].id, function = { invoke_arn = aws_lambda_function.get_demo.invoke_arn, function_name = aws_lambda_function.get_demo.function_name } }
   } : {}
   public_preflight = { for key, route in local.public_routes : key => route if key != "history" }
 }
@@ -165,9 +165,9 @@ resource "aws_api_gateway_method_settings" "public" {
   method_path = "*/*"
   settings {
     throttling_burst_limit = var.throttling_burst_limit
-    throttling_rate_limit = var.throttling_rate_limit
-    data_trace_enabled    = false
-    metrics_enabled       = true
+    throttling_rate_limit  = var.throttling_rate_limit
+    data_trace_enabled     = false
+    metrics_enabled        = true
   }
 }
 

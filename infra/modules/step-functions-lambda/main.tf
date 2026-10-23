@@ -519,9 +519,9 @@ resource "aws_sfn_state_machine" "review" {
         Parameters = {
           FunctionName = aws_lambda_function.this["store_clarification_token"].arn
           Payload = {
-            "review_id.$"       = "$.review_id"
-            "taskToken.$"       = "$$.Task.Token"
-            reviews_table_name  = var.reviews_table_name
+            "review_id.$"      = "$.review_id"
+            "taskToken.$"      = "$$.Task.Token"
+            reviews_table_name = var.reviews_table_name
           }
         }
         ResultPath = "$.resume"
