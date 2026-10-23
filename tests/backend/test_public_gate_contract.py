@@ -15,22 +15,16 @@ def _read(name):
         )
 
 
-def test_every_review_and_upload_route_keeps_its_admin_authorizer():
-    checked = set()
-    for filename in ("main.tf", "chat.tf"):
-        for resource in _read(filename)["resource"]:
-            for route in resource.get("aws_apigatewayv2_route", {}).values():
-                key = route["route_key"]
-                if key == "GET /demo":
-                    continue
-                checked.add(key)
-                assert route["authorization_type"] == "CUSTOM", key
-                assert "admin_gate" in route["authorizer_id"], key
-    assert {
-        "POST /reviews",
-        "POST /uploads",
-        "POST /reviews/{reviewId}/questions",
-    } <= checked
+def test_there_is_no_admin_path_or_unprotected_api():
+    module = ROOT / "infra/modules/api-gateway"
+    text = "\n".join(path.read_text(encoding="utf-8") for path in module.glob("*.tf"))
+    # Every route is on the WAF-protected REST stage; the old HTTP API and
+    # the admin key that bypassed the public limits are gone.
+    for gone in ("aws_apigatewayv2_api\"", "aws_apigatewayv2_route", "ADMIN_KEY", "admin_key"):
+        assert gone not in text, gone
+    routes = str(_read("public-edge.tf")["locals"])
+    for function in ("create_upload", "submit_review", "ask_question", "get_review"):
+        assert function in routes, function
 
 
 def test_public_chat_default_stays_disabled():
@@ -58,7 +52,7 @@ def test_public_activation_is_disabled_and_requires_a_verified_api_id():
     )
 
 
-def test_rest_stage_has_waf_and_http_submission_uses_admission():
+def test_rest_stage_has_waf_and_submission_uses_admission():
     edge = _read("public-edge.tf")
     resources = {}
     for item in edge["resource"]:
@@ -71,15 +65,10 @@ def test_rest_stage_has_waf_and_http_submission_uses_admission():
         assert (
             "/public/" in resources["aws_lambda_permission"][permission]["source_arn"]
         )
-    http = {
-        kind: values
-        for item in _read("main.tf")["resource"]
-        for kind, values in item.items()
-        if kind == "aws_apigatewayv2_integration" and "start_review" in values
-    }
-    integration = http["aws_apigatewayv2_integration"]["start_review"]
-    assert "integration_subtype" not in integration
-    assert "submit_review" in integration["integration_uri"]
+    # POST /reviews reaches submit_review, which admits the review, never
+    # Step Functions directly.
+    routes = _read("public-edge.tf")["locals"][0]["public_routes"]
+    assert "submit_review" in str(routes).split("submit", 1)[1].split("read", 1)[0]
 
 
 def test_rest_front_door_relies_on_handler_gates_and_returns_cors_errors():

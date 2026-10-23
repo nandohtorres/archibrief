@@ -20,24 +20,16 @@ def headers(event: dict) -> dict:
     return {str(key).lower(): value for key, value in (event.get("headers") or {}).items()}
 
 
-def is_admin(event: dict) -> bool:
-    expected = os.environ.get("ADMIN_KEY", "")
-    provided = headers(event).get("x-admin-key", "")
-    return bool(expected) and hmac.compare_digest(str(provided).encode(), expected.encode())
-
-
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
 def public_enabled() -> bool:
-    # A second lock behind the API authorizer. Deployment remains admin-only.
+    # Every handler checks this itself; the API has no authorizer.
     return os.environ.get("PUBLIC_ACCESS_ENABLED", "false").lower() == "true"
 
 
 def visitor_key(event: dict) -> str:
-    if is_admin(event):
-        return "admin"
     secret = os.environ.get("VISITOR_HASH_KEY", "")
     if len(secret) < 32:
         raise AdmissionDenied("admission_unavailable")
@@ -61,8 +53,6 @@ def visitor_key(event: dict) -> str:
 def capability_allowed(event: dict, review: dict, *, write: bool = False) -> bool:
     if not review_is_live(review):
         return False
-    if is_admin(event):
-        return True
     if not public_enabled():
         return False
     provided = headers(event).get("x-review-write-token" if write else "x-review-read-token", "")
@@ -80,8 +70,6 @@ def capability_allowed(event: dict, review: dict, *, write: bool = False) -> boo
 
 
 def verify_upload_challenge(event: dict, token: str) -> str:
-    if is_admin(event):
-        return visitor_key(event)
     if not public_enabled():
         raise AdmissionDenied("public_access_closed")
     if not isinstance(token, str) or not 1 <= len(token) <= 2048:

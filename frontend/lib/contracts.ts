@@ -273,8 +273,7 @@ export interface CreateUploadRequest {
   turnstile_token?: string;
 }
 
-// New reservations use conditional checksum-bound PUT; uploadFields support
-// the existing admin-only POST deployment during migration.
+// Reservations are a conditional, checksum-bound presigned PUT.
 export interface CreateUploadResponse {
   archiveKey: string;
   uploadUrl: string;
@@ -285,8 +284,6 @@ export interface CreateUploadResponse {
   readToken?: string;
   writeToken?: string;
   expiresAt?: number;
-  // Temporary compatibility for the existing admin deployment and fixtures.
-  uploadFields?: Record<string, string>;
 }
 
 export interface SubmitReviewResponse {
@@ -392,7 +389,6 @@ export interface AskQuestionRequest {
 export interface AskQuestionResponse extends ChatTurn {
   questions_remaining: number;
   limit: number;
-  limit_applies: boolean;
 }
 
 export interface SuggestedQuestion {
@@ -407,7 +403,6 @@ export interface QuestionsTranscript {
   suggested: SuggestedQuestion[];
   questions_remaining: number;
   limit: number;
-  limit_applies: boolean;
 }
 
 // Pregenerated suggested answers for a demo (scripts/pregenerate_demo_chats.py,

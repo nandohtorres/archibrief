@@ -8,13 +8,12 @@ import time
 import uuid
 
 from backend.lambdas.list_questions.handler import handler as list_handler
+from tests.backend import visitor
 from tests.backend.lambdas.ask_question.test_handler import _ask, _call, _event
 
 
-def _list(admin=True, review_id="r1"):
-    response = list_handler(
-        _event(None, admin=admin, review_id=review_id, raw=""), None
-    )
+def _list(review_id="r1"):
+    response = list_handler(_event(None, review_id=review_id, raw=""), None)
     return response["statusCode"], json.loads(response["body"])
 
 
@@ -71,15 +70,21 @@ def test_expired_failed_and_in_flight_questions_are_left_out(env):
 
 
 def test_access_and_missing_reviews(env, monkeypatch):
-    assert _list(admin=False) == (403, {"error": "chat_not_public"})
+    monkeypatch.setenv("CHAT_PUBLIC_ENABLED", "false")
+    assert _list() == (403, {"error": "chat_not_public"})
+    monkeypatch.setenv("CHAT_PUBLIC_ENABLED", "true")
     assert _list(review_id="nope")[0] == 404
     env.reviews.put_item(
-        Item={"reviewId": "r2", "status": "pending", "ttl": int(time.time()) + 86400}
+        Item={
+            "reviewId": "r2",
+            "status": "pending",
+            "ttl": int(time.time()) + 86400,
+            **visitor.review_fields(),
+        }
     )
     assert _list(review_id="r2")[0] == 409
-    monkeypatch.setenv("CHAT_PUBLIC_ENABLED", "true")
-    status, body = _list(admin=False)
-    assert status == 200 and body["limit_applies"] is True
+    status, body = _list()
+    assert status == 200 and body["limit"] == 5
 
 
 def test_listing_never_calls_the_model(env):

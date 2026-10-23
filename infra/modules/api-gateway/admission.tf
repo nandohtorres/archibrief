@@ -45,12 +45,12 @@ variable "public_access_enabled" {
 variable "verified_public_api_id" {
   type        = string
   default     = ""
-  description = "REST API ID copied only after an admin-only deployment and WAF bypass checks."
+  description = "REST API ID, copied in only after the closed deployment and WAF bypass checks pass."
 }
 
 # Estimated-cost allowances in micro-USD (1,000,000 = $1.00), enforced by
-# backend/shared/admission.py. Public requests share the global, visitor and
-# review scopes; admin requests use only their own daily allowance.
+# backend/shared/admission.py. Every paid request draws on the global,
+# visitor and review scopes.
 variable "paid_limits" {
   type = object({
     global_daily_budget    = number
@@ -59,7 +59,6 @@ variable "paid_limits" {
     visitor_daily_requests = number
     review_budget          = number
     review_requests        = number
-    admin_daily_budget     = number
     initial_reserve        = number
     clarify_reserve        = number
     deeper_reserve         = number
@@ -71,7 +70,6 @@ variable "paid_limits" {
     visitor_daily_requests = 30
     review_budget          = 1000000
     review_requests        = 20
-    admin_daily_budget     = 20000000
     initial_reserve        = 400000
     clarify_reserve        = 200000
     deeper_reserve         = 200000
@@ -91,34 +89,32 @@ resource "random_password" "reservation" {
 locals {
   public_admitted = var.public_edge_enabled ? (var.public_access_enabled && var.verified_public_api_id == aws_api_gateway_rest_api.public[0].id) : false
   admission_environment = {
-    ADMIN_KEY                         = random_password.admin_key.result
-    PUBLIC_ACCESS_ENABLED             = local.public_admitted ? "true" : "false"
-    VISITOR_HASH_KEY                  = random_password.visitor_hash.result
-    TURNSTILE_SECRET_PARAMETER_NAME   = var.turnstile_secret_parameter_name
-    TURNSTILE_HOSTNAMES               = join(",", var.turnstile_hostnames)
-    UPLOADS_DAILY_MAX                 = tostring(var.upload_limits.global_daily)
-    UPLOADS_VISITOR_DAILY_MAX         = tostring(var.upload_limits.visitor_daily)
-    USAGE_COUNTERS_TABLE_NAME         = var.usage_counters_table_name
-    REVIEWS_TABLE_NAME                = var.reviews_table_name
-    REPORTS_BUCKET_NAME               = var.reports_bucket_name
-    KILL_SWITCH_PARAMETER_NAME        = var.kill_switch_parameter_name
-    CORS_ALLOWED_ORIGINS              = jsonencode(concat([var.frontend_origin], var.additional_cors_origins))
-    PAID_DAILY_BUDGET_MICRO_USD       = tostring(var.paid_limits.global_daily_budget)
-    PAID_DAILY_MAX_REQUESTS           = tostring(var.paid_limits.global_daily_requests)
-    PAID_VISITOR_BUDGET_MICRO_USD     = tostring(var.paid_limits.visitor_daily_budget)
-    PAID_VISITOR_MAX_REQUESTS         = tostring(var.paid_limits.visitor_daily_requests)
-    PAID_REVIEW_BUDGET_MICRO_USD      = tostring(var.paid_limits.review_budget)
-    PAID_REVIEW_MAX_REQUESTS          = tostring(var.paid_limits.review_requests)
-    PAID_ADMIN_DAILY_BUDGET_MICRO_USD = tostring(var.paid_limits.admin_daily_budget)
-    INITIAL_RESERVE_MICRO_USD         = tostring(var.paid_limits.initial_reserve)
-    CLARIFY_RESERVE_MICRO_USD         = tostring(var.paid_limits.clarify_reserve)
-    DEEPER_RESERVE_MICRO_USD          = tostring(var.paid_limits.deeper_reserve)
+    PUBLIC_ACCESS_ENABLED           = local.public_admitted ? "true" : "false"
+    VISITOR_HASH_KEY                = random_password.visitor_hash.result
+    TURNSTILE_SECRET_PARAMETER_NAME = var.turnstile_secret_parameter_name
+    TURNSTILE_HOSTNAMES             = join(",", var.turnstile_hostnames)
+    UPLOADS_DAILY_MAX               = tostring(var.upload_limits.global_daily)
+    UPLOADS_VISITOR_DAILY_MAX       = tostring(var.upload_limits.visitor_daily)
+    USAGE_COUNTERS_TABLE_NAME       = var.usage_counters_table_name
+    REVIEWS_TABLE_NAME              = var.reviews_table_name
+    REPORTS_BUCKET_NAME             = var.reports_bucket_name
+    KILL_SWITCH_PARAMETER_NAME      = var.kill_switch_parameter_name
+    CORS_ALLOWED_ORIGINS            = jsonencode(concat([var.frontend_origin], var.additional_cors_origins))
+    PAID_DAILY_BUDGET_MICRO_USD     = tostring(var.paid_limits.global_daily_budget)
+    PAID_DAILY_MAX_REQUESTS         = tostring(var.paid_limits.global_daily_requests)
+    PAID_VISITOR_BUDGET_MICRO_USD   = tostring(var.paid_limits.visitor_daily_budget)
+    PAID_VISITOR_MAX_REQUESTS       = tostring(var.paid_limits.visitor_daily_requests)
+    PAID_REVIEW_BUDGET_MICRO_USD    = tostring(var.paid_limits.review_budget)
+    PAID_REVIEW_MAX_REQUESTS        = tostring(var.paid_limits.review_requests)
+    INITIAL_RESERVE_MICRO_USD       = tostring(var.paid_limits.initial_reserve)
+    CLARIFY_RESERVE_MICRO_USD       = tostring(var.paid_limits.clarify_reserve)
+    DEEPER_RESERVE_MICRO_USD        = tostring(var.paid_limits.deeper_reserve)
   }
 }
 
 resource "aws_iam_role" "submit_review" {
   name                 = "${var.name_prefix}-submit-review"
-  assume_role_policy   = data.aws_iam_policy_document.admin_authorizer_trust.json
+  assume_role_policy   = data.aws_iam_policy_document.lambda_trust.json
   permissions_boundary = var.permissions_boundary_arn
   tags                 = var.tags
 }
@@ -169,14 +165,6 @@ resource "aws_lambda_function" "submit_review" {
     variables = merge(local.admission_environment, { STATE_MACHINE_ARN = var.state_machine_arn })
   }
   tags = var.tags
-}
-
-resource "aws_lambda_permission" "submit_review_http_api" {
-  statement_id  = "AllowHTTPAPIGateway"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.submit_review.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
 }
 
 resource "aws_iam_role_policy" "shared_paid_counters" {

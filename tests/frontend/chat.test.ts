@@ -86,13 +86,8 @@ describe("report chat helpers (ADR-0050)", () => {
   });
 
   it("labels the remaining questions plainly", () => {
-    expect(remainingLabel(4, 5, true)).toBe(
-      "4 of 5 questions left on this review",
-    );
-    expect(remainingLabel(0, 5, true)).toBe(
-      "You've used this review's 5 questions",
-    );
-    expect(remainingLabel(5, 5, false)).toBe("Owner access: no question limit");
+    expect(remainingLabel(4, 5)).toBe("4 of 5 questions left on this review");
+    expect(remainingLabel(0, 5)).toBe("You've used this review's 5 questions");
   });
 
   it("maps every server error code to fixed text", () => {
@@ -117,7 +112,6 @@ describe("report chat helpers (ADR-0050)", () => {
         suggested: [],
         questions_remaining: 4,
         limit: 5,
-        limit_applies: true,
       }),
     ).toBe(true);
     expect(isQuestionsTranscript({ review_id: "r1", questions: [{}] })).toBe(

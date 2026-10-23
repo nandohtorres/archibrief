@@ -3,6 +3,7 @@ import time
 
 import backend.lambdas.get_review.handler as handler_module
 from backend.lambdas.get_review.handler import handler
+from tests.backend import visitor
 
 
 class _FakeDynamoDBClient:
@@ -27,18 +28,21 @@ class _FakeS3Client:
 
 def _event(review_id: str | None) -> dict:
     return {
-        "headers": {"x-admin-key": "admin-secret"},
+        "headers": dict(visitor.HEADERS),
+        "requestContext": visitor.REQUEST_CONTEXT,
         "pathParameters": {"reviewId": review_id} if review_id else {},
     }
 
 
 def _setup(monkeypatch, items: dict, objects: dict | None = None):
-    monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+    visitor.enable_public(monkeypatch)
     monkeypatch.setenv("REVIEWS_TABLE_NAME", "archibrief-dev-reviews")
     monkeypatch.setenv("REPORTS_BUCKET_NAME", "archibrief-dev-reports")
     monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
     monkeypatch.setattr(handler_module, "S3Client", _FakeS3Client)
-    _FakeDynamoDBClient.ITEMS = items
+    _FakeDynamoDBClient.ITEMS = {
+        key: {**item, **visitor.review_fields()} for key, item in items.items()
+    }
     _FakeS3Client.OBJECTS = objects or {}
 
 

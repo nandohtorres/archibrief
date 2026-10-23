@@ -13,7 +13,7 @@ interface DemoCardsProps {
 }
 
 // Finished reviews of real public Terraform, opened from static files: no
-// admin key, no paid run (docs/demos.md).
+// account and no paid run (docs/demos.md).
 export function DemoCards({ openingId, onOpen, variant = "compact" }: DemoCardsProps) {
   const [demos, setDemos] = useState<DemoEntry[]>([]);
   const [loadFailed, setLoadFailed] = useState(false);

@@ -1,8 +1,9 @@
-// The landing page above the submission flow, and
-// owner-only submissions until public submissions open (ADR-0047).
+// The landing page above the submission flow, and how submissions answer
+// when they are paused or refused.
 import { expect, test } from "@playwright/test";
-import { FIXTURE_URL, LIVE_URL } from "../playwright.config";
+import { FIXTURE_URL, LIVE_URL, PUBLIC_URL } from "../playwright.config";
 import { fillSubmission } from "./support/submission";
+import { mockTurnstile } from "./support/turnstile";
 
 test.describe("landing page", () => {
   test("shows the pitch, the real demos and the full submission form", async ({ page }) => {
@@ -11,17 +12,15 @@ test.describe("landing page", () => {
     await expect(page.getByRole("heading", { name: "Real reviews of AWS code" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "One review, two readers" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Submit your Terraform" })).toBeVisible();
-    // Visitors are told new reviews are owner-only before they reach the key field.
-    await expect(page.locator(".owner-only-note")).toContainText("owner-only for now");
-    await expect(page.getByLabel("Admin key")).toBeVisible();
+    // Visitors learn there's a daily limit before they submit; there's no key field.
+    await expect(page.locator(".limits-note")).toContainText("a few run each day");
+    await expect(page.getByLabel("Admin key")).toHaveCount(0);
 
     await page.getByRole("link", { name: "Submit your own Terraform" }).click();
     await expect(page).toHaveURL(/#submit$/);
   });
 
-  test("without the owner key, submitting explains it's owner-only and sends nothing", async ({
-    page,
-  }) => {
+  test("a build without public submissions says so and sends nothing", async ({ page }) => {
     let called = false;
     await page.route("**/mock-api/**", async (route) => {
       called = true;
@@ -31,26 +30,27 @@ test.describe("landing page", () => {
     await fillSubmission(page);
     await page.getByRole("button", { name: "Start review" }).click();
 
-    await expect(page.locator(".submit-notice")).toContainText("limited to the site owner");
+    await expect(page.locator(".submit-notice")).toContainText("paused right now");
     expect(called).toBe(false);
     await expect(page.getByRole("heading", { name: "Submit your Terraform" })).toBeVisible();
   });
 
-  test("a rejected key gets a plain message, not an error screen", async ({ page }) => {
+  test("a refused upload gets a plain message, not an error screen", async ({ page }) => {
+    await mockTurnstile(page);
     await page.route("**/mock-api/uploads", (route) =>
       route.fulfill({
-        status: 401,
+        status: 403,
         contentType: "application/json",
-        body: '{"message":"Unauthorized"}',
+        body: '{"error":"challenge_rejected"}',
       }),
     );
-    await page.goto(LIVE_URL);
-    await page.getByLabel("Admin key").fill("wrong-key");
+    await page.goto(PUBLIC_URL);
     await fillSubmission(page);
+    await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
     await page.getByRole("button", { name: "Start review" }).click();
 
-    await expect(page.locator(".submit-notice")).toContainText("That key wasn't accepted");
-    await expect(page.getByText("Unauthorized")).toHaveCount(0);
+    await expect(page.locator(".submit-notice")).toContainText("Verification expired");
+    await expect(page.getByText("challenge_rejected")).toHaveCount(0);
   });
 
   test("the hero button opens a review at the top of the page", async ({ page }) => {

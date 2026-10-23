@@ -4,10 +4,6 @@ Reservations are conservative estimates, not an AWS billing ceiling. Ambiguous
 failures retain their allowance; a failure known to happen before any paid call
 can release it (release_operation). The caller supplies an idempotent claim in
 the same transaction; no paid work may happen before that transaction succeeds.
-
-Admin requests draw on their own daily allowance instead of the public global,
-visitor and review scopes, so public traffic can't block the owner and the
-owner's reviews don't use up the public allowance.
 """
 
 from __future__ import annotations
@@ -52,7 +48,6 @@ def budget_actions(
     count_request: bool = True,
     now: float | None = None,
     table_name: str | None = None,
-    admin: bool = False,
 ) -> list[dict]:
     """Conditional updates; append to the transaction containing the operation claim."""
     now = time.time() if now is None else now
@@ -62,29 +57,18 @@ def budget_actions(
     if not table_name:
         raise AdmissionDenied("admission_unavailable")
     day = datetime.fromtimestamp(now, UTC).strftime("%Y%m%d")
-    visitor = review.get("visitorKey", "admin-legacy")
-    if admin:
-        scopes = [
-            (
-                f"paid#admin#{day}",
-                "PAID_ADMIN_DAILY_BUDGET_MICRO_USD",
-                20_000_000,
-                None,
-                None,
-                int(now) + 172800,
-            )
-        ]
-    else:
-        scopes = _public_scopes(review, visitor, day, now)
+    visitor = review.get("visitorKey", "legacy")
     actions = []
-    for key, budget_name, default_budget, count_name, default_count, expiry in scopes:
+    for key, budget_name, default_budget, count_name, default_count, expiry in _public_scopes(
+        review, visitor, day, now
+    ):
         budget = positive_setting(budget_name, default_budget)
         if cost > budget:
             raise AdmissionDenied()
         condition = "(attribute_not_exists(spent) OR spent <= :room)"
         values = {":zero": 0, ":cost": cost, ":room": budget - cost, ":ttl": expiry}
         update = "SET spent = if_not_exists(spent, :zero) + :cost, #ttl = if_not_exists(#ttl, :ttl)"
-        if count_request and count_name:
+        if count_request:
             maximum = positive_setting(count_name, default_count)
             condition += " AND (attribute_not_exists(requests) OR requests < :maximum)"
             update += ", requests = if_not_exists(requests, :zero) + :one"
@@ -133,9 +117,7 @@ def _public_scopes(review: dict, visitor: str, day: str, now: float) -> list[tup
     ]
 
 
-def reserve_operation(
-    review: dict, operation: str, payload: Any, cost: int, *, admin: bool = False
-) -> bool:
+def reserve_operation(review: dict, operation: str, payload: Any, cost: int) -> bool:
     """True for a new claim; False for a digest-identical retry. No automatic refund.
 
     Retrying an existing claim is permitted only for intrinsically idempotent
@@ -156,7 +138,7 @@ def reserve_operation(
         if existing.get("digest") != digest:
             raise AdmissionDenied("operation_conflict")
         return False
-    budget = budget_actions(review, cost, admin=admin)
+    budget = budget_actions(review, cost)
     actions = [
         {
             "Put": {

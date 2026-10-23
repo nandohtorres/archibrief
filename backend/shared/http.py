@@ -50,7 +50,7 @@ def api_handler(function):
                     "access-control-allow-origin": origin,
                     "vary": "Origin",
                     "access-control-allow-methods": "GET,POST,OPTIONS",
-                    "access-control-allow-headers": "content-type,x-admin-key,x-review-read-token,x-review-write-token",
+                    "access-control-allow-headers": "content-type,x-review-read-token,x-review-write-token",
                     "access-control-max-age": "300",
                 }
             )

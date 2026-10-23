@@ -33,7 +33,7 @@ from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Cli
 from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.models.finding import Finding
-from backend.shared.public_access import capability_allowed, is_admin
+from backend.shared.public_access import capability_allowed
 from backend.shared.report import compute_presentation
 from backend.shared.retention import review_expires_at, review_is_live
 
@@ -203,7 +203,6 @@ def handler(event: dict, _context: object) -> dict:
             f"deeper:{finding_id}:{claimed_at}",
             {"finding_id": finding_id},
             positive_setting("DEEPER_RESERVE_MICRO_USD", 200000),
-            admin=is_admin(event),
         )
         if not fresh:
             raise AdmissionDenied("operation_in_progress")

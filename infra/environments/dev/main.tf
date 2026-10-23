@@ -1,6 +1,6 @@
-# Dev environment root: wires infra/modules together. No user accounts
-# (ADR-0044) and no auth module; the API is gated by a single pre-shared
-# admin credential generated inside the api-gateway module.
+# Dev environment root: wires infra/modules together. No user accounts and
+# no auth module: the public API is bounded by Turnstile, WAF, review
+# capabilities and the spending limits set below.
 
 provider "aws" {
   region = var.region
@@ -148,7 +148,6 @@ module "api_gateway" {
     visitor_daily_requests = 8
     review_budget          = 1000000
     review_requests        = 10
-    admin_daily_budget     = 5000000
     initial_reserve        = 400000
     clarify_reserve        = 200000
     deeper_reserve         = 200000
@@ -166,7 +165,6 @@ module "api_gateway" {
   certificate_arn             = aws_acm_certificate_validation.site.certificate_arn
   frontend_origin             = "https://${module.frontend_hosting.cloudfront_domain_name}"
   additional_cors_origins     = ["https://${var.domain}", "https://www.${var.domain}"]
-  admin_authorizer_zip_path   = var.admin_authorizer_zip_path
   get_review_zip_path         = var.get_review_zip_path
   clarify_review_zip_path     = var.clarify_review_zip_path
   deeper_review_zip_path      = var.deeper_review_zip_path

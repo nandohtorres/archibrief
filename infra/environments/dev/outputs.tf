@@ -3,15 +3,6 @@ output "frontend_url" {
   value       = "https://${module.frontend_hosting.cloudfront_domain_name}"
 }
 
-output "api_endpoint" {
-  value = module.api_gateway.api_endpoint
-}
-
-output "admin_key_secret_arn" {
-  description = "Retrieve the pre-shared admin credential from Secrets Manager using this ARN, not from Terraform state/output directly."
-  value       = module.api_gateway.admin_key_secret_arn
-}
-
 # Custom-domain outputs. The DNS records themselves are not managed by
 # Terraform: Cloudflare is the DNS host, not Route53 (see this
 # environment's README for the two-phase apply).

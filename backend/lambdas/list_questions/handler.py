@@ -19,7 +19,6 @@ from typing import Any
 from backend.chat.access import (
     FINAL_STATUSES,
     caller_allowed,
-    is_admin,
     question_is_live,
     questions_per_review,
     transcript_item,
@@ -44,8 +43,7 @@ def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
 
 @api_handler
 def handler(event: dict, _context: object) -> dict:
-    admin = is_admin(event)
-    if not caller_allowed(admin):
+    if not caller_allowed():
         return _response(403, {"error": "chat_not_public"})
     review_id = (event.get("pathParameters") or {}).get("reviewId", "")
     if not isinstance(review_id, str) or not _REVIEW_ID.fullmatch(review_id):
@@ -96,6 +94,5 @@ def handler(event: dict, _context: object) -> dict:
             "suggested": suggestions,
             "questions_remaining": max(0, limit - int(review.get("questionsUsed", 0))),
             "limit": limit,
-            "limit_applies": not admin,
         },
     )

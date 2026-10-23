@@ -1,19 +1,6 @@
-output "api_endpoint" {
-  value = aws_apigatewayv2_api.main.api_endpoint
-}
-
-output "api_id" {
-  value = aws_apigatewayv2_api.main.id
-}
-
-output "admin_key_secret_arn" {
-  description = "Secrets Manager ARN for the pre-shared admin credential (ADR-0044) — retrieve the value from here, never from Terraform state/output directly in normal use."
-  value       = aws_secretsmanager_secret.admin_key.arn
-}
-
-output "stage_arn" {
-  description = "aws_apigatewayv2_stage ARN. Not a WAF attachment point: AWS WAF cannot be associated with an HTTP API (v2) stage, only REST API stages, so this API has no WAF; abuse limits are stage throttling + the admin authorizer."
-  value       = aws_apigatewayv2_stage.default.arn
+output "public_api_url" {
+  description = "The REST API's public stage URL. The frontend calls api.archibrief.dev, which maps to it."
+  value       = var.public_edge_enabled ? aws_api_gateway_stage.public[0].invoke_url : null
 }
 
 output "regional_domain_target" {

@@ -9,11 +9,11 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 ## Status
 
-**Live, with three demo reviews anyone can open.** They cover real public Terraform: a security firm's breach lab, a Medicare data platform, and FEC databases. They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
+**Live and open to the public.** Anyone can submit Terraform for a review, within a few free reviews a day (each one calls a paid model), and there are three finished demo reviews to open first. The demos cover real public Terraform: a security firm's breach lab, a Medicare data platform, and FEC databases. They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
 
-**Report chat is live.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, quotas and a hard daily spend cap. On the demos, anyone can read the suggested questions' answers, which were generated once and are served free. Asking new questions is owner-only for now.
+**Report chat is live.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, a five-question limit per review and a hard daily spend cap. On the demos, the suggested questions' answers were generated once and are served free.
 
-**New reviews are owner-run for now,** because each one calls a paid model. [Public submissions](docs/public-access-implementation.md) are built and tested, with uploads, a bot check and per-visitor and global spending limits. They stay switched off until live validation is done. Not yet done: a single spend cap across every paid path (the current hard cap covers chat), and the paid chat evaluation.
+**How public use is bounded:** a Cloudflare Turnstile check before each upload, AWS WAF in front of the API, and spending limits reserved in DynamoDB before every paid call, globally, per visitor and per review ([public access design](docs/public-access-implementation.md)). Not yet done: the paid chat evaluation.
 
 ## How it works
 
@@ -32,14 +32,14 @@ The frontend exposes progress, clarification, findings, a stakeholder view of th
 - Counts, expressions, missing modules, and omitted settings limit what the model can observe. The demo audits found three such gaps (resource counts, backup plans, snapshot settings); each was fixed in the resource summary, and the FEC demo was re-run after the count fix.
 - Trap tests cover their fixtures. Mocked tests do not measure live model quality, production IAM correctness, or deployed accessibility.
 - “Go deeper” is synchronous with a bounded agent timeout; long requests can fail.
-- Public uploads, shared spending limits and identifier-only workflow state are built but switched off. Live validation, a retention inventory and a final privacy notice come before opening them. There is no seven-day physical-deletion guarantee.
+- Reviews are reachable for seven days, but deletion is asynchronous and backups last longer; there is no seven-day physical-deletion guarantee ([privacy](https://archibrief.dev/privacy.html)).
 
 ## Stack
 
 | Layer | Implementation |
 |---|---|
 | UI | Next.js, React, TypeScript; static export to S3/CloudFront |
-| Orchestration | API Gateway HTTP API, Lambda, Step Functions |
+| Orchestration | API Gateway REST API with AWS WAF, Lambda, Step Functions |
 | Static review | Python, python-hcl2, Trivy, custom deterministic rules |
 | Reasoning | LangGraph on Bedrock AgentCore; Bedrock Claude, Guardrails |
 | Retrieval | Titan V2 embeddings, S3 Vectors, lexical companion index |

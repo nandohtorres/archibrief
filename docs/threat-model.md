@@ -19,17 +19,18 @@
 ```mermaid
 flowchart TB
     subgraph Internet["Untrusted — public internet"]
-        Browser["Admin's browser<br/>(has the shared admin key)"]
-        Anon["Anonymous visitor<br/>(no admin key)"]
+        Browser["Visitor's browser<br/>(holds its own reviews' read/write<br/>capabilities, tab-scoped)"]
+        Bot["Script or bot"]
     end
 
     subgraph Edge["Edge — static, no app logic"]
         CF["CloudFront + S3<br/>(frontend static export)"]
     end
 
-    subgraph API["API Gateway — TRUST BOUNDARY 1: admin-key authorizer"]
-        AuthGate["admin_authorizer Lambda<br/>(checks x-admin-key against<br/>the Secrets Manager value, via env var)"]
-        Demo["GET /demo<br/>(deliberately unauthenticated,<br/>precomputed static report only)"]
+    subgraph API["TRUST BOUNDARY 1: public front door (REST API + WAF)"]
+        WAF["AWS WAF<br/>(16 KiB body limit, per-IP rate rule,<br/>managed common rules) + stage throttling"]
+        Admit["Handlers: public flag, Turnstile at upload,<br/>review capabilities, network-bound writes,<br/>DynamoDB spend and upload limits"]
+        Demo["GET /demo<br/>(precomputed static report only)"]
     end
 
     subgraph Pipeline["Step Functions — the review pipeline"]
@@ -52,7 +53,7 @@ flowchart TB
         Finalize["Finalize Lambda"]
     end
 
-    subgraph Chat["TRUST BOUNDARY 6: report chat (ADR-0050)<br/>admin-only until public access opens"]
+    subgraph Chat["TRUST BOUNDARY 6: report chat (ADR-0050)"]
         Ask["ask_question Lambda<br/>normalize + bound, chat Guardrail,<br/>one Converse call, citations verified,<br/>fixed refusals, canary"]
     end
 
@@ -63,11 +64,12 @@ flowchart TB
         SSM["SSM kill switch<br/>(checked before any paid work)"]
     end
 
-    Anon -->|static page only| CF
     Browser -->|static page| CF
-    Browser -->|x-admin-key header| AuthGate
-    Anon -->|no auth needed| Demo
-    AuthGate -->|authorized| Pipeline
+    Browser -->|Turnstile token, capabilities| WAF
+    Bot --> WAF
+    WAF --> Admit
+    WAF --> Demo
+    Admit -->|admitted| Pipeline
     Ingest --> Guard1
     Guard1 --> Scan
     Scan --> Rules
@@ -82,7 +84,7 @@ flowchart TB
     Finalize --> S3R
     Pipeline --> DDB
     Pipeline -.->|checked first, fails fast| SSM
-    AuthGate -->|authorized| Ask
+    Admit -->|admitted| Ask
     Ask -->|reads one ledger| S3R
     Ask --> S3V
     Ask -.->|checked first| SSM
@@ -90,19 +92,20 @@ flowchart TB
 
 **The six trust boundaries, in words:**
 
-1. **API Gateway admin-key authorizer** — the only real authentication boundary in the system (ADR-0044: no user accounts, one pre-shared credential). Every state-changing route sits behind it except `GET /demo`, which is deliberately public and unauthenticated by design (static precomputed content, zero pipeline cost, ADR-0029).
+1. **The public front door** — there are no user accounts, so nothing here authenticates a person. A Regional REST API stage behind AWS WAF (body limit, per-IP rate rule, AWS managed common rules) and stage throttling takes every request. Each handler then enforces the rest itself: the public-access flag, a Cloudflare Turnstile check before an upload is granted, per-review read/write capabilities (random tokens whose hashes are stored; writes also need the original network identifier), and DynamoDB transactions that reserve estimated spend against global, per-visitor and per-review limits before any paid work. `GET /demo` serves a precomputed report and needs nothing (ADR-0029).
 2. **Untrusted-Terraform ingestion contract** (ADR-0027) — the client-supplied Terraform archive is parsed with a static HCL parser (`python-hcl2`) and never executed, never shelled out to `terraform plan`/`apply`, never templated into a command string. This is the real control against a malicious archive, not sandboxing.
 3. **Bedrock Guardrails at Ingest** — a prompt-attack classifier runs inline before the Terraform content (or any derived text) ever reaches a model.
 4. **AgentCore Runtime's reasoning sandbox** — the model itself holds no AWS credentials and has no tool-calling surface beyond one schema-validated `emit_findings` call. The distinction matters: the *runtime* (the agent code AgentCore executes) does run under an IAM role, but every action on it is read/invoke-only — `bedrock:InvokeModel*`, `bedrock:ApplyGuardrail`, `bedrock:GetInferenceProfile`, `s3vectors:QueryVectors`/`GetVectors`, `s3:GetObject` on its own code-artifact bucket, and CloudWatch Logs. Model output can only influence what that code does through the validated `emit_findings` payload. Guardrails runs a second time immediately before this stage.
 5. **Server-side verification, never trusting the model's own say-so** — every emitted finding is independently checked: schema validation, and for any finding type other than `not-observable`/`deterministic-rule-result`, the citation must resolve to a real retrieved chunk — a model self-labeling something `deterministic-rule-result` to dodge that check is explicitly rejected.
-6. **The report chat** (ADR-0050) — a visitor's question is untrusted, and so is everything the chat model reads (the stored brief and findings were written from untrusted input). Questions are normalized and bounded, screened by a chat-only Guardrail (fail closed), and answered by one model call whose output the server checks citation by citation; refusals are fixed text. The Lambda's role can invoke only the chat models and read only `reports/*`; it has no write access to reviews beyond its own counters and question records. Admin-only until per-visitor limits are built for public access.
+6. **The report chat** (ADR-0050) — a visitor's question is untrusted, and so is everything the chat model reads (the stored brief and findings were written from untrusted input). Questions are normalized and bounded, screened by a chat-only Guardrail (fail closed), and answered by one model call whose output the server checks citation by citation; refusals are fixed text. The Lambda's role can invoke only the chat models and read only `reports/*`; it has no write access to reviews beyond its own counters and question records. Asking needs the review's write capability.
 
 ## Assets and data classes
 
 | Asset | Sensitivity | Where it lives |
 |---|---|---|
-| Admin pre-shared key | High — sole authentication secret for the whole live app | Secrets Manager (`archibrief-dev-admin-key-*`), the Lambda authorizer's env var, the client's `sessionStorage` (tab-scoped, with a "Forget key" control) |
-| Submitted Terraform archives | Medium — may describe a real AWS account's architecture | S3 `uploads/*` prefix, write-only from the client's presigned POST |
+| Review capabilities (read/write tokens) | Medium — whoever holds a review's tokens can read it, and with the original network, act on it | Issued once at upload; only SHA-256 hashes stored in DynamoDB; the client keeps them in tab `sessionStorage` |
+| Turnstile secret, visitor-hash and reservation keys | Medium — would let an attacker skip the bot check or forge identifiers | SSM SecureString (Turnstile); Terraform-generated Lambda environment values (hash and reservation keys) |
+| Submitted Terraform archives | Medium — may describe a real AWS account's architecture | S3 `uploads/*` prefix, written by the client through a checksum-bound, no-overwrite presigned PUT |
 | Evidence ledgers (findings) | Medium — the review's actual output, could reveal architecture weaknesses if leaked | S3 reports bucket (Finalize-written only), DynamoDB `findings` table |
 | Review/audit metadata | Low-medium | DynamoDB `reviews`/`audit_log` tables |
 | RAG corpus (AWS WAF/security best-practice text) | Low — public AWS documentation, not sensitive on its own | S3 (source of truth) + S3 Vectors (query index) |
@@ -110,18 +113,18 @@ flowchart TB
 
 ## Attacker profiles
 
-1. **Unauthenticated internet visitor.** Can reach the static frontend and `GET /demo` only. No login form exists to brute-force (the admin key is a header value, not a password prompt) — the only way to probe the gated surface is sending arbitrary `x-admin-key` guesses directly against the API, which API Gateway's per-route throttling limits (and, for `GET /demo` specifically, an isolated lower-throughput quota).
-2. **Someone with a leaked or guessed admin key.** The realistic "worst case" external attacker — gets full access to the admin-gated API (submit reviews, trigger "go deeper," read results). Mitigated by: the key never being transmitted anywhere but this one app, no password-reset/recovery flow to abuse (there's no account to reset), and the architectural boundaries (3)-(5) above still applying regardless of who submitted the request.
-3. **A malicious or adversarial Terraform repository submitted for review.** The threat model's actual primary design target, not a hypothetical — ADR-0027/0038 exist specifically because the content being reviewed is assumed untrusted even when the person submitting it is the legitimate admin (e.g. reviewing a client's or a third party's IaC). Covered by boundaries (2)-(5); prompt-injection regression tests for the reasoning node (`tests/backend/agent/nodes/test_reason.py`, stubbed model) run on every push/PR. The deterministic layer is weaker than that suggests: see the trap-suite gap under "Residual risks".
+1. **Anonymous internet visitor.** Can do everything the site offers: submit within the daily limits, clarify, go deeper and ask questions about their own reviews. Can't read or act on anyone else's review without that review's tokens. The architectural boundaries (2)-(5) apply to every submission.
+2. **A script trying to burn the budget or the daily capacity.** The realistic external attacker. It has to pass Turnstile for each upload, stays inside the WAF and stage rate limits, and is bounded by the global, per-visitor and per-review spend limits, which are reserved in DynamoDB before any paid call. The worst it can do is use up the day's few reviews, which is a denial of service to other visitors, not unbounded spend.
+3. **A malicious or adversarial Terraform repository submitted for review.** The threat model's actual primary design target, not a hypothetical — ADR-0027/0038 exist specifically because the content being reviewed is assumed untrusted, whoever submits it (e.g. a client's or a third party's IaC). Covered by boundaries (2)-(5); prompt-injection regression tests for the reasoning node (`tests/backend/agent/nodes/test_reason.py`, stubbed model) run on every push/PR. The deterministic layer is weaker than that suggests: see the trap-suite gap under "Residual risks".
 4. **A compromised or careless deploy identity** (e.g. the admin's own AWS SSO session). Out of full scope per this document's own boundaries above, but the project's least-privilege `ArchiBriefDeploy` permission set, its runtime permissions boundary (denies removing/swapping the boundary on any runtime role), and the explicit deny statements on the Terraform state bucket all reduce blast radius if this happens.
 
 ## Threat register (STRIDE, by trust boundary)
 
 | # | Boundary | STRIDE category | Threat | Control | Status |
 |---|---|---|---|---|---|
-| T1 | 1 (admin-key authorizer) | Spoofing | Attacker guesses/brute-forces the admin key | 32-char `random_password`-generated secret; no feedback that distinguishes "wrong key" from "route doesn't exist"; per-route throttling | Mitigated. No lockout-after-N-attempts exists (there's no concept of a failed-login counter for a single shared key) — accepted residual risk given the key's length/randomness |
-| T2 | 1 | Information disclosure | Admin key leaked via logs, client storage, or a referrer header | Never put in a URL/query string (checked: `requestHeaders` sends it as a custom header only); kept in `sessionStorage`, not a cookie, so it doesn't ride along on unrelated requests and is gone when the tab closes; a key left in `localStorage` by older builds is moved and deleted on load; "Forget key" clears it immediately | Mitigated for the app's own code paths. Residual risk: script running in the page (an XSS) or anyone at the open tab can read it — same risk class as any single shared credential |
-| T3 | 1 | Denial of service | Public traffic (or a bot) exhausts the API's throttle quota | `GET /demo` isolated to its own lower-rate `route_settings` bucket so it can't starve admin-gated routes' quota | Partially mitigated — see T4 |
+| T1 | 1 (front door) | Spoofing | A script gets uploads or reviews without a person behind it | Turnstile verified server-side (success, hostname, action) before an upload grant, failing closed; per-visitor and global upload and spend limits; WAF per-IP rate rule | Mitigated within the limits. A paid CAPTCHA-solving service could pass Turnstile; the spend limits still bound the cost |
+| T2 | 1 | Information disclosure | Someone reads or changes another visitor's review | 32+ character random read/write tokens, only hashes stored; writes also require the original network identifier; review IDs are server-issued; tokens never go in URLs (`requestHeaders` sends them as headers) and live in tab `sessionStorage` | Mitigated. Residual: script in the page (an XSS) or anyone at the open tab can read them; a shared read token works for whoever has it |
+| T3 | 1 | Denial of service | Traffic (or a bot) exhausts the API's throttle quota or the day's review capacity | WAF per-IP rate rule (429); stage throttling, with `GET /demo` and chat questions on their own lower per-method limits; daily limits sized to the budget | Partially mitigated: a bot inside the limits can still use up the day's reviews (see T4) |
 | T4 | 1 | Denial of service | A `/demo` traffic spike exhausts account-wide Lambda concurrency, indirectly starving the real pipeline's Lambdas | None currently — `lambda_reserved_concurrency` is `-1` (unreserved) because this account's concurrency ceiling is below AWS's 10-unreserved minimum to even set a reservation | **Open, accepted for now.** Needs either an AWS limit increase or `lambda:GetAccountSettings` access to confirm the real ceiling |
 | T5 | 2 (Terraform ingestion) | Tampering / elevation | Malicious Terraform content attempts to execute code via a crafted archive | Ingest: static `python-hcl2` parse only, no `subprocess`/`eval`/`exec`. Scan (ADR-0048) is the one documented exception: it runs the pinned, checksum-verified Trivy binary as a subprocess on the already-vetted files. Trivy evaluates HCL statically and never runs terraform, providers or provisioners; it runs with no AWS credentials in its environment, in its own Lambda whose role can only read `uploads/` | Mitigated |
 | T6 | 2 | Tampering | Archive content attempts path traversal via a crafted S3 key | S3 keys have no `..`-resolution semantics; `review_id` validated against `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$` before being interpolated into any key | Mitigated |
@@ -134,7 +137,7 @@ flowchart TB
 | T14 | 3, 4 | Tampering | Instruction text smuggled into what the reasoning model reads: a resource name inside rule-finding text (trap c02), or a setting value or name in the resource summary (ADR-0049) | Names and string setting values are restricted to identifier characters and capped at 32 characters; summary settings come only from an allowlist and are otherwise booleans, numbers, "not set" or "unknown"; comments, descriptions, tags and policy text never reach the model; the prompt frames all of it as untrusted data; findings are re-verified downstream | Mitigated (defense in depth); model-side trap briefs cover the rest |
 | T15 | 6 (report chat, ADR-0050) | Tampering | Prompt injection through a chat question, the stored brief or finding text, a resource name, or earlier turns, to make the chat say something false, reveal its instructions or act as a general assistant | Stage 1–2: NFKC, invisible/tag characters stripped, mixed-script words and base64 payloads rejected, 500-char cap. Stage 3: a chat-only Guardrail (prompt attack + three narrow denied topics), fail closed. Stage 4: all untrusted text only in JSON data fields; history is loaded server-side (a body with any unknown field, e.g. a forged `history`, is a 400). Stage 5: every paragraph must cite something the server can verify, refusals become fixed text, a per-deploy canary turns any leak into a refusal. 31-case trap suite, stubbed in CI | Mitigated, defense in depth; real-model trap run pending (paid) |
 | T16 | 6 | Information disclosure | The chat cites or reveals another review's findings or data | The model sees findings only under per-review aliases (F1…), never UUIDs; an alias not in this review's map can't resolve; the handler loads exactly one ledger by path parameter; the role reads only `reports/*` | Mitigated by construction, unit-tested |
-| T17 | 6 | Denial of service (cost) | Questions used to run up model spend: many questions, retries, long answers, parallel first clicks on a suggestion | Kill switch first; per-review 5-question slot, the day's worst-case $ reservation and a question count, all in one DynamoDB transaction before the paid call; `maxTokens` 700 and an 1,800-char cap; idempotent `client_request_id`; in-flight locks on questions and suggestions; route throttling 2 req/s; failed calls refund the slot but keep the $ reservation | Mitigated, moto-tested; the daily cap's value is set from measured cost |
+| T17 | 6 | Denial of service (cost) | Questions used to run up model spend: many questions, retries, long answers, parallel first clicks on a suggestion | Kill switch first; per-review 5-question slot, the day's worst-case $ reservation and a question count, all in one DynamoDB transaction before the paid call; `maxTokens` 700 and an 1,800-char cap; idempotent `client_request_id`; in-flight locks on questions and suggestions; per-method throttling 2 req/s; failed calls refund the slot but keep the $ reservation | Mitigated, moto-tested; the daily cap's value is set from measured cost |
 | T18 | 6 | Information disclosure | Question or answer text, or a blocked attack, ends up in logs | One allowlisted JSON log line per request with counts, tokens and cost only; a blocked question logs a SHA-256, never its text; 7-day log retention | Mitigated, tested on captured stdout |
 | T12 | Deploy identity | Elevation of privilege | The deploy identity's own `iam:CreateRole`/`PutRolePolicy` access is used to grant a runtime role more than it should have, or to strip its permissions boundary | `iam:CreateRole` conditioned on the exact runtime boundary being attached; explicit `Deny` on `DeleteRolePermissionsBoundary` and on `PutRolePermissionsBoundary` with any other boundary | Mitigated |
 
@@ -145,7 +148,7 @@ Mapped against the [2025 edition](https://genai.owasp.org/llm-top-10/). Earlier 
 | OWASP 2025 category | Applies? | Control | Residual risk |
 |---|---|---|---|
 | LLM01:2025 Prompt Injection | Yes — the primary AI-specific threat here | Guardrails (x2) + no-execution ingestion + no mutating tool for the model + server-side citation verification (see T7) | Accepted, defense-in-depth is the stated posture (ADR-0038), not a claim of zero risk |
-| LLM02:2025 Sensitive Information Disclosure | Partially | The model only ever sees `workload_brief`/`rule_findings`/retrieved RAG chunks and ADR-0049's sanitized resource summary — no raw Terraform, credentials, admin key or other reviews' data. The chat model sees the same summary plus this one review's stored findings (T16) | Mitigated for the known data flows |
+| LLM02:2025 Sensitive Information Disclosure | Partially | The model only ever sees `workload_brief`/`rule_findings`/retrieved RAG chunks and ADR-0049's sanitized resource summary — no raw Terraform, credentials or other reviews' data. The chat model sees the same summary plus this one review's stored findings (T16) | Mitigated for the known data flows |
 | LLM03:2025 Supply Chain | Partially | Hosted foundation model via Bedrock (no third-party weights or adapters). npm dependencies are locked (`package-lock.json`, `npm ci`); the Lambda and AgentCore packages install from pinned versions (`scripts/lambda_constraints.txt`, `backend/agent/runtime_requirements.lock.txt`); Dependabot proposes updates; Trivy is a checksum-verified release | Not modeled in depth (see Scope). CI's own Python test install isn't pinned, and no CI job scans dependencies for known vulnerabilities |
 | LLM04:2025 Data and Model Poisoning | Yes, for the RAG corpus | No training or fine-tuning. The corpus is built by the site owner from a fixed list of AWS documentation URLs (`backend/corpus/ingest.py`), versioned (`corpus_version`), and each chunk carries a content hash that every citation must match. Users can't add documents | A changed or compromised upstream AWS page would be ingested on the next rebuild; there is no review of corpus diffs between versions. Accepted for a single-owner corpus |
 | LLM05:2025 Improper Output Handling | Yes | React's default JSX escaping (no `dangerouslySetInnerHTML`/`innerHTML` anywhere — confirmed by grep); findings rendered as structured typed fields, never raw HTML from the model. Chat answers: URLs and markdown links stripped server-side, source links only from the server's own citation records and only `https:`; the downloaded report is built from escaped text with no scripts (unit-tested against `<script>` and `javascript:` inputs) | Mitigated |
@@ -153,16 +156,16 @@ Mapped against the [2025 edition](https://genai.owasp.org/llm-top-10/). Earlier 
 | LLM07:2025 System Prompt Leakage | Low impact | The system prompts hold instructions only — no secrets, keys, access rules or other users' data — and are in the repository. Authorization is enforced server-side, never by the prompt | Accepted: leaking a prompt reveals nothing that isn't already in the code |
 | LLM08:2025 Vector and Embedding Weaknesses | Partially | One S3 Vectors index holding only the owner-built AWS corpus; no user content is embedded, so there is no cross-tenant retrieval. The runtime role can query but not write vectors | Embedding inversion and access-control mixing don't apply while no user data is embedded; revisit if that changes |
 | LLM09:2025 Misinformation | Yes | Every finding carries a type, a confidence breakdown and its evidence; `not-observable` lets the system say "can't tell" instead of guessing; quotes must match retrieved chunks word for word | **A verified citation proves the passage exists, not that it supports the conclusion.** An outside review (October 2026) found rule and hand-written text that overstated what the code shows (S3 default encryption, CloudTrail coverage, IAM database authentication logging); see [demos.md](demos.md). Confidence is a heuristic (`_PRIORITY_BY_TYPE` in `backend/shared/report.py`), not validated against outcomes |
-| LLM10:2025 Unbounded Consumption | Partially | `max_tokens` and an AgentCore wall-clock bound on each request; new reviews are owner-only; chat has atomic per-day question and spend caps (ADR-0050); a kill switch and budget alerts | The daily spend cap covers chat only. No single cap spans reviews, "go deeper" and chat, and budget alerts notify rather than stop spending (T4) |
+| LLM10:2025 Unbounded Consumption | Yes | `max_tokens` and an AgentCore wall-clock bound on each request; every paid path reserves estimated cost against global, per-visitor and per-review limits in one DynamoDB transaction before the call; chat also has its own daily cap (ADR-0050); a kill switch and budget alerts | Reservations are estimates, not an AWS billing ceiling, and are not settled to actual review cost; budget alerts notify rather than stop spending |
 
 ## Abuse cases (concrete scenarios, not abstract categories)
 
-- **"I found the demo URL and I'm hammering it with a script."** → Hits the isolated `GET /demo` throttle bucket (T3), gets `429`s; worst case if that's somehow exceeded account-wide is Lambda concurrency pressure (T4, open).
-- **"I have the admin key (leaked or shared) and I submit a Terraform repo containing a prompt injection in a `#` comment."** → Guardrails at Ingest likely flags it; even if it slips through, the model that reads it has no tool that can change anything, and any finding it tries to fabricate still needs a real, resolvable citation to survive Validate (T7, T8).
+- **"I found the demo URL and I'm hammering it with a script."** → Hits the WAF rate rule and `GET /demo`'s own throttle (T3), gets `429`s; worst case if that's somehow exceeded account-wide is Lambda concurrency pressure (T4, open).
+- **"I submit a Terraform repo containing a prompt injection in a `#` comment."** → Guardrails at Ingest likely flags it; even if it slips through, the model that reads it has no tool that can change anything, and any finding it tries to fabricate still needs a real, resolvable citation to survive Validate (T7, T8).
 - **"I submit an archive with a path like `../../etc/passwd` as a filename inside the tarball."** → S3 keys don't resolve `..`, and `review_id` (the only client-controlled piece of the actual S3 key) is pattern-validated before use (T6).
 - **"I trigger 'go deeper' on a finding from a review finalized before `workload_brief` was persisted."** → Explicitly handled, not a silent failure: `deeper_review.handler` returns a `409` with a clear error rather than sending an empty brief to the model.
 - **"I ask the chat to ignore its rules, in fullwidth letters split by zero-width spaces."** → Stage 1 turns it back into plain words (or rejects it, for lookalike letters or base64), the chat Guardrail then sees "ignore your rules"; if the model still complies, its uncited text is dropped and a fixed "not determinable" answer is returned (T15).
-- **"I script 1,000 chat questions against one review."** → The admin authorizer stops it today; once public, the review's 5 slots and the day's $ reservation stop paid calls before Bedrock is reached, and route throttling slows the script (T17).
+- **"I script 1,000 chat questions against one review."** → The review's 5 slots and the day's $ reservation stop paid calls before Bedrock is reached, and per-method throttling and the WAF rate rule slow the script (T17).
 - **"Something's actively wrong in production and I need to stop all spend right now."** → Flip `/archibrief-dev/kill-switch` to `true`; tested on the live deployment, confirmed sub-second fail-fast with zero Ingest/Bedrock/AgentCore invocation (T10).
 
 ## Test evidence (real, not aspirational)
@@ -175,14 +178,14 @@ Mapped against the [2025 edition](https://genai.owasp.org/llm-top-10/). Earlier 
 ## Residual risks, explicitly accepted (not silently ignored)
 
 1. **T4** — Lambda account-wide concurrency isn't reserved for the real pipeline, because this AWS account's concurrency ceiling is apparently below AWS's own 10-unreserved minimum to set a reservation at all. Accepted for now; revisit once the real ceiling is confirmed (blocked on `lambda:GetAccountSettings` access) or raised.
-2. **No lockout on repeated wrong admin-key attempts (T1)** — there's no concept of a failed-attempt counter for a single shared credential; accepted given the key's length/randomness and that this isn't a multi-tenant login system.
-3. **CI is advisory, not a blocking merge gate** — every test suite described above runs on every push and pull request, but branch protection with required status checks is not enabled, so a failing run does not *block* a merge. Enabling required checks closes this.
+2. **The day's capacity can be used up (T1, T3)** — a determined script that passes Turnstile can take the few daily reviews, so real visitors see "try again tomorrow". Accepted: it bounds cost, and the kill switch and limits can be tuned.
+3. **Reservations are estimates** — review reservations are fixed per operation and not settled to the actual Bedrock bill, so real spend can differ from the limits by the ratio of real to estimated cost. Measured per-review cost sets the reservation values.
 4. **Finding-priority calibration (OWASP LLM09:2025 overlay)** is a documented first-pass heuristic, not validated against real-world outcomes yet — accepted as a known v1 limitation, not hidden.
 5. **Deterministic coverage is bounded by the trap suite** — the trap suite (`tests/backend/traps/`) first showed the rule engine missed all 14 dangerous-but-sneaky configs and flagged 3 of 4 safe ones; Trivy plus rebuilt rules (ADR-0048) now catch 14/14 with 0/4 false positives, with and without Trivy. Because the model never sees Terraform, a pattern outside both is still invisible to the whole pipeline; new tricks go into the suite first.
-6. **"Go deeper" timeout** — synchronous behind the HTTP API's 30 s integration limit; the agent call is capped at ~24 s and a per-finding in-flight claim plus stored-result reuse stop retries from double-spending. A longer analysis returns a timeout error rather than running async.
+6. **"Go deeper" timeout** — synchronous behind API Gateway's 29 s integration limit; the agent call is capped at ~24 s and a per-finding in-flight claim plus stored-result reuse stop retries from double-spending. A longer analysis returns a timeout error rather than running async.
 7. **Chat citations prove existence, not support** — the server verifies that every cited finding, quote, resource and requirement is real, not that it supports the sentence next to it ("citation-shaped hallucination"). Bedrock's contextual grounding check scores answers but only logs (AWS lists chatbot use as unsupported); the paid chat eval measures this before any blocking threshold is set. The UI says "cited answer", never "verified".
-8. **The chat is admin-only until public access opens** — opening it needs per-visitor limits (Turnstile, IP-keyed counters) that don't exist yet; until then the global daily cap would be the only bound on a public visitor. `CHAT_PUBLIC_ENABLED` stays false.
-9. **The admin key is a plain environment variable** — Terraform generates it (`random_password.admin_key` in `infra/modules/api-gateway/main.tf`) and stores it in Secrets Manager (`archibrief-dev-admin-key`), but the authorizer and chat Lambdas read a copy from their `ADMIN_KEY` environment variable rather than fetching the secret. So anyone who can read those functions' configuration (`lambda:GetFunctionConfiguration`, including the Lambda console) or the Terraform state can read the key. Accepted because only the owner's AWS identities have that access and the state is treated as a secret. **Rotation:** run `terraform apply -replace=module.api_gateway.random_password.admin_key` from `infra/environments/dev`; that writes a new secret version and updates every Lambda's environment in the same apply, so the old key stops working at once. Read the new key from Secrets Manager, then use "Forget key" in the browser and enter it again. **Future fix:** have the authorizer read the secret at cold start (cached), so the key is never in plain configuration, or replace the shared key with Cognito sign-in.
+8. **Network-bound writes** — a visitor whose network changes mid-review (a phone moving between Wi-Fi and mobile data) can still read the review but can't clarify, go deeper or ask questions. Accepted as the cost of binding writes without accounts.
+9. **Hash and reservation keys are plain environment variables** — Terraform generates them and the Lambdas read them from their environment, so anyone who can read those functions' configuration or the Terraform state can read them. Accepted because only the owner's AWS identities have that access. Rotating the visitor-hash key orphans live reservations, so it changes only with a migration.
 
 ## Appendix: NIST AI RMF (Generative AI Profile) overlay
 

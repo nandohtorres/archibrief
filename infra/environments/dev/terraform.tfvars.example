@@ -15,9 +15,6 @@ lambda_zip_paths = {
   store_clarification_token  = "../../../backend/lambdas/store_clarification_token/build/store_clarification_token.zip"
 }
 
-# Pre-shared admin-credential authorizer on POST /reviews (ADR-0044).
-admin_authorizer_zip_path = "../../../backend/lambdas/admin_authorizer/build/admin_authorizer.zip"
-
 # GET /reviews/{reviewId}, POST .../clarify, POST .../deeper and
 # GET /demo Lambdas.
 get_review_zip_path     = "../../../backend/lambdas/get_review/build/get_review.zip"

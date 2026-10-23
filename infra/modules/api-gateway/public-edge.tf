@@ -1,6 +1,6 @@
-# Regional REST front door with WAF. The HTTP API stays admin-only until it is
-# retired. Off by default; neither this flag nor public_access_enabled is
-# enabled here.
+# The API: a Regional REST API whose public stage sits behind WAF, served at
+# api.archibrief.dev (main.tf). Off by default in the module; the dev
+# environment turns it on.
 variable "public_edge_enabled" {
   type    = bool
   default = false
@@ -170,6 +170,32 @@ resource "aws_api_gateway_method_settings" "public" {
   }
 }
 
+# Per-route quotas below the stage-wide one: GET /demo needs no capability,
+# and each chat question is a paid model call (ADR-0050 §5). The daily
+# budgets are the real stop; these keep one client from spending them in
+# seconds.
+resource "aws_api_gateway_method_settings" "route" {
+  for_each = var.public_edge_enabled ? {
+    "demo/GET" = {
+      burst = var.demo_throttling_burst_limit
+      rate  = var.demo_throttling_rate_limit
+    }
+    "reviews/{reviewId}/questions/POST" = {
+      burst = var.chat_throttling_burst_limit
+      rate  = var.chat_throttling_rate_limit
+    }
+  } : {}
+  rest_api_id = aws_api_gateway_rest_api.public[0].id
+  stage_name  = aws_api_gateway_stage.public[0].stage_name
+  method_path = each.key
+  settings {
+    throttling_burst_limit = each.value.burst
+    throttling_rate_limit  = each.value.rate
+    data_trace_enabled     = false
+    metrics_enabled        = true
+  }
+}
+
 resource "aws_wafv2_web_acl" "public" {
   count = var.public_edge_enabled ? 1 : 0
   name  = "${var.name_prefix}-public"
@@ -263,8 +289,4 @@ resource "aws_wafv2_web_acl_association" "public" {
   count        = var.public_edge_enabled ? 1 : 0
   resource_arn = aws_api_gateway_stage.public[0].arn
   web_acl_arn  = aws_wafv2_web_acl.public[0].arn
-}
-
-output "public_api_url" {
-  value = var.public_edge_enabled ? aws_api_gateway_stage.public[0].invoke_url : null
 }

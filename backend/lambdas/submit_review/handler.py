@@ -21,7 +21,7 @@ from backend.shared.admission import (
 from backend.shared.clients import DynamoDBClient
 from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
-from backend.shared.public_access import capability_allowed, is_admin
+from backend.shared.public_access import capability_allowed
 from backend.shared.retention import review_is_live
 
 
@@ -127,7 +127,6 @@ def handler(event: dict, _context: object) -> dict:
             "initial",
             payload,
             positive_setting("INITIAL_RESERVE_MICRO_USD", 400000),
-            admin=is_admin(event),
         )
     except AdmissionDenied as exc:
         return response(409 if "operation" in exc.code else 429, {"error": exc.code})

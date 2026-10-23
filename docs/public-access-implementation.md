@@ -1,10 +1,10 @@
 # Public access design
 
-**Status: built and tested, switched off.** The live site is admin-only. Two
-flags (`public_access_enabled`, `chat_public_enabled`) stay false until the
-release checks at the end of this document pass. Tests here prove mocked
-behavior, not live IAM, WAF bypass prevention, real DynamoDB concurrency or
-model quality.
+**Status: live.** Public submissions and chat are on (`public_access_enabled`;
+the chat flag follows it). The admin key, its allowance and the old HTTP API
+are removed: the owner uses the same path and limits as everyone else. The
+release checks below record what was verified against real services; the
+paid evaluation is still open.
 
 ## Uploads
 
@@ -35,7 +35,7 @@ Cloudflare Turnstile is verified server-side for success, hostname (apex or
 closed. The
 secret lives in SSM, not in the repo. Visitor identifiers are an HMAC of the
 address API Gateway observed (IPv6 grouped by /64); forwarded headers are
-ignored. Admin calls skip the challenge.
+ignored.
 
 Upload grants and the global and visitor upload counters share one DynamoDB
 transaction. The launch limits are 6 uploads a UTC day globally and 2 per
@@ -47,14 +47,14 @@ needs a migration.
 
 Every public paid path (initial review, clarification, deeper review, chat)
 reserves estimated cost against global daily, visitor daily and review
-lifetime allowances in the same transaction as its operation claim. Admin
-requests reserve only a separate admin daily allowance, so public traffic
-can't block the owner and owner reviews don't spend the public allowance.
+lifetime allowances in the same transaction as its operation claim. There is
+no separate owner allowance: the owner's reviews count against the same
+limits.
 
 The module defaults are in `paid_limits` (`infra/modules/api-gateway/admission.tf`);
 the live values are set in `infra/environments/dev/main.tf`: global $1.20 and
 15 requests a day (about three initial reviews), visitor $1.00 and 8, review
-$1.00 and 10, admin $5.00. Initial reviews reserve $0.40; clarification and
+$1.00 and 10. Initial reviews reserve $0.40; clarification and
 deeper review reserve $0.20. A
 `tests/backend/test_defaults_match_terraform.py` check fails if the handler
 fallbacks drift from these defaults.
@@ -79,8 +79,7 @@ permissions stop other stages from using that grant. The stage has no
 authorizer: each handler checks the public flag, capabilities, expiry and
 CORS itself, so a header-based authorizer can't turn visitors away before
 that check. API Gateway's own error responses carry CORS headers so the
-browser can read them. The original HTTP API requires the admin key until it
-is retired.
+browser can read them. `api.archibrief.dev` maps to this stage.
 
 ## Review pipeline and content
 
@@ -123,5 +122,5 @@ applied to the live account with every public flag off; a follow-up
 4. Measure per-review cost on a few real reviews and set the limits from it.
 5. Inventory retained content and backups, and finalize the privacy notice.
    Don't promise seven-day physical deletion.
-6. Cut over: point the frontend and `api.archibrief.dev` at the REST stage,
-   and remove the admin key, the admin allowance and the HTTP API.
+6. Cut over: point `api.archibrief.dev` at the REST stage, and remove the
+   admin key, the admin allowance and the HTTP API.

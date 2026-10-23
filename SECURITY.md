@@ -16,8 +16,8 @@ an acknowledgement within a week.
   (`api.archibrief.dev`).
 - The code in this repository: the review pipeline, the API handlers, the
   Terraform in `infra/` and the frontend.
-- Ways around the admin-key authorizer, the spending limits or the kill
-  switch, prompt injection that makes the model act outside its review, and
+- Ways around the Turnstile check, the review capabilities, the spending
+  limits or the kill switch, prompt injection that makes the model act outside its review, and
   anything that exposes another review's data.
 
 ## Out of scope

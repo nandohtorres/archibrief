@@ -8,6 +8,7 @@ from backend.lambdas.clarify_review import handler as clarify
 from backend.lambdas.finalize.handler import handler as finalize
 from backend.lambdas.review_worker import handler as worker
 from backend.lambdas.store_clarification_token.handler import handler as store_token
+from tests.backend import visitor
 from tests.backend.lambdas.submit_review.test_handler import (  # noqa: F401 - shared moto fixture
     _submit,
     env,
@@ -103,7 +104,8 @@ def test_clarification_history_contains_only_an_opaque_reference(prepared, monke
     )
     event = {
         "pathParameters": {"reviewId": review_id},
-        "headers": {"x-admin-key": "admin-secret"},
+        "headers": dict(visitor.HEADERS),
+        "requestContext": visitor.REQUEST_CONTEXT,
         "body": json.dumps(
             {
                 "answers": {"budget_ceiling": "50000"},

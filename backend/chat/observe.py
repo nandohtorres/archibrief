@@ -41,7 +41,6 @@ LOG_FIELDS = (
     "model_id",
     "prompt_version",
     "canary_hit",
-    "admin",
 )
 
 

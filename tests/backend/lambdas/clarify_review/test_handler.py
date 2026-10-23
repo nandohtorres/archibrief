@@ -8,6 +8,7 @@ from moto import mock_aws
 
 import backend.lambdas.clarify_review.handler as handler_module
 from backend.lambdas.clarify_review.handler import handler
+from tests.backend import visitor
 
 TABLE = "archibrief-dev-reviews"
 
@@ -26,7 +27,8 @@ class _FakeSfnClient:
 
 def _event(review_id: str | None, body: dict | None) -> dict:
     return {
-        "headers": {"x-admin-key": "admin-secret"},
+        "headers": dict(visitor.HEADERS),
+        "requestContext": visitor.REQUEST_CONTEXT,
         "pathParameters": {"reviewId": review_id} if review_id else {},
         "body": json.dumps(body) if body is not None else None,
     }
@@ -35,6 +37,7 @@ def _event(review_id: str | None, body: dict | None) -> dict:
 def _waiting(review_id: str = "r1", token: str = "token-1") -> dict:
     return {
         "reviewId": review_id,
+        **visitor.review_fields(),
         "status": "needs_clarification",
         "clarificationTaskToken": token,
         "ttl": int(time.time()) + 86400,
@@ -46,7 +49,7 @@ def table(monkeypatch):
     # Real DynamoDB semantics (moto) so the conditional claim is exercised,
     # not a permissive fake. boto3.client is patched only for Step Functions.
     with mock_aws():
-        monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+        visitor.enable_public(monkeypatch)
         monkeypatch.setenv("USAGE_COUNTERS_TABLE_NAME", "counters")
         boto3.resource("dynamodb", region_name="us-east-1").create_table(
             TableName="counters",
@@ -189,7 +192,12 @@ def test_appends_additional_notes_as_a_clarification_note(table):
 
 def test_rejects_review_not_awaiting_clarification(table):
     table.put_item(
-        Item={"reviewId": "r1", "status": "pending", "ttl": int(time.time()) + 86400}
+        Item={
+            "reviewId": "r1",
+            "status": "pending",
+            "ttl": int(time.time()) + 86400,
+            **visitor.review_fields(),
+        }
     )
 
     result = handler(_event("r1", {"answers": {}}), None)

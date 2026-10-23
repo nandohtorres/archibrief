@@ -83,22 +83,6 @@ def test_zero_limits_and_expired_reviews_fail_before_any_reservation(
     assert counters.scan()["Items"] == []
 
 
-def test_admin_uses_its_own_allowance_without_a_request_cap(counters, monkeypatch):
-    monkeypatch.setenv("PAID_DAILY_BUDGET_MICRO_USD", "1")
-    monkeypatch.setenv("PAID_DAILY_MAX_REQUESTS", "1")
-    for number in range(5):
-        reserve_operation(
-            _review(f"r{number}", "admin"), "initial", {}, 400000, admin=True
-        )
-    rows = {row["counterKey"].split("#")[1]: row for row in counters.scan()["Items"]}
-    assert "global" not in rows and "visitor" not in rows and "review" not in rows
-    assert rows["admin"]["spent"] == 2000000
-    assert "requests" not in rows["admin"]
-    monkeypatch.setenv("PAID_ADMIN_DAILY_BUDGET_MICRO_USD", "2000000")
-    with pytest.raises(AdmissionDenied):
-        reserve_operation(_review("r9", "admin"), "initial", {}, 1, admin=True)
-
-
 def test_release_gives_the_reservation_back_once_and_keeps_the_claim(counters):
     reserve_operation(_review(), "initial", {"input": "a"}, 400000)
     assert release_operation("r1", "initial")
@@ -136,7 +120,7 @@ def test_release_leaves_the_claim_unreleased_if_a_counter_expired(counters):
     assert "released" not in claim
 
 
-def test_public_requests_never_touch_the_admin_allowance(counters):
+def test_every_reservation_uses_the_global_visitor_and_review_scopes(counters):
     reserve_operation(_review(), "initial", {}, 400000)
     keys = {row["counterKey"].split("#")[1] for row in counters.scan()["Items"]}
     assert keys == {"r1", "global", "visitor", "review"}

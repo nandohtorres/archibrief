@@ -10,6 +10,8 @@ and the `reviewer`/`admin` RBAC tiering in
 [ADR-0021](0021-iam-model-and-app-rbac.md) /
 [ADR-0037](0037-admin-owner-only.md)**.
 
+> **Superseded (2026-10-23):** the admin key was removed when public submissions opened. Everyone, the owner included, now uses the public path and limits; see [ADR-0046's addendum](0046-public-reviews-and-grounded-chat.md#addendum-2026-10-23-what-the-release-actually-uses).
+
 ## Context
 
 The product's actual purpose was reassessed: ArchiBrief exists to

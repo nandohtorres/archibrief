@@ -8,13 +8,15 @@ from moto import mock_aws
 
 from backend.lambdas.submit_review import handler as module
 from backend.shared.uploads import handler as upload_handler
+from backend.shared import uploads
+from backend.shared.public_access import visitor_key
+from tests.backend import visitor
 
 
 @pytest.fixture
 def env(monkeypatch):
     with mock_aws():
         for key, value in {
-            "ADMIN_KEY": "admin-secret",
             "RESERVATION_KEY": "test-" + "r" * 48,
             "AWS_DEFAULT_REGION": "us-east-1",
             "REPORTS_BUCKET_NAME": "reports",
@@ -22,6 +24,11 @@ def env(monkeypatch):
             "USAGE_COUNTERS_TABLE_NAME": "counters",
         }.items():
             monkeypatch.setenv(key, value)
+        visitor.enable_public(monkeypatch)
+        # Turnstile is covered in test_public_access; here every token passes.
+        monkeypatch.setattr(
+            uploads, "verify_upload_challenge", lambda event, _token: visitor_key(event)
+        )
         for name, key in (("reviews", "reviewId"), ("counters", "counterKey")):
             boto3.client("dynamodb").create_table(
                 TableName=name,
@@ -36,15 +43,26 @@ def env(monkeypatch):
         )
         archive = b"test archive bytes"
         event = {
-            "headers": {"x-admin-key": "admin-secret"},
+            "headers": dict(visitor.HEADERS),
+            "requestContext": visitor.REQUEST_CONTEXT,
             "body": json.dumps(
                 {
                     "archive_size": len(archive),
                     "archive_sha256": hashlib.sha256(archive).hexdigest(),
+                    "client_request_id": "6f1d1c3e-8a52-4f3b-9d1a-2c7e5b0a9f11",
                 }
             ),
         }
         upload = json.loads(upload_handler(event, None)["body"])
+        # Use the shared test tokens, so later calls can send visitor.HEADERS.
+        boto3.resource("dynamodb").Table("reviews").update_item(
+            Key={"reviewId": upload["reviewId"]},
+            UpdateExpression="SET readTokenHash = :r, writeTokenHash = :w",
+            ExpressionAttributeValues={
+                ":r": visitor.review_fields()["readTokenHash"],
+                ":w": visitor.review_fields()["writeTokenHash"],
+            },
+        )
         version = s3.put_object(
             Bucket="reports",
             Key=upload["archiveKey"],
@@ -73,7 +91,12 @@ def env(monkeypatch):
 
 def _submit(body):
     return module.handler(
-        {"headers": {"x-admin-key": "admin-secret"}, "body": json.dumps(body)}, None
+        {
+            "headers": dict(visitor.HEADERS),
+            "requestContext": visitor.REQUEST_CONTEXT,
+            "body": json.dumps(body),
+        },
+        None,
     )
 
 
@@ -88,14 +111,13 @@ def test_dispatch_contains_no_submission_content_and_retry_is_idempotent(env):
         sfn.describe_execution(executionArn=executions[0]["executionArn"])["input"]
     ) == {"review_id": upload["reviewId"]}
     counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
-    # An admin submission uses the admin allowance, not the public scopes.
+    # The retry reserved nothing more.
     assert (
-        next(row for row in counters if row["counterKey"].startswith("paid#admin"))[
+        next(row for row in counters if row["counterKey"].startswith("paid#global"))[
             "spent"
         ]
         == 400000
     )
-    assert not any(row["counterKey"].startswith("paid#global") for row in counters)
 
 
 def test_changed_body_and_replaced_version_cannot_dispatch_another_review(env):

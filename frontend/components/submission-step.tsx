@@ -11,8 +11,7 @@ import { defaultReportName } from "@/lib/workflow";
 //   (passed in as `demos`), set apart from the form by a divider;
 // - upload a .tar, or paste Terraform (turned into a .tar in the browser,
 //   lib/tar.ts, so it takes the same upload + ingest path);
-// - the admin key next to the submit button. Submitting stays owner-only
-//   until public submissions open (ADR-0046/0047).
+// - a Turnstile check before a live submission (the server verifies it).
 
 export interface SubmissionValues {
   terraformRepoRef: string;
@@ -35,10 +34,8 @@ interface SubmissionStepProps {
   apiConfigured: boolean;
   initialValues: SubmissionValues;
   submitting: boolean;
-  // Shown under the submit button, e.g. while submissions are owner-only.
+  // Shown under the submit button, e.g. when a daily limit is reached.
   notice?: string | null;
-  adminKey: string;
-  onAdminKeyChange: (value: string) => void;
   onSubmit: (values: SubmissionValues) => Promise<void>;
   // Finished demo reviews, shown above the form.
   demos?: ReactNode;
@@ -100,8 +97,6 @@ export function SubmissionStep({
   initialValues,
   submitting,
   notice = null,
-  adminKey,
-  onAdminKeyChange,
   onSubmit,
   demos = null,
 }: SubmissionStepProps) {
@@ -110,7 +105,7 @@ export function SubmissionStep({
   const wasSubmitting = useRef(false);
   const [challengeToken, setChallengeToken] = useState("");
   const [challengeError, setChallengeError] = useState(false);
-  const challengeRequired = apiConfigured && publicSubmissionEnabled && !adminKey.trim();
+  const challengeRequired = apiConfigured && publicSubmissionEnabled;
   useEffect(() => {
     if (wasSubmitting.current && !submitting) {
       challenge.current?.reset();
@@ -177,8 +172,9 @@ export function SubmissionStep({
       <h2 id="submission-heading">Submit your Terraform</h2>
       <p className="lede">
         ArchiBrief reads the code; it never runs Terraform or touches your AWS account.{" "}
-        <span className="owner-only-note">
-          New reviews are owner-only for now, because each one uses a paid model.
+        <span className="limits-note">
+          Each review uses a paid model, so a few run each day; if today&apos;s are used up, try
+          again tomorrow.
         </span>
       </p>
 
@@ -359,25 +355,7 @@ export function SubmissionStep({
           </div>
         )}
         <div className="form-actions">
-          {apiConfigured ? (
-            <div className="admin-key-control">
-              <label htmlFor="admin-key-input">Admin key</label>
-              <input
-                id="admin-key-input"
-                type="password"
-                autoComplete="off"
-                placeholder="Owner only, for now"
-                value={adminKey}
-                onChange={(event) => onAdminKeyChange(event.target.value)}
-              />
-              {/* Kept for this tab only (lib/admin-key.ts); this clears it now. */}
-              {adminKey && (
-                <button type="button" className="button quiet" onClick={() => onAdminKeyChange("")}>
-                  Forget key
-                </button>
-              )}
-            </div>
-          ) : (
+          {!apiConfigured && (
             <button
               className="button secondary"
               type="button"

@@ -13,7 +13,7 @@ import { formatDollars, formatMonthly } from "./workflow";
 const CHAT_ERRORS: Record<string, string> = {
   invalid_request: "That request couldn't be read. Reload the page and try again.",
   invalid_question: "Please ask in plain text, in under 500 characters.",
-  chat_not_public: "Questions are open to the site owner only for now.",
+  chat_not_public: "Questions are paused right now.",
   review_not_found: "This review doesn't exist or has expired.",
   review_not_complete: "Questions open once the review is finished.",
   request_in_progress: "That question is still being answered. Try again in a moment.",
@@ -35,8 +35,7 @@ export function chatErrorMessage(code: string): string {
   return CHAT_ERRORS[code] ?? "Something went wrong asking that question.";
 }
 
-export function remainingLabel(remaining: number, limit: number, limitApplies: boolean): string {
-  if (!limitApplies) return "Owner access: no question limit";
+export function remainingLabel(remaining: number, limit: number): string {
   if (remaining <= 0) return `You've used this review's ${limit} questions`;
   return `${remaining} of ${limit} question${limit === 1 ? "" : "s"} left on this review`;
 }
