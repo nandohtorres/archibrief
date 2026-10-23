@@ -146,11 +146,18 @@ resource "aws_apigatewayv2_integration" "start_review" {
   integration_type       = "AWS_PROXY"
   integration_uri        = aws_lambda_function.submit_review.invoke_arn
   payload_format_version = "2.0"
+
+  # Moving POST /reviews off the old StepFunctions-StartExecution
+  # integration forces a replacement. Create the new one first so the
+  # route can switch to it before the old one (still in use) is deleted.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-# POST /reviews is the only route on the StartExecution integration.
+# POST /reviews is the only route on the submit_review integration.
 # Never point another route at it as a stand-in: any caller could then
-# trigger a billed Step Functions execution.
+# start a billed review.
 #
 # authorizer_id points at the pre-shared admin-credential authorizer
 # (ADR-0044), the only auth ArchiBrief has; there is no per-user identity.
