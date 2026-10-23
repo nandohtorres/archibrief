@@ -31,7 +31,6 @@ import { ReportQuestions } from "./report-questions";
 interface ReportWorkspaceProps {
   report: ReviewReport;
   source: ReportSource;
-  adminKey: string;
   // The demo's index entry (source, license, reviewer notes) and its
   // pregenerated suggested answers, when this is a demo review.
   demo?: DemoEntry | null;
@@ -49,7 +48,6 @@ const MAX_DETAIL_PANE_WIDTH = 85;
 export function ReportWorkspace({
   report,
   source,
-  adminKey,
   demo = null,
   demoChat = null,
   architecture: demoArchitecture = null,
@@ -177,7 +175,7 @@ export function ReportWorkspace({
       return;
     }
     try {
-      const result = (await requestDeeperFinding(report.review_id, findingId, adminKey)) as {
+      const result = (await requestDeeperFinding(report.review_id, findingId)) as {
         findings: ReportFinding[];
       };
       const newFindings = result.findings ?? [];
@@ -511,7 +509,6 @@ export function ReportWorkspace({
         <ReportQuestions
           reviewId={report.review_id}
           source={source}
-          adminKey={adminKey}
           findings={findings}
           selectedFindingId={selectedId}
           questionSeed={questionSeed}

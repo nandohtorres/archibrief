@@ -3,8 +3,9 @@
 // limit, a server error, and the report download with the conversation.
 // Never calls real AWS (each real question is a paid model call).
 import { expect, test, type Page } from "@playwright/test";
-import { LIVE_URL } from "../playwright.config";
+import { PUBLIC_URL } from "../playwright.config";
 import { fillSubmission } from "./support/submission";
+import { mockTurnstile } from "./support/turnstile";
 import { fixtureReport } from "../lib/fixtures";
 
 const SUGGESTED = [
@@ -41,7 +42,6 @@ function answer(question: string, kind: "custom" | "suggested", remaining: numbe
     prompt_version: "chat_prompt@2026-10-15a",
     questions_remaining: remaining,
     limit: 5,
-    limit_applies: true,
   };
 }
 
@@ -51,18 +51,26 @@ async function openLiveReport(
 ) {
   let reviewId = "";
   const asked: Array<Record<string, string>> = [];
+  await mockTurnstile(page);
   await page.route("**/mock-api/uploads", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        archiveKey: "archive/e2e.tar",
-        uploadUrl: `${LIVE_URL}/mock-api/s3-upload`,
-        uploadFields: {},
+        reviewId: "12345678-1234-4234-8234-123456789abc",
+        archiveKey: "uploads/12345678-1234-4234-8234-123456789abc/archive.tar",
+        uploadUrl: `${PUBLIC_URL}/mock-api/bound-upload`,
+        uploadMethod: "PUT",
+        uploadHeaders: { "If-None-Match": "*" },
+        readToken: "r".repeat(43),
+        writeToken: "w".repeat(43),
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
       }),
     }),
   );
-  await page.route("**/mock-api/s3-upload", (route) => route.fulfill({ status: 204, body: "" }));
+  await page.route("**/mock-api/bound-upload", (route) =>
+    route.fulfill({ status: 200, headers: { "x-amz-version-id": "e2e-version" }, body: "" }),
+  );
   await page.route("**/mock-api/reviews", async (route) => {
     reviewId = (route.request().postDataJSON() as { review_id: string }).review_id;
     await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
@@ -75,7 +83,13 @@ async function openLiveReport(
     }),
   );
   await page.route(/\/mock-api\/reviews\/[^/]+\/questions$/, async (route) => {
-    expect(route.request().headers()["x-admin-key"]).toBe("e2e-admin-key");
+    // Reading the transcript needs the read capability; asking needs the write one.
+    const headers = route.request().headers();
+    if (route.request().method() === "GET") {
+      expect(headers["x-review-read-token"]).toBe("r".repeat(43));
+    } else {
+      expect(headers["x-review-write-token"]).toBe("w".repeat(43));
+    }
     if (route.request().method() === "GET") {
       await route.fulfill({
         status: 200,
@@ -86,7 +100,6 @@ async function openLiveReport(
           suggested: SUGGESTED,
           questions_remaining: 2,
           limit: 5,
-          limit_applies: true,
         }),
       });
       return;
@@ -101,9 +114,9 @@ async function openLiveReport(
     });
   });
 
-  await page.goto(LIVE_URL);
-  await page.getByLabel("Admin key").fill("e2e-admin-key");
+  await page.goto(PUBLIC_URL);
   await fillSubmission(page);
+  await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
   await page.getByRole("button", { name: "Start review" }).click();
   await expect(page.locator("#report-heading")).toBeVisible({ timeout: 20_000 });
   return asked;

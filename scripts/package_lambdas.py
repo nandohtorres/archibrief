@@ -353,19 +353,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
         ],
         "packages": [],
     },
-    # admin_authorizer and validate are listed too, so every Lambda builds
-    # the same way. tests/backend/test_package_lambdas.py keeps these lists
-    # honest.
-    "admin_authorizer": {
-        "sources": [
-            "backend/__init__.py",
-            "backend/lambdas/__init__.py",
-            "backend/lambdas/admin_authorizer/__init__.py",
-            "backend/lambdas/admin_authorizer/handler.py",
-        ],
-        # Standard library only (hmac, os).
-        "packages": [],
-    },
+    # validate is listed too, so every Lambda builds the same way.
+    # tests/backend/test_package_lambdas.py keeps these lists honest.
     "validate": {
         "sources": [
             "backend/__init__.py",
@@ -428,7 +417,7 @@ def _install_packages(packages: list[str], staging_dir: Path) -> None:
     check_all_pinned(staging_dir)
     # pip's downloaded dist-info/__pycache__ directories aren't needed at
     # runtime and only bloat the zip — strip them, same as every existing
-    # zip in this repo (confirmed: admin_authorizer's/finalize's zips
+    # zip in this repo (confirmed: finalize's zip
     # carry no __pycache__ entries).
     for junk_dir in staging_dir.rglob("__pycache__"):
         shutil.rmtree(junk_dir, ignore_errors=True)

@@ -14,7 +14,6 @@ def configured(monkeypatch):
     monkeypatch.setenv("VISITOR_HASH_KEY", "v" * 32)
     monkeypatch.setenv("TURNSTILE_SECRET_PARAMETER_NAME", "/test/turnstile")
     monkeypatch.setenv("TURNSTILE_HOSTNAMES", "example.test, www.example.test")
-    monkeypatch.setenv("ADMIN_KEY", "admin-secret")
     monkeypatch.setattr(
         access.boto3,
         "client",

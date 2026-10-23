@@ -20,7 +20,6 @@ from backend.shared.admission import AdmissionDenied, positive_setting, request_
 from backend.shared.clients import DynamoDBClient, DynamoDBTransactionClient, TransactionCanceled
 from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.public_access import (
-    is_admin,
     public_enabled,
     token_hash,
     verify_upload_challenge,
@@ -43,14 +42,10 @@ def reserve_upload(event: dict, payload: dict) -> dict:
         raise ValueError("archive_size must be between 1 and 20971520 bytes")
     if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
         raise ValueError("archive_sha256 must be a lowercase SHA-256 digest")
-    if not is_admin(event) and not public_enabled():
+    if not public_enabled():
         raise AdmissionDenied("public_access_closed")
     try:
-        nonce = str(
-            uuid.UUID(
-                payload.get("client_request_id") or (str(uuid.uuid4()) if is_admin(event) else "")
-            )
-        )
+        nonce = str(uuid.UUID(payload.get("client_request_id") or ""))
     except (ValueError, TypeError):
         raise ValueError("a client_request_id UUID is required") from None
     secret = os.environ.get("RESERVATION_KEY", "")
@@ -122,10 +117,7 @@ def reserve_upload(event: dict, payload: dict) -> dict:
         ),
         (
             f"uploads#visitor#{visitor}#{day}",
-            positive_setting(
-                "UPLOADS_ADMIN_DAILY_MAX" if is_admin(event) else "UPLOADS_VISITOR_DAILY_MAX",
-                100 if is_admin(event) else DEFAULT_UPLOADS_VISITOR_DAILY_MAX,
-            ),
+            positive_setting("UPLOADS_VISITOR_DAILY_MAX", DEFAULT_UPLOADS_VISITOR_DAILY_MAX),
         ),
     ):
         actions.append(

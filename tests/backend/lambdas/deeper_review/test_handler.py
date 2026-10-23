@@ -8,6 +8,7 @@ from moto import mock_aws
 
 import backend.lambdas.deeper_review.handler as handler_module
 from backend.lambdas.deeper_review.handler import handler
+from tests.backend import visitor
 
 REVIEWS = "reviews"
 FINDINGS = "findings"
@@ -68,7 +69,8 @@ _LEDGER = {
 
 def _event(review_id: str | None, finding_id: str | None) -> dict:
     return {
-        "headers": {"x-admin-key": "admin-secret"},
+        "headers": dict(visitor.HEADERS),
+        "requestContext": visitor.REQUEST_CONTEXT,
         "pathParameters": {
             **({"reviewId": review_id} if review_id else {}),
             **({"findingId": finding_id} if finding_id else {}),
@@ -86,7 +88,13 @@ class _Env:
         self, review_item: dict | None = _REVIEW, ledger: dict | None = _LEDGER
     ) -> None:
         if review_item:
-            self.reviews.put_item(Item={"ttl": int(time.time()) + 86400, **review_item})
+            self.reviews.put_item(
+                Item={
+                    "ttl": int(time.time()) + 86400,
+                    **visitor.review_fields(),
+                    **review_item,
+                }
+            )
         if ledger:
             self.s3.put_object(
                 Bucket=BUCKET, Key=LEDGER_KEY, Body=json.dumps(ledger).encode()
@@ -104,7 +112,7 @@ def env(monkeypatch):
     # moto, not permissive fakes, so key schemas and the conditional
     # in-flight claim are really evaluated.
     with mock_aws():
-        monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+        visitor.enable_public(monkeypatch)
         monkeypatch.setenv("USAGE_COUNTERS_TABLE_NAME", "counters")
         ddb = boto3.resource("dynamodb", region_name="us-east-1")
         ddb.create_table(

@@ -1,10 +1,9 @@
 # Report chat (ADR-0046 §4, ADR-0050): POST and GET
 # /reviews/{reviewId}/questions.
 #
-# Admin-gated like every other non-demo route until per-visitor limits
-# exist; the handlers also refuse non-admin callers unless
-# chat_public_enabled is true, so removing the authorizer alone can't
-# open a paid public endpoint.
+# The routes are on the REST API (public-edge.tf). The handlers refuse
+# every caller unless chat_public_enabled is true, and each question is
+# bounded by the review's question limit and the daily chat budget.
 #
 # ask_question makes the one paid call (Bedrock Converse), so its role can
 # invoke only the chat models, the embedding model, the two chat
@@ -129,7 +128,6 @@ locals {
     REVIEWS_TABLE_NAME        = var.reviews_table_name
     QUESTIONS_TABLE_NAME      = var.review_questions_table_name
     REPORTS_BUCKET_NAME       = var.reports_bucket_name
-    ADMIN_KEY                 = random_password.admin_key.result
     CHAT_PUBLIC_ENABLED       = var.chat_public_enabled ? "true" : "false"
     CHAT_QUESTIONS_PER_REVIEW = tostring(var.chat_questions_per_review)
   })
@@ -157,7 +155,7 @@ locals {
 resource "aws_iam_role" "chat" {
   for_each             = local.chat_functions
   name                 = each.value.name
-  assume_role_policy   = data.aws_iam_policy_document.admin_authorizer_trust.json
+  assume_role_policy   = data.aws_iam_policy_document.lambda_trust.json
   permissions_boundary = var.permissions_boundary_arn
   tags                 = var.tags
 }
@@ -201,42 +199,6 @@ resource "aws_lambda_function" "chat" {
 
   depends_on = [aws_cloudwatch_log_group.chat]
   tags       = var.tags
-}
-
-resource "aws_lambda_permission" "apigw_invoke_chat" {
-  for_each      = local.chat_functions
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.chat[each.key].function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
-}
-
-resource "aws_apigatewayv2_integration" "chat" {
-  for_each               = local.chat_functions
-  api_id                 = aws_apigatewayv2_api.main.id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = aws_lambda_function.chat[each.key].invoke_arn
-  payload_format_version = "2.0"
-  # Above the Lambda's own timeout, so its timeout response reaches the
-  # caller rather than a bare gateway 503 (same as deeper_review).
-  timeout_milliseconds = 29000
-}
-
-resource "aws_apigatewayv2_route" "post_questions" {
-  api_id             = aws_apigatewayv2_api.main.id
-  route_key          = "POST /reviews/{reviewId}/questions"
-  target             = "integrations/${aws_apigatewayv2_integration.chat["ask_question"].id}"
-  authorizer_id      = aws_apigatewayv2_authorizer.admin_gate.id
-  authorization_type = "CUSTOM"
-}
-
-resource "aws_apigatewayv2_route" "get_questions" {
-  api_id             = aws_apigatewayv2_api.main.id
-  route_key          = "GET /reviews/{reviewId}/questions"
-  target             = "integrations/${aws_apigatewayv2_integration.chat["list_questions"].id}"
-  authorizer_id      = aws_apigatewayv2_authorizer.admin_gate.id
-  authorization_type = "CUSTOM"
 }
 
 # --- Alarms (ADR-0050 §9), off until the deploy role can create them ---

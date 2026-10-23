@@ -47,11 +47,6 @@ variable "lambda_zip_paths" {
   })
 }
 
-variable "admin_authorizer_zip_path" {
-  type        = string
-  description = "Deployment package for the pre-shared admin-credential Lambda authorizer (ADR-0044)."
-}
-
 variable "get_review_zip_path" {
   type        = string
   description = "Deployment package for GET /reviews/{reviewId}'s Lambda (backend/lambdas/get_review)."

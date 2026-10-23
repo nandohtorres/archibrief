@@ -42,7 +42,7 @@ from backend.shared.admission import AdmissionDenied, positive_setting, reserve_
 from backend.shared.clients import DynamoDBClient, S3Client
 from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
-from backend.shared.public_access import capability_allowed, is_admin
+from backend.shared.public_access import capability_allowed
 from backend.shared.retention import review_is_live
 
 
@@ -105,7 +105,6 @@ def handler(event: dict, _context: object) -> dict:
             "clarify:" + hashlib.sha256(task_token.encode()).hexdigest(),
             {"answers": answers, "note": clarification_note},
             positive_setting("CLARIFY_RESERVE_MICRO_USD", 200000),
-            admin=is_admin(event),
         )
     except AdmissionDenied as exc:
         return _response(409 if "operation" in exc.code else 429, {"error": exc.code})

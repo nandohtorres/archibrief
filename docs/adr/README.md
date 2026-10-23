@@ -53,14 +53,14 @@ File names are `NNNN-title.md`; ADRs reference each other as `ADR-NNNN`.
 | [ADR-0034](0034-aurora-cost-comparison-corrected.md) | Corrected Aurora Serverless v2 cost comparison | Accepted, supersedes 0017 (reasoning) |
 | [ADR-0035](0035-titan-baseline-not-cost-locked.md) | Titan V2 as baseline candidate, formal eval deferred | Accepted, supersedes 0019 (framing) |
 | [ADR-0036](0036-structure-aware-chunking-baseline.md) | Structure-aware chunking baseline, richer citation metadata | Accepted, extends 0020 |
-| [ADR-0037](0037-admin-owner-only.md) | Admin role owner-only; scoped reviewer role for invited reviewers (later) | Owner-only admin principle carried into 0044 (as pre-shared credential, not RBAC role); reviewer role cut by 0044 |
+| [ADR-0037](0037-admin-owner-only.md) | Admin role owner-only; scoped reviewer role for invited reviewers (later) | Owner-only admin principle carried into 0044, then retired with the admin key (0046 addendum); reviewer role cut by 0044 |
 | [ADR-0038](0038-prompt-injection-architectural-boundaries.md) | Prompt-injection defense — architectural boundaries added | Accepted, extends 0022 |
 | [ADR-0039](0039-base-report-field-completeness.md) | Base report field completeness + versioned "go deeper" snapshots | Accepted, extends 0023 |
 | [ADR-0040](0040-budget-as-target-real-cost-reporting.md) | Budget as target/alert threshold; real measured cost always reported | Accepted, supersedes 0024 (framing) |
 | [ADR-0041](0041-threat-modeling-methodology.md) | STRIDE primary + OWASP LLM Top 10 overlay + NIST AI RMF appendix | Accepted — completes the threat-modeling research item |
 | [ADR-0042](0042-minor-amendments-batch.md) | Minor amendments: 0003, 0004, 0006, 0007, 0009, 0015, 0016, 0018, 0025 | Accepted, extends listed ADRs |
 | [ADR-0043](0043-auth-method-simplified-password-plus-email-code.md) | Auth method simplified — email/password primary, emailed auth code as second factor; passkeys deferred past v1 | Superseded by 0044 |
-| [ADR-0044](0044-no-user-accounts-admin-pre-shared-credential.md) | No user accounts — single admin pre-shared credential; guest mode fully static | Accepted, supersedes 0010, 0018, 0029 (method), 0043; cuts 0037's reviewer role |
+| [ADR-0044](0044-no-user-accounts-admin-pre-shared-credential.md) | No user accounts — single admin pre-shared credential; guest mode fully static | Superseded by 0046 (guest-static) and its 2026-10-23 addendum (admin key removed) |
 | [ADR-0045](0045-archive-path-direct-upload.md) | archive_path resolved via direct S3 upload (presigned POST); GitHub-fetch deferred with a full hardening writeup | Accepted |
 | [ADR-0046](0046-public-reviews-and-grounded-chat.md) | Public anonymous reviews + grounded report chat, quota-limited (Turnstile, per-IP-key, per-review, global daily cap); staged injection defenses with tests; no email | Accepted, supersedes 0044 guest-static |
 | [ADR-0047](0047-landing-page-and-frontend-quality-gates.md) | Landing page = design option A above the review flow; full form shown, submitting owner-only (admin key) until public submissions open (ADR-0046 Phase 3); phone/contrast checks + Lighthouse CI gates | Accepted |

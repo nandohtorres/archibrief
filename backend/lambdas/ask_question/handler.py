@@ -15,10 +15,9 @@ Request body (unknown fields are rejected, which is how a forged
 suggestion's own text is asked.
 
 Order of checks, cheapest and most decisive first:
-1. Who may ask: admin key, or CHAT_PUBLIC_ENABLED (off until the chat
-   opens to the public).
-2. Body shape, then the kill switch (fails closed; the admin key doesn't
-   bypass it).
+1. Who may ask: CHAT_PUBLIC_ENABLED (off until the chat opens to the
+   public).
+2. Body shape, then the kill switch (fails closed).
 3. The review exists and is complete.
 4. Idempotency: a repeated client_request_id returns the stored answer.
 5. Suggested question already answered → served free (and a repeat
@@ -27,7 +26,7 @@ Order of checks, cheapest and most decisive first:
    reserve screening cost and a daily request before stage 3 (Guardrails).
    A blocked question costs screening but uses no review question slot.
 7. Atomic model admission: the review's question slot (custom questions
-   only; the admin key isn't limited), the owned screening claim and the
+   only), the owned screening claim and the
    remaining worst-case cost reservation. Suggestions skip screening and
    reserve their whole cost and daily count in this transaction.
 8. The paid call (backend/chat/answer.py), then settle the reservation to
@@ -57,7 +56,6 @@ from botocore.exceptions import ClientError, ConnectTimeoutError, ReadTimeoutErr
 from backend.chat.access import (
     FINAL_STATUSES,
     caller_allowed,
-    is_admin,
     question_is_live,
     questions_per_review,
     transcript_item,
@@ -308,28 +306,25 @@ def _remaining(review_item: dict[str, Any], limit: int) -> int:
     return max(0, limit - int(review_item.get("questionsUsed", 0)))
 
 
-def _success(item: dict[str, Any], remaining: int, limit: int, admin: bool) -> dict[str, Any]:
+def _success(item: dict[str, Any], remaining: int, limit: int) -> dict[str, Any]:
     return _response(
         200,
         {
             **transcript_item(item),
             "questions_remaining": remaining,
             "limit": limit,
-            "limit_applies": not admin,
         },
     )
 
 
-def _record_blocked(tables: _Tables, review_id: str, admin: bool, max_blocked: int) -> bool:
+def _record_blocked(tables: _Tables, review_id: str, max_blocked: int) -> bool:
     """+1 on the review's blocked counter; False once over the limit."""
     kwargs: dict[str, Any] = {
         "Key": {"reviewId": review_id},
         "UpdateExpression": "SET chatBlocked = if_not_exists(chatBlocked, :zero) + :one",
-        "ExpressionAttributeValues": {":zero": 0, ":one": 1},
+        "ConditionExpression": "attribute_not_exists(chatBlocked) OR chatBlocked < :max",
+        "ExpressionAttributeValues": {":zero": 0, ":one": 1, ":max": max_blocked},
     }
-    if not admin:
-        kwargs["ConditionExpression"] = "attribute_not_exists(chatBlocked) OR chatBlocked < :max"
-        kwargs["ExpressionAttributeValues"][":max"] = max_blocked
     try:
         tables.reviews.update_item(**kwargs)
     except ClientError as exc:
@@ -380,7 +375,6 @@ def _spend_key(day: str) -> dict[str, str]:
 def _precheck(
     tables: _Tables,
     review: dict[str, Any],
-    admin: bool,
     counts_slot: bool,
     reserve: int,
     now: float,
@@ -389,15 +383,14 @@ def _precheck(
     doesn't keep paying for Guardrails checks. The admission transaction
     still decides; this only
     turns away requests that would certainly fail it."""
-    if not admin:
-        if counts_slot and int(review.get("questionsUsed", 0)) >= questions_per_review():
-            return "review_quota_exhausted"
-        if int(review.get("chatFailed", 0)) >= MAX_FAILURES_PER_REVIEW:
-            return "too_many_failed"
-        if counts_slot and int(review.get("chatBlocked", 0)) >= _env_int(
-            "CHAT_BLOCKED_PER_REVIEW", DEFAULT_BLOCKED_PER_REVIEW
-        ):
-            return "too_many_blocked"
+    if counts_slot and int(review.get("questionsUsed", 0)) >= questions_per_review():
+        return "review_quota_exhausted"
+    if int(review.get("chatFailed", 0)) >= MAX_FAILURES_PER_REVIEW:
+        return "too_many_failed"
+    if counts_slot and int(review.get("chatBlocked", 0)) >= _env_int(
+        "CHAT_BLOCKED_PER_REVIEW", DEFAULT_BLOCKED_PER_REVIEW
+    ):
+        return "too_many_blocked"
     day = _day(now)
     budget = _env_int("CHAT_DAILY_BUDGET_MICRO_USD", DEFAULT_DAILY_BUDGET_MICRO_USD)
     spent = tables.counters.get_item(_spend_key(day))
@@ -436,7 +429,6 @@ def _admit(
     question_item: dict[str, Any],
     suggestion_key: str | None,
     count_slot: bool,
-    admin: bool,
     reserve: int,
     now: float,
     review: dict,
@@ -470,13 +462,9 @@ def _admit(
             "TableName": tables.reviews_name,
             "Key": {"reviewId": review_id},
             "UpdateExpression": "SET questionsUsed = if_not_exists(questionsUsed, :zero) + :one",
-            "ExpressionAttributeValues": {":zero": 0, ":one": 1},
+            "ConditionExpression": "attribute_not_exists(questionsUsed) OR questionsUsed < :max",
+            "ExpressionAttributeValues": {":zero": 0, ":one": 1, ":max": limit},
         }
-        if not admin:
-            update["ConditionExpression"] = (
-                "attribute_not_exists(questionsUsed) OR questionsUsed < :max"
-            )
-            update["ExpressionAttributeValues"][":max"] = limit
         actions.append({"Update": update})
         roles.append("review_slot")
     actions.append(
@@ -558,7 +546,6 @@ def _admit(
             count_request=not screened,
             now=now,
             table_name=tables.counters_name,
-            admin=admin,
         )
     except AdmissionDenied:
         return "daily_cap_reached"
@@ -607,9 +594,8 @@ def handler(event: dict, context: object) -> dict:
     started = time.monotonic()
     deadline = _deadline(context, started)
     now = time.time()
-    admin = is_admin(event)
     review_id = (event.get("pathParameters") or {}).get("reviewId", "")
-    log: dict[str, Any] = {"review_id": review_id, "admin": admin}
+    log: dict[str, Any] = {"review_id": review_id}
 
     def finish(response: dict[str, Any], outcome: str, **fields: Any) -> dict[str, Any]:
         log_chat_event(
@@ -620,7 +606,7 @@ def handler(event: dict, context: object) -> dict:
         )
         return response
 
-    if not caller_allowed(admin):
+    if not caller_allowed():
         return finish(_error(403, "chat_not_public"), "rejected", error="chat_not_public")
     if not isinstance(review_id, str) or not _REVIEW_ID.fullmatch(review_id):
         return finish(_error(400, "invalid_request"), "rejected", error="invalid_request")
@@ -654,7 +640,7 @@ def handler(event: dict, context: object) -> dict:
     if existing and existing.get("status") in FINAL_STATUSES:
         if existing.get("requestDigest") and existing["requestDigest"] != request_digest(body):
             return finish(_error(409, "request_conflict"), "rejected", error="request_conflict")
-        return finish(_success(existing, _remaining(review, limit), limit, admin), "replayed")
+        return finish(_success(existing, _remaining(review, limit), limit), "replayed")
     if (
         existing
         and existing.get("requestDigest")
@@ -694,7 +680,7 @@ def handler(event: dict, context: object) -> dict:
         log["kind"] = "suggested"
         prior = _asked_suggestion(tables, review_id, suggestion["id"], now)
         if prior is not None:
-            return finish(_success(prior, _remaining(review, limit), limit, admin), "replayed")
+            return finish(_success(prior, _remaining(review, limit), limit), "replayed")
         stored = tables.questions.get_item({"reviewId": review_id, "questionKey": suggestion_key})
         if stored and question_is_live(stored, now) and stored.get("status") in FINAL_STATUSES:
             item = {
@@ -709,7 +695,7 @@ def handler(event: dict, context: object) -> dict:
             }
             tables.questions.put_item(item)
             return finish(
-                _success(item, _remaining(review, limit), limit, admin),
+                _success(item, _remaining(review, limit), limit),
                 "served_stored",
                 status=stored["status"],
             )
@@ -733,7 +719,7 @@ def handler(event: dict, context: object) -> dict:
     reserve = reserve_micro_usd(model_id, prompt_chars, MAX_OUTPUT_TOKENS)
     log["reserve_micro_usd"] = reserve
     counts_slot = suggestion_key is None
-    turned_away = _precheck(tables, review, admin, counts_slot, reserve, now)
+    turned_away = _precheck(tables, review, counts_slot, reserve, now)
     if turned_away:
         return finish(_error(429, turned_away), "rejected", error=turned_away)
 
@@ -749,7 +735,7 @@ def handler(event: dict, context: object) -> dict:
             "screeningClaim": screening_claim,
         }
         refused = _admit(
-            tables, review_id, screening_item, None, False, admin, screening_cost, now, review
+            tables, review_id, screening_item, None, False, screening_cost, now, review
         )
         if refused:
             code = {"request_in_progress": 409, "chat_busy": 503}.get(refused, 429)
@@ -775,7 +761,7 @@ def handler(event: dict, context: object) -> dict:
                 "est_cost_micro_usd": GUARDRAIL_INPUT_MICRO_USD_PER_UNIT,
             }
             max_blocked = _env_int("CHAT_BLOCKED_PER_REVIEW", DEFAULT_BLOCKED_PER_REVIEW)
-            if not _record_blocked(tables, review_id, admin, max_blocked):
+            if not _record_blocked(tables, review_id, max_blocked):
                 _mark_failed(tables, review_id, [question_key], "too_many_blocked", screening_claim)
                 return finish(
                     _error(429, "too_many_blocked"), "blocked", error="too_many_blocked", **fields
@@ -790,7 +776,7 @@ def handler(event: dict, context: object) -> dict:
             }
             tables.questions.put_item(item)
             return finish(
-                _success(item, _remaining(review, limit), limit, admin),
+                _success(item, _remaining(review, limit), limit),
                 "blocked",
                 status="refused",
                 refusal_reason="blocked",
@@ -809,7 +795,6 @@ def handler(event: dict, context: object) -> dict:
         question_item,
         suggestion_key,
         counts_slot,
-        admin,
         reserve - screening_cost,
         now,
         review,
@@ -817,7 +802,7 @@ def handler(event: dict, context: object) -> dict:
     if refused == "request_in_progress":
         again = tables.questions.get_item({"reviewId": review_id, "questionKey": question_key})
         if again and question_is_live(again, now) and again.get("status") in FINAL_STATUSES:
-            return finish(_success(again, _remaining(review, limit), limit, admin), "replayed")
+            return finish(_success(again, _remaining(review, limit), limit), "replayed")
     if refused:
         if screening_claim:
             _mark_failed(tables, review_id, [question_key], refused, screening_claim)
@@ -889,7 +874,7 @@ def handler(event: dict, context: object) -> dict:
 
     used = int(review.get("questionsUsed", 0)) + (1 if counts_slot else 0)
     return finish(
-        _success(item, max(0, limit - used), limit, admin),
+        _success(item, max(0, limit - used), limit),
         "answered",
         status=result.answer.status,
         refusal_reason=result.answer.refusal_reason,

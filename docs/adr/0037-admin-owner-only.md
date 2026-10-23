@@ -6,6 +6,8 @@ grant `admin` to external reviewers. **Amended by
 (2026-09-11): the owner-only admin *principle* carries forward
 unchanged, but the mechanism changes from a Cognito RBAC role to a single
 pre-shared credential (there are no user accounts to have roles at all).
+
+> **Superseded (2026-10-23):** the admin key was removed when public submissions opened. Everyone, the owner included, now uses the public path and limits; see [ADR-0046's addendum](0046-public-reviews-and-grounded-chat.md#addendum-2026-10-23-what-the-release-actually-uses).
 The `reviewer`/`demo` role for invited reviewers below is **cut, not deferred**
 — see ADR-0044.
 

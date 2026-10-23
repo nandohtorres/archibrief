@@ -42,11 +42,10 @@ variable "throttling_rate_limit" {
   default = 10
 }
 
-# Separate, lower quota for the one public route (GET /demo). With one
-# stage-wide bucket, a public traffic spike (or a bot hitting the one URL
-# that needs no credential) could exhaust the whole API's quota and
-# throttle admin usage. get_demo has near-zero marginal cost, so this
-# isolates blast radius rather than capping spend.
+# Separate, lower quota for GET /demo, so a bot hitting that one free URL
+# can't use up the stage-wide quota everyone else shares. get_demo has
+# near-zero marginal cost, so this isolates blast radius rather than
+# capping spend.
 variable "demo_throttling_burst_limit" {
   type    = number
   default = 5
@@ -60,11 +59,6 @@ variable "demo_throttling_rate_limit" {
 variable "tags" {
   type    = map(string)
   default = {}
-}
-
-variable "admin_authorizer_zip_path" {
-  type        = string
-  description = "Deployment package for the pre-shared admin-credential Lambda authorizer (ADR-0044)."
 }
 
 variable "permissions_boundary_arn" {
@@ -223,7 +217,7 @@ variable "chat_model_ids" {
 variable "chat_public_enabled" {
   type        = bool
   default     = false
-  description = "Second lock behind the admin authorizer: non-admin callers are refused unless true. Stays false until per-visitor limits exist."
+  description = "The chat handlers refuse every caller unless true."
 }
 
 variable "chat_questions_per_review" {
@@ -271,12 +265,6 @@ variable "alarm_topic_arn" {
 
 variable "lambda_log_retention_days" {
   description = "Days to keep Lambda logs. Must be a value CloudWatch Logs accepts."
-  type        = number
-  default     = 30
-}
-
-variable "api_access_log_retention_days" {
-  description = "Days to keep API Gateway access logs. They include client IP addresses."
   type        = number
   default     = 30
 }

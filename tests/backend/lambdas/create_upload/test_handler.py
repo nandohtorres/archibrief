@@ -5,18 +5,25 @@ import pytest
 from moto import mock_aws
 
 from backend.lambdas.create_upload.handler import handler
+from backend.shared import uploads
+from backend.shared.public_access import visitor_key
+from tests.backend import visitor
 
 
 def _event(body: dict | None) -> dict:
     return {
-        "headers": {"x-admin-key": "admin-secret"},
+        "requestContext": visitor.REQUEST_CONTEXT,
         "body": json.dumps(body) if body is not None else None,
     }
 
 
 def _configure(monkeypatch):
     monkeypatch.setenv("RESERVATION_KEY", "test-" + "r" * 48)
-    monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+    visitor.enable_public(monkeypatch)
+    # Turnstile is covered in test_public_access; here every token passes.
+    monkeypatch.setattr(
+        uploads, "verify_upload_challenge", lambda event, _token: visitor_key(event)
+    )
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
     monkeypatch.setenv("REVIEWS_TABLE_NAME", "reviews")
     monkeypatch.setenv("USAGE_COUNTERS_TABLE_NAME", "counters")
@@ -37,7 +44,16 @@ def test_handler_issues_its_own_id_and_conditional_checksum_bound_upload(monkeyp
     )
     _configure(monkeypatch)
 
-    result = handler(_event({"archive_size": 100, "archive_sha256": "a" * 64}), None)
+    result = handler(
+        _event(
+            {
+                "archive_size": 100,
+                "archive_sha256": "a" * 64,
+                "client_request_id": "0b5f2f6e-3c5d-4c43-9f0f-6e0f4ac4b2f1",
+            }
+        ),
+        None,
+    )
 
     assert result["statusCode"] == 200
     body = json.loads(result["body"])

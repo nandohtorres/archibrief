@@ -316,15 +316,6 @@ h4 {
   color: var(--success);
 }
 
-.admin-key-control {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--text-muted);
-  font-size: 0.78rem;
-}
-
-.admin-key-control input,
 .finding-toolbar select,
 .finding-toolbar input {
   border: 1px solid var(--border);
@@ -332,10 +323,6 @@ h4 {
   background: var(--surface);
   color: var(--text);
   padding: 0.55rem 0.75rem;
-}
-
-.admin-key-control input {
-  width: 11rem;
 }
 
 .fixture-controls {
@@ -845,20 +832,6 @@ h4 {
 .submission-form .code-input {
   font: 400 0.85rem/1.55 var(--font-mono);
   tab-size: 2;
-}
-
-.submission-form .admin-key-control label {
-  display: inline;
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.submission-form .admin-key-control input {
-  width: 13rem;
-  min-height: 44px;
-  padding: 0.55rem 0.75rem;
 }
 
 .submission-form [aria-invalid="true"] {
@@ -3505,18 +3478,8 @@ h4 {
     flex-direction: column;
   }
 
-  .admin-key-control,
   .segmented-control {
     width: 100%;
-  }
-
-  .admin-key-control {
-    justify-content: space-between;
-  }
-
-  .admin-key-control input {
-    width: auto;
-    flex: 1;
   }
 
   .segmented-control button {
@@ -3645,11 +3608,6 @@ h4 {
     display: none;
   }
 
-  .admin-key-control {
-    order: 2;
-    width: 100%;
-  }
-
   /* 16px inputs stop iOS Safari zooming the page on focus. */
   input,
   select,
@@ -3672,13 +3630,6 @@ h4 {
 
   .diagram-swipe-hint {
     display: block;
-  }
-}
-
-@media (max-width: 680px) {
-  .submission-form .admin-key-control input {
-    width: auto;
-    flex: 1;
   }
 }
 

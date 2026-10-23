@@ -31,13 +31,11 @@ export function getApiBaseUrl(): string | null {
   return configured ? configured.replace(/\/$/, "") : null;
 }
 
-// No user accounts (ADR-0044) — gated endpoints check a single
-// pre-shared admin credential sent as x-admin-key, not a per-user
-// bearer token.
-function requestHeaders(adminKey?: string, reviewId?: string, write = false): HeadersInit {
+// No user accounts: a review is reached with the read/write capabilities
+// issued with its upload and kept in this tab (lib/review-access.ts).
+function requestHeaders(reviewId?: string, write = false): HeadersInit {
   return {
     "Content-Type": "application/json",
-    ...(adminKey ? { "x-admin-key": adminKey } : {}),
     ...(reviewId ? reviewAccessHeaders(reviewId, write) : {}),
   };
 }
@@ -89,16 +87,13 @@ function requireApiBaseUrl(): string {
   return baseUrl;
 }
 
-export async function submitReview(
-  request: SubmitReviewRequest,
-  adminKey?: string,
-): Promise<SubmitReviewResponse> {
+export async function submitReview(request: SubmitReviewRequest): Promise<SubmitReviewResponse> {
   // POST /reviews goes through the submit_review Lambda, which admits the
   // review and starts the workflow. The {reviewId, status} result below is
   // built from what was sent; the response body isn't needed.
   const response = await fetch(`${requireApiBaseUrl()}/reviews`, {
     method: "POST",
-    headers: requestHeaders(adminKey, request.review_id, true),
+    headers: requestHeaders(request.review_id, true),
     body: JSON.stringify(request),
   });
   if (!response.ok) {
@@ -107,16 +102,13 @@ export async function submitReview(
   return { reviewId: request.review_id, status: "pending" };
 }
 
-// ADR-0045: the first half of the direct-upload archive_path
-// flow — admin-gated like every other non-demo route, since issuing a
-// presigned POST is real AWS-facing work tied to this account's bucket.
-export async function requestUpload(
-  request: CreateUploadRequest,
-  adminKey?: string,
-): Promise<CreateUploadResponse> {
+// ADR-0045: the first half of the direct-upload archive_path flow. The
+// server checks the Turnstile token and the upload limits before issuing a
+// checksum-bound presigned PUT.
+export async function requestUpload(request: CreateUploadRequest): Promise<CreateUploadResponse> {
   const response = await fetch(`${requireApiBaseUrl()}/uploads`, {
     method: "POST",
-    headers: requestHeaders(adminKey),
+    headers: requestHeaders(),
     body: JSON.stringify(request),
   });
   const upload = (await readJson(response)) as CreateUploadResponse;
@@ -135,7 +127,7 @@ export async function requestUpload(
       writeToken: upload.writeToken,
       expiresAt: upload.expiresAt,
     });
-  } else if (!adminKey || !upload.uploadFields) {
+  } else {
     throw new ApiRequestError("A bound upload reservation is required.", response.status);
   }
   return upload;
@@ -161,35 +153,18 @@ export async function uploadArchiveToS3(
       throw new ApiRequestError("Storage did not return an upload version.", response.status);
     return version;
   }
-  const formData = new FormData();
-  for (const [field, value] of Object.entries(upload.uploadFields ?? {})) {
-    formData.append(field, value);
-  }
-  formData.append("file", file);
-
-  const response = await fetch(upload.uploadUrl, { method: "POST", body: formData });
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new ApiRequestError(
-      text || `Archive upload to storage failed (${response.status}).`,
-      response.status,
-    );
-  }
+  throw new ApiRequestError("A bound upload reservation is required.", null);
 }
 
-export async function fetchReview(
-  reviewId: string,
-  adminKey?: string,
-): Promise<ReviewReport | ReviewStatusPointer> {
+export async function fetchReview(reviewId: string): Promise<ReviewReport | ReviewStatusPointer> {
   const response = await fetch(`${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}`, {
-    headers: requestHeaders(adminKey, reviewId),
+    headers: requestHeaders(reviewId),
   });
   return (await readJson(response)) as ReviewReport | ReviewStatusPointer;
 }
 
-// GET /demo — the one public, unauthenticated route. Serves a
-// precomputed sample report (backend/lambdas/get_demo), never a fresh
-// pipeline run, so no admin key is sent.
+// GET /demo serves a precomputed sample report (backend/lambdas/get_demo),
+// never a fresh pipeline run, so it needs no review capability.
 export async function fetchDemoReport(): Promise<ReviewReport> {
   const response = await fetch(`${requireApiBaseUrl()}/demo`);
   const value = await readJson(response);
@@ -205,13 +180,12 @@ export async function fetchDemoReport(): Promise<ReviewReport> {
 export async function submitClarification(
   reviewId: string,
   request: ClarificationRequest,
-  adminKey?: string,
 ): Promise<SubmitReviewResponse> {
   const response = await fetch(
     `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/clarify`,
     {
       method: "POST",
-      headers: requestHeaders(adminKey, reviewId, true),
+      headers: requestHeaders(reviewId, true),
       body: JSON.stringify(request),
     },
   );
@@ -225,14 +199,10 @@ export async function submitClarification(
   return value;
 }
 
-export async function requestDeeperFinding(
-  reviewId: string,
-  findingId: string,
-  adminKey?: string,
-): Promise<unknown> {
+export async function requestDeeperFinding(reviewId: string, findingId: string): Promise<unknown> {
   const response = await fetch(
     `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/findings/${encodeURIComponent(findingId)}/deeper`,
-    { method: "POST", headers: requestHeaders(adminKey, reviewId, true) },
+    { method: "POST", headers: requestHeaders(reviewId, true) },
   );
   return readJson(response);
 }
@@ -275,13 +245,12 @@ async function readChatJson(response: Response): Promise<unknown> {
 export async function askQuestion(
   reviewId: string,
   request: AskQuestionRequest,
-  adminKey?: string,
 ): Promise<AskQuestionResponse> {
   const response = await fetch(
     `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/questions`,
     {
       method: "POST",
-      headers: requestHeaders(adminKey, reviewId, true),
+      headers: requestHeaders(reviewId, true),
       body: JSON.stringify(request),
     },
   );
@@ -296,13 +265,10 @@ export async function askQuestion(
   return value as AskQuestionResponse;
 }
 
-export async function fetchQuestions(
-  reviewId: string,
-  adminKey?: string,
-): Promise<QuestionsTranscript> {
+export async function fetchQuestions(reviewId: string): Promise<QuestionsTranscript> {
   const response = await fetch(
     `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/questions`,
-    { headers: requestHeaders(adminKey, reviewId) },
+    { headers: requestHeaders(reviewId) },
   );
   const value = await readChatJson(response);
   if (!isQuestionsTranscript(value)) {

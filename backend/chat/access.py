@@ -6,7 +6,6 @@ bundle the model-calling code.
 
 from __future__ import annotations
 
-import hmac
 import os
 from typing import Any
 
@@ -14,23 +13,10 @@ DEFAULT_QUESTIONS_PER_REVIEW = 5
 FINAL_STATUSES = ("answered", "not_determinable", "refused")
 
 
-def is_admin(event: dict) -> bool:
-    """Same constant-time comparison as the admin authorizer."""
-    expected = os.environ.get("ADMIN_KEY", "")
-    headers = {str(k).lower(): v for k, v in (event.get("headers") or {}).items()}
-    provided = headers.get("x-admin-key", "")
-    # Bytes, so a non-ASCII header can't raise (compare_digest rejects
-    # non-ASCII str).
-    return bool(expected) and hmac.compare_digest(
-        str(provided).encode("utf-8"), expected.encode("utf-8")
-    )
-
-
-def caller_allowed(admin: bool) -> bool:
-    """Admin only until the chat opens to the public (ADR-0050 §2). The flag
-    is a second lock behind the API's admin authorizer, so removing the
-    authorizer alone can't open a paid public endpoint."""
-    return admin or os.environ.get("CHAT_PUBLIC_ENABLED", "false").lower() == "true"
+def caller_allowed() -> bool:
+    """Chat opens with public access (ADR-0050 §2). The API has no
+    authorizer, so this flag is the gate."""
+    return os.environ.get("CHAT_PUBLIC_ENABLED", "false").lower() == "true"
 
 
 def questions_per_review() -> int:

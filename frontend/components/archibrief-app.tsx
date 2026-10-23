@@ -23,7 +23,6 @@ import {
 } from "@/lib/api";
 import { archiveDigest } from "@/lib/review-access";
 import { publicSubmissionEnabled } from "@/lib/public-access";
-import { loadAdminKey, saveAdminKey } from "@/lib/admin-key";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
 import type {
   DemoChat,
@@ -44,10 +43,8 @@ import {
 
 type ThemeChoice = "light" | "dark";
 
-const OWNER_ONLY_NOTICE =
-  "Submissions are limited to the site owner for now. Public submissions are coming soon. In the meantime, the sample review shows exactly what you'd get back.";
-const KEY_REJECTED_NOTICE =
-  "That key wasn't accepted. Submissions are limited to the site owner for now.";
+const SUBMISSIONS_CLOSED_NOTICE =
+  "New reviews are paused right now. The sample review shows exactly what you'd get back.";
 
 const emptySubmission: SubmissionValues = {
   terraformRepoRef: "",
@@ -59,7 +56,6 @@ export function ArchiBriefApp() {
   const [screen, setScreen] = useState<AppScreen>("submission");
   const [theme, setTheme] = useState<ThemeChoice>("light");
   const [pendingSection, setPendingSection] = useState<string | null>(null);
-  const [adminKey, setAdminKey] = useState("");
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submission, setSubmission] = useState(emptySubmission);
@@ -93,18 +89,8 @@ export function ArchiBriefApp() {
   useEffect(() => {
     const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
     if (stored === "light" || stored === "dark") setTheme(stored);
-    // Tab-scoped, never localStorage — see lib/admin-key.ts.
-    const storedKey = loadAdminKey(window.sessionStorage, window.localStorage);
-    // A key typed or autofilled before the page's script loaded is in the
-    // field but never reached onChange; keep it rather than wiping it.
-    const typed =
-      (document.getElementById("admin-key-input") as HTMLInputElement | null)?.value ?? "";
-    if (!storedKey && typed) {
-      saveAdminKey(window.sessionStorage, typed);
-      setAdminKey(typed);
-    } else {
-      setAdminKey(storedKey);
-    }
+    // The admin key this site used to keep for the tab is retired.
+    window.sessionStorage.removeItem("archibrief-admin-key");
   }, []);
 
   // Each screen starts at the top; otherwise opening the sample from far
@@ -117,11 +103,6 @@ export function ArchiBriefApp() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("archibrief-theme", theme);
   }, [theme]);
-
-  function handleAdminKeyChange(value: string) {
-    setAdminKey(value);
-    saveAdminKey(window.sessionStorage, value);
-  }
 
   useEffect(() => {
     if (screen !== "progress" || progressMode !== "fixture") return;
@@ -147,7 +128,7 @@ export function ArchiBriefApp() {
     const poll = async () => {
       attempts += 1;
       try {
-        const result = await fetchReview(liveReviewId, adminKey);
+        const result = await fetchReview(liveReviewId);
         if (cancelled) return;
         setLiveCurrentStage((result as ReviewStatusPointer).currentStage ?? null);
         if (result.status === "complete") {
@@ -206,17 +187,15 @@ export function ArchiBriefApp() {
       window.clearInterval(elapsedTimer);
       window.clearTimeout(firstPoll);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, progressMode, liveReviewId]);
 
   async function handleSubmission(values: SubmissionValues) {
     setSubmission(values);
     setSubmitNotice(null);
-    // Owner-only for now (ADR-0047): every submit
-    // route already requires the admin key server-side; this just answers
-    // a visitor plainly instead of sending a request that would fail.
-    if (apiConfigured && !adminKey.trim() && !publicSubmissionEnabled) {
-      setSubmitNotice(OWNER_ONLY_NOTICE);
+    // A build without public submissions answers plainly instead of
+    // sending a request the API would refuse.
+    if (apiConfigured && !publicSubmissionEnabled) {
+      setSubmitNotice(SUBMISSIONS_CLOSED_NOTICE);
       return;
     }
     if (!apiConfigured) {
@@ -243,15 +222,12 @@ export function ArchiBriefApp() {
       }
       const pending = pendingSubmission.current;
       if (!pending.request) {
-        const upload = await requestUpload(
-          {
-            archive_size: values.archiveFile.size,
-            archive_sha256: digest,
-            client_request_id: pending.nonce,
-            ...(values.turnstileToken ? { turnstile_token: values.turnstileToken } : {}),
-          },
-          adminKey,
-        );
+        const upload = await requestUpload({
+          archive_size: values.archiveFile.size,
+          archive_sha256: digest,
+          client_request_id: pending.nonce,
+          ...(values.turnstileToken ? { turnstile_token: values.turnstileToken } : {}),
+        });
         const version = await uploadArchiveToS3(upload, values.archiveFile);
         pending.request = {
           review_id: upload.reviewId ?? pending.nonce,
@@ -263,16 +239,15 @@ export function ArchiBriefApp() {
           baseline_answers: {},
         };
       }
-      const response = await submitReview(pending.request, adminKey);
+      const response = await submitReview(pending.request);
       setLiveReviewId(response.reviewId);
       setLiveCurrentStage(null);
       setProgressMode("live");
       setScreen("progress");
     } catch (error) {
-      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
-        setSubmitNotice(
-          publicSubmissionEnabled && !adminKey.trim() ? error.message : KEY_REJECTED_NOTICE,
-        );
+      if (error instanceof ApiRequestError && (error.status === 403 || error.status === 429)) {
+        // Verification and daily limits: the message says what to do next.
+        setSubmitNotice(error.message);
         return;
       }
       setFailureMessage(
@@ -387,11 +362,10 @@ export function ArchiBriefApp() {
     setClarifySubmitting(true);
     setClarifyError(null);
     try {
-      await submitClarification(
-        liveReviewId,
-        { answers, additional_notes: additionalNotes || undefined },
-        adminKey,
-      );
+      await submitClarification(liveReviewId, {
+        answers,
+        additional_notes: additionalNotes || undefined,
+      });
       // Resuming via SendTaskSuccess happens server-side (clarify_review
       // Lambda); re-entering "progress" restarts the same live-polling
       // effect from a fresh attempt count, same as the original submission.
@@ -461,8 +435,6 @@ export function ArchiBriefApp() {
                 initialValues={submission}
                 submitting={submitting}
                 notice={submitNotice}
-                adminKey={adminKey}
-                onAdminKeyChange={handleAdminKeyChange}
                 onSubmit={handleSubmission}
                 demos={<DemoCards openingId={openingDemoId} onOpen={openDemo} />}
               />
@@ -506,7 +478,6 @@ export function ArchiBriefApp() {
           <ReportWorkspace
             report={report}
             source={reportSource}
-            adminKey={adminKey}
             demo={demo}
             demoChat={demoChat}
             architecture={demoArchitecture}

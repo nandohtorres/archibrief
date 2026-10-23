@@ -22,7 +22,6 @@ import { formatFindingId, type ReportSource } from "@/lib/workflow";
 interface ReportQuestionsProps {
   reviewId: string;
   source: ReportSource;
-  adminKey: string;
   findings: ReportFinding[];
   selectedFindingId: string;
   questionSeed: string;
@@ -67,7 +66,6 @@ function modeFor(source: ReportSource): Mode {
 export function ReportQuestions({
   reviewId,
   source,
-  adminKey,
   findings,
   selectedFindingId,
   questionSeed,
@@ -85,7 +83,6 @@ export function ReportQuestions({
   const [suggested, setSuggested] = useState<SuggestedQuestion[]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [limit, setLimit] = useState(5);
-  const [limitApplies, setLimitApplies] = useState(true);
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -111,7 +108,7 @@ export function ReportQuestions({
   useEffect(() => {
     if (mode !== "live") return;
     let cancelled = false;
-    fetchQuestions(reviewId, adminKey)
+    fetchQuestions(reviewId)
       .then((transcript) => {
         if (cancelled) return;
         setTurns(transcript.questions);
@@ -119,7 +116,6 @@ export function ReportQuestions({
         setSuggested(transcript.suggested);
         setRemaining(transcript.questions_remaining);
         setLimit(transcript.limit);
-        setLimitApplies(transcript.limit_applies);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -132,7 +128,7 @@ export function ReportQuestions({
     return () => {
       cancelled = true;
     };
-  }, [adminKey, mode, reviewId]);
+  }, [mode, reviewId]);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
@@ -149,11 +145,10 @@ export function ReportQuestions({
     const key = JSON.stringify(body);
     if (attempt.current?.key !== key) attempt.current = { key, id: newClientRequestId() };
     try {
-      const response = await askQuestion(
-        reviewId,
-        { client_request_id: attempt.current.id, ...body },
-        adminKey,
-      );
+      const response = await askQuestion(reviewId, {
+        client_request_id: attempt.current.id,
+        ...body,
+      });
       attempt.current = null;
       // A repeat click on an answered suggestion returns the turn already
       // in the transcript; show it once.
@@ -164,7 +159,6 @@ export function ReportQuestions({
       );
       setRemaining(response.questions_remaining);
       setLimit(response.limit);
-      setLimitApplies(response.limit_applies);
       if (response.kind === "suggested") {
         setSuggested((current) =>
           current.map((s) => (s.id === response.suggested_id ? { ...s, answered: true } : s)),
@@ -235,7 +229,7 @@ export function ReportQuestions({
     void send({ question }, question);
   }
 
-  const exhausted = mode === "live" && limitApplies && remaining !== null && remaining <= 0;
+  const exhausted = mode === "live" && remaining !== null && remaining <= 0;
   const canType = mode === "fixture" || (mode === "live" && loaded && !loadError);
 
   return (
@@ -392,11 +386,8 @@ export function ReportQuestions({
 
       <div className="chat-footer">
         {mode === "live" && remaining !== null && (
-          <p
-            className={`chat-remaining${limitApplies && remaining <= 1 ? " low" : ""}`}
-            role="status"
-          >
-            {remainingLabel(remaining, limit, limitApplies)}
+          <p className={`chat-remaining${remaining <= 1 ? " low" : ""}`} role="status">
+            {remainingLabel(remaining, limit)}
           </p>
         )}
         {focusFindingId && (

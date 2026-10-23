@@ -1,25 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { LIVE_URL, PUBLIC_URL } from "../playwright.config";
+import { PUBLIC_URL } from "../playwright.config";
 import { fixtureReport } from "../lib/fixtures";
 import { fillSubmission } from "./support/submission";
+import { mockTurnstile } from "./support/turnstile";
 
 const REVIEW_ID = "12345678-1234-4234-8234-123456789abc";
-
-async function challenge(page: Page, succeed = true) {
-  await page.route("https://challenges.cloudflare.com/**", async (route) => {
-    const onload = new URL(route.request().url()).searchParams.get("onload");
-    await route.fulfill({
-      contentType: "application/javascript",
-      body: `
-      window.turnstile = {
-        render: (element, options) => { setTimeout(() => options[${JSON.stringify(succeed ? "callback" : "error-callback")}]?.(${JSON.stringify(succeed ? "mock-challenge" : "network-error")}), 10); return 'test-widget'; },
-        reset: () => {}, remove: () => {}, getResponse: () => 'mock-challenge', isExpired: () => false
-      };
-      ${onload ? `window[${JSON.stringify(onload)}]?.();` : ""}
-    `,
-    });
-  });
-}
 
 async function reservation(
   page: Page,
@@ -91,39 +76,37 @@ async function reservation(
         suggested: [],
         questions_remaining: 5,
         limit: 5,
-        limit_applies: true,
       }),
     }),
   );
 }
 
-async function fill(page: Page, url: string, admin = false) {
-  await page.goto(url);
-  if (admin) await page.getByLabel("Admin key").fill("test-admin-key");
+async function fill(page: Page) {
+  await page.goto(PUBLIC_URL);
   await fillSubmission(page);
+  await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
 }
 
-test("admin upload uses the server ID, exact S3 version and separate capabilities", async ({
-  page,
-}) => {
-  await reservation(page, LIVE_URL);
-  await fill(page, LIVE_URL, true);
+test("upload uses the server ID, exact S3 version and separate capabilities", async ({ page }) => {
+  await mockTurnstile(page);
+  await reservation(page, PUBLIC_URL);
+  await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
 });
 
-test("anonymous preview completes verification before bound upload admission", async ({ page }) => {
-  await challenge(page);
+test("verification completes before bound upload admission", async ({ page }) => {
+  await mockTurnstile(page);
   await reservation(page, PUBLIC_URL);
-  await fill(page, PUBLIC_URL);
-  await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
+  await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
 });
 
 test("challenge failure keeps anonymous submission disabled", async ({ page }) => {
-  await challenge(page, false);
-  await fill(page, PUBLIC_URL);
+  await mockTurnstile(page, false);
+  await page.goto(PUBLIC_URL);
+  await fillSubmission(page);
   await expect(
     page.getByText("Verification is unavailable. Please try again shortly."),
   ).toBeVisible();
@@ -131,24 +114,26 @@ test("challenge failure keeps anonymous submission disabled", async ({ page }) =
 });
 
 test("missing storage version prevents review dispatch", async ({ page }) => {
-  await reservation(page, LIVE_URL, { version: false });
+  await mockTurnstile(page);
+  await reservation(page, PUBLIC_URL, { version: false });
   let dispatched = false;
   page.on("request", (request) => {
     if (request.url().endsWith("/mock-api/reviews")) dispatched = true;
   });
-  await fill(page, LIVE_URL, true);
+  await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
   await expect(page.getByText("Storage did not return an upload version.")).toBeVisible();
   expect(dispatched).toBe(false);
 });
 
 test("quota rejection does not upload or dispatch a review", async ({ page }) => {
-  await reservation(page, LIVE_URL, { quota: true });
+  await mockTurnstile(page);
+  await reservation(page, PUBLIC_URL, { quota: true });
   let uploaded = false;
   page.on("request", (request) => {
     if (request.url().includes("bound-upload")) uploaded = true;
   });
-  await fill(page, LIVE_URL, true);
+  await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
   await expect(
     page.getByText("Today's upload allowance is used up. Please try again tomorrow."),
@@ -157,7 +142,8 @@ test("quota rejection does not upload or dispatch a review", async ({ page }) =>
 });
 
 test("dispatch retry reuses the bound file without a second reservation", async ({ page }) => {
-  await reservation(page, LIVE_URL);
+  await mockTurnstile(page);
+  await reservation(page, PUBLIC_URL);
   let reservations = 0;
   let uploads = 0;
   let dispatches = 0;
@@ -177,7 +163,7 @@ test("dispatch retry reuses the bound file without a second reservation", async 
       ),
     });
   });
-  await fill(page, LIVE_URL, true);
+  await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
   await expect(page.getByRole("button", { name: "Edit submission" })).toBeVisible();
   await page.getByRole("button", { name: "Edit submission" }).click();

@@ -6,15 +6,15 @@ Well-Architected guidance, or that say plainly it can't tell. Decisions
 and their reasons are in ADR-0046 §4–§5 and ADR-0050; the threat model's
 trust boundary 6 covers the attack surface.
 
-Chat is admin-only for now. Public use adds separate read/write
-capabilities, visitor binding and shared spending limits, all switched off;
-see [public access design](public-access-implementation.md).
+Chat is open to anyone with a review's write capability, bounded by the
+review's five questions, the daily chat budget and the shared spending
+limits; see [public access design](public-access-implementation.md).
 
 ## How a question is answered
 
 ```
 POST /reviews/{reviewId}/questions
-  1. admin key, or public flags plus live write capability/visitor binding
+  1. public flag, plus a live write capability bound to the visitor
   2. body shape (unknown fields → 400), kill switch (fails closed)
   3. review exists and is complete
   4. same client_request_id already answered → stored answer, no cost
@@ -100,7 +100,7 @@ the Lambda, so they change without a code deploy):
 
 ## Deployment status and remaining validation
 
-The recorded admin-only deployment and its model, timeout and budget changes
+The first live deployment (owner-only at the time) and its model, timeout and budget changes
 are documented in ADR-0050's first-live-deploy amendment. Demo suggested answers
 are committed in `frontend/public/demos/chats/`. This documentation cleanup did
 not inspect AWS or repeat those paid runs.
