@@ -1,6 +1,14 @@
 # ArchiBrief Threat Model
 
-**Methodology**: STRIDE primary (trust-boundary / data-flow decomposition), OWASP Top 10 for LLM/GenAI as a completeness overlay — per [ADR-0041](adr/0041-threat-modeling-methodology.md). Written against the deployed system (live at the frontend/API endpoints in the README), not the original design-phase intent — every control below is checked against the code and, where noted, against behavior tested on the live deployment, not assumed from an ADR's text alone.
+**Methodology**: STRIDE primary (trust-boundary / data-flow decomposition), OWASP Top 10 for LLM/GenAI as a completeness overlay — per [ADR-0041](adr/0041-threat-modeling-methodology.md). Controls describe the source design; deployed checks require separate evidence and are identified where recorded. A source review or ADR alone does not establish live enforcement.
+
+**Publication limits:** Reason checks quote provenance; Validate schema-checks
+its results. Neither proves semantic support. Rejected-model coverage metadata
+is not yet preserved through publication, and lifecycle `complete` does not mean
+complete analysis. Frontend evidence labels are not severity ratings. Demo
+corrections now accompany downloads and saved answers; the original model text
+is preserved and the answers have not been regenerated. Deeper-result storage
+and the report/chat snapshot still need a separately reviewed design.
 
 **Diagram tooling note**: [ADR-0025](adr/0025-diagram-tooling-interim.md) names `mingrammer/diagrams` for project diagrams, but that requires a local Graphviz install (`dot`). Rather than add a system dependency for one diagram, the data-flow diagram below is Mermaid (renders natively on GitHub and GitLab) — ADR-0025 itself calls this choice "low-stakes, easily revisited," so this is a substitution, not a reversal of that decision.
 
@@ -48,7 +56,7 @@ flowchart TB
     end
 
     subgraph Verify["TRUST BOUNDARY 5: server-side verification<br/>(the model is never trusted on its own say-so)"]
-        Validate["Validate Lambda<br/>schema + citation-resolves-to-real-chunk check"]
+        Validate["Validate Lambda<br/>schema check; quote provenance checked in Reason"]
         Audit["Audit Lambda"]
         Finalize["Finalize Lambda"]
     end
@@ -114,7 +122,7 @@ flowchart TB
 ## Attacker profiles
 
 1. **Anonymous internet visitor.** Can do everything the site offers: submit within the daily limits, clarify, go deeper and ask questions about their own reviews. Can't read or act on anyone else's review without that review's tokens. The architectural boundaries (2)-(5) apply to every submission.
-2. **A script trying to burn the budget or the daily capacity.** The realistic external attacker. It has to pass Turnstile for each upload, stays inside the WAF and stage rate limits, and is bounded by the global, per-visitor and per-review spend limits, which are reserved in DynamoDB before any paid call. The worst it can do is use up the day's few reviews, which is a denial of service to other visitors, not unbounded spend.
+2. **A script trying to burn the budget or the daily capacity.** Turnstile, WAF, stage throttling and transactional global/visitor/review reservations constrain admitted work. An attacker can exhaust the day's capacity. Reservations estimate cost; they are not an AWS billing ceiling and do not bound every infrastructure charge.
 3. **A malicious or adversarial Terraform repository submitted for review.** The threat model's actual primary design target, not a hypothetical — ADR-0027/0038 exist specifically because the content being reviewed is assumed untrusted, whoever submits it (e.g. a client's or a third party's IaC). Covered by boundaries (2)-(5); prompt-injection regression tests for the reasoning node (`tests/backend/agent/nodes/test_reason.py`, stubbed model) run on every push/PR. The deterministic layer is weaker than that suggests: see the trap-suite gap under "Residual risks".
 4. **A compromised or careless deploy identity** (e.g. the admin's own AWS SSO session). Out of full scope per this document's own boundaries above, but the project's least-privilege `ArchiBriefDeploy` permission set, its runtime permissions boundary (denies removing/swapping the boundary on any runtime role), and the explicit deny statements on the Terraform state bucket all reduce blast radius if this happens.
 

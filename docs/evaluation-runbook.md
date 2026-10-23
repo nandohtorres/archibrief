@@ -60,3 +60,11 @@ The chat thresholds remain in `backend/chat/chat_eval.py:PASS_BARS`. Report
 partial coverage, false refusals, unsupported cost/compliance claims, citation
 entailment and latency alongside those metrics. A pending or failed case must
 not disappear from the headline denominator.
+
+The chat runner writes `gate_failures` and exits 1 if a selected threshold is
+unmet or unmeasured; a small diagnostic batch may therefore exit 1 without
+being a full benchmark. Without `--traps`, `trap_pass_rate` is listed under
+`not_evaluated_gates`, not reported as passing. A zero exit on quality alone
+does not establish trap coverage, semantic support or general model accuracy.
+Evaluation-wide cost admission and production-parity runners remain separate
+work; the existing flags and token limits are not a monetary ceiling.

@@ -11,6 +11,11 @@ all four categories; mobile 93 performance, 100 in the rest).
 
 ## Free test results
 
+The counts below record earlier saved runs, not a rolling measurement of HEAD.
+The [bounded-fixes review ledger](reviews/2026-10-23-bounded-fixes.md) records
+that branch's later checks and their scope separately. A passing CI selection
+does not mean the intentionally excluded coverage-gap cases passed.
+
 | Suite | Result | Command |
 |---|---|---|
 | Backend | 871 passed | `python -m pytest tests/backend --ignore=tests/backend/adversarial -q --tb=short -p no:cacheprovider` |

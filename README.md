@@ -11,7 +11,7 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 **Live and open to the public.** Anyone can submit Terraform for a review, within a few free reviews a day (each one calls a paid model), and there are three finished demo reviews to open first. The demos cover real public Terraform: a security firm's breach lab, a Medicare data platform, and FEC databases. They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
 
-**Report chat is live.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, a five-question limit per review and a hard daily spend cap. On the demos, the suggested questions' answers were generated once and are served free.
+**Report chat is live.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, a five-question limit per review and a daily estimated-cost allowance. On the demos, the suggested questions' answers were generated once and are served free.
 
 **How public use is bounded:** a Cloudflare Turnstile check before each upload, AWS WAF in front of the API, and spending limits reserved in DynamoDB before every paid call, globally, per visitor and per review ([public access design](docs/public-access-implementation.md)). Not yet done: the paid chat evaluation.
 
@@ -24,6 +24,8 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 5. Server-side validation checks typed findings and citation provenance before audit/finalization. A model finding's quote must match a retrieved chunk. Deterministic findings use configuration evidence rather than model citations.
 
 The frontend exposes progress, clarification, findings, a stakeholder view of the same evidence, per-finding “go deeper,” report chat, and an HTML report download that includes the conversation. See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [evaluation](docs/evaluation.md), and [Trivy comparison](docs/comparison.md).
+
+The [engineering case study](docs/case-study.md) explains the tradeoffs and a reporting failure found during review.
 
 ## What the receipts establish—and their limits
 
@@ -49,16 +51,19 @@ The frontend exposes progress, clarification, findings, a stakeholder view of th
 
 ## Local development
 
-Backend dependencies and development extras are declared in `backend/pyproject.toml` (Python 3.12+). Frontend commands are in `frontend/package.json` (Node 22.12+ or 24). With dependencies installed, from the repository root:
+Use Python 3.12+ in an active virtual environment and Node 22.12+ or 24. Runtime dependency declarations are in `backend/pyproject.toml`; install the locked development set used by CI. From the repository root:
 
 ```text
-python -m pytest tests/backend -q
+python -m pip install -r backend/dev-requirements.lock.txt
+python -m pytest tests/backend -m "not coverage_gap" -q
 cd frontend
 npm ci
 npm run dev
 ```
 
-Without `NEXT_PUBLIC_API_BASE_URL`, the UI uses the local fixture path. Playwright builds separate fixture, admin and public-preview mocked-API static sites; its API tests do not require AWS credentials. Live retrieval/model evaluation harnesses are paid operations and separate from these tests. See [evaluation](docs/evaluation.md) for evidence and reproducible commands.
+Without `NEXT_PUBLIC_API_BASE_URL`, the UI uses the local fixture path. Leave the frontend env file absent for that mode; `frontend/.env.example` documents deployed API settings. Playwright builds separate fixture, closed-submission and public-preview mocked-API static sites; its API tests do not require AWS credentials. `coverage_gap` cases remain available separately and include documented intentional failures; excluding them is not evidence of passing that coverage. See [evaluation](docs/evaluation.md) for scope and reproducible commands. Live retrieval/model runners make paid service calls and are separate from these tests.
+
+Direct demo links: [breach pattern](https://archibrief.dev/?demo=breach-pattern), [Medicare platform](https://archibrief.dev/?demo=medicare-platform), [FEC databases](https://archibrief.dev/?demo=fec-database). These require the frontend containing the link/recovery changes to be deployed.
 
 ## Screenshots
 
