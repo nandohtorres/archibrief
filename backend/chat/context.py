@@ -204,6 +204,12 @@ def build_review_context(ledger: dict[str, Any]) -> ReviewContext:
             "truncated": bool(summary.get("truncated")),
             "note": _text(summary.get("note"), 800),
         }
+        notices = summary.get("not_observable")
+        if isinstance(notices, list):
+            terraform_resources["not_observable"] = [
+                _text(notice, 160) for notice in notices[:10] if isinstance(notice, str)
+            ]
+            terraform_resources["not_observable_total"] = len(notices)
     else:
         terraform_resources = {"resources": [], "available": False, "note": NO_RESOURCES_NOTE}
 

@@ -92,6 +92,17 @@ def test_an_oversized_review_is_trimmed_lowest_priority_first(ledger):
     assert ctx.review_data["findings"][-1]["evidence"] == ""
 
 
+def test_summary_coverage_notices_survive_finding_trimming_and_are_bounded(ledger):
+    ledger["terraform_resources"]["not_observable"] = [
+        "remote module " + "x" * 500
+    ] * 20
+    ctx = build_review_context(ledger)
+    coverage = ctx.review_data["terraform_resources"]
+    assert coverage["not_observable_total"] == 20
+    assert len(coverage["not_observable"]) == 10
+    assert all(len(note) <= 160 for note in coverage["not_observable"])
+
+
 def test_deeper_findings_point_at_their_parent_by_alias(ledger):
     ledger["findings"][2]["parent_finding_id"] = RULE_FINDING_ID
     ctx = build_review_context(ledger)

@@ -108,6 +108,7 @@ def _run_brief(
         corpus_version=corpus_version,
         retrieved_chunks=retrieved_chunks,
         deterministic_rule_version=None,
+        terraform_resources=brief.terraform_resources,
     )
     if raw_findings and not model_findings:
         return {

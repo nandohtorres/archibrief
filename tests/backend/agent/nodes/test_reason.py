@@ -25,6 +25,7 @@ from backend.agent.nodes.reason import (
     call_reasoning_model,
     parse_model_findings,
     reason_node,
+    verify_model_findings,
 )
 
 
@@ -307,6 +308,33 @@ def test_malformed_item_does_not_swallow_a_sibling_citation_failure():
     assert "failed to build a valid Finding" in failures
 
 
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        {},
+        {"type": []},
+        {"type": "invented"},
+        {"type": "fact", "chunk_id": {"secret": "do not echo"}},
+    ],
+)
+def test_bad_envelope_does_not_abort_a_valid_sibling_or_echo_raw_data(malformed):
+    findings, failures = verify_model_findings(
+        [malformed, _valid_finding_item()],
+        "r1",
+        "fake-model",
+        "corpus@1",
+        [
+            _chunk(
+                "chunk-a", "Encrypt data at rest using AWS KMS customer managed keys."
+            )
+        ],
+        None,
+    )
+    assert len(findings) == 1
+    assert len(failures) == 1
+    assert "do not echo" not in failures[0]
+
+
 # --- Unbounded consumption ------------------------------------------------
 
 
@@ -510,7 +538,13 @@ _PLAIN = {
     "effort_hours_high": 3,
 }
 _TERRAFORM = {
-    "resources": [{"type": "aws_instance", "name": "web", "settings": {"instance_type": "t3.micro"}}]
+    "resources": [
+        {
+            "type": "aws_instance",
+            "name": "web",
+            "settings": {"instance_type": "t3.micro"},
+        }
+    ]
 }
 
 
@@ -520,7 +554,11 @@ def _with_plain(plain: object, terraform_resources: dict | None = _TERRAFORM):
         review_id="r1",
         model_id="m",
         corpus_version="c",
-        retrieved_chunks=[_chunk("chunk-a", "Encrypt data at rest using AWS KMS customer managed keys.")],
+        retrieved_chunks=[
+            _chunk(
+                "chunk-a", "Encrypt data at rest using AWS KMS customer managed keys."
+            )
+        ],
         deterministic_rule_version=None,
         terraform_resources=terraform_resources,
     )
@@ -545,9 +583,16 @@ def test_a_size_the_terraform_doesnt_use_is_cleared_so_it_shows_unpriced():
 
 
 def test_unknown_price_items_or_harms_drop_the_plain_block():
-    assert _with_plain({**_PLAIN, "fix_components": [{"item": "gold_bars", "quantity": 1}]}) is None
+    assert (
+        _with_plain(
+            {**_PLAIN, "fix_components": [{"item": "gold_bars", "quantity": 1}]}
+        )
+        is None
+    )
     assert _with_plain({**_PLAIN, "harm": "the end of the world"}) is None
-    assert _with_plain({**_PLAIN, "effort_hours_low": 9, "effort_hours_high": 1}) is None
+    assert (
+        _with_plain({**_PLAIN, "effort_hours_low": 9, "effort_hours_high": 1}) is None
+    )
     assert _with_plain("not an object") is None
     assert _with_plain({**_PLAIN, "harm": "none"}).harm is None
 

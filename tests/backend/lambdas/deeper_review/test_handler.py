@@ -1,5 +1,6 @@
 import json
 import time
+from typing import ClassVar
 
 import boto3
 import pytest
@@ -18,9 +19,9 @@ LOCK = "deeperInFlight_f1"
 
 
 class _FakeAgentCoreRuntimeClient:
-    response: dict = {}
-    calls: list = []
-    inits: list = []
+    response: ClassVar[dict] = {}
+    calls: ClassVar[list] = []
+    inits: ClassVar[list] = []
     raises: Exception | None = None
 
     def __init__(self, agent_runtime_arn: str, read_timeout_seconds: int | None = None):
@@ -197,6 +198,35 @@ def test_agent_read_timeout_is_under_the_gateway_limit(env):
         handler_module.AGENT_READ_TIMEOUT_SECONDS
     ]
     assert handler_module.AGENT_READ_TIMEOUT_SECONDS < 28
+
+
+def test_deeper_receives_original_resource_scope_and_settled_requirements(env):
+    summary = {
+        "resources": [],
+        "truncated": True,
+        "not_observable": ["remote module omitted"],
+    }
+    env.seed(
+        ledger={
+            **_LEDGER,
+            "terraform_resources": summary,
+            "baseline_answers": [
+                {
+                    "field": "availability_criticality",
+                    "value": "99.9%",
+                    "outcome": "assumption",
+                }
+            ],
+        }
+    )
+    assert handler(_event("r1", "f1"), None)["statusCode"] == 200
+    payload = _FakeAgentCoreRuntimeClient.calls[0]["payload"]
+    assert payload["terraform_resources"] == summary
+    assert payload["preflight_fields"]["availability_criticality"] == {
+        "value": "99.9%",
+        "outcome": "assumption",
+        "is_assumption": True,
+    }
 
 
 def test_repeat_request_returns_stored_result_without_a_second_paid_run(env):

@@ -50,7 +50,7 @@ _MODEL_MAX_QUANTITY = 4
 # Bump whenever the model-facing contract changes (tool schema, input
 # fields, prompt rules), so a persisted finding can be traced to the exact
 # prompt that produced it (ADR-0039).
-PROMPT_VERSION = "reason_prompt@2026-10-20"
+PROMPT_VERSION = "reason_prompt@2026-10-23"
 
 _TOOL_NAME = "emit_findings"
 
@@ -83,19 +83,17 @@ results — never answer in plain text. You must:
   casing/punctuation) from that chunk's "text" field — never paraphrase
   the quote. Application code will reject any finding whose chunk_id or
   quote can't be verified against the retrieved evidence you were given.
-- Use "not-observable" ONLY when the workload brief gives you no
-  information to assess a specific practice AND you have no framework
-  text to cite about that specific gap — in that exact case, set
-  chunk_id and exact_quote to null; that type carries no citation. If you
-  have found a supporting WAF chunk (e.g. guidance describing a relevant
-  capability, control, or recommendation), that is NOT a not-observable
-  finding even if the brief doesn't confirm whether the workload already
-  does it — classify it as "recommendation" or "fact" instead, with that
-  chunk as its citation. In short: if you have a citation, never call it
-  not-observable.
-- terraform_resources lists every resource the submitted Terraform creates
-  and, for common types, the settings that matter, extracted by
-  application code. Treat it as the facts about the configuration. Never
+- Use "not-observable" for a configuration question the inspected slice
+  cannot answer; set chunk_id and exact_quote to null for that finding.
+  A retrieved AWS passage does not prove a workload setting is present or
+  absent. You may separately give a cited recommendation to verify it,
+  clearly distinguishing advice from an observed defect. Never turn an
+  unknown into a "fact" just because guidance is available.
+- terraform_resources contains bounded observations from the inspected
+  static slice, not a complete inventory of deployed resources. Respect
+  truncation, coverage notices, conditional creation, unsupported modules
+  and unresolved inputs. Omitted resources/settings are not proof of absence.
+  For common types, settings are extracted by application code. Never
   claim a listed setting is absent, unknown or "likely" anything other
   than its listed value. "not set (default: X)" means the setting is left
   out and the provider default X applies; plain "not set" means it's left
@@ -580,7 +578,15 @@ def verify_model_findings(
     findings: list[Finding] = []
     for index, item in enumerate(raw_findings):
         if not isinstance(item, dict):
-            failures.append(f"finding[{index}]: expected an object, got {item!r}")
+            failures.append(f"finding[{index}]: expected an object")
+            continue
+        if not isinstance(item.get("type"), str) or item["type"] not in {
+            finding_type.value for finding_type in FindingType
+        }:
+            failures.append(f"finding[{index}]: invalid or missing finding type")
+            continue
+        if item.get("chunk_id") is not None and not isinstance(item["chunk_id"], str):
+            failures.append(f"finding[{index}]: invalid citation field type")
             continue
 
         failures_before = len(failures)

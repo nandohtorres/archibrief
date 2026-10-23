@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import secrets
 import sys
 import time
@@ -159,7 +160,7 @@ def run_quality(clients, canary, guardrail, limit=None) -> dict[str, Any]:
         "false_refusal": rate(r["status"] == "refused" for r in answerable),
         "forbidden_hits": sum(bool(r.get("forbidden_hit")) for r in rows),
         "mean_cost_usd": round(sum(r["cost_micro_usd"] for r in rows) / len(rows) / 1e6, 5),
-        "p95_latency_ms": sorted(r["latency_ms"] for r in rows)[int(len(rows) * 0.95) - 1],
+        "p95_latency_ms": sorted(r["latency_ms"] for r in rows)[math.ceil(len(rows) * 0.95) - 1],
     }
     return {"metrics": metrics, "rows": rows}
 
@@ -182,6 +183,24 @@ def run_traps(clients, canary, guardrail, limit=None) -> dict[str, Any]:
         print(json.dumps(row), file=sys.stderr)
     passed = sum(not r["failures"] for r in rows)
     return {"metrics": {"trap_pass_rate": round(passed / len(rows), 3)}, "rows": rows}
+
+
+def failed_pass_bars(results: dict[str, Any]) -> list[str]:
+    """An unmeasured metric cannot establish that its gate passed."""
+    failures = []
+    quality = results["quality"]["metrics"]
+    for name, threshold in PASS_BARS.items():
+        if name == "trap_pass_rate":
+            if "traps" not in results:
+                continue  # Reported separately as not evaluated.
+            value = results["traps"]["metrics"].get(name)
+        else:
+            value = quality.get("false_refusal" if name == "false_refusal_max" else name)
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
+            failures.append(f"{name}: not measured")
+        elif value > threshold if name.endswith("_max") else value < threshold:
+            failures.append(f"{name}: threshold not met")
+    return failures
 
 
 def main() -> int:
@@ -243,9 +262,11 @@ def main() -> int:
         results["traps"] = run_traps(clients, canary, guardrail, args.limit)
     results["seconds"] = round(time.time() - started)
     results["pass_bars"] = PASS_BARS
+    results["gate_failures"] = failed_pass_bars(results)
+    results["not_evaluated_gates"] = [] if args.traps else ["trap_pass_rate"]
     args.out.write_text(json.dumps(results, indent=2), encoding="utf-8")
     print(json.dumps({k: v.get("metrics") for k, v in results.items() if isinstance(v, dict)}))
-    return 0
+    return 1 if results["gate_failures"] else 0
 
 
 if __name__ == "__main__":

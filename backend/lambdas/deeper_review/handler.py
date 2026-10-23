@@ -226,6 +226,16 @@ def handler(event: dict, _context: object) -> dict:
                 "workload_brief": workload_brief,
                 "retrieval_query": retrieval_query,
                 "parent_finding_id": finding_id,
+                "terraform_resources": ledger.get("terraform_resources") or {},
+                "preflight_fields": {
+                    answer["field"]: {
+                        "value": answer.get("value"),
+                        "outcome": answer.get("outcome"),
+                        "is_assumption": answer.get("outcome") == "assumption",
+                    }
+                    for answer in ledger.get("baseline_answers") or []
+                    if isinstance(answer, dict) and isinstance(answer.get("field"), str)
+                },
                 "corpus_version": parent_finding.get("corpus_version", "unknown"),
                 "deterministic_rule_version": parent_finding.get("deterministic_rule_version"),
             },
