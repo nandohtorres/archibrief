@@ -4,6 +4,11 @@ Baseline: `4fb3ac4` (master after PR #28), 2026-10-23. This follows the master
 plan's P00–P20 order, implementing bounded fixes and separating larger designs
 at Fernando's explicit direction. It is a review branch, not a deployed release.
 
+This ledger describes saved checkpoint `2ec0dbe` on `codex/portfolio-trust-fixes`.
+The subsequent, separately authorized [report redesign](2026-10-23-report-redesign.md)
+is on `codex/report-contract-redesign`; historical dispositions below describe
+the bounded checkpoint, not the later branch's cumulative implementation.
+
 ## Reconciliation and scope
 
 The earlier audit used `00169cc`. Public cutover and gateway-template fixes

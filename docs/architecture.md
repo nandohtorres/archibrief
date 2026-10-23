@@ -70,6 +70,11 @@ flowchart LR
     Submit --> SFN
     APIGW --> GetDemo
     APIGW --> GetReview
+    GetReview -->|base evidence| S3R
+    GetReview -->|saved children| DDB
+    APIGW --> Chat
+    Chat --> S3R
+    Chat -->|saved children and transcript| DDB
     APIGW --> Clarify
     APIGW --> Deeper
     APIGW --> CreateUpload
@@ -236,8 +241,13 @@ runs in AgentCore, called by the worker. Earlier executions retain their
 historical definition/content; changing the source cannot erase old history.
 
 Deeper review bypasses the worker and calls the shorter AgentCore graph with
-the stored resource summary and settled requirements. Child findings are saved
-in DynamoDB, while normal report GET/chat still use the original S3 ledger.
-Canonical child-result assembly and asynchronous deeper execution are separate
-design work. The UI deduplicates saved-result replay and identifies the original
-guided budget; that does not resolve the underlying persistence contract.
+the stored resource summary, settled requirements, and bounded parent evidence
+and alternatives. Children and their completion marker commit together in
+DynamoDB. Report GET and chat use the same projection of original S3 evidence
+plus live, validated children. The report rebuilds diagram and budget from that
+projection, and the browser refreshes it after a deeper result is saved.
+The S3 ledger stays unchanged. Output quality is recorded independently of job
+completion; all-rejected deeper results are retained for free idempotent replay.
+Deeper execution still has the existing short synchronous timeout. Moving it
+to an asynchronous job remains open; current source changes do not solve it.
+See the [report redesign review](reviews/2026-10-23-report-redesign.md).

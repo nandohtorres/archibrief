@@ -16,8 +16,9 @@ import type {
   ReportFinding,
   ReviewReport,
 } from "@/lib/contracts";
+import { isReviewReport } from "@/lib/contracts";
 import { isArchitectureGraph, type ArchitectureGraph } from "@/lib/architecture";
-import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
+import { fetchReview, getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
 import { reviewerNotesById, type DemoEntry } from "@/lib/demos";
 import { buildReportHtml, downloadFile } from "@/lib/chat";
 import { buildReportExport, reportSnapshotLabel, withEvidenceLabel } from "@/lib/report-review";
@@ -55,13 +56,14 @@ const MIN_DETAIL_PANE_WIDTH = 45;
 const MAX_DETAIL_PANE_WIDTH = 85;
 
 export function ReportWorkspace({
-  report,
+  report: initialReport,
   source,
   demo = null,
   demoChat = null,
   architecture: demoArchitecture = null,
   onNewReview,
 }: ReportWorkspaceProps) {
+  const [report, setReport] = useState(initialReport);
   const reviewerNotes = useMemo(() => reviewerNotesById(demo), [demo]);
   const architecture =
     demoArchitecture ?? (isArchitectureGraph(report.architecture) ? report.architecture : null);
@@ -198,8 +200,40 @@ export function ReportWorkspace({
       };
       const newFindings = result.findings ?? [];
       if (newFindings.length === 0) {
-        setStatus(`The deeper request for ${formatFindingId(findingId)} returned no new findings.`);
+        try {
+          const refreshed = await fetchReview(report.review_id);
+          if (isReviewReport(refreshed)) {
+            setReport(refreshed);
+            setFindings(refreshed.findings.map(withEvidenceLabel));
+          }
+        } catch {
+          /* The completed run can be recovered on reload. */
+        }
+        setStatus(
+          `The deeper request for ${formatFindingId(findingId)} returned no new findings. ${qualityMessage(result.analysis_quality)}`,
+        );
         return;
+      }
+      try {
+        const refreshed = await fetchReview(report.review_id);
+        if (
+          isReviewReport(refreshed) &&
+          refreshed.report_projection?.children_available &&
+          newFindings.every((child) =>
+            refreshed.findings.some((f) => f.record.finding_id === child.record.finding_id),
+          )
+        ) {
+          setReport(refreshed);
+          setFindings(refreshed.findings.map(withEvidenceLabel));
+          selectFinding(newFindings[0].record.finding_id);
+          setStatus(
+            `Deeper findings saved. The report, guided budget, diagram and chat now use the saved findings. ${qualityMessage(result.analysis_quality)}`,
+          );
+          return;
+        }
+      } catch {
+        // Results were saved by POST, but a failed read must not claim the
+        // original budget/diagram has been refreshed. Keep the bounded view.
       }
       setFindings((current) => {
         const known = new Set(current.map(({ record }) => record.finding_id));
@@ -215,6 +249,15 @@ export function ReportWorkspace({
         `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} available below ${formatFindingId(findingId)}. ${qualityMessage(result.analysis_quality)} The guided budget still describes the original report. Download to keep these findings with this session.`,
       );
     } catch (error) {
+      try {
+        const refreshed = await fetchReview(report.review_id);
+        if (isReviewReport(refreshed)) {
+          setReport(refreshed);
+          setFindings(refreshed.findings.map(withEvidenceLabel));
+        }
+      } catch {
+        /* Keep the last readable report. */
+      }
       setStatus(error instanceof Error ? error.message : "The deeper-analysis request failed.");
     }
   }
@@ -332,13 +375,29 @@ export function ReportWorkspace({
         <aside className="scope-note" aria-label="Analysis quality">
           <strong>Analysis quality</strong>
           <p>{qualityMessage(report.analysis_quality)}</p>
+          {report.deeper_reviews?.map((run) => (
+            <p key={run.parent_finding_id}>
+              Deeper review of {formatFindingId(run.parent_finding_id)}:{" "}
+              {qualityMessage(run.analysis_quality)}
+            </p>
+          ))}
+          {report.report_projection && !report.report_projection.children_available && (
+            <p>Saved deeper findings are unavailable in this report configuration.</p>
+          )}
+          {!!report.report_projection?.excluded_child_count && (
+            <p>
+              Some saved deeper findings could not be included. Report completeness is limited;
+              reload before relying on its totals.
+            </p>
+          )}
         </aside>
-        {findings.some(({ record }) => record.parent_finding_id) && (
-          <p className="field-help">
-            The guided budget, diagram and chat context cover the original report. Added deeper
-            findings are shown in the technical view and downloads.
-          </p>
-        )}
+        {findings.some(({ record }) => record.parent_finding_id) &&
+          !report.report_projection?.children_available && (
+            <p className="field-help">
+              The guided budget, diagram and chat context cover the original report. Added deeper
+              findings are shown in the technical view and downloads.
+            </p>
+          )}
       </div>
 
       <div className="report-content">

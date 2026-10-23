@@ -175,4 +175,64 @@ test.describe("live critical path (mocked network)", () => {
     expect(await archive()).toContain("ustar");
     expect(await archive()).toContain('bucket = "e2e-logs"');
   });
+
+  test("deeper analysis refreshes the shared report and survives reload", async ({ page }) => {
+    await mockTurnstile(page);
+    await mockUpload(page);
+    const child = {
+      ...fixtureReport.findings[0],
+      record: {
+        ...fixtureReport.findings[0].record,
+        finding_id: "saved-child",
+        parent_finding_id: fixtureReport.findings[0].record.finding_id,
+        finding: "Durable deeper bucket assessment",
+      },
+    };
+    let saved = false;
+    let paidRequests = 0;
+    await page.route("**/mock-api/reviews", (route) =>
+      route.fulfill({ json: { reviewId: REVIEW_ID, status: "pending" } }),
+    );
+    await page.route(`**/mock-api/reviews/${REVIEW_ID}`, (route) =>
+      route.fulfill({
+        json: {
+          ...fixtureReport,
+          review_id: REVIEW_ID,
+          findings: saved ? [...fixtureReport.findings, child] : fixtureReport.findings,
+          report_projection: {
+            version: 1,
+            children_available: true,
+            child_count: saved ? 1 : 0,
+            excluded_child_count: 0,
+          },
+        },
+      }),
+    );
+    await page.route(/\/mock-api\/reviews\/[^/]+\/findings\/[^/]+\/deeper$/, (route) => {
+      saved = true;
+      paidRequests++;
+      return route.fulfill({ json: { findings: [child] } });
+    });
+    await page.goto(PUBLIC_URL);
+    await fillSubmission(page);
+    await page.getByRole("button", { name: "Start review" }).click();
+    await expect(page.locator("#report-heading")).toBeVisible();
+    await page.getByRole("button", { name: "Go deeper", exact: true }).click();
+    await expect(page.getByText(/Deeper findings saved/)).toBeVisible();
+    await page.getByRole("tab", { name: /Guided Report/ }).click();
+    await expect(page.getByText("Durable deeper bucket assessment", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.locator(".finding-list > li")).toHaveCount(fixtureReport.findings.length + 1);
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export ledger", exact: true }).click();
+    const stream = await (await download).createReadStream();
+    let contents = "";
+    for await (const chunk of stream!) contents += chunk.toString();
+    expect(
+      JSON.parse(contents).findings.some(
+        (f: { record: { finding_id: string } }) => f.record.finding_id === "saved-child",
+      ),
+    ).toBe(true);
+    expect(paidRequests).toBe(1);
+  });
 });

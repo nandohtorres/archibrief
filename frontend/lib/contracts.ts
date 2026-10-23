@@ -199,6 +199,13 @@ export interface ReviewReport {
   baseline_answers: BaselineAnswer[];
   findings: ReportFinding[];
   analysis_quality?: AnalysisQuality;
+  report_projection?: {
+    version: 1;
+    children_available: boolean;
+    child_count: number;
+    excluded_child_count: number;
+  };
+  deeper_reviews?: Array<{ parent_finding_id: string; analysis_quality: AnalysisQuality }>;
   // Totals across every finding that needs action. Absent on older reviews.
   budget?: BudgetSummary;
   // The diagram built from the code (lib/architecture.ts). Older reviews

@@ -206,6 +206,15 @@ def build_review_context(ledger: dict[str, Any]) -> ReviewContext:
         {
             "workload_brief": _text(ledger.get("workload_brief"), BRIEF_CHARS),
             "analysis_quality": public_analysis_quality(ledger.get("analysis_quality")),
+            "report_projection": ledger.get("report_projection"),
+            "deeper_reviews": [
+                {
+                    "parent_ref": aliases.get(run["parent_finding_id"]),
+                    "analysis_quality": public_analysis_quality(run.get("analysis_quality")),
+                }
+                for run in ledger.get("deeper_reviews", [])[:10]
+            ],
+            "deeper_review_count": len(ledger.get("deeper_reviews", [])),
             "requirements": requirements,
             "findings": compact_findings,
             "terraform_resources": terraform_resources,

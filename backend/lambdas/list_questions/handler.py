@@ -29,6 +29,7 @@ from backend.shared.clients import DynamoDBClient, S3Client
 from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.public_access import capability_allowed
 from backend.shared.retention import review_is_live
+from backend.shared.review_projection import current_ledger
 
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
@@ -82,7 +83,7 @@ def handler(event: dict, _context: object) -> dict:
     )
     suggestions = [
         {"id": s["id"], "question": s["question"], "answered": s["id"] in answered_suggestions}
-        for s in suggested_questions(build_review_context(ledger))
+        for s in suggested_questions(build_review_context(current_ledger(ledger, review_id)))
     ]
 
     limit = questions_per_review()

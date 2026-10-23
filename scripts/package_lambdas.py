@@ -160,6 +160,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/get_review/__init__.py",
             "backend/lambdas/get_review/handler.py",
+            "backend/shared/review_projection.py",
+            "backend/shared/architecture_links.py",
             "backend/shared/analysis_quality.py",
             "backend/shared/assessment.py",
             "backend/shared/retention.py",
@@ -301,8 +303,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     # The report chat (ADR-0050). ask_question makes the one paid model
     # call; it reuses retrieve.vector_search, which needs only the shared
-    # clients. Standard library + boto3 only: the chat code deliberately
-    # avoids the pydantic models. boto3 is bundled here (the same pin as
+    # clients. The shared report projection validates stored children with
+    # the same pydantic model as the report API. boto3 is bundled here (the same pin as
     # the AgentCore runtime lock) because it calls S3 Vectors, and AWS no
     # longer publishes which boto3 the python3.12 runtime carries in each
     # Region: an older one wouldn't know the s3vectors client.
@@ -327,6 +329,11 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/ask_question/__init__.py",
             "backend/lambdas/ask_question/handler.py",
+            "backend/shared/review_projection.py",
+            "backend/shared/architecture_links.py",
+            "backend/shared/models/__init__.py",
+            "backend/shared/models/finding.py",
+            "backend/shared/stakeholder/pricing.py",
             "backend/shared/analysis_quality.py",
             "backend/shared/assessment.py",
             "backend/shared/stakeholder/__init__.py",
@@ -339,7 +346,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/sanitize.py",
             "backend/shared/http.py",
         ],
-        "packages": ["boto3"],
+        "packages": ["boto3", "pydantic>=2.0"],
     },
     # Read-only transcript; no model code bundled.
     "list_questions": {
@@ -355,6 +362,11 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/__init__.py",
             "backend/lambdas/list_questions/__init__.py",
             "backend/lambdas/list_questions/handler.py",
+            "backend/shared/review_projection.py",
+            "backend/shared/architecture_links.py",
+            "backend/shared/models/__init__.py",
+            "backend/shared/models/finding.py",
+            "backend/shared/stakeholder/pricing.py",
             "backend/shared/analysis_quality.py",
             "backend/shared/assessment.py",
             "backend/shared/stakeholder/__init__.py",
@@ -365,7 +377,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/sanitize.py",
             "backend/shared/http.py",
         ],
-        "packages": [],
+        "packages": ["pydantic>=2.0"],
     },
     # validate is listed too, so every Lambda builds the same way.
     # tests/backend/test_package_lambdas.py keeps these lists honest.

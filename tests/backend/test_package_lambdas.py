@@ -167,7 +167,7 @@ def test_wrong_version_fails_the_build(tmp_path):
 def test_sdk_feature_users_bundle_the_pinned_boto3():
     # It calls S3 Vectors, which an older runtime boto3 doesn't know
     # Conditional/checksum S3 uploads and AgentCore also need a known SDK.
-    assert LAMBDA_SPECS["ask_question"]["packages"] == ["boto3"]
+    assert "boto3" in LAMBDA_SPECS["ask_question"]["packages"]
     others = [
         n
         for n, s in LAMBDA_SPECS.items()

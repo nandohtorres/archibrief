@@ -22,6 +22,11 @@ data "aws_iam_policy_document" "lambda_trust" {
 data "aws_iam_policy_document" "review_reader_data_access" {
   statement {
     effect    = "Allow"
+    actions   = ["dynamodb:Query"]
+    resources = [var.findings_table_arn]
+  }
+  statement {
+    effect    = "Allow"
     actions   = ["dynamodb:GetItem"]
     resources = [var.reviews_table_arn]
   }
@@ -65,6 +70,7 @@ resource "aws_lambda_function" "get_review" {
     variables = merge(local.admission_environment, {
       REVIEWS_TABLE_NAME  = var.reviews_table_name
       REPORTS_BUCKET_NAME = var.reports_bucket_name
+      FINDINGS_TABLE_NAME = var.findings_table_name
     })
   }
 

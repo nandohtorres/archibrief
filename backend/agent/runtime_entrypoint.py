@@ -101,6 +101,7 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
         "deterministic_rule_version": payload.get("deterministic_rule_version"),
         "deep_mode": True,
         "parent_finding_id": payload["parent_finding_id"],
+        "parent_finding": payload.get("parent_finding"),
     }
     result_state = _DEEPER_GRAPH.invoke(initial_state)
     return {

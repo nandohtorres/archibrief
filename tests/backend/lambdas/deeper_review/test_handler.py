@@ -105,7 +105,11 @@ class _Env:
         return self.reviews.get_item(Key={"reviewId": "r1"})["Item"]
 
     def stored_findings(self) -> list[dict]:
-        return self.findings.scan()["Items"]
+        return [
+            item
+            for item in self.findings.scan()["Items"]
+            if item.get("kind") != "deeper-result"
+        ]
 
 
 @pytest.fixture
@@ -222,6 +226,7 @@ def test_deeper_receives_original_resource_scope_and_settled_requirements(env):
     assert handler(_event("r1", "f1"), None)["statusCode"] == 200
     payload = _FakeAgentCoreRuntimeClient.calls[0]["payload"]
     assert payload["terraform_resources"] == summary
+    assert payload["parent_finding"] == _LEDGER["findings"][0]
     assert payload["preflight_fields"]["availability_criticality"] == {
         "value": "99.9%",
         "outcome": "assumption",
@@ -339,6 +344,66 @@ def test_deeper_quality_survives_idempotent_replay(env):
     quality = json.loads(first["body"])["analysis_quality"]
     assert quality["outcome"] == "partial"
     assert json.loads(replay["body"])["analysis_quality"] == quality
+
+
+def test_all_rejected_deeper_result_is_durable_and_does_not_spend_again(env):
+    env.seed()
+    _FakeAgentCoreRuntimeClient.response = {
+        "findings": [],
+        "model_output_counts": {"attempted": 2, "accepted": 0, "rejected": 2},
+    }
+    first = handler(_event("r1", "f1"), None)
+    replay = handler(_event("r1", "f1"), None)
+    assert first == replay
+    assert first["statusCode"] == 502
+    assert json.loads(first["body"])["analysis_quality"]["outcome"] == "all-rejected"
+    assert len(_FakeAgentCoreRuntimeClient.calls) == 1
+
+
+def test_lost_claim_cannot_publish_any_part_of_a_deeper_batch(env, monkeypatch):
+    env.seed()
+    original = _FakeAgentCoreRuntimeClient.invoke
+
+    def replace_claim(self, **kwargs):
+        env.reviews.update_item(
+            Key={"reviewId": "r1"},
+            UpdateExpression="SET #lock = :new",
+            ExpressionAttributeNames={"#lock": LOCK},
+            ExpressionAttributeValues={":new": int(time.time()) + 5},
+        )
+        return original(self, **kwargs)
+
+    monkeypatch.setattr(_FakeAgentCoreRuntimeClient, "invoke", replace_claim)
+    result = handler(_event("r1", "f1"), None)
+    assert result["statusCode"] == 409
+    assert env.findings.scan()["Items"] == []
+    assert LOCK in env.review()
+
+
+def test_saved_deeper_findings_survive_get_report_and_reach_chat(env):
+    from backend.chat.context import build_review_context
+    from backend.lambdas.get_review.handler import handler as get_review
+    from backend.shared.review_projection import current_ledger
+
+    base = {
+        **_VALID_RAW_FINDING,
+        "finding_id": "f1",
+        "parent_finding_id": None,
+        "depth_level": "lightweight",
+    }
+    ledger = {**_LEDGER, "findings": [base]}
+    env.seed(review_item={**_REVIEW, "status": "complete"}, ledger=ledger)
+    assert handler(_event("r1", "f1"), None)["statusCode"] == 200
+    body = json.loads(get_review(_event("r1", None), None)["body"])
+    assert {entry["record"]["finding_id"] for entry in body["findings"]} == {"f1", "f2"}
+    assert body["report_projection"]["child_count"] == 1
+    assert (
+        build_review_context(current_ledger(ledger, "r1")).alias_for("f2") is not None
+    )
+    assert (
+        json.loads(env.s3.get_object(Bucket=BUCKET, Key=LEDGER_KEY)["Body"].read())
+        == ledger
+    )
 
 
 def test_kill_switch_blocks_deeper_before_any_paid_call(env, monkeypatch):

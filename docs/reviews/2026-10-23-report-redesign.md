@@ -46,21 +46,52 @@ improvement is claimed without a later paid evaluation. Deployment requires
 rebuilding affected Lambda packages and the AgentCore runtime together; mixed
 versions publish unknown quality rather than inventing counts.
 
-## P05 — agreed next design
+## P05 — shared durable projection implemented; execution redesign remains
 
 User chose assembly of the original S3 ledger plus stored child findings. The
-original ledger will remain immutable. The shared read projection must enforce
-review identity, live TTL, parent membership, deduplication and pagination, and
-feed API, chat, diagram and budget consistently. Query reads must follow
+original ledger stays immutable. The shared read projection enforces
+review identity, live TTL, parent membership, Finding validation, deduplication
+and bounded pagination. API, chat, diagram and budget consume this projection.
+Storage read failures fail the request; invalid/orphaned children are excluded
+with a visible count. An older deployment missing the findings-table environment
+variable explicitly reports `children_available: false`. Query reads follow
 `LastEvaluatedKey`, including filtered empty pages, as documented in the
 [AWS Query API](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Query.html).
 
+Each new deeper batch and a `RESULT#<parent>` completion marker commit together
+with a conditional removal of the current claim, using the existing transaction
+client. Lost claims cannot publish, and a second read after claiming closes the
+read/claim race. Empty and all-rejected runs are durable too: replay does not pay
+again. New records keep the original review expiry. Legacy child-only records
+remain readable with unknown quality. Parent evidence and alternatives reach
+the deeper prompt under bounds, and remain historical claims to reassess, not
+trusted instructions. Reason prompt version: `reason_prompt@2026-10-23b`.
+
+The browser refreshes the saved report after deeper analysis; reload and exports
+use those saved children. A failed refresh or older API retains the explicit
+original-budget fallback. Saved chat answers retain their historical evidence;
+new calls receive the current projection. Read roles gain only Query access to
+the findings table. Chat packages now include the pinned Finding validator.
+
+P05 is **not complete**: execution still uses the existing short synchronous
+AgentCore timeout. An asynchronous job contract/dispatch/recovery design remains
+next. P06 remediation grouping, P07–P09 evaluation architecture and budgeting,
+and P11–P16 typed facts/five coverage domains are also not implemented here.
+Budget totals still sum per finding and disclose overlapping work. No scores,
+paid-run results or deployment verification are implied by these source fixes.
+
 ## Validation
 
-- 71 existing browser tests passed after the UI contract change.
-- 165 focused backend tests passed after deployment manifest corrections.
-- Frontend unit tests, lint and type checking passed before added integration tests.
+- 1,108 backend tests passed, 5 skipped, 26 documented coverage gaps deselected.
+  Includes the real LangGraph state-channel test with the pinned 1.2.16 package.
+- 73 browser tests passed, including independent severity/action filtering and
+  deeper result reload/export recovery.
+- 82 frontend unit tests passed; lint, type checking and formatting passed.
 - Added checks cover a risky fact, a medium rule, unassessed legacy data, independent
   filtering/ranking, both rejection gates, worker-to-S3-to-report/chat propagation,
   deeper replay counters, and HTML warnings for all-rejected output.
-- Full backend rerun and the new browser scenario are pending at this checkpoint.
+- Terraform files parse and pass formatting; no provider initialization, plan,
+  deployment or live paid submission was run.
+- Local environment: Windows, Python 3.14.3, Node 24.14.0; CI targets Python 3.12.
+  Pinned graph dependencies were installed in ignored `backend/build/graph-test-deps`
+  for the final suite, without altering global packages.

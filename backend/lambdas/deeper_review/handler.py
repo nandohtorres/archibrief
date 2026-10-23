@@ -30,10 +30,16 @@ from botocore.exceptions import ClientError, ReadTimeoutError
 from backend.lambdas.validate.handler import validate_findings
 from backend.shared.admission import AdmissionDenied, positive_setting, reserve_operation
 from backend.shared.analysis_quality import build_analysis_quality, public_analysis_quality
-from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
+from backend.shared.clients import (
+    AgentCoreRuntimeClient,
+    DynamoDBClient,
+    DynamoDBTransactionClient,
+    S3Client,
+    TransactionCanceled,
+)
 from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
-from backend.shared.models.finding import Finding
+from backend.shared.models.finding import DepthLevel, Finding
 from backend.shared.public_access import capability_allowed
 from backend.shared.report import report_findings, stakeholder_view
 from backend.shared.retention import review_expires_at, review_is_live
@@ -112,21 +118,42 @@ def _release_in_flight(client: DynamoDBClient, review_id: str, finding_id: str, 
 
 def _existing_deeper_findings(
     client: DynamoDBClient, review_id: str, finding_id: str
-) -> tuple[list[Finding], dict]:
-    items = client.query(
+) -> tuple[list[Finding], dict, bool]:
+    items = client.query_all(
         KeyConditionExpression="reviewId = :rid",
         FilterExpression="parent_finding_id = :pid",
         ExpressionAttributeValues={":rid": review_id, ":pid": finding_id},
+        ConsistentRead=True,
+        Limit=50,
     )
+    items = [item for item in items if review_is_live(item)]
+    marker = next((item for item in items if item.get("kind") == "deeper-result"), None)
+    records = [item for item in items if item.get("kind") != "deeper-result"]
+    if marker:
+        expected = set(marker["finding_ids"])
+        records = [item for item in records if item.get("finding_id") in expected]
+        if {item.get("finding_id") for item in records} != expected:
+            raise ValueError("incomplete stored deeper result")
     return (
-        [Finding.model_validate(item) for item in items],
-        public_analysis_quality(items[0].get("analysis_quality") if items else None),
+        [Finding.model_validate(item) for item in records],
+        public_analysis_quality(
+            (marker or (records[0] if records else {})).get("analysis_quality")
+        ),
+        marker is not None or bool(records),
     )
 
 
 def _findings_response(
     review_id: str, finding_id: str, findings: list[Finding], quality: dict | None = None
 ) -> dict:
+    if not findings and public_analysis_quality(quality)["outcome"] != "no-findings":
+        return _response(
+            502,
+            {
+                "error": "the deeper evaluation produced no valid findings",
+                "analysis_quality": public_analysis_quality(quality),
+            },
+        )
     return _response(
         200,
         {
@@ -190,8 +217,10 @@ def handler(event: dict, _context: object) -> dict:
     # per-finding in-flight claim stops a double-click or a client retry
     # after a gateway timeout from starting a second concurrent paid run.
     findings_table = DynamoDBClient(table_name=os.environ["FINDINGS_TABLE_NAME"])
-    existing, existing_quality = _existing_deeper_findings(findings_table, review_id, finding_id)
-    if existing:
+    existing, existing_quality, completed = _existing_deeper_findings(
+        findings_table, review_id, finding_id
+    )
+    if completed:
         return _findings_response(review_id, finding_id, existing, existing_quality)
 
     claimed_at = int(time.time())
@@ -200,6 +229,13 @@ def handler(event: dict, _context: object) -> dict:
             409,
             {"error": "a deeper analysis for this finding is already running; try again shortly"},
         )
+    # Another run may have committed between the first read and our claim.
+    existing, existing_quality, completed = _existing_deeper_findings(
+        findings_table, review_id, finding_id
+    )
+    if completed:
+        _release_in_flight(reviews_table, review_id, finding_id, claimed_at)
+        return _findings_response(review_id, finding_id, existing, existing_quality)
 
     try:
         fresh = reserve_operation(
@@ -230,6 +266,7 @@ def handler(event: dict, _context: object) -> dict:
                 "workload_brief": workload_brief,
                 "retrieval_query": retrieval_query,
                 "parent_finding_id": finding_id,
+                "parent_finding": parent_finding,
                 "terraform_resources": ledger.get("terraform_resources") or {},
                 "preflight_fields": {
                     answer["field"]: {
@@ -263,24 +300,69 @@ def handler(event: dict, _context: object) -> dict:
         raw_new_findings,
         [finding.model_dump(mode="json") for finding in valid_findings],
     )
-    if not valid_findings:
-        _release_in_flight(reviews_table, review_id, finding_id, claimed_at)
-        return _response(
-            502,
-            {
-                "error": "the deeper evaluation produced no valid findings",
-                "analysis_quality": quality,
-            },
-        )
-
-    for finding in valid_findings:
-        findings_table.put_item(
-            {
-                **_findings_table_item(finding),
-                "ttl": review_expires_at(review_item),
-                "analysis_quality": quality,
+    valid_findings = [
+        finding.model_copy(
+            update={
+                "review_id": review_id,
+                "parent_finding_id": finding_id,
+                "depth_level": DepthLevel.DEEP,
             }
         )
-    _release_in_flight(reviews_table, review_id, finding_id, claimed_at)
+        for finding in valid_findings
+    ]
+    if len(valid_findings) > 98:
+        raise ValueError("deeper result exceeds atomic batch limit")
+    deadline = review_expires_at(review_item)
+    committed_at = int(time.time())
+    if deadline <= committed_at:
+        return _response(409, {"error": "review expired before the deeper result could be saved"})
+    marker = {
+        "reviewId": review_id,
+        "findingId": f"RESULT#{finding_id}",
+        "kind": "deeper-result",
+        "parent_finding_id": finding_id,
+        "finding_ids": [finding.finding_id for finding in valid_findings],
+        "analysis_quality": quality,
+        "ttl": deadline,
+    }
+    # Every child and its completion marker commit together. The lock check
+    # prevents a timed-out/stale attempt from publishing over a newer one.
+    actions = [
+        {
+            "Put": {
+                "TableName": os.environ["FINDINGS_TABLE_NAME"],
+                "Item": {
+                    **_findings_table_item(finding),
+                    "ttl": deadline,
+                    "analysis_quality": quality,
+                },
+            }
+        }
+        for finding in valid_findings
+    ]
+    actions.extend(
+        [
+            {"Put": {"TableName": os.environ["FINDINGS_TABLE_NAME"], "Item": marker}},
+            {
+                "Update": {
+                    "TableName": os.environ["REVIEWS_TABLE_NAME"],
+                    "Key": {"reviewId": review_id},
+                    "UpdateExpression": "REMOVE #lock",
+                    "ConditionExpression": "#lock = :claim AND (attribute_not_exists(#ttl) OR #ttl > :now)",
+                    "ExpressionAttributeNames": {
+                        "#lock": _in_flight_attribute(finding_id),
+                        "#ttl": "ttl",
+                    },
+                    "ExpressionAttributeValues": {":claim": claimed_at, ":now": committed_at},
+                }
+            },
+        ]
+    )
+    try:
+        DynamoDBTransactionClient().transact_write(actions)
+    except TransactionCanceled:
+        return _response(
+            409, {"error": "the deeper result could not be committed; reload the report"}
+        )
 
     return _findings_response(review_id, finding_id, valid_findings, quality)

@@ -266,6 +266,8 @@ export function ReportQuestions({
           <strong>Bound to this report snapshot</strong>
           Answers use the workload brief, the findings and their evidence, the resource settings and
           AWS Well-Architected guidance. They can&apos;t see live AWS and never change the report.
+          Saved answers retain the evidence available when they were written; they are not
+          regenerated when deeper findings are added.
         </p>
       </div>
 

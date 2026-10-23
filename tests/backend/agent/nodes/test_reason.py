@@ -13,6 +13,7 @@ job respectively) and are covered where they actually live.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 
 import pytest
@@ -387,8 +388,34 @@ def test_reason_node_keeps_verified_findings_when_a_sibling_citation_fails():
     assert len(result["reasoned_findings"]) == 1
     assert result["reasoned_findings"][0]["finding"] == good["finding"]
     assert len(result["dropped_model_findings"]) == 1
-    assert result["model_output_counts"] == {"attempted": 2, "accepted": 1, "rejected": 1}
+    assert result["model_output_counts"] == {
+        "attempted": 2,
+        "accepted": 1,
+        "rejected": 1,
+    }
     assert "finding[1]" in result["dropped_model_findings"][0]
+
+
+def test_deeper_reasoning_sees_bounded_parent_evidence_and_alternatives():
+    state = _reason_state([])
+    state.update(
+        deep_mode=True,
+        parent_finding={
+            "finding": "Original finding",
+            "evidence": "x" * 9000,
+            "alternatives_considered": [
+                {"option": "alternative", "reason_rejected": "y" * 9000}
+            ]
+            * 20,
+            "private_internal_field": "must not enter the prompt",
+        },
+    )
+    reason_node(state)
+    sent = json.loads(state["reasoning_client"].calls[0]["user_content"])
+    assert sent["parent_finding"]["finding"] == "Original finding"
+    assert len(sent["parent_finding"]["evidence"]) <= 1200
+    assert len(sent["parent_finding"]["alternatives_considered"]) == 3
+    assert "private_internal_field" not in sent["parent_finding"]
 
 
 def test_reason_node_still_returns_rule_findings_when_every_model_finding_fails():

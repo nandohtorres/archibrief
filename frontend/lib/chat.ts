@@ -252,10 +252,12 @@ export function buildReportHtml(
 <p class="meta">${escapeHtml(report.terraform_repo_ref)} · ${escapeHtml(report.created_at)} · review ${escapeHtml(report.review_id)}</p>
 <p class="meta">${escapeHtml(reportSnapshotLabel(report.findings))}</p>
 <h2>Analysis quality</h2><p>${escapeHtml(qualityMessage(report.analysis_quality))}</p>
+${(report.deeper_reviews ?? []).map((run) => `<p>Deeper review of ${escapeHtml(run.parent_finding_id)}: ${escapeHtml(qualityMessage(run.analysis_quality))}</p>`).join("")}
+${report.report_projection?.excluded_child_count ? "<p>Some saved deeper findings could not be included. Report completeness and totals are limited.</p>" : ""}
 ${demo ? `<h2>Demo source and review corrections</h2><p>${escapeHtml(demo.source)} · ${escapeHtml(demo.license)}</p><p>${escapeHtml(demo.disclaimer)}</p>${safeHref(demo.sourceUrl) ? `<p><a href="${escapeHtml(safeHref(demo.sourceUrl))}">Original source</a></p>` : ""}<p>Original generated text is preserved. Reviewer notes correct or qualify it, including saved answers. Annotation format: demo-review@1; historical review date not recorded.</p>${notes.map(reviewerNoteHtml).join("")}` : ""}
 <h2>Requirements used</h2>
 <ul>${baseline || "<li>None recorded.</li>"}</ul>
-${report.findings.some(({ record }) => record.parent_finding_id) ? "<p>Budget totals and guided explanations cover the original report. Added deeper findings are listed separately below and are not included in those totals.</p>" : ""}
+${report.findings.some(({ record }) => record.parent_finding_id) && !report.report_projection?.children_available ? "<p>Budget totals and guided explanations cover the original report. Added deeper findings are listed separately below and are not included in those totals.</p>" : ""}
 ${report.budget ? `<h2>What it costs to fix</h2>${budgetHtml(report.budget)}` : ""}
 <h2>Findings (${report.findings.length})</h2>
 ${findings}

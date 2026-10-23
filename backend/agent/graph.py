@@ -74,6 +74,7 @@ class ReviewState(TypedDict, total=False):
     # versioned child of the original, never a disconnected result (ADR-0039).
     deep_mode: bool
     parent_finding_id: str | None
+    parent_finding: dict[str, Any] | None
 
 
 def route_after_preflight(state: ReviewState) -> str:

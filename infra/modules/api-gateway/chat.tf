@@ -35,6 +35,11 @@ resource "random_password" "chat_canary" {
 
 data "aws_iam_policy_document" "ask_question_access" {
   statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:Query"]
+    resources = [var.findings_table_arn]
+  }
+  statement {
     # ADR-0030 kill switch, checked first; fails closed.
     effect    = "Allow"
     actions   = ["ssm:GetParameter"]
@@ -89,6 +94,11 @@ data "aws_iam_policy_document" "ask_question_access" {
 data "aws_iam_policy_document" "list_questions_access" {
   statement {
     effect    = "Allow"
+    actions   = ["dynamodb:Query"]
+    resources = [var.findings_table_arn]
+  }
+  statement {
+    effect    = "Allow"
     actions   = ["dynamodb:GetItem"]
     resources = [var.reviews_table_arn]
   }
@@ -128,6 +138,7 @@ locals {
     REVIEWS_TABLE_NAME        = var.reviews_table_name
     QUESTIONS_TABLE_NAME      = var.review_questions_table_name
     REPORTS_BUCKET_NAME       = var.reports_bucket_name
+    FINDINGS_TABLE_NAME       = var.findings_table_name
     CHAT_PUBLIC_ENABLED       = var.chat_public_enabled ? "true" : "false"
     CHAT_QUESTIONS_PER_REVIEW = tostring(var.chat_questions_per_review)
   })

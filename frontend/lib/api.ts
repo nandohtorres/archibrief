@@ -4,6 +4,7 @@ import {
   isReviewReport,
   isSubmitReviewResponse,
   type AskQuestionRequest,
+  type AnalysisQuality,
   type AskQuestionResponse,
   type ClarificationRequest,
   type QuestionsTranscript,
@@ -15,6 +16,7 @@ import {
   type SubmitReviewResponse,
 } from "./contracts";
 import { reviewAccessHeaders, storeReviewAccess } from "./review-access";
+import { qualityMessage } from "./analysis-quality";
 
 export class ApiRequestError extends Error {
   constructor(
@@ -62,8 +64,9 @@ async function readJson(response: Response): Promise<unknown> {
         ? "Too many requests right now. Wait a minute and try again."
         : text || `ArchiBrief API returned ${response.status}.`;
     try {
-      const body = JSON.parse(text) as { error?: string };
+      const body = JSON.parse(text) as { error?: string; analysis_quality?: AnalysisQuality };
       if (body.error && messages[body.error]) message = messages[body.error];
+      if (body.analysis_quality?.version === 1) message = qualityMessage(body.analysis_quality);
     } catch {
       /* Older endpoints can return plain text. */
     }

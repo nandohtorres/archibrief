@@ -73,6 +73,23 @@ class DynamoDBClient:
         response = self._table.query(**kwargs)
         return response.get("Items", [])
 
+    def query_all(self, *, max_pages: int = 20, **kwargs: Any) -> list[dict[str, Any]]:
+        """Follow every page, including empty filtered pages; fail on bounds.
+
+        Separate from query() so callers requesting one page retain that
+        contract. A bounded reader must never silently return half a report.
+        """
+        items = []
+        request = dict(kwargs)
+        for _ in range(max_pages):
+            response = self._table.query(**request)
+            items.extend(response.get("Items", []))
+            cursor = response.get("LastEvaluatedKey")
+            if not cursor:
+                return items
+            request["ExclusiveStartKey"] = cursor
+        raise ValueError("query pagination limit exceeded")
+
     def update_item(self, **kwargs: Any) -> None:
         """Field-level update (with an optional ConditionExpression), so
         callers don't overwrite fields written concurrently by others —
