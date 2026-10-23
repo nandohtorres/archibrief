@@ -1,10 +1,5 @@
-import type {
-  BudgetSummary,
-  FindingPriority,
-  FindingType,
-  ReportFinding,
-  ReviewReport,
-} from "./contracts";
+import type { BudgetSummary, FindingType, ReportFinding, ReviewReport } from "./contracts";
+import { assessmentFor, compareAssessments } from "./assessment";
 
 export type AppScreen = "submission" | "preflight" | "progress" | "clarify" | "report" | "failure";
 // Where the report on screen came from: the public sample (GET /demo),
@@ -12,15 +7,9 @@ export type AppScreen = "submission" | "preflight" | "progress" | "clarify" | "r
 // API configured. Drives labels and whether paid actions are offered.
 // "demo": a saved review of real public Terraform (lib/demos.ts).
 export type ReportSource = "sample" | "demo" | "live" | "fixture";
-export type FindingFilter = "all" | FindingPriority;
+export type FindingFilter =
+  "all" | "needed" | "none" | "unknown" | "critical" | "high" | "medium" | "low";
 export type FindingSort = "priority" | "confidence" | "title";
-
-export const priorityRank: Record<FindingPriority, number> = {
-  high: 4,
-  review: 3,
-  unknown: 2,
-  confirmed: 1,
-};
 
 export function filterAndSortFindings(
   findings: ReportFinding[],
@@ -30,15 +19,18 @@ export function filterAndSortFindings(
 ): ReportFinding[] {
   const normalizedQuery = query.trim().toLowerCase();
   return findings
-    .filter(({ record, presentation }) => {
-      const matchesFilter = filter === "all" || presentation.priority === filter;
+    .filter((finding) => {
+      const { record } = finding;
+      const assessment = assessmentFor(finding);
+      const matchesFilter =
+        filter === "all" || assessment.action === filter || assessment.severity === filter;
       const haystack = `${record.finding} ${record.category} ${record.type}`.toLowerCase();
       return matchesFilter && haystack.includes(normalizedQuery);
     })
     .sort((left, right) => {
       if (sort === "confidence") return right.record.confidence - left.record.confidence;
       if (sort === "title") return left.record.finding.localeCompare(right.record.finding);
-      return priorityRank[right.presentation.priority] - priorityRank[left.presentation.priority];
+      return compareAssessments(left, right);
     });
 }
 
@@ -168,8 +160,10 @@ function costIntro(budget: BudgetSummary): string {
 // heading doesn't repeat a name derived from the repository label.
 export function stakeholderSummary(report: ReviewReport, titled = false): StakeholderSummary {
   const name = titled ? "" : workloadName(report.terraform_repo_ref);
-  const high = report.findings.filter(({ presentation }) => presentation.priority === "high");
-  const review = report.findings.filter(({ presentation }) => presentation.priority === "review");
+  const high = report.findings.filter(({ record }) => record.type === "deterministic-rule-result");
+  const review = report.findings.filter(({ record }) =>
+    ["assumption", "inference", "recommendation"].includes(record.type),
+  );
 
   const toReview = plural(review.length, "item", "items");
   const findingsIntro =
@@ -198,7 +192,11 @@ export function stakeholderSummary(report: ReviewReport, titled = false): Stakeh
   return {
     heading: name ? `What this review means for ${name}` : "What this review means",
     intro,
-    startWith: high.slice(0, 3).map(({ record }) => record.finding),
+    startWith: report.findings
+      .filter((f) => assessmentFor(f).action === "needed")
+      .sort(compareAssessments)
+      .slice(0, 3)
+      .map(({ record }) => record.finding),
     coverageLimits,
   };
 }

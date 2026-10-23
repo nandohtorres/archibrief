@@ -1430,6 +1430,36 @@ h4 {
   color: var(--critical);
 }
 
+.priority-pill.severity-critical,
+.architecture-badge.severity-critical {
+  color: #fff;
+  background: #9f2435;
+}
+
+.priority-pill.severity-high,
+.architecture-badge.severity-high {
+  color: #892b24;
+  background: #ffe3de;
+}
+
+.priority-pill.severity-medium,
+.architecture-badge.severity-medium {
+  color: #71500c;
+  background: #fff0c9;
+}
+
+.priority-pill.severity-low,
+.architecture-badge.severity-low {
+  color: #294f73;
+  background: #e0edf9;
+}
+
+.priority-pill.severity-unknown,
+.architecture-badge.severity-unknown {
+  color: #42556b;
+  background: #edf1f6;
+}
+
 .priority-pill.review {
   background: var(--warning-bg);
   color: var(--warning);

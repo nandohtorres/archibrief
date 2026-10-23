@@ -387,6 +387,7 @@ def test_reason_node_keeps_verified_findings_when_a_sibling_citation_fails():
     assert len(result["reasoned_findings"]) == 1
     assert result["reasoned_findings"][0]["finding"] == good["finding"]
     assert len(result["dropped_model_findings"]) == 1
+    assert result["model_output_counts"] == {"attempted": 2, "accepted": 1, "rejected": 1}
     assert "finding[1]" in result["dropped_model_findings"][0]
 
 

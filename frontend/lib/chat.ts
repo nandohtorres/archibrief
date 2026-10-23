@@ -8,6 +8,8 @@ import type {
 import type { DemoEntry, ReviewerNote } from "./demos";
 import { evidenceLabel, notesForTurn, reportSnapshotLabel } from "./report-review";
 import { formatDollars, formatMonthly } from "./workflow";
+import { assessmentFor, assessmentLabel } from "./assessment";
+import { qualityMessage } from "./analysis-quality";
 
 // Plain messages for the chat API's error codes (backend/lambdas/
 // ask_question ERROR_MESSAGES). The server's own text is never shown, so
@@ -167,10 +169,12 @@ export function buildReportHtml(
 ): string {
   const notes = demo?.reviewerNotes ?? [];
   const findings = report.findings
-    .map(
-      ({ record, stakeholder }) => `
+    .map((finding) => {
+      const { record, stakeholder } = finding;
+      return `
     <article class="finding">
       <h3>${escapeHtml(record.finding)}</h3>
+      <p class="meta">${escapeHtml(assessmentLabel(finding))} · assessment source: ${escapeHtml(assessmentFor(finding).source)}</p>
       <p class="meta">${escapeHtml(evidenceLabel(record.type))} · ${escapeHtml(record.category)} · ${escapeHtml(record.type)} · evidence confidence ${Math.round(record.confidence * 100)}% (heuristic, not correctness probability)</p>
       ${notes
         .filter((note) => note.findingId === record.finding_id)
@@ -189,8 +193,8 @@ export function buildReportHtml(
             }</p>`
           : ""
       }
-    </article>`,
-    )
+    </article>`;
+    })
     .join("");
   const baseline = report.baseline_answers
     .map(
@@ -247,6 +251,7 @@ export function buildReportHtml(
 <h1>${escapeHtml(title)}</h1>
 <p class="meta">${escapeHtml(report.terraform_repo_ref)} · ${escapeHtml(report.created_at)} · review ${escapeHtml(report.review_id)}</p>
 <p class="meta">${escapeHtml(reportSnapshotLabel(report.findings))}</p>
+<h2>Analysis quality</h2><p>${escapeHtml(qualityMessage(report.analysis_quality))}</p>
 ${demo ? `<h2>Demo source and review corrections</h2><p>${escapeHtml(demo.source)} · ${escapeHtml(demo.license)}</p><p>${escapeHtml(demo.disclaimer)}</p>${safeHref(demo.sourceUrl) ? `<p><a href="${escapeHtml(safeHref(demo.sourceUrl))}">Original source</a></p>` : ""}<p>Original generated text is preserved. Reviewer notes correct or qualify it, including saved answers. Annotation format: demo-review@1; historical review date not recorded.</p>${notes.map(reviewerNoteHtml).join("")}` : ""}
 <h2>Requirements used</h2>
 <ul>${baseline || "<li>None recorded.</li>"}</ul>

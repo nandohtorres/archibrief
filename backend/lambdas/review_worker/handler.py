@@ -17,6 +17,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from backend.shared.admission import release_operation, request_digest
+from backend.shared.analysis_quality import build_analysis_quality
 from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.retention import review_is_live
@@ -227,6 +228,9 @@ def handler(event: dict, _context: object) -> dict:
             return {"status": "needs_clarification"}
         _progress(table, review_id, "validate")
         validated = _invoke("validate", {"findings": agent["findings"]})
+        quality = build_analysis_quality(
+            agent.get("model_output_counts"), agent["findings"], validated["valid_findings"]
+        )
         _progress(table, review_id, "audit")
         _invoke(
             "audit",
@@ -244,6 +248,7 @@ def handler(event: dict, _context: object) -> dict:
             {
                 "review_id": review_id,
                 "findings": validated["valid_findings"],
+                "analysis_quality": quality,
                 "workload_brief": state["workload_brief"],
                 "preflight_fields": agent.get("preflight_fields", {}),
                 "defaults_version": agent.get("defaults_version"),

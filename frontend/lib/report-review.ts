@@ -1,8 +1,9 @@
 import type { ChatTurn, FindingType, ReportFinding, ReviewReport } from "./contracts";
 import type { DemoEntry, ReviewerNote } from "./demos";
+import { assessmentFor } from "./assessment";
 
 // These labels describe evidence provenance, not severity. Keep historical
-// priority keys compatible until the severity contract is separately reviewed.
+// priority keys compatible for historical clients; risk uses assessment.ts.
 export function evidenceLabel(type: FindingType): string {
   switch (type) {
     case "deterministic-rule-result":
@@ -65,6 +66,9 @@ export function buildReportExport(
 ) {
   return {
     ...report,
+    assessment_view: Object.fromEntries(
+      report.findings.map((finding) => [finding.record.finding_id, assessmentFor(finding)]),
+    ),
     chat_transcript: transcript,
     ...(demo ? { demo_review: demoReviewMetadata(demo) } : {}),
   };

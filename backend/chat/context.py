@@ -19,6 +19,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from backend.shared.analysis_quality import public_analysis_quality
+from backend.shared.assessment import assessment_rank, finding_assessment
 from backend.shared.sanitize import clip, normalize_text
 
 FIELD_CHARS = 1200
@@ -28,19 +30,6 @@ ALTERNATIVES_PER_FINDING = 3
 # About 9k tokens. Over this, lower-priority findings are cut down to their
 # one-line text, then dropped, rather than failing the question.
 REVIEW_BLOCK_CHARS = 36000
-
-# Same buckets as backend/shared/report.py's _PRIORITY_BY_TYPE (a test
-# keeps them equal), without importing the pydantic models into the chat
-# Lambda.
-PRIORITY_BY_TYPE = {
-    "deterministic-rule-result": "high",
-    "fact": "confirmed",
-    "assumption": "review",
-    "inference": "review",
-    "recommendation": "review",
-    "not-observable": "unknown",
-}
-_PRIORITY_RANK = {"high": 0, "review": 1, "unknown": 2, "confirmed": 3}
 
 NO_RESOURCES_NOTE = (
     "This review was stored before resource summaries were kept with it, so "
@@ -80,7 +69,7 @@ def _order(findings: list[dict]) -> list[dict]:
     indexed = list(enumerate(findings))
     indexed.sort(
         key=lambda pair: (
-            _PRIORITY_RANK.get(PRIORITY_BY_TYPE.get(pair[1].get("type", ""), "review"), 1),
+            *assessment_rank(pair[1]),
             -float(pair[1].get("confidence") or 0),
             pair[0],
         )
@@ -102,7 +91,7 @@ def _compact_finding(alias: str, finding: dict, parent_alias: str | None) -> dic
         "ref": alias,
         "category": _text(finding.get("category"), 40),
         "type": _text(finding.get("type"), 40),
-        "priority": PRIORITY_BY_TYPE.get(finding.get("type", ""), "review"),
+        "assessment": finding_assessment(finding),
         "finding": _text(finding.get("finding")),
         "evidence": _text(finding.get("evidence")),
         "risk_impact": _text(finding.get("risk_impact")),
@@ -216,6 +205,7 @@ def build_review_context(ledger: dict[str, Any]) -> ReviewContext:
     ctx.review_data = _trim(
         {
             "workload_brief": _text(ledger.get("workload_brief"), BRIEF_CHARS),
+            "analysis_quality": public_analysis_quality(ledger.get("analysis_quality")),
             "requirements": requirements,
             "findings": compact_findings,
             "terraform_resources": terraform_resources,

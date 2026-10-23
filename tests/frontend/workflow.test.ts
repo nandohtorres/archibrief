@@ -11,21 +11,18 @@ import {
 } from "../../frontend/lib/workflow";
 
 describe("finding workspace behavior", () => {
-  it("filters by presentation priority without changing the evidence ledger", () => {
+  it("keeps legacy unassessed findings distinct without changing the evidence ledger", () => {
     const originalOrder = fixtureReport.findings.map(
       ({ record }) => record.finding_id,
     );
     const highRisk = filterAndSortFindings(
       fixtureReport.findings,
       "",
-      "high",
+      "unknown",
       "priority",
     );
 
-    expect(highRisk).toHaveLength(3);
-    expect(
-      highRisk.every(({ presentation }) => presentation.priority === "high"),
-    ).toBe(true);
+    expect(highRisk).toHaveLength(fixtureReport.findings.length);
     expect(
       fixtureReport.findings.map(({ record }) => record.finding_id),
     ).toEqual(originalOrder);
@@ -121,7 +118,22 @@ describe("stakeholder summary", () => {
       ...fixtureReport.findings[0].record,
       finding_id: title,
       finding: title,
+      type:
+        priority === "high"
+          ? ("deterministic-rule-result" as const)
+          : priority === "review"
+            ? ("inference" as const)
+            : ("fact" as const),
     },
+    assessment:
+      priority === "high"
+        ? {
+            version: 1 as const,
+            severity: "high" as const,
+            action: "needed" as const,
+            source: "rule" as const,
+          }
+        : undefined,
     presentation: { priority, short_label: priority },
   });
 

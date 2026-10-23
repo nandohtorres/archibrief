@@ -9,6 +9,8 @@ import {
   stakeholderSummary,
 } from "@/lib/workflow";
 import { BudgetSummary, verdictClass } from "./budget-summary";
+import { assessmentFor } from "@/lib/assessment";
+import { AssessmentTag } from "./assessment-tag";
 
 interface GuidedReportProps {
   report: ReviewReport;
@@ -93,9 +95,7 @@ function FindingCard({
   return (
     <details open={open} id={cardElementId(finding.record.finding_id)}>
       <summary>
-        <span className={`priority-pill ${finding.presentation.priority}`}>
-          {finding.presentation.short_label}
-        </span>
+        <AssessmentTag finding={finding} />
         <span>
           <small>
             {formatFindingId(finding.record.finding_id)} · {finding.record.category}
@@ -106,7 +106,6 @@ function FindingCard({
         {card?.verdict && card.verdict_label && (
           <span className={`verdict-tag ${verdictClass[card.verdict]}`}>{card.verdict_label}</span>
         )}
-        {card && !card.needs_action && <span className="verdict-tag none">No action needed</span>}
         <i aria-hidden="true">›</i>
       </summary>
       <div className="guided-finding-body">
@@ -179,7 +178,7 @@ export function GuidedReport({
   titled = false,
 }: GuidedReportProps) {
   const decisionFindings = orderByBudget(
-    report.findings.filter(({ presentation }) => presentation.priority !== "confirmed"),
+    report.findings.filter((f) => assessmentFor(f).action !== "none"),
     report.budget,
   );
   // Facts read straight from the code. Some are only context ("Multi-AZ
@@ -187,7 +186,7 @@ export function GuidedReport({
   // disabled"), so they're shown, in their own labeled section, rather
   // than hidden.
   const confirmedFindings = orderByBudget(
-    report.findings.filter(({ presentation }) => presentation.priority === "confirmed"),
+    report.findings.filter((f) => assessmentFor(f).action === "none"),
     report.budget,
   );
   const summary = stakeholderSummary(report, titled);
@@ -225,7 +224,7 @@ export function GuidedReport({
                 </ul>
               </>
             ) : (
-              <p>No high-risk gaps need fixing first; review the items below.</p>
+              <p>No action assessments were recorded. Review the evidence below.</p>
             ))}
           {summary.coverageLimits.map((limit) => (
             <p key={limit}>
@@ -265,10 +264,10 @@ export function GuidedReport({
 
       {confirmedFindings.length > 0 && (
         <>
-          <h3 className="guided-section-heading">Reported facts</h3>
+          <h3 className="guided-section-heading">No action proposed</h3>
           <p className="guided-section-note">
-            Findings classified as facts in the original review. This is not a safety rating; check
-            their evidence and any reviewer corrections.
+            These findings have an explicit no-action assessment. This is not a safety guarantee;
+            check their evidence, assessment source and any reviewer corrections.
           </p>
           <div className="guided-findings">
             {confirmedFindings.map((finding) => (

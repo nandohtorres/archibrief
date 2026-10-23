@@ -322,7 +322,23 @@ def test_returns_502_when_agent_produces_no_valid_findings(env):
     result = handler(_event("r1", "f1"), None)
 
     assert result["statusCode"] == 502
+    assert "rejected" not in json.loads(result["body"])
     assert LOCK not in env.review()
+
+
+def test_deeper_quality_survives_idempotent_replay(env):
+    env.seed()
+    _FakeAgentCoreRuntimeClient.response = {
+        "status": "complete",
+        "findings": [dict(_VALID_RAW_FINDING, model_id="model")],
+        "model_output_counts": {"attempted": 2, "accepted": 1, "rejected": 1},
+    }
+    first = handler(_event("r1", "f1"), None)
+    replay = handler(_event("r1", "f1"), None)
+    assert first["statusCode"] == replay["statusCode"] == 200
+    quality = json.loads(first["body"])["analysis_quality"]
+    assert quality["outcome"] == "partial"
+    assert json.loads(replay["body"])["analysis_quality"] == quality
 
 
 def test_kill_switch_blocks_deeper_before_any_paid_call(env, monkeypatch):

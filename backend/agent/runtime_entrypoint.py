@@ -107,6 +107,7 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
         "dropped_model_findings": result_state.get("dropped_model_findings", []),
+        "model_output_counts": result_state.get("model_output_counts"),
     }
 
 
@@ -179,6 +180,7 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
         "dropped_model_findings": result_state.get("dropped_model_findings", []),
+        "model_output_counts": result_state.get("model_output_counts"),
         # Returned on the success path too, so Finalize can persist
         # per-field preflight outcomes for a completed review.
         "preflight_fields": result_state.get("preflight_fields", {}),

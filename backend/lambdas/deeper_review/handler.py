@@ -29,12 +29,13 @@ from botocore.exceptions import ClientError, ReadTimeoutError
 
 from backend.lambdas.validate.handler import validate_findings
 from backend.shared.admission import AdmissionDenied, positive_setting, reserve_operation
+from backend.shared.analysis_quality import build_analysis_quality, public_analysis_quality
 from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
 from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.models.finding import Finding
 from backend.shared.public_access import capability_allowed
-from backend.shared.report import compute_presentation
+from backend.shared.report import report_findings, stakeholder_view
 from backend.shared.retention import review_expires_at, review_is_live
 
 
@@ -111,16 +112,21 @@ def _release_in_flight(client: DynamoDBClient, review_id: str, finding_id: str, 
 
 def _existing_deeper_findings(
     client: DynamoDBClient, review_id: str, finding_id: str
-) -> list[Finding]:
+) -> tuple[list[Finding], dict]:
     items = client.query(
         KeyConditionExpression="reviewId = :rid",
         FilterExpression="parent_finding_id = :pid",
         ExpressionAttributeValues={":rid": review_id, ":pid": finding_id},
     )
-    return [Finding.model_validate(item) for item in items]
+    return (
+        [Finding.model_validate(item) for item in items],
+        public_analysis_quality(items[0].get("analysis_quality") if items else None),
+    )
 
 
-def _findings_response(review_id: str, finding_id: str, findings: list[Finding]) -> dict:
+def _findings_response(
+    review_id: str, finding_id: str, findings: list[Finding], quality: dict | None = None
+) -> dict:
     return _response(
         200,
         {
@@ -129,10 +135,8 @@ def _findings_response(review_id: str, finding_id: str, findings: list[Finding])
             # Same {record, presentation} shape build_review_report uses
             # (backend/shared/report.py), so the frontend renders a deeper
             # finding with the same components as every other finding.
-            "findings": [
-                {"record": f.model_dump(mode="json"), "presentation": compute_presentation(f)}
-                for f in findings
-            ],
+            "findings": report_findings(findings, stakeholder_view(findings, {})),
+            "analysis_quality": public_analysis_quality(quality),
         },
     )
 
@@ -186,9 +190,9 @@ def handler(event: dict, _context: object) -> dict:
     # per-finding in-flight claim stops a double-click or a client retry
     # after a gateway timeout from starting a second concurrent paid run.
     findings_table = DynamoDBClient(table_name=os.environ["FINDINGS_TABLE_NAME"])
-    existing = _existing_deeper_findings(findings_table, review_id, finding_id)
+    existing, existing_quality = _existing_deeper_findings(findings_table, review_id, finding_id)
     if existing:
-        return _findings_response(review_id, finding_id, existing)
+        return _findings_response(review_id, finding_id, existing, existing_quality)
 
     claimed_at = int(time.time())
     if not _claim_in_flight(reviews_table, review_id, finding_id, claimed_at):
@@ -253,18 +257,30 @@ def handler(event: dict, _context: object) -> dict:
         raise
 
     raw_new_findings = agent_response.get("findings", [])
-    valid_findings, rejected = validate_findings(raw_new_findings)
+    valid_findings, _rejected = validate_findings(raw_new_findings)
+    quality = build_analysis_quality(
+        agent_response.get("model_output_counts"),
+        raw_new_findings,
+        [finding.model_dump(mode="json") for finding in valid_findings],
+    )
     if not valid_findings:
         _release_in_flight(reviews_table, review_id, finding_id, claimed_at)
         return _response(
             502,
-            {"error": "the deeper evaluation produced no valid findings", "rejected": rejected},
+            {
+                "error": "the deeper evaluation produced no valid findings",
+                "analysis_quality": quality,
+            },
         )
 
     for finding in valid_findings:
         findings_table.put_item(
-            {**_findings_table_item(finding), "ttl": review_expires_at(review_item)}
+            {
+                **_findings_table_item(finding),
+                "ttl": review_expires_at(review_item),
+                "analysis_quality": quality,
+            }
         )
     _release_in_flight(reviews_table, review_id, finding_id, claimed_at)
 
-    return _findings_response(review_id, finding_id, valid_findings)
+    return _findings_response(review_id, finding_id, valid_findings, quality)

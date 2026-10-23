@@ -57,11 +57,11 @@ def test_compute_presentation_matches_fixture_examples():
         )
     ) == {
         "priority": "high",
-        "short_label": "High risk",
+        "short_label": "Rule result",
     }
     assert compute_presentation(_finding(type=FindingType.FACT)) == {
         "priority": "confirmed",
-        "short_label": "Confirmed",
+        "short_label": "Reported fact",
     }
     assert compute_presentation(_finding(type=FindingType.ASSUMPTION)) == {
         "priority": "review",

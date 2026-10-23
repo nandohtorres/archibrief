@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from backend.shared.analysis_quality import public_analysis_quality
+from backend.shared.assessment import finding_assessment
 from backend.shared.models.finding import Finding, FindingType
 from backend.shared.stakeholder.brief import build_stakeholder_view
 
@@ -22,8 +24,8 @@ from backend.shared.stakeholder.brief import build_stakeholder_view
 # confirmed fact nor a rule violation. Not yet validated against a large
 # sample of real model output.
 _PRIORITY_BY_TYPE: dict[FindingType, tuple[str, str]] = {
-    FindingType.DETERMINISTIC_RULE_RESULT: ("high", "High risk"),
-    FindingType.FACT: ("confirmed", "Confirmed"),
+    FindingType.DETERMINISTIC_RULE_RESULT: ("high", "Rule result"),
+    FindingType.FACT: ("confirmed", "Reported fact"),
     FindingType.ASSUMPTION: ("review", "Review"),
     FindingType.INFERENCE: ("review", "Review"),
     FindingType.RECOMMENDATION: ("review", "Review"),
@@ -41,7 +43,13 @@ def stakeholder_view(findings: list[Finding], ledger: dict[str, Any]) -> dict | 
     them fails: like the diagram, never worth failing a report over."""
     try:
         return build_stakeholder_view(
-            findings, ledger.get("terraform_resources"), ledger.get("baseline_answers") or []
+            [
+                f
+                for f in findings
+                if finding_assessment(f.model_dump(mode="json"))["action"] != "unknown"
+            ],
+            ledger.get("terraform_resources"),
+            ledger.get("baseline_answers") or [],
         )
     except Exception as exc:  # noqa: BLE001 - any failure just drops the view
         print(json.dumps({"event": "stakeholder_view_failed", "error": type(exc).__name__}))
@@ -52,7 +60,13 @@ def report_findings(findings: list[Finding], view: dict | None) -> list[dict[str
     blocks = (view or {}).get("blocks", {})
     entries = []
     for f in findings:
-        entry = {"record": f.model_dump(mode="json"), "presentation": compute_presentation(f)}
+        record = f.model_dump(mode="json")
+        entry = {
+            "record": record,
+            # Legacy display keys remain for older clients only.
+            "presentation": compute_presentation(f),
+            "assessment": finding_assessment(record),
+        }
         if f.finding_id in blocks:
             entry["stakeholder"] = blocks[f.finding_id]
         entries.append(entry)
@@ -70,6 +84,7 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
         # holds a fixed placeholder.
         "owner_id": "admin",
         "status": "complete",
+        "analysis_quality": public_analysis_quality(ledger.get("analysis_quality")),
         # terraformRepoRef is persisted by IdempotencyGate's PutItem
         # (infra/modules/step-functions-lambda/main.tf); costEstimateTier is
         # computed by finalize.handler.compute_cost_estimate_tier, a

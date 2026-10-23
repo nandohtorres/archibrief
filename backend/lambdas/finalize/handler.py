@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.agent.nodes.preflight import FIELD_LABELS
+from backend.shared.analysis_quality import public_analysis_quality
 from backend.shared.architecture_links import link_findings
 from backend.shared.clients import DynamoDBClient, S3Client
 from backend.shared.models.finding import Finding
@@ -131,6 +132,7 @@ def handler(event, context):
         baseline_answers,
         event.get("terraform_resources"),
     )
+    ledger["analysis_quality"] = public_analysis_quality(event.get("analysis_quality"))
     # The report's diagram (rule_engine/architecture.py), when there is one.
     architecture = place_findings(event.get("architecture"), findings)
     if architecture is not None:

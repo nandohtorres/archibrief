@@ -703,4 +703,9 @@ def reason_node(state: dict) -> dict:
         **state,
         "reasoned_findings": [f.model_dump(mode="json") for f in findings],
         "dropped_model_findings": dropped,
+        "model_output_counts": {
+            "attempted": len(raw_findings),
+            "accepted": len(model_findings),
+            "rejected": len(raw_findings) - len(model_findings),
+        },
     }

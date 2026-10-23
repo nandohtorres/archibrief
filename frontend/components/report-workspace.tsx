@@ -9,7 +9,13 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import type { ChatTurn, DemoChat, ReportFinding, ReviewReport } from "@/lib/contracts";
+import type {
+  AnalysisQuality,
+  ChatTurn,
+  DemoChat,
+  ReportFinding,
+  ReviewReport,
+} from "@/lib/contracts";
 import { isArchitectureGraph, type ArchitectureGraph } from "@/lib/architecture";
 import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
 import { reviewerNotesById, type DemoEntry } from "@/lib/demos";
@@ -28,6 +34,8 @@ import { ArchitectureView } from "./architecture-view";
 import { FindingDetail } from "./finding-detail";
 import { GuidedReport } from "./guided-report";
 import { ReportQuestions } from "./report-questions";
+import { AssessmentTag } from "./assessment-tag";
+import { qualityMessage } from "@/lib/analysis-quality";
 
 interface ReportWorkspaceProps {
   report: ReviewReport;
@@ -186,6 +194,7 @@ export function ReportWorkspace({
     try {
       const result = (await requestDeeperFinding(report.review_id, findingId)) as {
         findings: ReportFinding[];
+        analysis_quality?: AnalysisQuality;
       };
       const newFindings = result.findings ?? [];
       if (newFindings.length === 0) {
@@ -203,7 +212,7 @@ export function ReportWorkspace({
       });
       selectFinding(newFindings[0].record.finding_id);
       setStatus(
-        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} available below ${formatFindingId(findingId)}. The guided budget still describes the original report. Download to keep these findings with this session.`,
+        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} available below ${formatFindingId(findingId)}. ${qualityMessage(result.analysis_quality)} The guided budget still describes the original report. Download to keep these findings with this session.`,
       );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "The deeper-analysis request failed.");
@@ -320,6 +329,10 @@ export function ReportWorkspace({
             detail="Named and versioned"
           />
         </div>
+        <aside className="scope-note" aria-label="Analysis quality">
+          <strong>Analysis quality</strong>
+          <p>{qualityMessage(report.analysis_quality)}</p>
+        </aside>
         {findings.some(({ record }) => record.parent_finding_id) && (
           <p className="field-help">
             The guided budget, diagram and chat context cover the original report. Added deeper
@@ -371,29 +384,40 @@ export function ReportWorkspace({
         {view === "technical" ? (
           <div id="technical-panel" role="tabpanel" aria-labelledby="technical-tab" tabIndex={0}>
             <div className="finding-filters" aria-label="Filter findings">
-              {(["all", "high", "review", "confirmed", "unknown"] as FindingFilter[]).map(
-                (value) => (
-                  <button
-                    className={`finding-filter-${value}`}
-                    type="button"
-                    key={value}
-                    aria-pressed={filter === value}
-                    onClick={() => setFilter(value)}
-                  >
-                    {value === "all"
-                      ? `All (${findings.length})`
-                      : value === "high"
-                        ? "Rule results"
-                        : value === "confirmed"
-                          ? "Reported facts"
-                          : value}
-                  </button>
-                ),
-              )}
+              {(
+                [
+                  "all",
+                  "needed",
+                  "critical",
+                  "high",
+                  "medium",
+                  "low",
+                  "none",
+                  "unknown",
+                ] as FindingFilter[]
+              ).map((value) => (
+                <button
+                  className={`finding-filter-${value}`}
+                  type="button"
+                  key={value}
+                  aria-pressed={filter === value}
+                  onClick={() => setFilter(value)}
+                >
+                  {value === "all"
+                    ? `All (${findings.length})`
+                    : value === "needed"
+                      ? "Action proposed"
+                      : value === "none"
+                        ? "No action proposed"
+                        : value === "unknown"
+                          ? "Unassessed"
+                          : `${value} risk`}
+                </button>
+              ))}
             </div>
             <p className="field-help">
-              Groups describe evidence type, not severity. A reported fact may describe a risk; a
-              rule result is not automatically high risk.
+              Risk and action assessments are separate from evidence type and confidence. Each
+              assessment names its source; unassessed findings are not safety confirmations.
             </p>
             <div className="finding-toolbar">
               <label htmlFor="finding-search">
@@ -417,7 +441,7 @@ export function ReportWorkspace({
                   value={sort}
                   onChange={(event) => setSort(event.target.value as FindingSort)}
                 >
-                  <option value="priority">Review order</option>
+                  <option value="priority">Action first, then severity</option>
                   <option value="confidence">Confidence: high to low</option>
                   <option value="title">Title: A–Z</option>
                 </select>
@@ -445,9 +469,7 @@ export function ReportWorkspace({
                         <span className="finding-list-main">
                           <strong>{finding.record.finding}</strong>
                           <span>
-                            <i className={`priority-pill ${finding.presentation.priority}`}>
-                              {finding.presentation.short_label}
-                            </i>
+                            <AssessmentTag finding={finding} />
                             <i className="category-tag">{finding.record.category}</i>
                             <i className="type-tag">{finding.record.type}</i>
                           </span>
