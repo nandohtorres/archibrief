@@ -58,7 +58,11 @@ async function readJson(response: Response): Promise<unknown> {
       dispatch_unavailable: "The review could not start. Please retry the same submission.",
       operation_conflict: "This reservation belongs to a different submission. Start a new review.",
     };
-    let message = text || `ArchiBrief API returned ${response.status}.`;
+    // 429 comes from API Gateway throttling or the WAF rate rule, not a handler.
+    let message =
+      response.status === 429
+        ? "Too many requests right now. Wait a minute and try again."
+        : text || `ArchiBrief API returned ${response.status}.`;
     try {
       const body = JSON.parse(text) as { error?: string };
       if (body.error && messages[body.error]) message = messages[body.error];
@@ -89,13 +93,9 @@ export async function submitReview(
   request: SubmitReviewRequest,
   adminKey?: string,
 ): Promise<SubmitReviewResponse> {
-  // POST /reviews is a direct API Gateway -> Step Functions StartExecution
-  // integration (ADR-0016/0042, no BFF Lambda) — the response body is
-  // Step Functions' own native StartExecution API response (executionArn,
-  // startDate), never a {reviewId, status} shape, since this AWS_PROXY
-  // integration subtype has no response transformation capability. The
-  // {reviewId, status} result below is constructed from what was already
-  // sent, not parsed back out of the response.
+  // POST /reviews goes through the submit_review Lambda, which admits the
+  // review and starts the workflow. The {reviewId, status} result below is
+  // built from what was sent; the response body isn't needed.
   const response = await fetch(`${requireApiBaseUrl()}/reviews`, {
     method: "POST",
     headers: requestHeaders(adminKey, request.review_id, true),

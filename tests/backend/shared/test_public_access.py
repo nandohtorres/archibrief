@@ -13,7 +13,7 @@ def configured(monkeypatch):
     monkeypatch.setenv("PUBLIC_ACCESS_ENABLED", "true")
     monkeypatch.setenv("VISITOR_HASH_KEY", "v" * 32)
     monkeypatch.setenv("TURNSTILE_SECRET_PARAMETER_NAME", "/test/turnstile")
-    monkeypatch.setenv("TURNSTILE_HOSTNAME", "example.test")
+    monkeypatch.setenv("TURNSTILE_HOSTNAMES", "example.test, www.example.test")
     monkeypatch.setenv("ADMIN_KEY", "admin-secret")
     monkeypatch.setattr(
         access.boto3,
@@ -96,6 +96,16 @@ def test_challenge_outage_and_missing_configuration_fail_closed(
     monkeypatch.delenv("TURNSTILE_SECRET_PARAMETER_NAME")
     with pytest.raises(AdmissionDenied, match="admission_unavailable"):
         access.verify_upload_challenge(_event(), "token")
+
+
+@pytest.mark.parametrize("hostname", ["example.test", "www.example.test"])
+def test_challenge_accepts_every_configured_hostname(configured, monkeypatch, hostname):
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps(
+        {"success": True, "hostname": hostname, "action": "archibrief-upload"}
+    ).encode()
+    monkeypatch.setattr(access.urllib.request, "urlopen", lambda *a, **k: response)
+    assert access.verify_upload_challenge(_event(), "token") == access.visitor_key(_event())
 
 
 def test_public_access_is_closed_by_default_even_with_a_token(configured, monkeypatch):

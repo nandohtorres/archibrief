@@ -30,15 +30,16 @@ That permission is not part of the browser upload signature.
 
 ## Abuse protection
 
-Cloudflare Turnstile is verified server-side for success, hostname and the
-`archibrief-upload` action, with a bounded timeout, and fails closed. The
+Cloudflare Turnstile is verified server-side for success, hostname (apex or
+`www`) and the `archibrief-upload` action, with a bounded timeout, and fails
+closed. The
 secret lives in SSM, not in the repo. Visitor identifiers are an HMAC of the
 address API Gateway observed (IPv6 grouped by /64); forwarded headers are
 ignored. Admin calls skip the challenge.
 
 Upload grants and the global and visitor upload counters share one DynamoDB
-transaction. Defaults allow 100 uploads a UTC day globally and one per
-visitor (100 for admin). Abandoned reservations still count. The visitor HMAC
+transaction. The launch limits are 6 uploads a UTC day globally and 2 per
+visitor, close to what the paid budget can review. Abandoned reservations still count. The visitor HMAC
 and reservation keys must stay stable while grants are active; rotating them
 needs a migration.
 
@@ -50,10 +51,11 @@ lifetime allowances in the same transaction as its operation claim. Admin
 requests reserve only a separate admin daily allowance, so public traffic
 can't block the owner and owner reviews don't spend the public allowance.
 
-Terraform sets every value explicitly (`paid_limits` in
-`infra/modules/api-gateway/admission.tf`): public scopes $1.00 each with
-request limits of 100/30/20, admin $20.00 with no request cap. Initial reviews
-reserve $0.40; clarification and deeper review reserve $0.20. A
+The module defaults are in `paid_limits` (`infra/modules/api-gateway/admission.tf`);
+the live values are set in `infra/environments/dev/main.tf`: global $1.20 and
+15 requests a day (about three initial reviews), visitor $1.00 and 8, review
+$1.00 and 10, admin $5.00. Initial reviews reserve $0.40; clarification and
+deeper review reserve $0.20. A
 `tests/backend/test_defaults_match_terraform.py` check fails if the handler
 fallbacks drift from these defaults.
 
@@ -71,10 +73,14 @@ paid work. Zero or invalid allowances fail closed.
 ## Front door
 
 A Regional REST API `public` stage sits behind WAF: a 16 KiB body limit, a
-300-request per-IP rate rule and the AWS managed common rule set, with sampled
-request bodies disabled. Stage-scoped Lambda permissions stop other stages
-from using that grant. The original HTTP API always requires the admin key.
-Handlers enforce capabilities, expiry and CORS themselves.
+300-request per-IP rate rule (answered with 429) and the AWS managed common
+rule set, with sampled request bodies disabled. Stage-scoped Lambda
+permissions stop other stages from using that grant. The stage has no
+authorizer: each handler checks the public flag, capabilities, expiry and
+CORS itself, so a header-based authorizer can't turn visitors away before
+that check. API Gateway's own error responses carry CORS headers so the
+browser can read them. The original HTTP API requires the admin key until it
+is retired.
 
 ## Review pipeline and content
 
@@ -107,12 +113,15 @@ applied to the live account with every public flag off; a follow-up
 1. Plan and apply are done, with every public flag off. Still to check
    against real services: the worker's failure path.
 2. Deploy the REST front door with anonymous access off. Check the WAF
-   association, missing admin headers, CORS, checksum/version HEAD, the
-   conditional PUT, and default-endpoint and other-stage bypasses against real
-   services. Only then copy the API ID into `verified_public_api_id`.
-3. Test real concurrent last-slot requests on every paid path, ambiguous
-   dispatch failures, network changes and Turnstile outages.
-4. Inventory retained content and backups, and finalize the privacy notice.
+   association, that anonymous requests reach the handlers and are refused,
+   CORS on handler and gateway errors, checksum/version HEAD, the conditional
+   PUT, and default-endpoint and other-stage bypasses against real services.
+   Only then copy the API ID into `verified_public_api_id`.
+3. Open it at the REST URL without announcing it, with tight limits. Test
+   real concurrent last-slot requests on every paid path, ambiguous dispatch
+   failures, network changes and Turnstile outages, on both hostnames.
+4. Measure per-review cost on a few real reviews and set the limits from it.
+5. Inventory retained content and backups, and finalize the privacy notice.
    Don't promise seven-day physical deletion.
-5. Run the bounded paid evaluation in [evaluation-runbook.md](evaluation-runbook.md),
-   then raise the public limits to match measured per-review cost.
+6. Cut over: point the frontend and `api.archibrief.dev` at the REST stage,
+   and remove the admin key, the admin allowance and the HTTP API.

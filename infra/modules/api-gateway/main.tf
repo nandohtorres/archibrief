@@ -3,10 +3,10 @@
 # (ADR-0044; there are no user accounts and no Cognito JWT authorizer).
 # Throttling is a best-effort layer, not a guaranteed ceiling (ADR-0005,
 # ADR-0030); real enforcement is the application-level controls in the
-# backend. POST /reviews integrates directly with Step Functions
-# StartExecution, with no BFF Lambda (ADR-0016/0042). GET /demo serves a
-# precomputed report and is intentionally public. The other routes are
-# Lambda proxy integrations.
+# backend. Every route is a Lambda proxy integration; POST /reviews goes
+# through submit_review, which admits the review before starting the
+# workflow. GET /demo serves a precomputed report and is intentionally
+# public. The public front door is the REST API in public-edge.tf.
 
 resource "aws_apigatewayv2_api" "main" {
   name          = "${var.name_prefix}-api"
@@ -108,37 +108,6 @@ resource "aws_apigatewayv2_authorizer" "admin_gate" {
   enable_simple_responses           = true
   authorizer_result_ttl_in_seconds  = 0
   identity_sources                  = ["$request.header.x-admin-key"]
-}
-
-data "aws_iam_policy_document" "apigw_trust" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["apigateway.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "apigw_invoke_step_functions" {
-  name                 = "${var.name_prefix}-apigw-invoke-sfn"
-  assume_role_policy   = data.aws_iam_policy_document.apigw_trust.json
-  permissions_boundary = var.permissions_boundary_arn
-  tags                 = var.tags
-}
-
-resource "aws_iam_role_policy" "apigw_invoke_step_functions" {
-  name = "${var.name_prefix}-apigw-start-execution"
-  role = aws_iam_role.apigw_invoke_step_functions.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = "states:StartExecution"
-      Resource = var.state_machine_arn
-    }]
-  })
 }
 
 resource "aws_apigatewayv2_integration" "start_review" {

@@ -35,4 +35,4 @@ agentcore_runtime_zip_path = "../../../backend/agent/build/agentcore-runtime.zip
 # AWS Budgets threshold notifications (ADR-0040). Use a real inbox; SNS
 # emails it and the subscription must be confirmed.
 alert_email        = "REPLACE_ME@example.com"
-monthly_budget_usd = 50
+monthly_budget_usd = 20

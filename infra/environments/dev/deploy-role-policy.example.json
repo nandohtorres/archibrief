@@ -64,7 +64,10 @@
     {
       "Sid": "BedrockReasoningInvoke",
       "Effect": "Allow",
-      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
       "Resource": [
         "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0",
         "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-5",
@@ -193,7 +196,10 @@
     {
       "Sid": "DescribeIsAccountWide",
       "Effect": "Allow",
-      "Action": ["logs:DescribeLogGroups", "ssm:DescribeParameters"],
+      "Action": [
+        "logs:DescribeLogGroups",
+        "ssm:DescribeParameters"
+      ],
       "Resource": "*"
     },
     {
@@ -286,7 +292,12 @@
       "Resource": "arn:aws:iam::123456789012:role/archibrief-dev-*",
       "Condition": {
         "StringEquals": {
-          "iam:PassedToService": ["lambda.amazonaws.com", "states.amazonaws.com", "apigateway.amazonaws.com", "bedrock-agentcore.amazonaws.com"]
+          "iam:PassedToService": [
+            "lambda.amazonaws.com",
+            "states.amazonaws.com",
+            "apigateway.amazonaws.com",
+            "bedrock-agentcore.amazonaws.com"
+          ]
         }
       }
     },
@@ -442,6 +453,57 @@
         "arn:aws:s3:::archibrief-tfstate",
         "arn:aws:s3:::archibrief-tfstate/*"
       ]
+    },
+    {
+      "Sid": "ApiGatewayRestPublicEdge",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET",
+        "apigateway:POST",
+        "apigateway:PUT",
+        "apigateway:PATCH",
+        "apigateway:DELETE"
+      ],
+      "Resource": [
+        "arn:aws:apigateway:us-east-1::/restapis",
+        "arn:aws:apigateway:us-east-1::/restapis/*"
+      ]
+    },
+    {
+      "Sid": "ApiGatewayAttachWaf",
+      "Effect": "Allow",
+      "Action": "apigateway:SetWebACL",
+      "Resource": "arn:aws:apigateway:us-east-1::/restapis/*/stages/*"
+    },
+    {
+      "Sid": "WafPublicWebAcl",
+      "Effect": "Allow",
+      "Action": [
+        "wafv2:CreateWebACL",
+        "wafv2:GetWebACL",
+        "wafv2:UpdateWebACL",
+        "wafv2:DeleteWebACL",
+        "wafv2:TagResource",
+        "wafv2:UntagResource",
+        "wafv2:ListTagsForResource",
+        "wafv2:AssociateWebACL",
+        "wafv2:DisassociateWebACL",
+        "wafv2:ListResourcesForWebACL"
+      ],
+      "Resource": [
+        "arn:aws:wafv2:us-east-1:123456789012:regional/webacl/archibrief-*/*",
+        "arn:aws:wafv2:us-east-1:123456789012:regional/managedruleset/*/*",
+        "arn:aws:apigateway:us-east-1::/restapis/*/stages/*"
+      ]
+    },
+    {
+      "Sid": "WafAccountWideReads",
+      "Effect": "Allow",
+      "Action": [
+        "wafv2:ListWebACLs",
+        "wafv2:GetWebACLForResource"
+      ],
+      "Resource": "*"
     }
   ]
 }

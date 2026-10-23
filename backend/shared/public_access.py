@@ -87,8 +87,13 @@ def verify_upload_challenge(event: dict, token: str) -> str:
     if not isinstance(token, str) or not 1 <= len(token) <= 2048:
         raise AdmissionDenied("challenge_required")
     parameter = os.environ.get("TURNSTILE_SECRET_PARAMETER_NAME", "")
-    hostname = os.environ.get("TURNSTILE_HOSTNAME", "")
-    if not parameter or not hostname:
+    # Every hostname that serves the site (apex and www), comma-separated.
+    hostnames = {
+        name.strip()
+        for name in os.environ.get("TURNSTILE_HOSTNAMES", "").split(",")
+        if name.strip()
+    }
+    if not parameter or not hostnames:
         raise AdmissionDenied("admission_unavailable")
     try:
         secret = boto3.client(
@@ -108,7 +113,7 @@ def verify_upload_challenge(event: dict, token: str) -> str:
     if (
         not isinstance(verdict, dict)
         or verdict.get("success") is not True
-        or verdict.get("hostname") != hostname
+        or verdict.get("hostname") not in hostnames
         or verdict.get("action") != "archibrief-upload"
     ):
         raise AdmissionDenied("challenge_rejected")

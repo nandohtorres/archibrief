@@ -155,3 +155,28 @@ Later ADRs refer to these steps as Phase 1–5.
 - New work: Turnstile, quota table, WAF rule, chat endpoint, normalizer,
   secret scan, retention lifecycle, privacy page, capacity UX, chat trap
   set.
+
+## Addendum, 2026-10-23: what the release actually uses
+
+The built design differs from the quota table above in these ways, and the
+code is authoritative:
+
+- **Turnstile runs once, at upload** (`backend/shared/uploads.py`). Later
+  calls for that review are bound by its read/write capabilities and the
+  visitor's network identifier, not a fresh challenge.
+- **The WAF rate rule is 300 requests per 5 minutes per IP**, not ~10. A
+  review page polls for status every few seconds, which is about 100
+  requests per 5 minutes for one open tab, so a lower limit would block
+  ordinary use. Paid work is bounded by the DynamoDB scopes, not the WAF.
+- **Limits are estimated spend plus request counts:** a global, per-visitor
+  and per-review allowance shared by reviews, follow-ups and chat. Uploads
+  have their own daily caps, kept close to what the global budget can
+  review. Launch values are in `infra/environments/dev/main.tf`.
+- **The monthly budget alert is $20.**
+- **The visitor-hash secret is a Terraform-generated value**, not a
+  monthly-rotated Secrets Manager secret. Rotating it would orphan live
+  reservations, so it changes only with a migration.
+- **The admin key is retired** once public submissions open. It existed to
+  restrict who could submit. With the public controls in place, the owner
+  uses the same path and limits as everyone else, and the separate admin
+  allowance and the admin-only HTTP API are removed.

@@ -134,30 +134,52 @@ module "api_gateway" {
   chat_public_enabled             = var.public_access_enabled
   turnstile_secret_parameter_arn  = var.turnstile_secret_parameter_arn
   turnstile_secret_parameter_name = var.turnstile_secret_parameter_name
-  turnstile_hostname              = var.domain
+  turnstile_hostnames             = [var.domain, "www.${var.domain}"]
   source                          = "../../modules/api-gateway"
-  name_prefix                     = "${var.name_prefix}-${var.environment}"
-  state_machine_arn               = module.step_functions_lambda.state_machine_arn
-  kill_switch_parameter_name      = module.kill_switch.parameter_name
-  kill_switch_parameter_arn       = module.kill_switch.parameter_arn
-  domain_name                     = "api.${var.domain}"
-  certificate_arn                 = aws_acm_certificate_validation.site.certificate_arn
-  frontend_origin                 = "https://${module.frontend_hosting.cloudfront_domain_name}"
-  additional_cors_origins         = ["https://${var.domain}", "https://www.${var.domain}"]
-  admin_authorizer_zip_path       = var.admin_authorizer_zip_path
-  get_review_zip_path             = var.get_review_zip_path
-  clarify_review_zip_path         = var.clarify_review_zip_path
-  deeper_review_zip_path          = var.deeper_review_zip_path
-  get_demo_zip_path               = var.get_demo_zip_path
-  create_upload_zip_path          = var.create_upload_zip_path
-  reviews_table_name              = module.dynamodb.reviews_table_name
-  reviews_table_arn               = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.reviews_table_name}"
-  findings_table_name             = module.dynamodb.findings_table_name
-  findings_table_arn              = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.findings_table_name}"
-  reports_bucket_name             = module.s3.bucket_id
-  reports_bucket_arn              = module.s3.bucket_arn
-  agentcore_runtime_arn           = module.agentcore_runtime.agent_runtime_arn
-  permissions_boundary_arn        = module.iam.runtime_permissions_boundary_arn
+
+  # Launch limits for the public site (micro-USD; 1,000,000 = $1.00). The
+  # global budget fits about three initial reviews a day, and uploads are
+  # kept near that so visitors aren't refused after uploading. Retune from
+  # measured per-review cost.
+  paid_limits = {
+    global_daily_budget    = 1200000
+    global_daily_requests  = 15
+    visitor_daily_budget   = 1000000
+    visitor_daily_requests = 8
+    review_budget          = 1000000
+    review_requests        = 10
+    admin_daily_budget     = 5000000
+    initial_reserve        = 400000
+    clarify_reserve        = 200000
+    deeper_reserve         = 200000
+  }
+  upload_limits = {
+    global_daily  = 6
+    visitor_daily = 2
+  }
+  chat_daily_budget_micro_usd = 500000
+  name_prefix                 = "${var.name_prefix}-${var.environment}"
+  state_machine_arn           = module.step_functions_lambda.state_machine_arn
+  kill_switch_parameter_name  = module.kill_switch.parameter_name
+  kill_switch_parameter_arn   = module.kill_switch.parameter_arn
+  domain_name                 = "api.${var.domain}"
+  certificate_arn             = aws_acm_certificate_validation.site.certificate_arn
+  frontend_origin             = "https://${module.frontend_hosting.cloudfront_domain_name}"
+  additional_cors_origins     = ["https://${var.domain}", "https://www.${var.domain}"]
+  admin_authorizer_zip_path   = var.admin_authorizer_zip_path
+  get_review_zip_path         = var.get_review_zip_path
+  clarify_review_zip_path     = var.clarify_review_zip_path
+  deeper_review_zip_path      = var.deeper_review_zip_path
+  get_demo_zip_path           = var.get_demo_zip_path
+  create_upload_zip_path      = var.create_upload_zip_path
+  reviews_table_name          = module.dynamodb.reviews_table_name
+  reviews_table_arn           = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.reviews_table_name}"
+  findings_table_name         = module.dynamodb.findings_table_name
+  findings_table_arn          = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.findings_table_name}"
+  reports_bucket_name         = module.s3.bucket_id
+  reports_bucket_arn          = module.s3.bucket_arn
+  agentcore_runtime_arn       = module.agentcore_runtime.agent_runtime_arn
+  permissions_boundary_arn    = module.iam.runtime_permissions_boundary_arn
 
   # Report chat (ADR-0050).
   ask_question_zip_path            = var.ask_question_zip_path

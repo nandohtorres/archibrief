@@ -5,12 +5,9 @@
 # ADR-0030 also calls for lives in the separate kill-switch module to
 # avoid a module dependency cycle.
 #
-# No WAF Web ACL: AWS WAF can associate with API Gateway REST API (v1)
-# stages but not HTTP APIs (v2), and ArchiBrief's API is an HTTP API
-# (ADR-0016). Adding WAF would mean migrating to a REST API or fronting
-# the API with its own CloudFront distribution. Stage throttling (the
-# api-gateway module's throttling_burst_limit/throttling_rate_limit) is
-# the best-effort volumetric layer ADR-0030 lists.
+# WAF can't attach to an HTTP API (v2), so the public front door is a
+# separate REST API stage with its own Web ACL (api-gateway module,
+# public-edge.tf). Stage throttling is the volumetric layer on both.
 
 resource "aws_sns_topic" "budget_alerts" {
   name = "${var.name_prefix}-budget-alerts"

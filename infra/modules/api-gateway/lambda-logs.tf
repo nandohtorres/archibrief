@@ -9,6 +9,7 @@ locals {
     deeper_review    = aws_lambda_function.deeper_review.function_name
     get_demo         = aws_lambda_function.get_demo.function_name
     create_upload    = aws_lambda_function.create_upload.function_name
+    submit_review    = aws_lambda_function.submit_review.function_name
   }
 }
 

@@ -13,16 +13,31 @@ variable "turnstile_secret_parameter_name" {
   default = ""
 }
 
-variable "turnstile_hostname" {
-  type    = string
-  default = ""
+# Every hostname that serves the site; Turnstile reports the one the visitor used.
+variable "turnstile_hostnames" {
+  type    = list(string)
+  default = []
+}
+
+# Upload grants per UTC day, enforced by backend/shared/uploads.py. Keep them
+# near what the paid budget can actually review, so visitors aren't let
+# through the upload only to be refused at submit.
+variable "upload_limits" {
+  type = object({
+    global_daily  = number
+    visitor_daily = number
+  })
+  default = {
+    global_daily  = 100
+    visitor_daily = 1
+  }
 }
 
 variable "public_access_enabled" {
   type    = bool
   default = false
   validation {
-    condition     = !var.public_access_enabled || (var.public_edge_enabled && var.verified_public_api_id != "" && var.turnstile_secret_parameter_arn != null && var.turnstile_secret_parameter_name != "" && var.turnstile_hostname != "")
+    condition     = !var.public_access_enabled || (var.public_edge_enabled && var.verified_public_api_id != "" && var.turnstile_secret_parameter_arn != null && var.turnstile_secret_parameter_name != "" && length(var.turnstile_hostnames) > 0)
     error_message = "Public access requires the WAF REST front door and configured Turnstile verification."
   }
 }
@@ -80,7 +95,9 @@ locals {
     PUBLIC_ACCESS_ENABLED             = local.public_admitted ? "true" : "false"
     VISITOR_HASH_KEY                  = random_password.visitor_hash.result
     TURNSTILE_SECRET_PARAMETER_NAME   = var.turnstile_secret_parameter_name
-    TURNSTILE_HOSTNAME                = var.turnstile_hostname
+    TURNSTILE_HOSTNAMES               = join(",", var.turnstile_hostnames)
+    UPLOADS_DAILY_MAX                 = tostring(var.upload_limits.global_daily)
+    UPLOADS_VISITOR_DAILY_MAX         = tostring(var.upload_limits.visitor_daily)
     USAGE_COUNTERS_TABLE_NAME         = var.usage_counters_table_name
     REVIEWS_TABLE_NAME                = var.reviews_table_name
     REPORTS_BUCKET_NAME               = var.reports_bucket_name
