@@ -1,7 +1,7 @@
-"""Validate reason_node end-to-end against real Bedrock.
+"""Validate the reasoning component against real Bedrock.
 
 Sibling to backend/corpus/validate_retrieve_node.py — same convention: not
-a pytest test, run directly with real AWS credentials, near-zero cost
+a pytest test, run directly with real AWS credentials and explicit paid admission
 (one embed call, one vector query, one Claude Converse call, one
 ApplyGuardrail call).
 
@@ -13,6 +13,7 @@ real BedrockReasoningClient, and reports the full raw + parsed output.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import uuid
@@ -31,6 +32,7 @@ from backend.shared.clients import (
     GuardrailsClient,
     S3VectorsClient,
 )
+from backend.shared.evaluation_budget import add_budget_options, admit_budget, budget_plan
 
 _VECTOR_BUCKET_NAME = os.environ.get("ARCHIBRIEF_VECTOR_BUCKET", "archibrief-dev-kb")
 _VECTOR_INDEX_NAME = os.environ.get("ARCHIBRIEF_VECTOR_INDEX", "archibrief-dev-kb-index")
@@ -87,11 +89,37 @@ _RULE_FINDINGS = [
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Paid reasoning component diagnostic")
+    parser.add_argument("--plan", action="store_true")
+    parser.add_argument("--confirm-paid", action="store_true")
+    add_budget_options(parser)
+    args = parser.parse_args()
+    plan = {
+        "case_ids": {"component": ["reason-node-diagnostic"]},
+        "model": _MODEL_ID,
+        "admission": budget_plan(args, parser, 4),
+    }
+    if args.plan:
+        print(json.dumps(plan, indent=2))
+        return
+    if not args.confirm_paid:
+        parser.error("paid AWS validation requires --confirm-paid")
+    budget = admit_budget(args, parser, 4)
     review_id = f"validate-reason-node-{uuid.uuid4().hex[:8]}"
 
-    embedding_client = BedrockEmbeddingClient(region_name=_REGION)
-    vectors_client = S3VectorsClient(
-        bucket_name=_VECTOR_BUCKET_NAME, index_name=_VECTOR_INDEX_NAME, region_name=_REGION
+    embedding_client = budget.wrap(
+        BedrockEmbeddingClient(region_name=_REGION, no_retries=True, read_timeout_seconds=30),
+        "embedding",
+    )
+    vectors_client = budget.wrap(
+        S3VectorsClient(
+            bucket_name=_VECTOR_BUCKET_NAME,
+            index_name=_VECTOR_INDEX_NAME,
+            region_name=_REGION,
+            no_retries=True,
+            read_timeout_seconds=30,
+        ),
+        "vectors",
     )
     lexical_corpus_index = build_lexical_corpus_index_from_disk()
 
@@ -109,10 +137,22 @@ def main() -> None:
         print(f"  - {chunk['chunk_id']} (match_type={chunk['match_type']}, score={chunk['score']})")
     print()
 
-    guardrails_client = GuardrailsClient(
-        guardrail_id=_GUARDRAIL_ID, guardrail_version=_GUARDRAIL_VERSION, region_name=_REGION
+    guardrails_client = budget.wrap(
+        GuardrailsClient(
+            guardrail_id=_GUARDRAIL_ID,
+            guardrail_version=_GUARDRAIL_VERSION,
+            region_name=_REGION,
+            no_retries=True,
+            read_timeout_seconds=30,
+        ),
+        "guardrails",
     )
-    reasoning_client = BedrockReasoningClient(model_id=_MODEL_ID, region_name=_REGION)
+    reasoning_client = budget.wrap(
+        BedrockReasoningClient(
+            model_id=_MODEL_ID, region_name=_REGION, no_retries=True, read_timeout_seconds=60
+        ),
+        "reasoning",
+    )
 
     allowed = guardrails_client.check(_WORKLOAD_BRIEF, source="INPUT")
     print(f"guardrails.check(workload_brief) -> {allowed}")
@@ -129,8 +169,8 @@ def main() -> None:
         retrieved_chunks=retrieved_chunks,
         # Forced tool-use output is more verbose than free-text JSON (every
         # required field on every finding), and this brief produces enough
-        # findings to exceed 4096. 8192 is the standard Claude Sonnet output
-        # ceiling on Bedrock without an extended-output beta header.
+        # findings to exceed 4096. This component diagnostic requests 8192;
+        # it does not establish production-graph or output-budget parity.
         max_tokens=8192,
     )
 
@@ -172,6 +212,7 @@ def main() -> None:
         f"model finding(s), citations server-verified ==="
     )
     print(json.dumps([f.model_dump(mode="json") for f in findings], indent=2, default=str))
+    print(json.dumps({"call_journal": str(budget.path), "admission": budget.summary()}, indent=2))
 
 
 if __name__ == "__main__":

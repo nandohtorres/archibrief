@@ -5,24 +5,33 @@ Sibling to validate_retrieval.py, but exercises the actual LangGraph node
 merged vector+lexical retrieval path, the full citation metadata shape,
 and the lexical companion index built by lexical_index.py all work
 together against real Titan embed calls and a real S3 Vectors query.
-Read-only against the index (QueryVectors) plus a handful of embed calls —
-near zero cost, safe to re-run anytime, same as validate_retrieval.py.
+Read-only against the index, with paid embedding/query calls. CLI execution
+requires confirmation and an explicit service-call limit, like validate_retrieval.py.
 
 Not a pytest test — run directly, matching validate_retrieval.py's own
 convention (this repo's tests/ tree only exercises node logic against
 stubbed clients; hitting real AWS happens through these standalone
 scripts instead of pytest's skipif-on-missing-local-data pattern, since
-the gate here is live AWS credentials, not local corpus data).
+the CLI gate is explicit paid admission, not merely available credentials).
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
 
 from backend.agent.nodes.retrieve import extract_lexical_terms, retrieve_node
 from backend.corpus.eval import EVAL_QUERIES, EvalQuery
 from backend.corpus.lexical_index import build_lexical_corpus_index_from_disk
 from backend.shared.clients import BedrockEmbeddingClient, S3VectorsClient
+from backend.shared.evaluation_budget import (
+    EvaluationBudget,
+    EvaluationLimitReached,
+    add_budget_options,
+    admit_budget,
+    budget_plan,
+)
 
 _VECTOR_BUCKET_NAME = os.environ.get("ARCHIBRIEF_VECTOR_BUCKET", "archibrief-dev-kb")
 _VECTOR_INDEX_NAME = os.environ.get("ARCHIBRIEF_VECTOR_INDEX", "archibrief-dev-kb-index")
@@ -48,11 +57,20 @@ def _sample_queries() -> list[EvalQuery]:
     return [by_id[query_id] for query_id in _SAMPLE_QUERY_IDS]
 
 
-def run(queries: list[EvalQuery]) -> list[dict]:
-    embedding_client = BedrockEmbeddingClient(region_name=_REGION)
-    vectors_client = S3VectorsClient(
-        bucket_name=_VECTOR_BUCKET_NAME, index_name=_VECTOR_INDEX_NAME, region_name=_REGION
+def run(queries: list[EvalQuery], budget: EvaluationBudget | None = None) -> list[dict]:
+    embedding_client = BedrockEmbeddingClient(
+        region_name=_REGION, no_retries=True, read_timeout_seconds=30
     )
+    vectors_client = S3VectorsClient(
+        bucket_name=_VECTOR_BUCKET_NAME,
+        index_name=_VECTOR_INDEX_NAME,
+        region_name=_REGION,
+        no_retries=True,
+        read_timeout_seconds=30,
+    )
+    if budget:
+        embedding_client = budget.wrap(embedding_client, "embedding")
+        vectors_client = budget.wrap(vectors_client, "vectors")
     lexical_corpus_index = build_lexical_corpus_index_from_disk()
 
     reports = []
@@ -63,7 +81,20 @@ def run(queries: list[EvalQuery]) -> list[dict]:
             "vectors_client": vectors_client,
             "lexical_corpus_index": lexical_corpus_index,
         }
-        result = retrieve_node(state)
+        try:
+            result = retrieve_node(state)
+        except Exception as exc:  # noqa: BLE001 - never erase later scheduled queries
+            reports.append(
+                {
+                    "query_id": eval_query.query_id,
+                    "query": eval_query.query,
+                    "attempt_outcome": "not_run"
+                    if isinstance(exc, EvaluationLimitReached)
+                    else "failed",
+                    "error_kind": type(exc).__name__,
+                }
+            )
+            continue
         chunks = result["retrieved_chunks"]
         lexical_terms = extract_lexical_terms(eval_query.query)
         lexical_hits = [c for c in chunks if c["match_type"] == "lexical"]
@@ -73,6 +104,7 @@ def run(queries: list[EvalQuery]) -> list[dict]:
         reports.append(
             {
                 "query_id": eval_query.query_id,
+                "attempt_outcome": "returned",
                 "query": eval_query.query,
                 "lexical_terms": lexical_terms,
                 "chunk_count": len(chunks),
@@ -90,6 +122,9 @@ def run(queries: list[EvalQuery]) -> list[dict]:
 def print_report(reports: list[dict]) -> None:
     for report in reports:
         print(f"{report['query_id']}: {report['query']}")
+        if report["attempt_outcome"] != "returned":
+            print(f"  {report['attempt_outcome']}: {report['error_kind']}")
+            continue
         print(f"  lexical_terms:      {report['lexical_terms']}")
         print(
             f"  chunks retrieved:   {report['chunk_count']} (lexical hits: {report['lexical_hit_count']})"
@@ -100,10 +135,33 @@ def print_report(reports: list[dict]) -> None:
         print()
 
 
-def main() -> None:
-    reports = run(_sample_queries())
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Paid merged-retrieval diagnostic")
+    parser.add_argument("--plan", action="store_true")
+    parser.add_argument("--confirm-paid", action="store_true")
+    parser.add_argument("--limit", type=int)
+    add_budget_options(parser)
+    args = parser.parse_args()
+    if args.limit is not None and args.limit <= 0:
+        parser.error("--limit must be positive")
+    queries = _sample_queries()[: args.limit]
+    calls = 2 * len(queries)
+    plan = {
+        "partial": args.limit is not None,
+        "case_ids": {"sample": [q.query_id for q in queries]},
+        "admission": budget_plan(args, parser, calls),
+    }
+    if args.plan:
+        print(json.dumps(plan, indent=2))
+        return 0
+    if not args.confirm_paid:
+        parser.error("paid AWS validation requires --confirm-paid")
+    budget = admit_budget(args, parser, calls)
+    reports = run(queries, budget)
     print_report(reports)
+    print(json.dumps({"call_journal": str(budget.path), "admission": budget.summary()}, indent=2))
+    return 1 if any(r["attempt_outcome"] != "returned" for r in reports) else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
