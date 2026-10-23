@@ -1,0 +1,130 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F03-dangerous",
+ "family": "imdsv2-default-override",
+ "variant": "dangerous",
+ "workload_brief": "Web proxy and API servers in us-east-1, batch workers in us-west-2.",
+ "rule_findings": [
+  {
+   "finding_id": "a240896e-c01b-497a-8f9c-fb26484d9a8e",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  },
+  {
+   "finding_id": "a8e4eb38-39ad-4ea9-aa0c-67ad85d75cc1",
+   "category": "iam",
+   "type": "deterministic-rule-result",
+   "finding": "IAM role 'proxy_role' is used by running code and has AmazonS3FullAccess",
+   "evidence": "resource \"aws_iam_role\" \"proxy_role\" trusts a compute service (EC2, Lambda, ECS tasks or EKS pods) and has AmazonS3FullAccess attached",
+   "risk_impact": "Anyone who gets code running on this compute, or tricks it into a request forgery, can exercise the attached policies subject to other applicable IAM controls.",
+   "recommendation": "Replace the managed policy with a customer-managed one that names only the actions and resource ARNs this workload uses.",
+   "concern": "iam_compute_broad_managed"
+  },
+  {
+   "finding_id": "5a6631dd-b496-4c2d-b2e6-098d024e91b5",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "EC2 instance 'legacy_proxy' does not require IMDSv2 tokens",
+   "evidence": "resource \"aws_instance\" \"legacy_proxy\" metadata_options.http_tokens is not \"required\"",
+   "risk_impact": "IMDSv1 answers plain HTTP GETs, so a request forgery or open proxy on this server can read its role's temporary credentials. Its role 'proxy_role' has AmazonS3FullAccess, so those credentials reach far beyond this server.",
+   "recommendation": "Set metadata_options { http_tokens = \"required\" } (or require IMDSv2 account-wide with aws_ec2_instance_metadata_defaults).",
+   "concern": "ec2_imdsv2"
+  },
+  {
+   "finding_id": "7ce7bfc6-5809-4f55-bd75-75a4d445de64",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "EC2 instance 'west_worker' does not require IMDSv2 tokens",
+   "evidence": "resource \"aws_instance\" \"west_worker\" metadata_options.http_tokens is not set",
+   "risk_impact": "IMDSv1 answers plain HTTP GETs, so a request forgery or open proxy on this server can read its role's temporary credentials.",
+   "recommendation": "Set metadata_options { http_tokens = \"required\" } (or require IMDSv2 account-wide with aws_ec2_instance_metadata_defaults).",
+   "concern": "ec2_imdsv2"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_ec2_instance_metadata_defaults",
+    "name": "east",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_instance_profile",
+    "name": "api",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_instance_profile",
+    "name": "proxy",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role",
+    "name": "api_role",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role",
+    "name": "proxy_role",
+    "settings": {}
+   },
+   {
+    "type": "aws_iam_role_policy_attachment",
+    "name": "proxy_s3_full",
+    "settings": {}
+   },
+   {
+    "type": "aws_instance",
+    "name": "legacy_proxy",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "optional",
+     "root_block_device.encrypted": "not set"
+    }
+   },
+   {
+    "type": "aws_instance",
+    "name": "modern_api",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "required",
+     "root_block_device.encrypted": "not set"
+    }
+   },
+   {
+    "type": "aws_instance",
+    "name": "sealed_batch",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "not set",
+     "root_block_device.encrypted": "not set"
+    }
+   },
+   {
+    "type": "aws_instance",
+    "name": "west_worker",
+    "settings": {
+     "instance_type": "t3.micro",
+     "associate_public_ip_address": "not set",
+     "monitoring": "not set (default: false)",
+     "metadata_options.http_tokens": "not set",
+     "root_block_device.encrypted": "not set"
+    }
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
+ },
+ "scoring": "model_eval/SCORING.md#imdsv2-default-override"
+}

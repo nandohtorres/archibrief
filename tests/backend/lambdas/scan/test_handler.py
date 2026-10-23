@@ -41,6 +41,32 @@ def test_remote_and_escaping_module_sources_are_neutralized(tmp_path):
     assert "# comment" in text  # rest of the line kept, so line numbers don't move
 
 
+def test_module_source_rewriting_is_structural_and_preserves_provider_sources(tmp_path):
+    text = (
+        'terraform {\n required_providers {\n aws = {\n source = "hashicorp/aws"\n }\n }\n}\n'
+        'locals {\n payload = <<DOC\nmodule "fake" { source = "https://example.invalid/fake" }\nDOC\n}\n'
+        'module "one" { source = "git::https://example.invalid/one.git" }\n'
+        'module "escaped" { source = "\\u002e\\u002e/escape" }\n'
+    )
+    path = _write(tmp_path / "main.tf", text)
+    assert neutralize_remote_sources([path], str(tmp_path)) == 2
+    rewritten = Path(path).read_text(encoding="utf-8")
+    assert 'source = "hashicorp/aws"' in rewritten
+    assert 'module "fake" { source = "https://example.invalid/fake" }' in rewritten
+    assert "example.invalid/one.git" not in rewritten
+    assert rewritten.count(NEUTRALIZED_SOURCE) == 2
+    assert rewritten.count("\n") == text.count("\n")
+
+
+def test_malformed_module_source_fails_before_the_scanner_runs(tmp_path, monkeypatch):
+    path = _write(tmp_path / "main.tf", 'module "broken" { source = "unterminated')
+    invoked = []
+    monkeypatch.setattr(scan, "run_trivy", lambda *_a, **_k: invoked.append(True))
+    with pytest.raises(ValueError, match="unsupported HCL"):
+        scan.scan_files(str(tmp_path), [path], trivy_path=__file__)
+    assert invoked == []
+
+
 def test_trivy_runs_without_aws_credentials_or_network(tmp_path, monkeypatch):
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret")
@@ -116,6 +142,26 @@ def test_results_are_module_scoped_and_unsafe_names_dropped(tmp_path):
     assert [r["resource_key"] for r in results] == ["b/logs", "a/inner"]
 
 
+@pytest.mark.parametrize("address, key", [
+    ("module.edge_lab", "edge_lab"),
+    ("module.outer[0].module.inner[0]", "outer/inner"),
+    ('module.outer["a.b"].module.inner["x.y"]', "outer/inner"),
+])
+def test_module_only_cause_is_reported_at_module_scope_without_a_phantom_resource(tmp_path, address, key):
+    from backend.lambdas.rule_engine.handler import run_rules
+
+    files = [_write(tmp_path / "main.tf", "")]
+    results = trusted_results(_report("main.tf", [_item("AWS-0107", address)]), str(tmp_path), files)
+    assert results[0]["scope"] == "module"
+    assert results[0]["resource_key"] == key
+    findings = run_rules({"resources": {}}, "module-cause", {"status": "ok", "results": results})
+    relevant = [f for f in findings if key in f.finding]
+    assert relevant
+    assert all('resource "module"' not in f.evidence for f in relevant)
+    assert any("attribution" in f.evidence for f in relevant)
+    assert any(f.type.value == "not-observable" and "attribut" in f.finding for f in findings)
+
+
 def test_counted_and_for_each_resources_keep_their_results(tmp_path):
     # Trivy reports count/for_each instances as name[0] / name["key"].
     # These were dropped as unsafe names, so e.g. FEC's publicly
@@ -148,6 +194,32 @@ def test_results_are_capped(tmp_path, monkeypatch):
     )
 
     assert len(trusted_results(report, str(tmp_path), files)) == 3
+
+
+def test_partial_scan_discloses_totals_and_falls_back_for_omitted_concerns(tmp_path, monkeypatch):
+    from backend.lambdas.rule_engine.handler import run_rules
+
+    monkeypatch.setattr(scan, "MAX_RESULTS", 3)
+    files = [_write(tmp_path / "main.tf", "")]
+    report = _report("main.tf", [
+        *[_item("AWS-0090", f"aws_s3_bucket.b{i}") for i in range(4)],
+        _item("AWS-0180", "aws_db_instance.ledger"),
+    ])
+    monkeypatch.setattr(scan, "run_trivy", lambda *_a, **_k: report)
+    result = scan.scan_files(str(tmp_path), files, trivy_path=__file__)
+    assert result["truncated"] is True
+    assert result["results_total"] == 5
+    assert len(result["results"]) == 3
+    parsed = {"resources": {
+        "aws_db_instance": {"ledger": {"publicly_accessible": True}},
+        "aws_security_group": {"admin": {"ingress": [{
+            "from_port": 22, "to_port": 22, "cidr_blocks": ["0.0.0.0/0"]
+        }]}},
+    }}
+    findings = run_rules(parsed, "partial", scanner=result)
+    assert any("ledger" in f.finding and "publicly accessible" in f.finding for f in findings)
+    assert any("admin" in f.finding and "22" in f.finding for f in findings)
+    assert any(f.type.value == "not-observable" and "truncat" in f.finding for f in findings)
 
 
 def test_missing_binary_reports_unavailable(tmp_path):

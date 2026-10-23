@@ -23,11 +23,13 @@ Order of checks, cheapest and most decisive first:
 4. Idempotency: a repeated client_request_id returns the stored answer.
 5. Suggested question already answered → served free (and a repeat
    click returns the transcript's existing record instead of a copy).
-6. Stages 1–2 (normalize, bound), then stage 3 (Guardrails). A blocked
-   question uses no slot but counts toward the review's blocked limit.
-7. Admission, one transaction: the review's question slot (custom
-   questions only; the admin key isn't limited), the question record, the
-   day's worst-case cost reservation and question count.
+6. Stages 1–2 (normalize, bound), then atomically claim the question and
+   reserve screening cost and a daily request before stage 3 (Guardrails).
+   A blocked question costs screening but uses no review question slot.
+7. Atomic model admission: the review's question slot (custom questions
+   only; the admin key isn't limited), the owned screening claim and the
+   remaining worst-case cost reservation. Suggestions skip screening and
+   reserve their whole cost and daily count in this transaction.
 8. The paid call (backend/chat/answer.py), then settle the reservation to
    the estimated real cost. A failed call refunds the review's slot; the
    reservation stays spent, since Bedrock may have billed.
@@ -56,6 +58,7 @@ from backend.chat.access import (
     FINAL_STATUSES,
     caller_allowed,
     is_admin,
+    question_is_live,
     questions_per_review,
     transcript_item,
 )
@@ -66,6 +69,7 @@ from backend.chat.pricing import GUARDRAIL_INPUT_MICRO_USD_PER_UNIT, reserve_mic
 from backend.chat.prompt import MAX_OUTPUT_TOKENS, PROMPT_VERSION, build_system_prompt
 from backend.chat.suggested import find_suggestion
 from backend.chat.verify import REFUSAL_TEXTS, MalformedAnswer, VerifiedAnswer
+from backend.shared.admission import AdmissionDenied, budget_actions, request_digest
 from backend.shared.clients import (
     BedrockEmbeddingClient,
     BedrockReasoningClient,
@@ -79,8 +83,10 @@ from backend.shared.clients import (
     TransactionCanceled,
     UnexpectedStopReason,
 )
-from backend.shared.http import JSON_HEADERS
+from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
+from backend.shared.public_access import capability_allowed
+from backend.shared.retention import review_expires_at, review_is_live
 from backend.shared.sanitize import QuestionRejected, check_question
 
 # The small calls (Guardrails, embedding, S3 Vectors) normally take well
@@ -97,7 +103,8 @@ QUESTION_TTL_SECONDS = 7 * 24 * 3600
 COUNTER_TTL_SECONDS = 48 * 3600
 MAX_BODY_BYTES = 4096
 DEFAULT_BLOCKED_PER_REVIEW = 5
-DEFAULT_DAILY_BUDGET_MICRO_USD = 400_000  # $0.40/day, ADR-0050 §5
+DEFAULT_DAILY_BUDGET_MICRO_USD = 1_000_000  # $1/day, matches API module defaults
+DEFAULT_MODEL_ID = "us.anthropic.claude-sonnet-4-6"
 DEFAULT_DAILY_MAX_QUESTIONS = 100
 # Failed paid calls per review: the first few give the question back, and
 # after MAX_FAILURES_PER_REVIEW the review stops accepting paid questions.
@@ -121,6 +128,8 @@ ERROR_MESSAGES = {
     "review_not_found": "That review doesn't exist or has expired.",
     "review_not_complete": "Questions open once the review is finished.",
     "request_in_progress": "That question is still being answered. Try again in a moment.",
+    "request_expired": "That saved answer has expired. Start a new question.",
+    "request_conflict": "That request ID belongs to a different question. Start a new question.",
     "review_quota_exhausted": "You've used this review's questions.",
     "daily_cap_reached": "Today's free questions are used up. Try again tomorrow.",
     "too_many_blocked": "Too many questions on this review couldn't be processed.",
@@ -269,7 +278,7 @@ def _history(tables: _Tables, review_id: str, exclude_key: str, now: float) -> l
         # Guardrails blocked, must not reach the model as history on a
         # later turn.
         and i.get("status") in ("answered", "not_determinable")
-        and int(i.get("ttl", now + 1)) > now
+        and question_is_live(i, now)
     ]
     turns.sort(key=lambda i: (int(i.get("createdAt", 0)), str(i.get("askedAt", ""))))
     return turns
@@ -290,7 +299,7 @@ def _asked_suggestion(
         for i in items
         if i.get("suggestedId") == suggested_id
         and i.get("status") in FINAL_STATUSES
-        and int(i.get("ttl", now + 1)) > now
+        and question_is_live(i, now)
     ]
     return min(asked, key=lambda i: int(i.get("createdAt", 0))) if asked else None
 
@@ -385,6 +394,10 @@ def _precheck(
             return "review_quota_exhausted"
         if int(review.get("chatFailed", 0)) >= MAX_FAILURES_PER_REVIEW:
             return "too_many_failed"
+        if counts_slot and int(review.get("chatBlocked", 0)) >= _env_int(
+            "CHAT_BLOCKED_PER_REVIEW", DEFAULT_BLOCKED_PER_REVIEW
+        ):
+            return "too_many_blocked"
     day = _day(now)
     budget = _env_int("CHAT_DAILY_BUDGET_MICRO_USD", DEFAULT_DAILY_BUDGET_MICRO_USD)
     spent = tables.counters.get_item(_spend_key(day))
@@ -397,14 +410,24 @@ def _precheck(
     return None
 
 
-def _mark_failed(tables: _Tables, review_id: str, keys: list[str], error: str) -> None:
+def _mark_failed(
+    tables: _Tables, review_id: str, keys: list[str], error: str, claim: str | None = None
+) -> None:
     for key in keys:
-        tables.questions.update_item(
-            Key={"reviewId": review_id, "questionKey": key},
-            UpdateExpression="SET #s = :failed, errorCode = :e",
-            ExpressionAttributeNames={"#s": "status"},
-            ExpressionAttributeValues={":failed": "failed", ":e": error},
-        )
+        update: dict[str, Any] = {
+            "Key": {"reviewId": review_id, "questionKey": key},
+            "UpdateExpression": "SET #s = :failed, errorCode = :e",
+            "ExpressionAttributeNames": {"#s": "status"},
+            "ExpressionAttributeValues": {":failed": "failed", ":e": error},
+        }
+        if claim:
+            update["ConditionExpression"] = "#s = :screening AND screeningClaim = :claim"
+            update["ExpressionAttributeValues"].update({":screening": "screening", ":claim": claim})
+        try:
+            tables.questions.update_item(**update)
+        except ClientError as exc:
+            if not claim or exc.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                raise
 
 
 def _admit(
@@ -416,21 +439,30 @@ def _admit(
     admin: bool,
     reserve: int,
     now: float,
+    review: dict,
 ) -> str | None:
     """The admission transaction. None on success, else an error code."""
     limit = questions_per_review()
     budget = _env_int("CHAT_DAILY_BUDGET_MICRO_USD", DEFAULT_DAILY_BUDGET_MICRO_USD)
     max_count = _env_int("CHAT_DAILY_MAX_QUESTIONS", DEFAULT_DAILY_MAX_QUESTIONS)
-    if reserve > budget:
+    if reserve > budget or max_count <= 0:
         return "daily_cap_reached"
     day = _day(now)
     counter_ttl = int(now) + COUNTER_TTL_SECONDS
-    record_condition = "attribute_not_exists(questionKey) OR #s = :failed OR (#s = :in_flight AND createdAt < :stale)"
+    record_condition = "attribute_not_exists(questionKey) OR attribute_not_exists(#expiry) OR #s = :failed OR #expiry <= :now OR ((#s = :in_flight OR #s = :screening) AND createdAt < :stale)"
     record_values = {
         ":failed": "failed",
         ":in_flight": "in_flight",
+        ":screening": "screening",
         ":stale": int(now) - IN_FLIGHT_STALE_SECONDS,
+        ":now": int(now),
     }
+    screened = bool(question_item.get("screeningClaim")) and question_item["status"] != "screening"
+    record_names = {"#s": "status", "#expiry": "ttl"}
+    if screened:
+        record_condition = "#s = :screening AND #claim = :claim"
+        record_names = {"#s": "status", "#claim": "screeningClaim"}
+        record_values = {":screening": "screening", ":claim": question_item["screeningClaim"]}
     actions: list[dict[str, Any]] = []
     roles: list[str] = []
     if count_slot:
@@ -453,7 +485,7 @@ def _admit(
                 "TableName": tables.questions_name,
                 "Item": question_item,
                 "ConditionExpression": record_condition,
-                "ExpressionAttributeNames": {"#s": "status"},
+                "ExpressionAttributeNames": record_names,
                 "ExpressionAttributeValues": record_values,
             }
         }
@@ -472,7 +504,7 @@ def _admit(
                         "ttl": question_item["ttl"],
                     },
                     "ConditionExpression": record_condition,
-                    "ExpressionAttributeNames": {"#s": "status"},
+                    "ExpressionAttributeNames": {"#s": "status", "#expiry": "ttl"},
                     "ExpressionAttributeValues": record_values,
                 }
             }
@@ -498,25 +530,40 @@ def _admit(
         }
     )
     roles.append("daily_budget")
-    actions.append(
-        {
-            "Update": {
-                "TableName": tables.counters_name,
-                "Key": {"counterKey": f"global#{day}#chat_questions"},
-                "UpdateExpression": "SET n = if_not_exists(n, :zero) + :one, "
-                "#ttl = if_not_exists(#ttl, :ttl)",
-                "ConditionExpression": "attribute_not_exists(n) OR n < :max",
-                "ExpressionAttributeNames": {"#ttl": "ttl"},
-                "ExpressionAttributeValues": {
-                    ":zero": 0,
-                    ":one": 1,
-                    ":max": max_count,
-                    ":ttl": counter_ttl,
-                },
+    # Typed questions already counted when their screening claim was made.
+    if not screened:
+        actions.append(
+            {
+                "Update": {
+                    "TableName": tables.counters_name,
+                    "Key": {"counterKey": f"global#{day}#chat_questions"},
+                    "UpdateExpression": "SET n = if_not_exists(n, :zero) + :one, "
+                    "#ttl = if_not_exists(#ttl, :ttl)",
+                    "ConditionExpression": "attribute_not_exists(n) OR n < :max",
+                    "ExpressionAttributeNames": {"#ttl": "ttl"},
+                    "ExpressionAttributeValues": {
+                        ":zero": 0,
+                        ":one": 1,
+                        ":max": max_count,
+                        ":ttl": counter_ttl,
+                    },
+                }
             }
-        }
-    )
-    roles.append("daily_count")
+        )
+        roles.append("daily_count")
+    try:
+        shared = budget_actions(
+            review,
+            reserve,
+            count_request=not screened,
+            now=now,
+            table_name=tables.counters_name,
+            admin=admin,
+        )
+    except AdmissionDenied:
+        return "daily_cap_reached"
+    actions.extend(shared)
+    roles.extend(["daily_budget"] * len(shared))
     try:
         tables.transactions.transact_write(actions)
     except TransactionCanceled as exc:
@@ -555,6 +602,7 @@ def _answer_fields(answer: VerifiedAnswer) -> dict[str, Any]:
     }
 
 
+@api_handler
 def handler(event: dict, context: object) -> dict:
     started = time.monotonic()
     deadline = _deadline(context, started)
@@ -585,7 +633,11 @@ def handler(event: dict, context: object) -> dict:
 
     tables = _Tables()
     review = tables.reviews.get_item({"reviewId": review_id})
-    if review is None:
+    if (
+        review is None
+        or not review_is_live(review, now)
+        or not capability_allowed(event, review, write=True)
+    ):
         return finish(_error(404, "review_not_found"), "rejected", error="review_not_found")
     if review.get("status") != "complete" or not review.get("reportS3Key"):
         return finish(_error(409, "review_not_complete"), "rejected", error="review_not_complete")
@@ -593,8 +645,22 @@ def handler(event: dict, context: object) -> dict:
 
     question_key = f"Q#{body['client_request_id']}"
     existing = tables.questions.get_item({"reviewId": review_id, "questionKey": question_key})
+    if (
+        existing
+        and existing.get("status") in FINAL_STATUSES
+        and not question_is_live(existing, now)
+    ):
+        return finish(_error(410, "request_expired"), "rejected", error="request_expired")
     if existing and existing.get("status") in FINAL_STATUSES:
+        if existing.get("requestDigest") and existing["requestDigest"] != request_digest(body):
+            return finish(_error(409, "request_conflict"), "rejected", error="request_conflict")
         return finish(_success(existing, _remaining(review, limit), limit, admin), "replayed")
+    if (
+        existing
+        and existing.get("requestDigest")
+        and existing["requestDigest"] != request_digest(body)
+    ):
+        return finish(_error(409, "request_conflict"), "rejected", error="request_conflict")
     if (
         existing
         and existing.get("status") == "in_flight"
@@ -612,7 +678,8 @@ def handler(event: dict, context: object) -> dict:
         "questionKey": question_key,
         "createdAt": int(now),
         "askedAt": asked_at,
-        "ttl": int(now) + QUESTION_TTL_SECONDS,
+        "requestDigest": request_digest(body),
+        "ttl": min(int(now) + QUESTION_TTL_SECONDS, review_expires_at(review)),
     }
 
     suggestion_key: str | None = None
@@ -629,9 +696,10 @@ def handler(event: dict, context: object) -> dict:
         if prior is not None:
             return finish(_success(prior, _remaining(review, limit), limit, admin), "replayed")
         stored = tables.questions.get_item({"reviewId": review_id, "questionKey": suggestion_key})
-        if stored and stored.get("status") in FINAL_STATUSES:
+        if stored and question_is_live(stored, now) and stored.get("status") in FINAL_STATUSES:
             item = {
                 **base_item,
+                "ttl": min(base_item["ttl"], int(stored["ttl"])),
                 "question": question,
                 "status": stored["status"],
                 "refusalReason": stored.get("refusalReason"),
@@ -658,7 +726,7 @@ def handler(event: dict, context: object) -> dict:
         base_item.update({"kind": "custom"})
         log["kind"] = "custom"
 
-    model_id = os.environ.get("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    model_id = os.environ.get("CHAT_MODEL_ID", DEFAULT_MODEL_ID)
     canary = os.environ.get("CHAT_CANARY", "")
     log.update({"model_id": model_id, "prompt_version": PROMPT_VERSION})
     prompt_chars = len(build_system_prompt(canary)) + len(ctx.cached_text()) + 12000
@@ -669,7 +737,23 @@ def handler(event: dict, context: object) -> dict:
     if turned_away:
         return finish(_error(429, turned_away), "rejected", error=turned_away)
 
+    screening_claim = None
+    screening_cost = 0
     if suggestion_key is None:
+        screening_claim = uuid.uuid4().hex
+        screening_cost = GUARDRAIL_INPUT_MICRO_USD_PER_UNIT
+        screening_item = {
+            **base_item,
+            "question": question,
+            "status": "screening",
+            "screeningClaim": screening_claim,
+        }
+        refused = _admit(
+            tables, review_id, screening_item, None, False, admin, screening_cost, now, review
+        )
+        if refused:
+            code = {"request_in_progress": 409, "chat_busy": 503}.get(refused, 429)
+            return finish(_error(code, refused), "rejected", error=refused)
         try:
             verdict = GuardrailsClient(
                 guardrail_id=os.environ["CHAT_GUARDRAIL_ID"],
@@ -677,6 +761,10 @@ def handler(event: dict, context: object) -> dict:
                 **_SMALL_CALL,
             ).assess(question)
         except Exception:  # noqa: BLE001 - fail closed: no screening, no model call
+            # Keep the screening reservation: a timed-out request may be billed.
+            _mark_failed(
+                tables, review_id, [question_key], "guardrails_unavailable", screening_claim
+            )
             return finish(
                 _error(503, "guardrails_unavailable"), "rejected", error="guardrails_unavailable"
             )
@@ -688,6 +776,7 @@ def handler(event: dict, context: object) -> dict:
             }
             max_blocked = _env_int("CHAT_BLOCKED_PER_REVIEW", DEFAULT_BLOCKED_PER_REVIEW)
             if not _record_blocked(tables, review_id, admin, max_blocked):
+                _mark_failed(tables, review_id, [question_key], "too_many_blocked", screening_claim)
                 return finish(
                     _error(429, "too_many_blocked"), "blocked", error="too_many_blocked", **fields
                 )
@@ -695,6 +784,7 @@ def handler(event: dict, context: object) -> dict:
                 **base_item,
                 "question": question,
                 "status": "refused",
+                "costMicroUsd": screening_cost,
                 "refusalReason": "blocked",
                 "answer": [{"text": REFUSAL_TEXTS["blocked"], "citations": []}],
             }
@@ -708,17 +798,29 @@ def handler(event: dict, context: object) -> dict:
             )
 
     question_item = {**base_item, "question": question, "status": "in_flight"}
+    if screening_claim:
+        question_item["screeningClaim"] = screening_claim
     if focus_alias:
         question_item["focusFindingId"] = ctx.finding_ids[focus_alias]
     history = [] if suggestion_key else _history(tables, review_id, question_key, now)
     refused = _admit(
-        tables, review_id, question_item, suggestion_key, counts_slot, admin, reserve, now
+        tables,
+        review_id,
+        question_item,
+        suggestion_key,
+        counts_slot,
+        admin,
+        reserve - screening_cost,
+        now,
+        review,
     )
     if refused == "request_in_progress":
         again = tables.questions.get_item({"reviewId": review_id, "questionKey": question_key})
-        if again and again.get("status") in FINAL_STATUSES:
+        if again and question_is_live(again, now) and again.get("status") in FINAL_STATUSES:
             return finish(_success(again, _remaining(review, limit), limit, admin), "replayed")
     if refused:
+        if screening_claim:
+            _mark_failed(tables, review_id, [question_key], refused, screening_claim)
         status_code = {"request_in_progress": 409, "chat_busy": 503}.get(refused, 429)
         return finish(_error(status_code, refused), "rejected", error=refused)
 
@@ -757,6 +859,7 @@ def handler(event: dict, context: object) -> dict:
         _record_failure(tables, review_id, refund=counts_slot)
         raise
 
+    result.cost_micro_usd += screening_cost
     answered_at = datetime.now(UTC).isoformat()
     stored_fields = {
         **_answer_fields(result.answer),

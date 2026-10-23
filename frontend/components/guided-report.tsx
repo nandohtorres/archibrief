@@ -140,8 +140,9 @@ function FindingCard({
           </>
         )}
         <p className="plain-confidence">
-          <strong>Confidence: {confidenceLabel(finding.record.confidence)}.</strong> Based on the
-          evidence inputs recorded in the technical view; it is not a safety guarantee.
+          <strong>Confidence: {confidenceLabel(finding.record.confidence)}.</strong> A rough guide
+          to how direct the evidence is, from the inputs in the technical view. It doesn&apos;t
+          measure whether the finding is right, and it is not a safety guarantee.
         </p>
         <div className="guided-actions">
           <button

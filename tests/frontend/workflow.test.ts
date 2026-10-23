@@ -1,7 +1,9 @@
 import { fixtureReport } from "../../frontend/lib/fixtures";
 import {
   REVIEW_DEADLINE_MS,
+  citationGap,
   confidenceLabel,
+  defaultReportName,
   failureMessageFor,
   filterAndSortFindings,
   formatFindingId,
@@ -68,6 +70,19 @@ describe("finding workspace behavior", () => {
     expect(confidenceLabel(0.7)).toBe("Medium");
     expect(confidenceLabel(0.4)).toBe("Low");
     expect(formatFindingId("finding-7")).toBe("F-007");
+  });
+});
+
+describe("citationGap", () => {
+  it("calls only a not-observable finding an evidence gap", () => {
+    expect(citationGap("not-observable").heading).toBe("No citation by design");
+    expect(citationGap("deterministic-rule-result").heading).toBe(
+      "Configuration evidence, not a citation",
+    );
+    expect(citationGap("deterministic-rule-result").body).toContain(
+      "read the submitted configuration directly",
+    );
+    expect(citationGap("inference").heading).toBe("No source citation");
   });
 });
 
@@ -176,5 +191,24 @@ describe("stakeholder summary", () => {
       "Data residency was not supplied, so conclusions that depend on it are not observable.",
       "Availability was not supplied, so a conservative assumption was used.",
     ]);
+  });
+});
+
+describe("defaultReportName", () => {
+  it("names a blank report after the uploaded archive", () => {
+    const file = (name: string) => new File(["x"], name);
+    expect(defaultReportName("upload", file("payments-api.tar.gz"))).toBe(
+      "payments-api",
+    );
+    expect(defaultReportName("upload", file("infra.TGZ"))).toBe("infra");
+    expect(defaultReportName("upload", file("main.tar"))).toBe("main");
+  });
+
+  it("falls back for pasted Terraform and for no file at all", () => {
+    expect(defaultReportName("paste", null)).toBe("Pasted Terraform");
+    expect(defaultReportName("upload", null)).toBe("Untitled review");
+    expect(defaultReportName("upload", new File(["x"], ".tar"))).toBe(
+      "Untitled review",
+    );
   });
 });

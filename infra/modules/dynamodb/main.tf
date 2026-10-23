@@ -68,6 +68,11 @@ resource "aws_dynamodb_table" "findings" {
   hash_key     = "reviewId"
   range_key    = "findingId"
 
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
   attribute {
     name = "reviewId"
     type = "S"
@@ -89,6 +94,11 @@ resource "aws_dynamodb_table" "audit_log" {
   name         = "${var.table_prefix}-audit-log"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "auditId"
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
 
   attribute {
     name = "auditId"
@@ -122,7 +132,7 @@ resource "aws_dynamodb_table" "usage_counters" {
 
 # Report chat questions (ADR-0050). One item per question (Q#<request
 # id>) and per stored suggested answer (S#<suggestion id>), under the
-# review they belong to. Items expire 7 days after they're asked; the
+# review they belong to. Items never outlive the review's deadline; the
 # handlers also check the time on every read, since TTL deletion is late.
 resource "aws_dynamodb_table" "review_questions" {
   name         = "${var.table_prefix}-review-questions"

@@ -28,11 +28,14 @@ from typing import Any
 from botocore.exceptions import ClientError, ReadTimeoutError
 
 from backend.lambdas.validate.handler import validate_findings
+from backend.shared.admission import AdmissionDenied, positive_setting, reserve_operation
 from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
-from backend.shared.http import JSON_HEADERS
+from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.models.finding import Finding
+from backend.shared.public_access import capability_allowed, is_admin
 from backend.shared.report import compute_presentation
+from backend.shared.retention import review_expires_at, review_is_live
 
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
@@ -134,6 +137,7 @@ def _findings_response(review_id: str, finding_id: str, findings: list[Finding])
     )
 
 
+@api_handler
 def handler(event: dict, _context: object) -> dict:
     path_params = event.get("pathParameters") or {}
     review_id = path_params.get("reviewId")
@@ -148,7 +152,11 @@ def handler(event: dict, _context: object) -> dict:
 
     reviews_table = DynamoDBClient(table_name=os.environ["REVIEWS_TABLE_NAME"])
     review_item = reviews_table.get_item({"reviewId": review_id})
-    if review_item is None:
+    if (
+        review_item is None
+        or not review_is_live(review_item)
+        or not capability_allowed(event, review_item, write=True)
+    ):
         return _response(404, {"error": "review not found"})
 
     report_s3_key = review_item.get("reportS3Key")
@@ -188,6 +196,20 @@ def handler(event: dict, _context: object) -> dict:
             409,
             {"error": "a deeper analysis for this finding is already running; try again shortly"},
         )
+
+    try:
+        fresh = reserve_operation(
+            review_item,
+            f"deeper:{finding_id}:{claimed_at}",
+            {"finding_id": finding_id},
+            positive_setting("DEEPER_RESERVE_MICRO_USD", 200000),
+            admin=is_admin(event),
+        )
+        if not fresh:
+            raise AdmissionDenied("operation_in_progress")
+    except AdmissionDenied as exc:
+        _release_in_flight(reviews_table, review_id, finding_id, claimed_at)
+        return _response(409 if "operation" in exc.code else 429, {"error": exc.code})
 
     agent_client = AgentCoreRuntimeClient(
         agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
@@ -231,7 +253,9 @@ def handler(event: dict, _context: object) -> dict:
         )
 
     for finding in valid_findings:
-        findings_table.put_item(_findings_table_item(finding))
+        findings_table.put_item(
+            {**_findings_table_item(finding), "ttl": review_expires_at(review_item)}
+        )
     _release_in_flight(reviews_table, review_id, finding_id, claimed_at)
 
     return _findings_response(review_id, finding_id, valid_findings)

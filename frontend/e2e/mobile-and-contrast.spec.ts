@@ -79,7 +79,7 @@ test.describe("phone layout at 390px", () => {
     await page.goto(FIXTURE_URL);
     // The hero's actions are on the first screen: "See a real review" opens
     // the featured demo, the link goes to the submission form.
-    for (const name of [/See a real review/, /Review your own Terraform/]) {
+    for (const name of [/See a real review/, /Submit your own Terraform/]) {
       const action = page
         .locator(".landing-actions")
         .getByRole(name.source.startsWith("See") ? "button" : "link", { name });
@@ -154,17 +154,19 @@ test.describe("phone layout at 390px", () => {
   });
 });
 
-test("the theme button cycles system, light and dark", async ({ page }) => {
+test("the theme button starts light, even on a dark device, and toggles dark and back", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
   await page.goto(FIXTURE_URL);
   await page.waitForLoadState("networkidle");
   const toggle = page.getByRole("button", { name: /^Theme:/ });
-  await expect(toggle).toHaveAccessibleName(/^Theme: System/);
-  await toggle.click();
+  await expect(toggle).toHaveAccessibleName(/^Theme: Light/);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await toggle.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await toggle.click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
 test.describe("color contrast (WCAG AA)", () => {

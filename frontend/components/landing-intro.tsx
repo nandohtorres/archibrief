@@ -72,15 +72,16 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
     <div className="landing">
       <div className="landing-hero">
         <span className="landing-kicker">
-          AWS Terraform · architecture review that explains itself
+          AWS Terraform reviews · for engineers and the people they report to
         </span>
         <h1 id="landing-heading">
-          Know what&apos;s wrong with your AWS design, <em>and why it matters.</em>
+          A second opinion on your AWS architecture, <em>with the receipts.</em>
         </h1>
         <p className="landing-lede">
           ArchiBrief reads your Terraform and a short brief about the workload, then explains in
-          plain language what&apos;s exposed, what could fail, and why each fix matters. Every claim
-          points to the line of code and the AWS guidance behind it.
+          plain language what&apos;s exposed, what could fail, and why each fix matters. Each
+          finding shows the code it&apos;s based on and, where it relies on AWS guidance, the exact
+          passage, so you can check it.
         </p>
         <div className="landing-cta-block">
           <div className="landing-actions">
@@ -94,12 +95,12 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
               <span aria-hidden="true">→</span>
             </button>
             <a className="button secondary" href="#submit">
-              Review your own Terraform
+              Submit your own Terraform
             </a>
           </div>
           <ul className="landing-badges">
             <li>Never touches your AWS account</li>
-            <li>Every claim cites its source</li>
+            <li>Evidence shown with each finding</li>
             <li>AI mistakes shown, not hidden</li>
           </ul>
         </div>
@@ -107,20 +108,9 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
 
       <section
         className="landing-section landing-band"
-        id="samples"
-        aria-labelledby="samples-heading"
+        id="readers"
+        aria-labelledby="readers-heading"
       >
-        <div className="landing-section-head">
-          <h2 id="samples-heading">Real reviews of real public code</h2>
-          <p>
-            Three open-source AWS projects, reviewed by ArchiBrief and then checked by hand. Where
-            the AI got something wrong, the review says so.
-          </p>
-        </div>
-        {demos}
-      </section>
-
-      <section className="landing-section" id="readers" aria-labelledby="readers-heading">
         <div className="landing-section-head">
           <h2 id="readers-heading">One review, two readers</h2>
           <p>Built for the engineer who fixes it and the person who has to say yes.</p>
@@ -289,6 +279,21 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
             </li>
           </ol>
         </div>
+      </section>
+
+      <section
+        className="landing-section landing-band"
+        id="samples"
+        aria-labelledby="samples-heading"
+      >
+        <div className="landing-section-head">
+          <h2 id="samples-heading">Real reviews of AWS code</h2>
+          <p>
+            Three open-source AWS projects, reviewed by ArchiBrief and then checked by hand. Where
+            the AI got something wrong, the review says so.
+          </p>
+        </div>
+        {demos}
       </section>
     </div>
   );

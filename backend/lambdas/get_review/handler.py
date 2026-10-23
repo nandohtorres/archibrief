@@ -19,8 +19,10 @@ import os
 from typing import Any
 
 from backend.shared.clients import DynamoDBClient, S3Client
-from backend.shared.http import JSON_HEADERS
+from backend.shared.http import JSON_HEADERS, api_handler
+from backend.shared.public_access import capability_allowed
 from backend.shared.report import build_review_report
+from backend.shared.retention import review_is_live
 
 _PENDING_ALLOWED_FIELDS = (
     "reviewId",
@@ -49,6 +51,7 @@ def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@api_handler
 def handler(event: dict, _context: object) -> dict:
     review_id = (event.get("pathParameters") or {}).get("reviewId")
     if not review_id:
@@ -57,7 +60,7 @@ def handler(event: dict, _context: object) -> dict:
     reviews_table = os.environ["REVIEWS_TABLE_NAME"]
     item = DynamoDBClient(table_name=reviews_table).get_item({"reviewId": review_id})
 
-    if item is None:
+    if item is None or not review_is_live(item) or not capability_allowed(event, item):
         return _response(404, {"error": "review not found"})
 
     report_s3_key = item.get("reportS3Key")

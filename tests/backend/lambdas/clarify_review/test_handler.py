@@ -1,4 +1,5 @@
 import json
+import time
 
 import boto3
 import pytest
@@ -17,19 +18,27 @@ class _FakeSfnClient:
 
     def send_task_success(self, taskToken: str, output: str) -> None:
         if _FakeSfnClient.error_code:
-            raise ClientError({"Error": {"Code": _FakeSfnClient.error_code}}, "SendTaskSuccess")
+            raise ClientError(
+                {"Error": {"Code": _FakeSfnClient.error_code}}, "SendTaskSuccess"
+            )
         _FakeSfnClient.calls.append({"taskToken": taskToken, "output": output})
 
 
 def _event(review_id: str | None, body: dict | None) -> dict:
     return {
+        "headers": {"x-admin-key": "admin-secret"},
         "pathParameters": {"reviewId": review_id} if review_id else {},
         "body": json.dumps(body) if body is not None else None,
     }
 
 
 def _waiting(review_id: str = "r1", token: str = "token-1") -> dict:
-    return {"reviewId": review_id, "status": "needs_clarification", "clarificationTaskToken": token}
+    return {
+        "reviewId": review_id,
+        "status": "needs_clarification",
+        "clarificationTaskToken": token,
+        "ttl": int(time.time()) + 86400,
+    }
 
 
 @pytest.fixture
@@ -37,6 +46,16 @@ def table(monkeypatch):
     # Real DynamoDB semantics (moto) so the conditional claim is exercised,
     # not a permissive fake. boto3.client is patched only for Step Functions.
     with mock_aws():
+        monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+        monkeypatch.setenv("USAGE_COUNTERS_TABLE_NAME", "counters")
+        boto3.resource("dynamodb", region_name="us-east-1").create_table(
+            TableName="counters",
+            KeySchema=[{"AttributeName": "counterKey", "KeyType": "HASH"}],
+            AttributeDefinitions=[
+                {"AttributeName": "counterKey", "AttributeType": "S"}
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
         t = boto3.resource("dynamodb", region_name="us-east-1").create_table(
             TableName=TABLE,
             KeySchema=[{"AttributeName": "reviewId", "KeyType": "HASH"}],
@@ -47,7 +66,16 @@ def table(monkeypatch):
         monkeypatch.setattr(handler_module, "paid_work_allowed", lambda: True)
         _FakeSfnClient.calls = []
         _FakeSfnClient.error_code = None
-        monkeypatch.setattr(handler_module.boto3, "client", lambda *a, **kw: _FakeSfnClient())
+        original_client = boto3.client
+        monkeypatch.setattr(
+            handler_module.boto3,
+            "client",
+            lambda service, *a, **kw: (
+                _FakeSfnClient()
+                if service == "stepfunctions"
+                else original_client(service, *a, **kw)
+            ),
+        )
         yield t
 
 
@@ -65,7 +93,10 @@ def test_resumes_paused_execution_and_clears_token(table):
         {
             "taskToken": "token-1",
             "output": json.dumps(
-                {"baseline_answers": {"budget_ceiling": "50000"}, "clarification_note": ""}
+                {
+                    "baseline_answers": {"budget_ceiling": "50000"},
+                    "clarification_note": "",
+                }
             ),
         }
     ]
@@ -77,7 +108,9 @@ def test_resumes_paused_execution_and_clears_token(table):
 def test_does_not_overwrite_fields_written_by_others(table):
     # Writing back a whole-item snapshot read before resuming would wipe
     # fields written in between.
-    table.put_item(Item={**_waiting(), "currentStage": "reasoning", "terraformRepoRef": "repo"})
+    table.put_item(
+        Item={**_waiting(), "currentStage": "reasoning", "terraformRepoRef": "repo"}
+    )
 
     handler(_event("r1", {"answers": {"budget_ceiling": "50000"}}), None)
 
@@ -145,7 +178,9 @@ def test_appends_additional_notes_as_a_clarification_note(table):
     assert result["statusCode"] == 200
     [call] = _FakeSfnClient.calls
     output = json.loads(call["output"])
-    assert output["baseline_answers"] == {"regulatory_data_residency": "Yes — GDPR, HIPAA"}
+    assert output["baseline_answers"] == {
+        "regulatory_data_residency": "Yes — GDPR, HIPAA"
+    }
     assert output["clarification_note"] == (
         "\n\nAdditional context provided during clarification: "
         "Also handles EU customer PII in a second region."
@@ -153,11 +188,19 @@ def test_appends_additional_notes_as_a_clarification_note(table):
 
 
 def test_rejects_review_not_awaiting_clarification(table):
-    table.put_item(Item={"reviewId": "r1", "status": "pending"})
+    table.put_item(
+        Item={"reviewId": "r1", "status": "pending", "ttl": int(time.time()) + 86400}
+    )
 
     result = handler(_event("r1", {"answers": {}}), None)
 
     assert result["statusCode"] == 409
+    assert _FakeSfnClient.calls == []
+
+
+def test_expired_review_cannot_resume_paid_work(table):
+    table.put_item(Item={**_waiting(), "ttl": 1})
+    assert handler(_event("r1", {"answers": {}}), None)["statusCode"] == 404
     assert _FakeSfnClient.calls == []
 
 
@@ -188,3 +231,12 @@ def test_kill_switch_blocks_resume_and_keeps_token(table, monkeypatch):
     assert result["statusCode"] == 503
     assert _FakeSfnClient.calls == []
     assert _stored(table)["clarificationTaskToken"] == "token-1"
+
+
+@pytest.mark.parametrize("body", ["[]", '"text"', "null", "5"])
+def test_non_object_json_body_returns_400(table, body):
+    table.put_item(Item=_waiting())
+    event = {**_event("r1", None), "body": body}
+
+    assert handler(event, None)["statusCode"] == 400
+    assert _stored(table)["status"] == "needs_clarification"

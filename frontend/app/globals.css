@@ -7,6 +7,7 @@
   --surface-2: #eaeff3;
   --surface-3: #dce5eb;
   --border: #c5d0d9;
+  --border-strong: #a9b7c3;
   --text: #131c24;
   --text-muted: #43596c;
   --text-faint: #566b7d;
@@ -49,6 +50,7 @@
     --surface-2: #232325;
     --surface-3: #2c2c2f;
     --border: #4a4a4f;
+    --border-strong: #616168;
     --text: #e2e2e2;
     --text-muted: #ababad;
     --text-faint: #98989b;
@@ -77,6 +79,7 @@
   --surface-2: #232325;
   --surface-3: #2c2c2f;
   --border: #4a4a4f;
+  --border-strong: #616168;
   --text: #e2e2e2;
   --text-muted: #ababad;
   --text-faint: #98989b;
@@ -104,6 +107,14 @@
 
 html {
   scroll-behavior: smooth;
+}
+
+/* The full-bleed landing bands are 100vw wide, and 100vw includes the
+   vertical scrollbar where it takes space (Windows); clip the overhang
+   instead of scrolling sideways. clip, unlike hidden, keeps sticky. */
+html,
+body {
+  overflow-x: clip;
 }
 
 body {
@@ -226,6 +237,25 @@ h4 {
 .brand-name {
   font: 700 1.05rem/1 var(--font-mono);
   letter-spacing: -0.01em;
+}
+
+.brand-text {
+  display: grid;
+  gap: 0.25rem;
+  text-align: left;
+}
+
+.brand-tagline {
+  color: var(--text-faint);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+@media (max-width: 680px) {
+  .brand-tagline {
+    display: none;
+  }
 }
 
 .header-controls {
@@ -452,7 +482,6 @@ h4 {
   font-size: 1.05rem;
 }
 
-.boundary-callout,
 .state-detail {
   display: grid;
   gap: 0.2rem;
@@ -465,42 +494,57 @@ h4 {
   font-size: 0.88rem;
 }
 
-.boundary-callout strong,
 .state-detail strong {
   color: var(--text);
 }
 
-.preset-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
+/* Submission form (components/submission-step.tsx). */
+.flow-card h2#submission-heading {
+  max-width: none;
+  margin-bottom: var(--space-1);
 }
 
-.preset-button {
-  display: grid;
-  gap: 0.25rem;
-  text-align: left;
-  height: auto;
-  min-height: 0;
-  white-space: normal;
-  border: 1px solid var(--accent);
+.submission-card .lede {
+  margin-bottom: var(--space-2);
+}
+.boundary-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: var(--space-2);
+  padding: 0.9rem 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
   border-radius: var(--radius-m);
-  background: var(--surface);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
-.preset-button strong {
-  font-size: 0.85rem;
-}
-
-.preset-button span {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 400;
+.boundary-callout svg {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.1rem;
 }
 
 .submission-form {
   display: grid;
+  gap: var(--space-4);
+}
+
+.form-field {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* "Report name (optional)": the hint stays on the label's line. */
+.submission-form .form-field > label:not(.dropzone) {
+  display: block;
 }
 
 .submission-form label,
@@ -511,10 +555,6 @@ h4 {
   color: var(--text);
   font-size: 0.9rem;
   font-weight: 700;
-}
-
-.submission-form label:not(:first-child) {
-  margin-top: var(--space-3);
 }
 
 .submission-form label span {
@@ -543,39 +583,48 @@ h4 {
   resize: vertical;
 }
 
-/* Try-it section: example architectures, upload/paste
-   switch, admin key beside the submit button. */
-.example-heading {
-  margin: var(--space-3) 0 var(--space-1);
+/* Finished demo reviews strip (components/demo-cards.tsx, compact). */
+.demo-strip {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: var(--space-3);
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-m);
+  background: var(--bg);
+}
+
+.demo-strip-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+
+.demo-strip-header h3 {
+  margin: 0;
   font-size: 0.95rem;
 }
 
-.preset-button small {
-  color: var(--accent);
-  font: 600 0.72rem/1.4 var(--font-mono);
-}
-
-/* Finished demo reviews (components/demo-cards.tsx). */
-.demo-cards-note {
-  margin: 0 0 var(--space-1);
-  color: var(--text-muted);
+.demo-strip-header span {
+  color: var(--text-faint);
   font-size: 0.85rem;
 }
 
-.demo-card-grid {
+.demo-strip-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.6rem;
 }
 
-.demo-card {
-  display: grid;
-  gap: 0.3rem;
-  align-content: start;
-  min-height: 44px;
-  padding: var(--space-2);
+.demo-strip-button {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 52px;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--border);
-  border-left: 4px solid var(--accent);
   border-radius: var(--radius-m);
   background: var(--surface);
   color: var(--text);
@@ -584,28 +633,56 @@ h4 {
   cursor: pointer;
 }
 
-.demo-card:hover:not(:disabled),
-.demo-card:focus-visible {
+.demo-strip-button:hover:not(:disabled),
+.demo-strip-button:focus-visible {
+  border-color: var(--accent);
   background: var(--accent-tint);
 }
 
-.demo-card:disabled {
+.demo-strip-button:disabled {
   cursor: progress;
   opacity: 0.7;
 }
 
-.demo-card strong {
-  font-size: 0.9rem;
-}
-
-.demo-card span {
-  color: var(--text-muted);
-  font-size: 0.8rem;
-}
-
-.demo-card small {
+.demo-strip-button svg {
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
   color: var(--accent);
-  font: 600 0.72rem/1.4 var(--font-mono);
+}
+
+.demo-strip-button > span {
+  display: grid;
+  min-width: 0;
+}
+
+.demo-strip-button strong {
+  font-size: 0.88rem;
+}
+
+.demo-strip-button small {
+  color: var(--text-faint);
+  font-size: 0.78rem;
+}
+
+.form-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: var(--space-4);
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.form-divider::before,
+.form-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 
 .demo-provenance {
@@ -647,44 +724,122 @@ h4 {
   color: var(--text);
 }
 
-.preset-button.selected {
-  border-width: 2px;
-  background: var(--accent-tint);
-}
-
-.source-toggle {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-  margin: 0 0 var(--space-2);
+.terraform-source legend {
+  margin-bottom: 0.5rem;
   padding: 0;
-  border: 0;
-}
-
-.source-toggle legend {
-  width: 100%;
-  margin-bottom: var(--space-1);
-  padding: 0;
+  color: var(--text);
   font-size: 0.9rem;
   font-weight: 700;
 }
 
-.submission-form .source-toggle label {
+.source-switch {
+  display: inline-flex;
+  justify-self: start;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
+}
+
+.submission-form .source-switch label {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  min-height: 44px;
-  margin: 0;
+  min-height: 40px;
+  padding: 0 1.1rem;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
 }
 
-.submission-form .source-toggle input {
-  width: 1.1rem;
+.submission-form .source-switch label.selected {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14);
+}
+
+.submission-form .source-switch label:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* The real radio and file inputs sit invisibly over their styled labels,
+   so a click or a dropped file lands on the input itself. */
+.submission-form .source-switch label {
+  position: relative;
+}
+
+.submission-form .source-switch input,
+.submission-form .dropzone input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
   min-height: 0;
-  height: 1.1rem;
+  height: 100%;
   margin: 0;
-  accent-color: var(--accent);
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.submission-form .dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 150px;
+  padding: var(--space-2);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 400;
+  text-align: center;
+  cursor: pointer;
+}
+
+.submission-form .dropzone:hover,
+.submission-form .dropzone.dragging {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.submission-form .dropzone:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.submission-form .dropzone.invalid {
+  border-color: var(--critical);
+}
+
+.dropzone svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--accent);
+}
+
+.submission-form .dropzone .dropzone-title {
+  color: var(--text);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.dropzone-title u {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.submission-form .dropzone .dropzone-hint {
+  color: var(--text-faint);
+  font-size: 0.82rem;
 }
 
 .submission-form .code-input {
@@ -729,6 +884,13 @@ h4 {
 .flow-card > .form-actions {
   justify-content: space-between;
   margin-top: var(--space-4);
+}
+
+/* The form's grid gap already spaces it; a rule sets it apart instead. */
+.submission-form .form-actions {
+  margin-top: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--surface-3);
 }
 
 .preflight-grid {
@@ -2537,12 +2699,71 @@ h4 {
 }
 
 .site-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
+  display: grid;
+  justify-items: center;
+  gap: 0.9rem;
+  margin-top: var(--space-4);
+  padding: var(--space-5) var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-strong);
   color: var(--text-faint);
-  font: 0.72rem/1.5 var(--font-mono);
+  text-align: center;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text);
+}
+
+.footer-brand .brand-emblem {
+  width: 24px;
+  height: 24px;
+}
+
+.footer-brand strong {
+  font: 700 0.95rem/1 var(--font-mono);
+}
+
+.footer-brand span {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+.site-footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  color: var(--text-muted);
+  font: 0.74rem/1.5 var(--font-mono);
+  list-style: none;
+}
+
+/* Matches the Privacy link's 24px tap height so the row lines up. */
+.site-footer-row li {
+  line-height: 24px;
+}
+
+.site-footer-row li + li::before {
+  content: "·";
+  margin-right: 1.25rem;
+  color: var(--border-strong);
+}
+
+.site-footer-legal {
+  max-width: 72ch;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.site-footer-copy {
+  max-width: 80ch;
+  margin: 0;
+  font: 0.72rem/1.6 var(--font-mono);
 }
 
 /* Landing: editorial hero, sample cards, check marks, walkthrough and
@@ -2586,8 +2807,8 @@ h4 {
   font-size: clamp(1.05rem, 2.4vw, 1.2rem);
 }
 
-/* Buttons and check marks as one block; the check marks center under the
-   buttons and wrap to their width (width: 0 + min-width: 100%). */
+/* Buttons and check marks as one block; the check marks sit left-aligned
+   under the buttons and wrap to their width (width: 0 + min-width: 100%). */
 .landing-cta-block {
   display: inline-flex;
   flex-direction: column;
@@ -2619,7 +2840,7 @@ h4 {
 .landing-badges {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.5rem 1.5rem;
   width: 0;
   min-width: 100%;
@@ -2628,7 +2849,7 @@ h4 {
   color: var(--text-muted);
   font-size: 0.88rem;
   list-style: none;
-  text-align: center;
+  text-align: left;
 }
 
 .landing-badges li::before,
@@ -2656,7 +2877,7 @@ h4 {
   inset: 0 50%;
   width: 100vw;
   margin-left: -50vw;
-  border-block: 1px solid var(--border);
+  border-block: 1px solid var(--border-strong);
   background: var(--surface);
   content: "";
 }
@@ -3274,7 +3495,7 @@ h4 {
 
 @media (max-width: 680px) {
   .app-shell {
-    width: min(100% - 1rem, 1240px);
+    width: min(100% - 1.25rem, 1240px);
   }
 
   .section-heading-row,
@@ -3379,8 +3600,12 @@ h4 {
     align-self: flex-start;
   }
 
-  .site-footer {
+  .site-footer-row {
     flex-direction: column;
+  }
+
+  .site-footer-row li + li::before {
+    content: none;
   }
 }
 

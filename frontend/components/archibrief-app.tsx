@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AppHeader } from "./app-header";
+import { useEffect, useRef, useState } from "react";
+import { AppHeader, BrandEmblem } from "./app-header";
 import { DemoCards } from "./demo-cards";
 import { FailurePanel } from "./state-panel";
 import { ClarifyStep } from "./clarify-step";
@@ -21,9 +21,17 @@ import {
   submitReview,
   uploadArchiveToS3,
 } from "@/lib/api";
+import { archiveDigest } from "@/lib/review-access";
+import { publicSubmissionEnabled } from "@/lib/public-access";
 import { loadAdminKey, saveAdminKey } from "@/lib/admin-key";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
-import type { DemoChat, PreflightField, ReviewReport, ReviewStatusPointer } from "@/lib/contracts";
+import type {
+  DemoChat,
+  PreflightField,
+  ReviewReport,
+  ReviewStatusPointer,
+  SubmitReviewRequest,
+} from "@/lib/contracts";
 import type { ArchitectureGraph } from "@/lib/architecture";
 import { FEATURED_DEMO_ID, fetchDemo, fetchDemoIndex, type DemoEntry } from "@/lib/demos";
 import {
@@ -34,7 +42,7 @@ import {
   type ReportSource,
 } from "@/lib/workflow";
 
-type ThemeChoice = "system" | "light" | "dark";
+type ThemeChoice = "light" | "dark";
 
 const OWNER_ONLY_NOTICE =
   "Submissions are limited to the site owner for now. Public submissions are coming soon. In the meantime, the sample review shows exactly what you'd get back.";
@@ -49,7 +57,7 @@ const emptySubmission: SubmissionValues = {
 
 export function ArchiBriefApp() {
   const [screen, setScreen] = useState<AppScreen>("submission");
-  const [theme, setTheme] = useState<ThemeChoice>("system");
+  const [theme, setTheme] = useState<ThemeChoice>("light");
   const [pendingSection, setPendingSection] = useState<string | null>(null);
   const [adminKey, setAdminKey] = useState("");
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
@@ -75,11 +83,16 @@ export function ArchiBriefApp() {
   const [failureMessage, setFailureMessage] = useState(
     "The fixture failure state shows how ArchiBrief responds when a pipeline stage cannot complete.",
   );
+  const pendingSubmission = useRef<{
+    fingerprint: string;
+    nonce: string;
+    request?: SubmitReviewRequest;
+  } | null>(null);
   const apiConfigured = Boolean(getApiBaseUrl());
 
   useEffect(() => {
     const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
-    if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
+    if (stored === "light" || stored === "dark") setTheme(stored);
     // Tab-scoped, never localStorage — see lib/admin-key.ts.
     const storedKey = loadAdminKey(window.sessionStorage, window.localStorage);
     // A key typed or autofilled before the page's script loaded is in the
@@ -202,7 +215,7 @@ export function ArchiBriefApp() {
     // Owner-only for now (ADR-0047): every submit
     // route already requires the admin key server-side; this just answers
     // a visitor plainly instead of sending a request that would fail.
-    if (apiConfigured && !adminKey.trim()) {
+    if (apiConfigured && !adminKey.trim() && !publicSubmissionEnabled) {
       setSubmitNotice(OWNER_ONLY_NOTICE);
       return;
     }
@@ -223,39 +236,43 @@ export function ArchiBriefApp() {
 
     setSubmitting(true);
     try {
-      // review_id doubles as the idempotency token server-side (no
-      // separate idempotencyKey field exists — see lib/contracts.ts).
-      // retrieval_query has no
-      // separate input in this step, so it defaults to the workload
-      // brief text itself, the same fallback deeper_review's handler
-      // uses when no narrower technical query is available.
-      const reviewId = makeIdempotencyKey();
-
-      // ADR-0045: the archive goes straight to S3 via a
-      // presigned POST, tied to reviewId before the review itself exists
-      // anywhere server-side — only the resulting key is sent to
-      // POST /reviews, never the file bytes.
-      const upload = await requestUpload({ review_id: reviewId }, adminKey);
-      await uploadArchiveToS3(upload, values.archiveFile);
-
-      const response = await submitReview(
-        {
-          review_id: reviewId,
+      const digest = await archiveDigest(values.archiveFile);
+      const fingerprint = JSON.stringify([digest, values.terraformRepoRef, values.workloadBrief]);
+      if (pendingSubmission.current?.fingerprint !== fingerprint) {
+        pendingSubmission.current = { fingerprint, nonce: makeIdempotencyKey() };
+      }
+      const pending = pendingSubmission.current;
+      if (!pending.request) {
+        const upload = await requestUpload(
+          {
+            archive_size: values.archiveFile.size,
+            archive_sha256: digest,
+            client_request_id: pending.nonce,
+            ...(values.turnstileToken ? { turnstile_token: values.turnstileToken } : {}),
+          },
+          adminKey,
+        );
+        const version = await uploadArchiveToS3(upload, values.archiveFile);
+        pending.request = {
+          review_id: upload.reviewId ?? pending.nonce,
+          ...(version ? { archive_version_id: version } : {}),
           archive_s3_key: upload.archiveKey,
           terraform_repo_ref: values.terraformRepoRef,
           workload_brief: values.workloadBrief,
           retrieval_query: values.workloadBrief,
           baseline_answers: {},
-        },
-        adminKey,
-      );
+        };
+      }
+      const response = await submitReview(pending.request, adminKey);
       setLiveReviewId(response.reviewId);
       setLiveCurrentStage(null);
       setProgressMode("live");
       setScreen("progress");
     } catch (error) {
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
-        setSubmitNotice(KEY_REJECTED_NOTICE);
+        setSubmitNotice(
+          publicSubmissionEnabled && !adminKey.trim() ? error.message : KEY_REJECTED_NOTICE,
+        );
         return;
       }
       setFailureMessage(
@@ -447,6 +464,7 @@ export function ArchiBriefApp() {
                 adminKey={adminKey}
                 onAdminKeyChange={handleAdminKeyChange}
                 onSubmit={handleSubmission}
+                demos={<DemoCards openingId={openingDemoId} onOpen={openDemo} />}
               />
             </div>
             <LandingClosing />
@@ -505,17 +523,33 @@ export function ArchiBriefApp() {
         )}
       </main>
       <footer className="site-footer">
-        <span>
-          ArchiBrief is an independent project, not affiliated with or endorsed by Amazon Web
-          Services.
-        </span>
-        <span>
-          {apiConfigured
-            ? "Static analysis only · never accesses your AWS account"
-            : "Fixture build · no live AWS access"}
-          {" · "}
-          <a href="/privacy.html">Privacy</a>
-        </span>
+        <div className="footer-brand">
+          <BrandEmblem />
+          <strong>ArchiBrief</strong>
+          <span>Your AWS architecture, briefed</span>
+        </div>
+        <ul className="site-footer-row">
+          {apiConfigured ? (
+            <>
+              <li>Static analysis only</li>
+              <li>Never accesses your AWS account</li>
+            </>
+          ) : (
+            <li>Fixture build · no live AWS access</li>
+          )}
+          <li>
+            <a href="/privacy.html">Privacy</a>
+          </li>
+        </ul>
+        <p className="site-footer-legal">
+          Reviews are informational and provided as is, without warranty. They are not professional
+          security, legal or compliance advice. Demo code belongs to its authors and is shown under
+          the license listed with each demo.
+        </p>
+        <p className="site-footer-copy">
+          © 2026 Fernando Torres · An independent project, not affiliated with or endorsed by Amazon
+          Web Services. AWS and Terraform are trademarks of their respective owners.
+        </p>
       </footer>
     </div>
   );

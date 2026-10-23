@@ -288,10 +288,12 @@ RECIPES: dict[str, Recipe] = {
     ),
     "cloudtrail_present": Recipe(
         "high",
-        "There's no record of who did what in the AWS account",
-        "Like an office building with no sign-in sheet and no cameras.",
-        "If something goes wrong, there's no way to tell who changed what, or when.",
-        "Turn on a CloudTrail trail that writes to a locked-down bucket.",
+        "The code doesn't set up a long-term record of who did what",
+        "Like a building that throws its sign-in sheet away after 90 days.",
+        "AWS keeps 90 days of account changes by default. Without a trail, nothing older is "
+        "kept and file-level access isn't recorded, so an investigation could come up short. "
+        "A trail may already exist outside this code, so check first.",
+        "If no trail exists yet, turn one on that writes to a locked-down bucket.",
         (Component("cloudtrail_trail"),),
         (1, 2),
         "slow_detection",

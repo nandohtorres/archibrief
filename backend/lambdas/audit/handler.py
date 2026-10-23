@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.shared.clients import DynamoDBClient
+from backend.shared.retention import review_expires_at
 
 
 @dataclass
@@ -26,6 +27,7 @@ class AuditLogEntry:
     deterministic_rule_version: str | None
     corpus_version: str | None
     model_id: str | None
+    review_created_at: str | None = None
     audit_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
@@ -39,6 +41,7 @@ class AuditLogEntry:
             "corpusVersion": self.corpus_version,
             "modelId": self.model_id,
             "createdAt": self.created_at,
+            "ttl": review_expires_at({"createdAt": self.review_created_at or self.created_at}),
         }
 
 
@@ -50,6 +53,7 @@ def build_audit_entry(event: dict) -> AuditLogEntry:
         deterministic_rule_version=event.get("deterministic_rule_version"),
         corpus_version=event.get("corpus_version"),
         model_id=event.get("model_id"),
+        review_created_at=event.get("review_created_at"),
     )
 
 

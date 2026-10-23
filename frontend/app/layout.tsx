@@ -28,9 +28,9 @@ const sourceSerif = Source_Serif_4({
 
 // The public domain; OG/Twitter image URLs resolve against it.
 const SITE_URL = "https://archibrief.dev";
-const TITLE = "ArchiBrief · AWS architecture review that explains why";
+const TITLE = "ArchiBrief · A second opinion on your AWS architecture, with the receipts";
 const DESCRIPTION =
-  "Plain-language AWS architecture reviews of real public Terraform: what's exposed, what could fail and why it matters, with every claim cited to the code and AWS guidance.";
+  "ArchiBrief reviews your AWS Terraform and explains in plain language what's exposed, what could fail and why each fix matters, with the code and AWS guidance behind every finding.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "ArchiBrief: know what's wrong with your AWS design, and why it matters.",
+        alt: "ArchiBrief: a second opinion on your AWS architecture, with the receipts.",
       },
     ],
     type: "website",
@@ -63,7 +63,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html
       lang="en"
-      data-theme="system"
+      data-theme="light"
       className={`${plexSans.variable} ${plexMono.variable} ${sourceSerif.variable}`}
       suppressHydrationWarning
     >

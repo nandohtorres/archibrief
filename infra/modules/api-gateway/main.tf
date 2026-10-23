@@ -17,7 +17,7 @@ resource "aws_apigatewayv2_api" "main" {
     # allowed, or every browser request from the missing origin fails CORS.
     allow_origins = concat([var.frontend_origin], var.additional_cors_origins)
     allow_methods = ["GET", "POST", "OPTIONS"]
-    allow_headers = ["authorization", "content-type", "x-admin-key"]
+    allow_headers = ["authorization", "content-type", "x-admin-key", "x-review-read-token", "x-review-write-token"]
   }
 
   tags = var.tags
@@ -82,7 +82,9 @@ resource "aws_lambda_function" "admin_authorizer" {
 
   environment {
     variables = {
-      ADMIN_KEY = random_password.admin_key.result
+      ADMIN_KEY             = random_password.admin_key.result
+      PUBLIC_ACCESS_ENABLED = local.public_admitted ? "true" : "false"
+      PUBLIC_REST_API_ID    = var.public_edge_enabled ? aws_api_gateway_rest_api.public[0].id : ""
     }
   }
 
@@ -142,19 +144,20 @@ resource "aws_iam_role_policy" "apigw_invoke_step_functions" {
 resource "aws_apigatewayv2_integration" "start_review" {
   api_id                 = aws_apigatewayv2_api.main.id
   integration_type       = "AWS_PROXY"
-  integration_subtype    = "StepFunctions-StartExecution"
-  credentials_arn        = aws_iam_role.apigw_invoke_step_functions.arn
-  payload_format_version = "1.0"
+  integration_uri        = aws_lambda_function.submit_review.invoke_arn
+  payload_format_version = "2.0"
 
-  request_parameters = {
-    StateMachineArn = var.state_machine_arn
-    Input           = "$request.body"
+  # Moving POST /reviews off the old StepFunctions-StartExecution
+  # integration forces a replacement. Create the new one first so the
+  # route can switch to it before the old one (still in use) is deleted.
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
-# POST /reviews is the only route on the StartExecution integration.
+# POST /reviews is the only route on the submit_review integration.
 # Never point another route at it as a stand-in: any caller could then
-# trigger a billed Step Functions execution.
+# start a billed review.
 #
 # authorizer_id points at the pre-shared admin-credential authorizer
 # (ADR-0044), the only auth ArchiBrief has; there is no per-user identity.
@@ -214,10 +217,10 @@ resource "aws_lambda_function" "get_review" {
   timeout          = 3
 
   environment {
-    variables = {
+    variables = merge(local.admission_environment, {
       REVIEWS_TABLE_NAME  = var.reviews_table_name
       REPORTS_BUCKET_NAME = var.reports_bucket_name
-    }
+    })
   }
 
   tags = var.tags
@@ -298,10 +301,10 @@ resource "aws_lambda_function" "clarify_review" {
   timeout          = 10
 
   environment {
-    variables = {
+    variables = merge(local.admission_environment, {
       REVIEWS_TABLE_NAME         = var.reviews_table_name
       KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
-    }
+    })
   }
 
   tags = var.tags
@@ -404,7 +407,7 @@ resource "aws_lambda_function" "deeper_review" {
   timeout = 28
 
   environment {
-    variables = {
+    variables = merge(local.admission_environment, {
       REVIEWS_TABLE_NAME         = var.reviews_table_name
       FINDINGS_TABLE_NAME        = var.findings_table_name
       KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
@@ -413,7 +416,7 @@ resource "aws_lambda_function" "deeper_review" {
       # task: the Lambda deploys without a runtime and fails only at
       # invocation time.
       AGENTCORE_RUNTIME_ARN = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
-    }
+    })
   }
 
   tags = var.tags
@@ -471,6 +474,9 @@ resource "aws_lambda_function" "get_demo" {
   source_code_hash = fileexists(var.get_demo_zip_path) ? filebase64sha256(var.get_demo_zip_path) : null
   timeout          = 3
 
+  environment {
+    variables = { CORS_ALLOWED_ORIGINS = jsonencode(concat([var.frontend_origin], var.additional_cors_origins)) }
+  }
   tags = var.tags
 }
 
@@ -503,8 +509,15 @@ resource "aws_apigatewayv2_route" "get_demo" {
 data "aws_iam_policy_document" "create_upload_data_access" {
   statement {
     effect    = "Allow"
-    actions   = ["s3:PutObject"]
+    actions   = ["s3:PutObject", "s3:GetObject"]
     resources = ["${var.reports_bucket_arn}/uploads/*"]
+  }
+  # HEAD on a missing key returns 404 only with ListBucket. Recovery must not
+  # treat a genuine AccessDenied as an absent upload (AWS HeadObject contract).
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [var.reports_bucket_arn]
   }
 }
 
@@ -533,12 +546,13 @@ resource "aws_lambda_function" "create_upload" {
   runtime          = "python3.12"
   filename         = var.create_upload_zip_path
   source_code_hash = fileexists(var.create_upload_zip_path) ? filebase64sha256(var.create_upload_zip_path) : null
-  timeout          = 5
+  timeout          = 15
 
   environment {
-    variables = {
+    variables = merge(local.admission_environment, {
       REPORTS_BUCKET_NAME = var.reports_bucket_name
-    }
+      RESERVATION_KEY     = random_password.reservation.result
+    })
   }
 
   tags = var.tags

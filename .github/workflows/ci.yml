@@ -25,7 +25,7 @@ jobs:
       # The runtime dependencies from backend/pyproject.toml (bs4 and pypdf
       # for the corpus pipeline), plus reportlab, which only the PDF tests
       # use to build their sample files.
-      - run: pip install pydantic boto3 langgraph python-hcl2 beautifulsoup4 pypdf reportlab ruff pytest pytest-cov "moto[dynamodb,s3]"
+      - run: pip install -r backend/dev-requirements.lock.txt
       # Trivy (ADR-0048), the same pinned, checksum-verified release the
       # Lambda layer ships (scripts/build_trivy_layer.py; a test keeps the
       # two in sync). TRIVY_PATH makes the trap suite run its Trivy mode.
@@ -44,7 +44,9 @@ jobs:
           --exit-code 1 infra
       - run: ruff format --check backend
       - run: ruff check backend
-      - run: pytest --cov=backend --cov-report=term-missing
+      # Documented adversarial coverage gaps fail on purpose; see
+      # tests/backend/adversarial/FIX_REPORT.md.
+      - run: pytest -m "not coverage_gap" --cov=backend --cov-report=term-missing
         working-directory: backend
 
   frontend:
@@ -68,6 +70,9 @@ jobs:
         if: steps.has_app.outputs.present == 'true'
         working-directory: frontend
       - run: npm run lint
+        if: steps.has_app.outputs.present == 'true'
+        working-directory: frontend
+      - run: npm run typecheck
         if: steps.has_app.outputs.present == 'true'
         working-directory: frontend
       - run: npx prettier --check .

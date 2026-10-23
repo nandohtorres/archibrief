@@ -1,8 +1,7 @@
 # Evaluation evidence
 
-Measured locally with no AWS calls or paid model runs; test counts reflect the
-code after the chat, demo cards and launch accessibility specs landed. CI runs
-the same suites on every pull request.
+Measured locally with no AWS calls or paid model runs. CI runs the same
+suites on every pull request.
 
 The [browser evaluation](evidence/browser-results.md) records all
 Playwright counts, the initial failures, the final axe-only rerun, and automated
@@ -12,16 +11,24 @@ all four categories; mobile 93 performance, 100 in the rest).
 
 ## Free test results
 
-| Suite | Result | Source and command |
+| Suite | Result | Command |
 |---|---|---|
-| Backend | 711 passed, 1 skipped | `python -m pytest tests/backend -q --tb=short` |
-| Frontend unit | 68 passed in 11 files | `cd frontend; npm test`; tests in `tests/frontend/` |
-| Deterministic traps | 60 collected; included in the passing backend run | `python -m pytest tests/backend/traps --collect-only -q -p no:cacheprovider` |
-| Stubbed chat trap checks | 26 collected; included in the passing backend run | Same collection command with `tests/backend/chat/test_traps_stubbed.py` |
-| Playwright | 61 passed in each of Chromium, Firefox and WebKit, including the accessibility, keyboard, viewport and resilience specs | `cd frontend; npx playwright test` |
+| Backend | 871 passed | `python -m pytest tests/backend --ignore=tests/backend/adversarial -q --tb=short -p no:cacheprovider` |
+| Adversarial suite | 217 passed, 18 failed: the 18 are documented coverage gaps, kept failing on purpose ([FIX_REPORT](../tests/backend/adversarial/FIX_REPORT.md)) | `python -m pytest tests/backend/adversarial -q -p no:cacheprovider` |
+| Frontend unit | 73 passed in 12 files | `cd frontend; npm test` (tests in `tests/frontend/`) |
+| Playwright | 68 passed, including accessibility, keyboard, viewport, contrast and resilience specs | `cd frontend; npx playwright test` |
+| Deterministic traps | 60, included in the backend run | `python -m pytest tests/backend/traps -q -p no:cacheprovider` |
+| Stubbed chat trap checks | 26, included in the backend run | `python -m pytest tests/backend/chat/test_traps_stubbed.py -q` |
+| Lint and types | Ruff, ESLint, TypeScript and Prettier pass | `ruff check backend scripts`; `npm run lint`; `npm run typecheck` |
 
-None of these is a model-quality measurement. The local frontend run used
-Node v24.14.0, and CI repeats the suites on Node 24.
+Four backend tests need the gitignored ingested corpus and one Trivy unit
+test is Linux-only; they skip where those aren't available. Earlier runs are recorded in
+[`hardening-checks.json`](evidence/hardening-checks.json),
+[`publication-checks.json`](evidence/publication-checks.json) and
+[`public-admission-checks.json`](evidence/public-admission-checks.json).
+
+None of these is a model-quality measurement; they test deterministic code
+and mocked integrations. CI runs the same suites on Python 3.12 and Node 24.
 
 ## Deterministic traps
 
@@ -42,6 +49,26 @@ counted Aurora instances. It does not establish recall on arbitrary Terraform.
 records the initial 14/14 dangerous misses and 3/4 safe false positives, followed
 by 14/14 caught and 0/4 safe false positives after the scanner/rule rebuild.
 Those are historical fixture denominators, not today's complete suite.
+
+## Regression cases from an outside review
+
+An outside review in October 2026 found text that claimed more than the code
+shows. Each is now a test, and the saved demo reports carry reviewer notes
+([demos.md](demos.md), bug 7):
+
+| Overstatement | Fix | Test |
+|---|---|---|
+| S3 rule: "data at rest is unencrypted" when no encryption is declared, though S3 has encrypted new objects by default since January 2023 | Rule text says the setting isn't declared | `test_s3_encryption_finding_does_not_claim_data_is_unencrypted` |
+| CloudTrail rule: "API activity would not be recorded" when this code defines no trail, though one may exist elsewhere and Event history keeps 90 days | Rule text allows for a trail elsewhere and names what's missing | `test_cloudtrail_finding_allows_for_a_trail_managed_elsewhere` |
+| Finding page called every citationless finding a not-observable gap, including rule findings with direct configuration evidence | Text depends on the finding type | `citationGap` in `tests/frontend/workflow.test.ts` |
+
+Two hand-written demo explanations were also corrected: the breach chain
+(a private S3 route alone doesn't close it) and FEC database sign-in (CloudTrail
+doesn't log IAM database authentication). The demo stakeholder files are
+rebuilt from them, and `build_demo_stakeholder.py --check` keeps them in step.
+
+These tests check wording, not correctness in general: they don't measure
+whether other rules or model findings overstate their evidence.
 
 ## Model traps: what was actually measured
 
@@ -101,7 +128,7 @@ presence figure must never be marketed as 100% factual accuracy.
 
 Run the free suites above. Trivy-backed tests use the offline flags in
 `backend/lambdas/scan/handler.py`, including `--skip-check-update`; no Terraform
-execution is needed. Corpus-dependent skips mean this run did not validate the
+execution is needed. Corpus-dependent tests skip without the
 gitignored corpus. Keep development and holdout model results separate.
 
 The paid runners are `backend/agent/validate_reasoning_eval.py --traps` and
@@ -110,3 +137,7 @@ future run. A useful future artifact should preserve model/prompt/corpus
 versions, all attempted findings/citations, rejected findings, blocked briefs,
 and per-case verdicts so survival, coverage and semantic support cannot be
 mistaken for one another.
+
+Both runners now offer `--plan` without constructing AWS clients and require
+`--confirm-paid` for execution. See the [evaluation runbook](evaluation-runbook.md)
+for case counts, partial batches and the remaining budget/authorization boundary.

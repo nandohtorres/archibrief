@@ -38,8 +38,10 @@ def handler(event: dict, _context: object) -> dict:
             # preceding RecordStage* ASL state (infra/modules/step-functions-lambda).
             "currentStage": "needs_clarification",
             "clarificationTaskToken": task_token,
-            "needsClarification": event.get("needs_clarification", []),
-            "preflightFields": event.get("preflight_fields", {}),
+            "needsClarification": event.get(
+                "needs_clarification", existing.get("needsClarification", [])
+            ),
+            "preflightFields": event.get("preflight_fields", existing.get("preflightFields", {})),
         }
     )
     client.put_item(existing)

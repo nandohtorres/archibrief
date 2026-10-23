@@ -18,6 +18,17 @@ def _list(admin=True, review_id="r1"):
     return response["statusCode"], json.loads(response["body"])
 
 
+def test_expired_review_hides_the_transcript(env):
+    _call(_ask())
+    env.reviews.update_item(
+        Key={"reviewId": "r1"},
+        UpdateExpression="SET #t = :t",
+        ExpressionAttributeNames={"#t": "ttl"},
+        ExpressionAttributeValues={":t": 1},
+    )
+    assert _list()[0] == 404
+
+
 def test_lists_the_conversation_in_order_with_suggestions(env):
     _call(_ask("First?"))
     _call(_ask("Second?"))
@@ -62,7 +73,9 @@ def test_expired_failed_and_in_flight_questions_are_left_out(env):
 def test_access_and_missing_reviews(env, monkeypatch):
     assert _list(admin=False) == (403, {"error": "chat_not_public"})
     assert _list(review_id="nope")[0] == 404
-    env.reviews.put_item(Item={"reviewId": "r2", "status": "pending"})
+    env.reviews.put_item(
+        Item={"reviewId": "r2", "status": "pending", "ttl": int(time.time()) + 86400}
+    )
     assert _list(review_id="r2")[0] == 409
     monkeypatch.setenv("CHAT_PUBLIC_ENABLED", "true")
     status, body = _list(admin=False)
@@ -72,3 +85,20 @@ def test_access_and_missing_reviews(env, monkeypatch):
 def test_listing_never_calls_the_model(env):
     _list()
     assert env.reasoning.calls == []
+
+
+def test_listing_fails_closed_on_missing_or_malformed_expiry(env):
+    for key, expiry in [("Q#missing", None), ("Q#malformed", "invalid")]:
+        item = {
+            "reviewId": "r1",
+            "questionKey": key,
+            "status": "answered",
+            "createdAt": 1,
+            "question": "Private expired text",
+        }
+        if expiry is not None:
+            item["ttl"] = expiry
+        env.questions.put_item(Item=item)
+    status, body = _list()
+    assert status == 200
+    assert body["questions"] == []

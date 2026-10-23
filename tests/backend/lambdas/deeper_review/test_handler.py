@@ -68,10 +68,11 @@ _LEDGER = {
 
 def _event(review_id: str | None, finding_id: str | None) -> dict:
     return {
+        "headers": {"x-admin-key": "admin-secret"},
         "pathParameters": {
             **({"reviewId": review_id} if review_id else {}),
             **({"findingId": finding_id} if finding_id else {}),
-        }
+        },
     }
 
 
@@ -85,7 +86,7 @@ class _Env:
         self, review_item: dict | None = _REVIEW, ledger: dict | None = _LEDGER
     ) -> None:
         if review_item:
-            self.reviews.put_item(Item=review_item)
+            self.reviews.put_item(Item={"ttl": int(time.time()) + 86400, **review_item})
         if ledger:
             self.s3.put_object(
                 Bucket=BUCKET, Key=LEDGER_KEY, Body=json.dumps(ledger).encode()
@@ -103,7 +104,17 @@ def env(monkeypatch):
     # moto, not permissive fakes, so key schemas and the conditional
     # in-flight claim are really evaluated.
     with mock_aws():
+        monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+        monkeypatch.setenv("USAGE_COUNTERS_TABLE_NAME", "counters")
         ddb = boto3.resource("dynamodb", region_name="us-east-1")
+        ddb.create_table(
+            TableName="counters",
+            KeySchema=[{"AttributeName": "counterKey", "KeyType": "HASH"}],
+            AttributeDefinitions=[
+                {"AttributeName": "counterKey", "AttributeType": "S"}
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
         reviews = ddb.create_table(
             TableName=REVIEWS,
             KeySchema=[{"AttributeName": "reviewId", "KeyType": "HASH"}],
@@ -286,3 +297,15 @@ def test_kill_switch_blocks_deeper_before_any_paid_call(env, monkeypatch):
 
     assert result["statusCode"] == 503
     assert _FakeAgentCoreRuntimeClient.calls == []
+
+
+def test_expired_review_cannot_serve_cached_or_new_deeper_findings(env):
+    env.seed(review_item={**_REVIEW, "ttl": 1})
+    assert handler(_event("r1", "f1"), None)["statusCode"] == 404
+    assert _FakeAgentCoreRuntimeClient.calls == []
+
+
+def test_new_deeper_findings_share_the_original_review_expiry(env):
+    env.seed()
+    assert handler(_event("r1", "f1"), None)["statusCode"] == 200
+    assert all(item["ttl"] == env.review()["ttl"] for item in env.stored_findings())

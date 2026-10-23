@@ -4,6 +4,26 @@ import { expect, test } from "@playwright/test";
 import { LIVE_URL } from "../playwright.config";
 
 test.describe("demo reviews from saved files", () => {
+  test("the submission form's example strip opens a full report with no upload", async ({
+    page,
+  }) => {
+    const apiCalls: string[] = [];
+    await page.route("**/mock-api/**", async (route) => {
+      apiCalls.push(route.request().url());
+      await route.fulfill({ status: 500, body: "" });
+    });
+
+    await page.goto(LIVE_URL);
+    const strip = page.getByRole("region", { name: "No Terraform? Open a finished example" });
+    await expect(strip.getByRole("button")).toHaveCount(3);
+    await strip.getByRole("button", { name: "FEC databases: open the full report" }).click();
+
+    await expect(page.locator("#report-heading")).toHaveText(
+      "Federal Election Commission databases",
+    );
+    expect(apiCalls).toEqual([]);
+  });
+
   test("a demo card opens the saved review with its source, reviewer notes and answers", async ({
     page,
   }) => {
@@ -26,7 +46,7 @@ test.describe("demo reviews from saved files", () => {
       /^https:\/\/github\.com\/RhinoSecurityLabs\//,
     );
     await expect(provenance).toContainText("not Capital One's code");
-    await expect(provenance).toContainText("3 findings carry a reviewer note");
+    await expect(provenance).toContainText("5 findings carry a reviewer note");
 
     // The stakeholder view shows the note on the finding the model got wrong.
     await page.getByRole("tab", { name: /Guided Report/ }).click();

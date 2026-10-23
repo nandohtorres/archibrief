@@ -18,6 +18,11 @@ describe("demo reviews (lib/demos.ts)", () => {
   it("accepts every shipped demo entry", () => {
     expect(index.demos.length).toBe(3);
     expect(index.demos.every(isDemoEntry)).toBe(true);
+    // The submission form's example strip shows these short labels.
+    for (const demo of index.demos as DemoEntry[]) {
+      expect(demo.shortTitle).toBeTruthy();
+      expect(demo.tag).toBeTruthy();
+    }
   });
 
   it("rejects entries with unsafe ids or non-https sources", () => {
@@ -29,6 +34,8 @@ describe("demo reviews (lib/demos.ts)", () => {
     expect(isDemoEntry({ ...good, reviewerNotes: [{ findingId: "x" }] })).toBe(
       false,
     );
+    expect(isDemoEntry({ ...good, shortTitle: 3 })).toBe(false);
+    expect(isDemoEntry({ ...good, tag: null })).toBe(false);
   });
 
   it("ships a saved report and chat for every demo, and every note points at a real finding", () => {
@@ -55,7 +62,7 @@ describe("demo reviews (lib/demos.ts)", () => {
       (d) => d.id === "breach-pattern",
     )!;
     const notes = reviewerNotesById(breach);
-    expect(notes.size).toBe(3);
+    expect(notes.size).toBe(5);
     expect(reviewerNotesById(null).size).toBe(0);
   });
 });

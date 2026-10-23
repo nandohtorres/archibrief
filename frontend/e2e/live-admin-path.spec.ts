@@ -8,6 +8,7 @@
 // suite must not do.
 import { expect, test } from "@playwright/test";
 import { LIVE_URL } from "../playwright.config";
+import { fillSubmission } from "./support/submission";
 import { fixtureReport } from "../lib/fixtures";
 
 test.describe("admin-gated live critical path (mocked network)", () => {
@@ -87,10 +88,10 @@ test.describe("admin-gated live critical path (mocked network)", () => {
     });
 
     await page.goto(LIVE_URL);
-    await expect(page.getByRole("heading", { name: "Review your own Terraform" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Submit your Terraform" })).toBeVisible();
     await page.getByLabel("Admin key").fill("e2e-admin-key");
 
-    await page.getByRole("button", { name: /Payments platform/ }).click();
+    await fillSubmission(page);
     await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
     await page.getByRole("button", { name: "Start review" }).click();
 
@@ -127,7 +128,7 @@ test.describe("admin-gated live critical path (mocked network)", () => {
     await page.reload();
     await expect(page.getByLabel("Admin key")).toHaveValue("e2e-admin-key");
 
-    await page.getByRole("button", { name: /Payments platform/ }).click();
+    await fillSubmission(page);
     await page.getByRole("button", { name: "Start review" }).click();
     await expect.poll(() => sentKey).toBe("e2e-admin-key");
 
@@ -188,11 +189,11 @@ test.describe("admin-gated live critical path (mocked network)", () => {
     });
 
     await page.goto(LIVE_URL);
-    await page.getByLabel("Paste Terraform").check();
+    await page.getByLabel("Paste code").check();
     await page
-      .getByLabel(/^Terraform/)
+      .getByLabel("Terraform code")
       .fill(['resource "aws_s3_bucket" "logs" {', '  bucket = "e2e-logs"', "}", ""].join("\n"));
-    await page.getByLabel(/^Name for the report/).fill("e2e-paste-check");
+    await page.getByLabel(/^Report name/).fill("e2e-paste-check");
     await page
       .getByLabel(/^Workload brief/)
       .fill("An internal log bucket for a small team. No regulatory requirements known.");

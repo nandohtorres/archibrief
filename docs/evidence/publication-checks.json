@@ -1,0 +1,213 @@
+{
+  "date": "2026-10-17",
+  "source_base": "07685e5",
+  "handoff": "dc4db7a",
+  "infrastructure_merge": "e976869",
+  "text_commit": "442d245",
+  "backend": {
+    "command": "python -m pytest tests/backend -q --tb=short -p no:cacheprovider",
+    "tests": 630,
+    "passed": 625,
+    "skipped": 5,
+    "failures": 0,
+    "errors": 0
+  },
+  "frontend_unit": {
+    "command": "npm.cmd test",
+    "files": 10,
+    "passed": 56
+  },
+  "playwright": {
+    "command": "npx.cmd playwright test --workers=2 --reporter=json",
+    "stats": {
+      "startTime": "2026-10-17T09:24:02.904Z",
+      "duration": 90260.79699999999,
+      "expected": 60,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    }
+  },
+  "static_checks": {
+    "ruff_check": "passed (backend and scripts)",
+    "ruff_format": "passed (backend and scripts)",
+    "eslint": "passed",
+    "typescript": "passed",
+    "git_diff_check": "passed",
+    "local_markdown_links": "passed",
+    "prettier_default": "failed: 60 files; predominantly CRLF line endings",
+    "prettier_auto_eol": "failed: components/landing-intro.tsx"
+  },
+  "semantics": {
+    "base": "07685e5",
+    "checked": {
+      "hcl": [
+        "infra/environments/dev/main.tf",
+        "infra/environments/dev/outputs.tf",
+        "infra/environments/dev/variables.tf",
+        "infra/environments/dev/versions.tf",
+        "infra/modules/agentcore-runtime/main.tf",
+        "infra/modules/agentcore-runtime/variables.tf",
+        "infra/modules/api-gateway/chat.tf",
+        "infra/modules/api-gateway/main.tf",
+        "infra/modules/api-gateway/variables.tf",
+        "infra/modules/cost-controls/main.tf",
+        "infra/modules/frontend-hosting/main.tf",
+        "infra/modules/frontend-hosting/variables.tf",
+        "infra/modules/iam/main.tf",
+        "infra/modules/iam/variables.tf",
+        "infra/modules/kill-switch/main.tf",
+        "infra/modules/s3-vectors/main.tf",
+        "infra/modules/s3-vectors/variables.tf",
+        "infra/modules/s3/main.tf",
+        "infra/modules/s3/variables.tf",
+        "infra/modules/step-functions-lambda/main.tf",
+        "infra/modules/step-functions-lambda/variables.tf"
+      ],
+      "python": [
+        "backend/agent/build_runtime_package.py",
+        "backend/agent/graph.py",
+        "backend/agent/nodes/preflight.py",
+        "backend/agent/nodes/reason.py",
+        "backend/agent/nodes/retrieve.py",
+        "backend/agent/reasoning_eval.py",
+        "backend/agent/runtime_entrypoint.py",
+        "backend/agent/trap_eval.py",
+        "backend/agent/validate_reason_node.py",
+        "backend/agent/validate_reasoning_eval.py",
+        "backend/chat/access.py",
+        "backend/chat/answer.py",
+        "backend/chat/chat_eval.py",
+        "backend/chat/context.py",
+        "backend/chat/pricing.py",
+        "backend/chat/prompt.py",
+        "backend/chat/verify.py",
+        "backend/corpus/chunking.py",
+        "backend/corpus/embed.py",
+        "backend/corpus/eval.py",
+        "backend/corpus/eval_holdout.py",
+        "backend/corpus/ingest.py",
+        "backend/corpus/normalize_pdf.py",
+        "backend/lambdas/ask_question/handler.py",
+        "backend/lambdas/clarify_review/handler.py",
+        "backend/lambdas/create_upload/handler.py",
+        "backend/lambdas/deeper_review/handler.py",
+        "backend/lambdas/finalize/handler.py",
+        "backend/lambdas/get_demo/handler.py",
+        "backend/lambdas/get_review/handler.py",
+        "backend/lambdas/ingest/handler.py",
+        "backend/lambdas/mark_review_failed/handler.py",
+        "backend/lambdas/rule_engine/handler.py",
+        "backend/lambdas/rule_engine/resource_summary.py",
+        "backend/lambdas/store_clarification_token/handler.py",
+        "backend/shared/citations.py",
+        "backend/shared/clients/__init__.py",
+        "backend/shared/kill_switch.py",
+        "backend/shared/models/finding.py",
+        "backend/shared/report.py",
+        "backend/shared/terraform_scope.py",
+        "scripts/backfill_resource_summary.py",
+        "scripts/package_lambdas.py",
+        "scripts/pregenerate_demo_chats.py",
+        "tests/backend/agent/nodes/test_reason.py",
+        "tests/backend/agent/nodes/test_retrieve.py",
+        "tests/backend/agent/test_reasoning_eval.py",
+        "tests/backend/chat/test_answer_deadline.py",
+        "tests/backend/chat/test_suggested_pricing_prompt.py",
+        "tests/backend/chat/test_verify.py",
+        "tests/backend/corpus/fixtures.py",
+        "tests/backend/corpus/test_embed.py",
+        "tests/backend/corpus/test_normalize_pdf.py",
+        "tests/backend/lambdas/ask_question/test_handler.py",
+        "tests/backend/lambdas/audit/test_handler.py",
+        "tests/backend/lambdas/clarify_review/test_handler.py",
+        "tests/backend/lambdas/deeper_review/test_handler.py",
+        "tests/backend/lambdas/finalize/test_handler.py",
+        "tests/backend/lambdas/ingest/test_handler.py",
+        "tests/backend/lambdas/rule_engine/test_resource_summary.py",
+        "tests/backend/shared/clients/test_agentcore_runtime_client.py",
+        "tests/backend/test_package_lambdas.py",
+        "tests/backend/traps/test_rule_engine_traps.py"
+      ],
+      "json": [
+        "backend/chat/eval_cases.json",
+        "backend/chat/trap_cases.json"
+      ]
+    },
+    "unexpected_semantic_changes": []
+  },
+  "frontend_semantics": {
+    "base": "07685e5",
+    "checked": [
+      "frontend/app/globals.css",
+      "frontend/components/archibrief-app.tsx",
+      "frontend/components/clarify-step.tsx",
+      "frontend/components/demo-cards.tsx",
+      "frontend/components/guided-report.tsx",
+      "frontend/components/landing-intro.tsx",
+      "frontend/components/report-questions.tsx",
+      "frontend/components/submission-step.tsx",
+      "frontend/e2e/demo-reviews.spec.ts",
+      "frontend/e2e/fixture-demo-path.spec.ts",
+      "frontend/e2e/landing.spec.ts",
+      "frontend/e2e/live-admin-path.spec.ts",
+      "frontend/e2e/mobile-and-contrast.spec.ts",
+      "frontend/e2e/sample-review.spec.ts",
+      "frontend/e2e/support/contrast.ts",
+      "frontend/lib/admin-key.ts",
+      "frontend/lib/api.ts",
+      "frontend/lib/contracts.ts",
+      "frontend/lib/workflow.ts",
+      "frontend/next.config.ts",
+      "tests/frontend/admin-key.test.ts",
+      "tests/frontend/app/fonts.test.ts",
+      "tests/frontend/workflow.test.ts"
+    ],
+    "unexpected_semantic_changes": []
+  },
+  "npm_audit": {
+    "info": 0,
+    "low": 2,
+    "moderate": 7,
+    "high": 19,
+    "critical": 2,
+    "total": 30
+  },
+  "npm_production_audit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "critical_packages": [
+    "tinypool",
+    "vitest"
+  ],
+  "gitleaks": {
+    "scope": "all local refs at scan time",
+    "commits_scanned": 126,
+    "configured_findings": 0,
+    "redacted": true,
+    "fixtures_excluded_by_repository_configuration": true
+  },
+  "audit_probes": {
+    "passed_reproductions": 3,
+    "uses_existing_moto_fixtures": true,
+    "cases": [
+      "Expired question hidden by GET but replayed by POST",
+      "Guardrails-refused question has no daily spend reservation",
+      "Upload JSON array raises AttributeError instead of controlled 400"
+    ]
+  },
+  "limitations": [
+    "No Terraform command or AWS call run",
+    "No live deployment verification or paid model evaluation",
+    "Four corpus-dependent tests skipped without the gitignored corpus; one Linux-specific Trivy unit test skipped on Windows",
+    "Node 24.14.0 differs from declared Node 20/22 support",
+    "Python 3.14.3 local environment differs from CI/runtime Python 3.12",
+    "No recursive reading of local credentials/state/env contents; ignored-directory inventory had permission limitations",
+    "No new behavior-changing application fix in this task"
+  ]
+}

@@ -1,0 +1,89 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F01-dangerous",
+ "family": "environment-shell-game",
+ "variant": "dangerous",
+ "workload_brief": "Order service for an online shop, production environment. Customer order data; the database must never be reachable from the internet.",
+ "rule_findings": [
+  {
+   "finding_id": "5a802a42-ea02-4eb7-9d3c-8ef50efe013d",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "Security group rule 'edge_lab_1/modules/edge/admin' allows 0.0.0.0/0 ingress to sensitive port(s) [22]",
+   "evidence": "resource \"aws_security_group\" \"edge_lab_1/modules/edge/admin\" allows 0.0.0.0/0 for ports 22-22",
+   "risk_impact": "This rule permits internet-source traffic on sensitive ports if attached to a resource. Actual reachability also depends on routing and listeners.",
+   "recommendation": "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
+   "concern": "sg_open_ingress"
+  },
+  {
+   "finding_id": "cdc4d19b-20e8-4088-a689-6de567b6bf11",
+   "category": "exposure",
+   "type": "deterministic-rule-result",
+   "finding": "RDS instance 'orders' is publicly accessible",
+   "evidence": "resource \"aws_db_instance\" \"orders\" has publicly_accessible = true",
+   "risk_impact": "The database gets a public endpoint and is one security-group mistake from the internet.",
+   "recommendation": "Set publicly_accessible = false and reach the database from inside the VPC.",
+   "concern": "rds_public"
+  },
+  {
+   "finding_id": "32bf7464-3cda-49ef-b6e5-3bbff119ec49",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  },
+  {
+   "finding_id": "985b9a09-17c9-4652-9036-f529ea81e21f",
+   "category": "observability",
+   "type": "not-observable",
+   "finding": "Terraform module or input coverage is incomplete",
+   "evidence": "Module 'edge_prod': provider inheritance and mappings are not evaluated; Module 'edge_lab': provider inheritance and mappings are not evaluated; Module 'network': remote or unresolved module source unavailable; contents not evaluated; Module 'legacy_git': remote or unresolved module source unavailable; contents not evaluated",
+   "risk_impact": "Unobserved inputs or modules may change this architecture's findings.",
+   "recommendation": "Supply the missing local configuration or inspect the disclosed gap separately.",
+   "concern": null
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_db_instance",
+    "name": "orders",
+    "settings": {
+     "engine": "postgres",
+     "instance_class": "db.t3.micro",
+     "multi_az": true,
+     "storage_encrypted": true,
+     "publicly_accessible": true,
+     "backup_retention_period": 7,
+     "deletion_protection": true,
+     "iam_database_authentication_enabled": "not set (default: false)",
+     "auto_minor_version_upgrade": "not set (default: true)",
+     "skip_final_snapshot": "not set (default: false)",
+     "copy_tags_to_snapshot": "not set (default: false)"
+    }
+   },
+   {
+    "type": "aws_security_group",
+    "name": "edge_lab_1/modules/edge/admin",
+    "settings": {}
+   },
+   {
+    "type": "aws_security_group",
+    "name": "modules/edge/admin",
+    "settings": {}
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based.",
+  "not_observable": [
+   "Module 'edge_prod': provider inheritance and mappings are not evaluated",
+   "Module 'edge_lab': provider inheritance and mappings are not evaluated",
+   "Module 'network': remote or unresolved module source unavailable; contents not evaluated",
+   "Module 'legacy_git': remote or unresolved module source unavailable; contents not evaluated"
+  ]
+ },
+ "scoring": "model_eval/SCORING.md#environment-shell-game"
+}

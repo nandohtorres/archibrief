@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-17",
+  "baseline": "160f5fa",
+  "deployed": false,
+  "backend": {
+    "collected": 674,
+    "passed": 669,
+    "skipped": 5,
+    "failures": 0,
+    "errors": 0,
+    "command": "python -m pytest tests/backend -q --tb=short -p no:cacheprovider --junitxml=backend/build/hardening-pytest.xml",
+    "local_source": "backend/build/hardening-pytest.xml"
+  },
+  "frontend_unit": {
+    "passed": 56,
+    "files": 10,
+    "command": "cd frontend; npm test",
+    "source": "terminal output, Vitest 5.0.5"
+  },
+  "playwright": {
+    "passed": 60,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "command": "cd frontend; npx playwright test --workers=2 --reporter=json",
+    "local_source": "backend/build/hardening-playwright.json"
+  },
+  "npm_audit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 4,
+    "high": 15,
+    "critical": 0,
+    "total": 19
+  },
+  "npm_audit_production": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "npm_audit_sources": [
+    "backend/build/npm-audit-hardening.json",
+    "backend/build/npm-audit-hardening-production.json"
+  ],
+  "hcl_parse": {
+    "files": 50,
+    "terraform_executed": false
+  },
+  "static_checks": [
+    "ruff check backend scripts",
+    "ruff format --check backend scripts",
+    "npm run lint",
+    "npm run typecheck",
+    "npm run format:check"
+  ],
+  "not_run": [
+    "AWS calls",
+    "Terraform commands",
+    "paid evaluations",
+    "remote CI",
+    "Python CVE audit"
+  ],
+  "launch_ready": false
+}

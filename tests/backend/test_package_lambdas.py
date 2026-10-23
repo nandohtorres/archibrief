@@ -32,6 +32,10 @@ PACKAGER = _load_package_script()
 LAMBDA_SPECS = PACKAGER.LAMBDA_SPECS
 
 
+def test_scan_package_includes_structural_hcl_parser_dependency():
+    assert any(package.startswith("python-hcl2") for package in LAMBDA_SPECS["scan"]["packages"])
+
+
 def _module_file(module: str) -> Path | None:
     base = ROOT / Path(*module.split("."))
     if base.with_suffix(".py").is_file():
@@ -160,14 +164,14 @@ def test_wrong_version_fails_the_build(tmp_path):
         PACKAGER.check_all_pinned(staging, constraints)
 
 
-def test_ask_question_bundles_its_own_pinned_boto3():
+def test_sdk_feature_users_bundle_the_pinned_boto3():
     # It calls S3 Vectors, which an older runtime boto3 doesn't know
-    # No other Lambda bundles boto3.
+    # Conditional/checksum S3 uploads and AgentCore also need a known SDK.
     assert LAMBDA_SPECS["ask_question"]["packages"] == ["boto3"]
     others = [
         n
         for n, s in LAMBDA_SPECS.items()
         if n != "ask_question" and "boto3" in s["packages"]
     ]
-    assert others == []
+    assert set(others) == {"create_upload", "submit_review", "review_worker", "clarify_review"}
     assert PACKAGER.pinned_versions()["boto3"] == "1.43.96"

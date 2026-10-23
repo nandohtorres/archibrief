@@ -10,7 +10,7 @@ Everything a demo needs lives in `frontend/public/demos/`:
 | File | What it is |
 |---|---|
 | `<id>.tar` | The reviewed `.tf` files, unchanged, plus `SOURCE.md` (repository, commit, license) and the project's license file |
-| `demos.json` | Title, source link pinned to the commit, license, disclaimer and the workload brief for each demo |
+| `demos.json` | Title, source link pinned to the commit, license, disclaimer and the workload brief for each demo; plus the site's display labels: `badge` and `shows` (the landing card: what kind of code it is and what the review shows) and `shortTitle` and `tag` (the submission form's example strip) |
 | `reports/<id>.json` | The saved report, exactly as `GET /reviews/{id}` returned it |
 
 `scripts/build_demo_archives.py` rebuilds the archives from the pinned
@@ -90,8 +90,8 @@ those stay the pipeline's unedited output.
 
 | Finding | Verdict |
 |---|---|
-| Rule: no server-side encryption on `cg-cardholder-data-bucket` | Correct |
-| Rule: no `aws_cloudtrail` | Correct |
+| Rule: no server-side encryption on `cg-cardholder-data-bucket` | Configuration correct. **Risk overstated**: "data at rest is unencrypted" ignores S3's default SSE-S3 encryption of new objects (since January 2023). What's missing is a declared choice, and a customer-managed key for card data. Rule text fixed (`rule_engine@2026-10-20.2`) |
+| Rule: no `aws_cloudtrail` | Correct for the code. **Risk overstated**: a trail may be managed elsewhere, and CloudTrail keeps 90 days of management events without one. Rule text fixed |
 | Rule: role `cg-banking-WAF-Role` is used by running code and has `AmazonS3FullAccess` | Correct (`managed_policy_arns`, EC2 trust) |
 | Rule: proxy instance doesn't require IMDSv2; risk text names the broad role | Correct (no `metadata_options`) |
 | Rule: bucket public access not fully blocked | Correct |
@@ -107,7 +107,7 @@ those stay the pipeline's unedited output.
 
 | Finding | Verdict |
 |---|---|
-| Rule: no `aws_cloudtrail` in the slice | Correct for the slice; CloudTrail may live elsewhere in CMS's accounts |
+| Rule: no `aws_cloudtrail` in the slice | Correct for the slice; CloudTrail may live elsewhere in CMS's accounts. **Risk overstated** as above; rule text fixed |
 | Rule: access-log bucket has no public access block | Correct for the slice (it has a bucket policy only) |
 | Model: both KMS keys rotate automatically | Correct |
 | Model: WAF with IPv4/IPv6 allowlists and logging | Correct |
@@ -126,14 +126,14 @@ Re-run (`b7f2a3e7`) after the instance-count fix.
 | Rule: security group `rds` allows 0.0.0.0/0 to database ports | Correct (all ports, all protocols) |
 | Rule: security group `rds` allows SSH or RDP from anywhere | Correct (all ports) |
 | Rule: production, staging and development instances publicly accessible | Correct |
-| Rule: no `aws_cloudtrail` | Correct |
+| Rule: no `aws_cloudtrail` | Correct for the code. **Risk overstated**, as in breach-pattern; rule text fixed |
 | Model: storage encryption on for all three clusters, AWS-managed key | Correct (`storage_encrypted = true`, no `kms_key_id`) |
 | Model: deletion protection on, 7-day backup retention | Correct |
-| Model: IAM database authentication off | Correct (unset; default false) |
+| Model: IAM database authentication off | Setting correct (unset; default false). **Overstated**: off doesn't prove passwords are shared, and its fix claims sign-ins would be recorded in CloudTrail, which AWS says doesn't log IAM database authentication. The guided text repeated both; fixed |
 | Model: production has 3 instances (1 writer, 2 readers), no reader auto scaling | Correct (`count = 3`; no Application Auto Scaling). The first run's false "single instance" claim is gone |
 | Model: no CloudWatch Logs export | Correct (no `enabled_cloudwatch_logs_exports`; the parameter group's log settings stay inside RDS) |
 | Model: `copy_tags_to_snapshot` not confirmed | **Wrong**: all three clusters set it to `true`. It wasn't in the resource summary; added (bug 6) |
-| Model: subnet group spans only two AZs | Correct |
+| Model: subnet group spans only two AZs | Two AZs: correct. **Weak citation**: RDS.15 asks for multiple AZs, which two already meet. A third AZ is an optional gain, not a failed control. Guided text now marks it optional |
 | Model: no RDS event subscriptions | Correct |
 
 ## Bugs the demos found
@@ -153,6 +153,13 @@ Re-run (`b7f2a3e7`) after the instance-count fix.
 6. `copy_tags_to_snapshot` and, for clusters, `skip_final_snapshot`
    weren't in the resource summary, so the FEC re-run called a setting
    unconfirmed that the code sets.
+7. Two rules stated account-wide facts the code can't show: the S3
+   encryption rule said data was unencrypted, and the CloudTrail rule
+   said API activity wouldn't be recorded. An outside review found these
+   in October 2026, along with two overstated hand-written guided
+   explanations (the breach chain and the FEC database sign-in). The
+   rules and guided text are fixed, with regression tests; the saved
+   reports keep their original text and carry reviewer notes.
 
 ## What each demo shows
 
@@ -167,4 +174,4 @@ Re-run (`b7f2a3e7`) after the instance-count fix.
   government code.
 - **Verification:** every finding above was checked by hand, including
   the ones the model got wrong. That check is what found five of the
-  six bugs.
+  first six bugs; an outside review found the seventh.

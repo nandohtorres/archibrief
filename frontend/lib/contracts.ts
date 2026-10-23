@@ -256,6 +256,7 @@ export interface ReviewStatusPointer {
 // label (persisted by IdempotencyGate, never consumed by Ingest).
 export interface SubmitReviewRequest {
   review_id: string;
+  archive_version_id?: string;
   archive_s3_key: string;
   terraform_repo_ref: string;
   workload_brief: string;
@@ -264,21 +265,28 @@ export interface SubmitReviewRequest {
 }
 
 // POST /uploads (ADR-0045) — the first half of the direct-upload flow.
-// review_id is the same client-generated UUID the client will later send
-// as SubmitReviewRequest.review_id, so the archive can be tied to a
-// review before the review itself exists anywhere server-side.
+// The client nonce recovers a server-issued reservation after response loss.
 export interface CreateUploadRequest {
-  review_id: string;
+  archive_size: number;
+  archive_sha256: string;
+  client_request_id?: string;
+  turnstile_token?: string;
 }
 
-// uploadFields are passed verbatim as additional multipart form fields
-// in the direct-to-S3 POST (see uploadArchiveToS3() in lib/api.ts) — the
-// standard S3 presigned-POST browser upload shape, never typed further
-// here since S3 owns their exact contents.
+// New reservations use conditional checksum-bound PUT; uploadFields support
+// the existing admin-only POST deployment during migration.
 export interface CreateUploadResponse {
   archiveKey: string;
   uploadUrl: string;
-  uploadFields: Record<string, string>;
+  uploadMethod?: "PUT";
+  uploadedVersionId?: string;
+  uploadHeaders?: Record<string, string>;
+  reviewId?: string;
+  readToken?: string;
+  writeToken?: string;
+  expiresAt?: number;
+  // Temporary compatibility for the existing admin deployment and fixtures.
+  uploadFields?: Record<string, string>;
 }
 
 export interface SubmitReviewResponse {

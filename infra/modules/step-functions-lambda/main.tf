@@ -196,7 +196,7 @@ resource "aws_iam_role_policy" "ingest_guardrails_apply" {
 data "aws_iam_policy_document" "ingest_s3_download" {
   statement {
     effect    = "Allow"
-    actions   = ["s3:GetObject"]
+    actions   = ["s3:GetObject", "s3:GetObjectVersion"]
     resources = ["${var.reports_bucket_arn}/uploads/*"]
   }
   # Parsed Terraform is handed to RuleEngine by S3 reference.
@@ -210,7 +210,7 @@ data "aws_iam_policy_document" "ingest_s3_download" {
 data "aws_iam_policy_document" "rule_engine_parsed_read" {
   statement {
     effect    = "Allow"
-    actions   = ["s3:GetObject"]
+    actions   = ["s3:GetObject", "s3:GetObjectVersion"]
     resources = ["${var.reports_bucket_arn}/parsed/*"]
   }
 }
@@ -233,7 +233,7 @@ resource "aws_iam_role_policy" "ingest_s3_download" {
 data "aws_iam_policy_document" "scan_s3_read" {
   statement {
     effect    = "Allow"
-    actions   = ["s3:GetObject"]
+    actions   = ["s3:GetObject", "s3:GetObjectVersion"]
     resources = ["${var.reports_bucket_arn}/uploads/*"]
   }
 }
@@ -358,7 +358,7 @@ data "aws_iam_policy_document" "state_machine_invoke" {
   statement {
     effect    = "Allow"
     actions   = ["lambda:InvokeFunction"]
-    resources = [for fn in aws_lambda_function.this : fn.arn]
+    resources = concat([for fn in aws_lambda_function.this : fn.arn], [aws_lambda_function.review_worker.arn])
   }
 
   statement {
@@ -454,375 +454,64 @@ resource "aws_sfn_state_machine" "review" {
 
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.state_machine.arn}:*"
-    include_execution_data = true
+    include_execution_data = false
     level                  = "ALL"
   }
 
+  # Never place brief, answers, findings or model responses in this state.
+  # No automatic retries: a timed-out paid invocation may already be billed.
   definition = jsonencode({
-    Comment = "ArchiBrief review pipeline outer job lifecycle (ADR-0028)"
-    StartAt = "IdempotencyGate"
+    Comment        = "Identifier-only review workflow; content lives in S3."
+    StartAt        = "RunInitial"
+    TimeoutSeconds = 604800
     States = {
-      # A retried or duplicated POST /reviews for the same review_id must
-      # not re-run paid work (Bedrock calls in particular). A conditional
-      # PutItem is the standard pure-ASL idempotency pattern for a direct
-      # API Gateway -> Step Functions integration with no BFF Lambda
-      # (ADR-0016/0042): the first execution to claim a review_id wins, and
-      # any later one fails the condition and stops before any paid work.
-      # It can't change the HTTP response (StartExecution has already
-      # returned 200 by the time this runs); it only prevents duplicate
-      # work and cost.
-      IdempotencyGate = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:dynamodb:putItem"
+      RunInitial = {
+        Type           = "Task"
+        Resource       = aws_lambda_function.review_worker.arn
+        TimeoutSeconds = 910
         Parameters = {
-          TableName = var.reviews_table_name
-          Item = {
-            reviewId       = { "S.$" = "$.review_id" }
-            idempotencyKey = { "S.$" = "$.review_id" }
-            status         = { S = "pending" }
-            createdAt      = { "S.$" = "$$.State.EnteredTime" }
-            # Persisted so get_review/build_review_report can return the
-            # submitted value (backend/shared/report.py). Always present:
-            # terraform_repo_ref is a required input field (see above).
-            terraformRepoRef = { "S.$" = "$.terraform_repo_ref" }
-          }
-          ConditionExpression = "attribute_not_exists(reviewId)"
-        }
-        ResultPath = "$.idempotencyResult"
-        Catch = [
-          {
-            ErrorEquals = ["DynamoDB.ConditionalCheckFailedException"]
-            ResultPath  = "$.idempotencyError"
-            Next        = "DuplicateReviewSubmission"
-          }
-        ]
-        Next = "CheckKillSwitch"
-      }
-      # Succeed, not Fail: this execution is correctly declining to redo
-      # paid work. The review's real status comes from the first execution
-      # and is visible through GET /reviews/{review_id}.
-      DuplicateReviewSubmission = {
-        Type = "Succeed"
-      }
-      # ADR-0030's "fast application kill switch checked before paid work
-      # starts": fails immediately, before Ingest/RuleEngine/Bedrock, so
-      # a real incident stops new billed work without waiting on AWS
-      # Budgets (which has no native action to halt Bedrock spend).
-      CheckKillSwitch = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:ssm:getParameter"
-        Parameters = {
-          Name = var.kill_switch_parameter_name
-        }
-        ResultPath = "$.killSwitch"
-        Next       = "KillSwitchGate"
-      }
-      KillSwitchGate = {
-        Type = "Choice"
-        Choices = [
-          {
-            Variable     = "$.killSwitch.Parameter.Value"
-            StringEquals = "true"
-            Next         = "KillSwitchActive"
-          }
-        ]
-        Default = "RecordStageIngest"
-      }
-      KillSwitchActive = {
-        Type  = "Fail"
-        Error = "KillSwitchActive"
-        Cause = "ADR-0030 application kill switch is set to true — no new paid work starts until it's reset."
-      }
-      # RecordStage* states: a direct DynamoDB UpdateItem before each
-      # pipeline stage, writing currentStage onto the review's item. A
-      # separate Task per stage rather than a write inside each Lambda,
-      # because Ingest/RuleEngine/Validate don't receive review_id or the
-      # table name, while review_id stays at the top level of state for
-      # the whole execution (every Task merges its result under a
-      # namespaced ResultPath). ResultPath = null discards the UpdateItem
-      # response. currentStage values are internal names; the frontend
-      # (lib/progress.ts) maps them to generic user-facing labels.
-      RecordStageIngest = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:dynamodb:updateItem"
-        Parameters = {
-          TableName = var.reviews_table_name
-          Key = {
-            reviewId = { "S.$" = "$.review_id" }
-          }
-          UpdateExpression = "SET currentStage = :stage"
-          ExpressionAttributeValues = {
-            ":stage" = { S = "ingest" }
-          }
-        }
-        ResultPath = null
-        Next       = "Ingest"
-      }
-      # ResultPath merges Ingest's return ({status, resources, variables,
-      # files_parsed, not_observable, workload_brief,
-      # guardrails_decisions}) under $.ingestResult. Without it the result
-      # would replace state and drop review_id and the rest of the input.
-      # report_bucket is a Terraform-known constant injected as a literal,
-      # never caller-supplied (ADR-0045).
-      Ingest = {
-        Type     = "Task"
-        Resource = aws_lambda_function.this["ingest"].arn
-        Parameters = {
-          "archive_s3_key.$" = "$.archive_s3_key"
-          "workload_brief.$" = "$.workload_brief"
-          "report_bucket"    = var.reports_bucket_name
-          # Ingest writes the parsed tree to parsed/<review_id>.json and
-          # returns only a reference, since workflow state caps at 256 KiB.
           "review_id.$" = "$.review_id"
+          phase         = "initial"
         }
-        ResultPath = "$.ingestResult"
-        Next       = "IngestResponseGate"
+        ResultPath = "$.result"
+        Next       = "Outcome"
       }
-      # Halts on Ingest status "rejected" (path traversal, symlink, too
-      # many members, or no parseable .tf files) or "blocked" (a
-      # Guardrails hit on the workload brief, ADR-0033). Otherwise
-      # RuleEngine would run on empty resources and the review would
-      # "succeed" with zero findings and no explanation.
-      IngestResponseGate = {
+      RunResume = {
+        Type           = "Task"
+        Resource       = aws_lambda_function.review_worker.arn
+        TimeoutSeconds = 910
+        Parameters = {
+          "review_id.$"  = "$.review_id"
+          "resume_key.$" = "$.resume.resume_key"
+          phase          = "resume"
+        }
+        ResultPath = "$.result"
+        Next       = "Outcome"
+      }
+      Outcome = {
         Type = "Choice"
         Choices = [
-          {
-            Variable     = "$.ingestResult.status"
-            StringEquals = "rejected"
-            Next         = "IngestRejected"
-          },
-          {
-            Variable     = "$.ingestResult.status"
-            StringEquals = "blocked"
-            Next         = "IngestBlocked"
-          }
+          { Variable = "$.result.status", StringEquals = "complete", Next = "Complete" },
+          { Variable = "$.result.status", StringEquals = "needs_clarification", Next = "StoreClarificationToken" },
+          { Variable = "$.result.status", StringEquals = "in_progress", Next = "WaitForStatus" }
         ]
-        Default = "Scan"
+        Default = "ReviewFailed"
       }
-      # Trivy over the submitted Terraform (ADR-0048). Never fails the
-      # review: the Lambda reports problems as status "unavailable", and
-      # the Catch covers the Lambda itself failing (timeout, throttling).
-      # Either way RuleEngine falls back to ArchiBrief's own rules and
-      # the report says the scanner didn't run.
-      Scan = {
+      WaitForStatus = {
+        Type    = "Wait"
+        Seconds = 10
+        Next    = "PollStatus"
+      }
+      PollStatus = {
         Type     = "Task"
-        Resource = aws_lambda_function.this["scan"].arn
+        Resource = aws_lambda_function.review_worker.arn
         Parameters = {
-          "review_id.$"      = "$.review_id"
-          "archive_s3_key.$" = "$.archive_s3_key"
-          "report_bucket"    = var.reports_bucket_name
+          "review_id.$" = "$.review_id"
+          phase         = "poll"
         }
-        ResultPath = "$.scanResult"
-        Catch = [
-          {
-            ErrorEquals = ["States.ALL"]
-            ResultPath  = "$.scanError"
-            Next        = "ScanUnavailable"
-          }
-        ]
-        Next = "RecordStageRuleEngine"
+        ResultPath = "$.result"
+        Next       = "Outcome"
       }
-      ScanUnavailable = {
-        Type       = "Pass"
-        Result     = { status = "unavailable", tool = "trivy", reason = "scan_step_failed" }
-        ResultPath = "$.scanResult"
-        Next       = "RecordStageRuleEngine"
-      }
-      RecordStageRuleEngine = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:dynamodb:updateItem"
-        Parameters = {
-          TableName = var.reviews_table_name
-          Key = {
-            reviewId = { "S.$" = "$.review_id" }
-          }
-          UpdateExpression = "SET currentStage = :stage"
-          ExpressionAttributeValues = {
-            ":stage" = { S = "rule_engine" }
-          }
-        }
-        ResultPath = null
-        Next       = "RuleEngine"
-      }
-      IngestRejected = {
-        Type  = "Fail"
-        Error = "IngestRejected"
-        Cause = "Ingest rejected the submitted Terraform archive (path traversal, a symlink, too many members, or no parseable .tf files) — see this execution's Ingest Task input/output in CloudWatch Logs for the specific reason."
-      }
-      IngestBlocked = {
-        Type  = "Fail"
-        Error = "IngestBlocked"
-        Cause = "Ingest's inline Guardrails check (ADR-0033) blocked the workload brief before any paid reasoning work started."
-      }
-      # RuleEngine loads the parsed Terraform from the S3 reference Ingest
-      # returned (backend/lambdas/rule_engine/handler.py's load_parsed), so
-      # the full tree never travels through workflow state.
-      RuleEngine = {
-        Type     = "Task"
-        Resource = aws_lambda_function.this["rule_engine"].arn
-        Parameters = {
-          "review_id.$"     = "$.review_id"
-          "parsed_s3_key.$" = "$.ingestResult.parsed_s3_key"
-          "report_bucket"   = var.reports_bucket_name
-          "scanner.$"       = "$.scanResult"
-        }
-        ResultPath = "$.ruleEngineResult"
-        Next       = "InitEffectiveInput"
-      }
-      # backend/agent/runtime_entrypoint.py's invoke() requires review_id,
-      # workload_brief and retrieval_query, and optionally takes
-      # baseline_answers and rule_findings. PrepareAgentInput assembles
-      # exactly that object into $.agentInput from the execution input and
-      # RuleEngine's output (whose findings live at
-      # $.ruleEngineResult.findings).
-      # $.effective holds the review's current brief + answers, folded
-      # forward across clarification rounds (ApplyClarification below), so
-      # Reason, Audit, and Finalize all see the same context and a second
-      # round keeps the first round's answers. rounds bounds how many times
-      # a review may pause for clarification.
-      InitEffectiveInput = {
-        Type = "Pass"
-        Parameters = {
-          "workload_brief.$"   = "$.workload_brief"
-          "baseline_answers.$" = "$.baseline_answers"
-          "rounds"             = 0
-        }
-        ResultPath = "$.effective"
-        Next       = "PrepareAgentInput"
-      }
-      PrepareAgentInput = {
-        Type = "Pass"
-        Parameters = {
-          "review_id.$"                  = "$.review_id"
-          "workload_brief.$"             = "$.effective.workload_brief"
-          "baseline_answers.$"           = "$.effective.baseline_answers"
-          "retrieval_query.$"            = "$.retrieval_query"
-          "rule_findings.$"              = "$.ruleEngineResult.findings"
-          "deterministic_rule_version.$" = "$.ruleEngineResult.rule_version"
-          # What the Terraform declares, so Reason doesn't guess.
-          "terraform_resources.$" = "$.ruleEngineResult.resource_summary"
-        }
-        ResultPath = "$.agentInput"
-        Next       = "RecordStageReasoning"
-      }
-      # Reached from PrepareAgentInput on both the first pass and every
-      # pass after a clarification round.
-      RecordStageReasoning = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:dynamodb:updateItem"
-        Parameters = {
-          TableName = var.reviews_table_name
-          Key = {
-            reviewId = { "S.$" = "$.review_id" }
-          }
-          UpdateExpression = "SET currentStage = :stage"
-          ExpressionAttributeValues = {
-            ":stage" = { S = "reasoning" }
-          }
-        }
-        ResultPath = null
-        Next       = "InvokeAgent"
-      }
-      InvokeAgent = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:bedrockagentcore:invokeAgentRuntime"
-        Parameters = {
-          # Amazon States Language requires a string here, not null.
-          # agentcore_runtime_arn defaults to null, which would fail ASL
-          # validation at CreateStateMachine, so a placeholder lets the
-          # state machine be created; InvokeAgent fails at execution time
-          # until a real AgentCore Runtime ARN is supplied.
-          "AgentRuntimeArn" = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
-          # Payload is a raw string field. States.JsonToString serializes
-          # only the curated $.agentInput object, not the whole state with
-          # its workflow bookkeeping keys (killSwitch, ingestResult).
-          "Payload.$" = "States.JsonToString($.agentInput)"
-          # AgentCore requires a session ID with a minimum length (33
-          # characters) that a short review_id might not meet, so a fixed
-          # prefix guarantees the floor whatever the review_id format.
-          "RuntimeSessionId.$" = "States.Format('archibrief-review-session-{}', $.review_id)"
-        }
-        # Merged under $.agentResult rather than replacing state.
-        ResultPath = "$.agentResult"
-        # Without TimeoutSeconds a Task state is effectively unbounded
-        # (99999999 seconds), so a hung Bedrock call or stuck runtime would
-        # hold the execution open indefinitely. 300 seconds is a generous
-        # ceiling; max_tokens and retrieval limits already bound the work
-        # inside runtime_entrypoint.py, and this only bounds the outer
-        # wall-clock wait.
-        TimeoutSeconds = 300
-        Catch = [
-          {
-            ErrorEquals = ["States.Timeout"]
-            ResultPath  = "$.agentTimeoutError"
-            Next        = "AgentInvocationTimedOut"
-          }
-        ]
-        Next = "ParseAgentResponse"
-      }
-      # An exceeded bounded wait is an expected terminal outcome, not a
-      # transient fault worth retrying.
-      AgentInvocationTimedOut = {
-        Type  = "Fail"
-        Error = "AgentInvocationTimedOut"
-        Cause = "InvokeAgent did not complete within 300 seconds — see this execution's history in CloudWatch for where the AgentCore Runtime invocation stalled."
-      }
-      # The SDK integration returns the response body at
-      # $.agentResult.Response (capital R) as a raw JSON string, which must
-      # be parsed with States.StringToJson before its fields are reachable.
-      # ASL can't chain a property access onto an intrinsic's result, so
-      # parsing gets its own Pass state; AgentResponseGate and Validate read
-      # the resulting $.agentParsed.parsed object.
-      ParseAgentResponse = {
-        Type = "Pass"
-        Parameters = {
-          "parsed.$" = "States.StringToJson($.agentResult.Response)"
-        }
-        ResultPath = "$.agentParsed"
-        Next       = "AgentResponseGate"
-      }
-      # invoke() can return {"status": "needs_clarification", ...} with no
-      # "findings" key when PreflightGate pauses for a required field.
-      # That is an expected, non-failure outcome, and Validate needs
-      # findings, so it routes to the clarification pause instead.
-      AgentResponseGate = {
-        Type = "Choice"
-        Choices = [
-          {
-            Variable     = "$.agentParsed.parsed.status"
-            StringEquals = "needs_clarification"
-            Next         = "StoreClarificationToken"
-          }
-        ]
-        Default = "RecordStageValidate"
-      }
-      RecordStageValidate = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:dynamodb:updateItem"
-        Parameters = {
-          TableName = var.reviews_table_name
-          Key = {
-            reviewId = { "S.$" = "$.review_id" }
-          }
-          UpdateExpression = "SET currentStage = :stage"
-          ExpressionAttributeValues = {
-            ":stage" = { S = "validate" }
-          }
-        }
-        ResultPath = null
-        Next       = "Validate"
-      }
-      # Pauses through the lambda:invoke.waitForTaskToken pattern:
-      # store_clarification_token.handler persists the task token on the
-      # review's DynamoDB item and returns immediately, but this state
-      # doesn't complete until clarify_review.handler (behind
-      # POST /reviews/{reviewId}/clarify) calls SendTaskSuccess with that
-      # token once a human answers. A Lambda is used because DynamoDB and
-      # Bedrock AgentCore integrations don't support waitForTaskToken.
-      #
-      # TimeoutSeconds bounds the wait at 7 days; ASL's default would let
-      # it wait essentially forever. A timed-out clarification is a
-      # terminal outcome, not a transient fault worth retrying.
       StoreClarificationToken = {
         Type           = "Task"
         Resource       = "arn:aws:states:::lambda:invoke.waitForTaskToken"
@@ -830,159 +519,19 @@ resource "aws_sfn_state_machine" "review" {
         Parameters = {
           FunctionName = aws_lambda_function.this["store_clarification_token"].arn
           Payload = {
-            "review_id.$"           = "$.review_id"
-            "taskToken.$"           = "$$.Task.Token"
-            "needs_clarification.$" = "$.agentParsed.parsed.needs_clarification"
-            "preflight_fields.$"    = "$.agentParsed.parsed.preflight_fields"
-            # Passed as a literal Parameter, the same convention
-            # Audit/Finalize use below.
-            "reviews_table_name" = var.reviews_table_name
+            "review_id.$"      = "$.review_id"
+            "taskToken.$"      = "$$.Task.Token"
+            reviews_table_name = var.reviews_table_name
           }
         }
-        ResultPath = "$.clarificationAnswer"
-        Catch = [
-          {
-            ErrorEquals = ["States.Timeout"]
-            ResultPath  = "$.clarificationError"
-            Next        = "ClarificationTimedOut"
-          }
-        ]
-        Next = "ApplyClarification"
+        ResultPath = "$.resume"
+        Next       = "RunResume"
       }
-      ClarificationTimedOut = {
+      Complete = { Type = "Succeed" }
+      ReviewFailed = {
         Type  = "Fail"
-        Error = "ClarificationTimedOut"
-        Cause = "No answer was submitted via POST /reviews/{reviewId}/clarify within the 7-day window."
-      }
-      # Folds this round's answers and note into $.effective: answers merge
-      # over earlier rounds (later wins per field), the note is appended to
-      # the brief that Reason reads and Finalize persists.
-      ApplyClarification = {
-        Type = "Pass"
-        Parameters = {
-          "workload_brief.$"   = "States.Format('{}{}', $.effective.workload_brief, $.clarificationAnswer.clarification_note)"
-          "baseline_answers.$" = "States.JsonMerge($.effective.baseline_answers, $.clarificationAnswer.baseline_answers, false)"
-          "rounds.$"           = "States.MathAdd($.effective.rounds, 1)"
-        }
-        ResultPath = "$.effective"
-        Next       = "ClarificationRoundGate"
-      }
-      ClarificationRoundGate = {
-        Type = "Choice"
-        Choices = [
-          {
-            Variable           = "$.effective.rounds"
-            NumericGreaterThan = var.max_clarification_rounds
-            Next               = "ClarificationLimitReached"
-          }
-        ]
-        Default = "PrepareAgentInput"
-      }
-      ClarificationLimitReached = {
-        Type  = "Fail"
-        Error = "ClarificationLimitReached"
-        Cause = "The review asked for clarification more times than max_clarification_rounds allows."
-      }
-      Validate = {
-        Type     = "Task"
-        Resource = aws_lambda_function.this["validate"].arn
-        # backend/lambdas/validate/handler.py reads event["findings"],
-        # taken from ParseAgentResponse's parsed object.
-        Parameters = {
-          "findings.$" = "$.agentParsed.parsed.findings"
-        }
-        # Merges {status, valid_findings, rejected_count, rejected} under
-        # $.validateResult rather than replacing state.
-        ResultPath = "$.validateResult"
-        Next       = "RecordStageAudit"
-      }
-      RecordStageAudit = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:dynamodb:updateItem"
-        Parameters = {
-          TableName = var.reviews_table_name
-          Key = {
-            reviewId = { "S.$" = "$.review_id" }
-          }
-          UpdateExpression = "SET currentStage = :stage"
-          ExpressionAttributeValues = {
-            ":stage" = { S = "audit" }
-          }
-        }
-        ResultPath = null
-        Next       = "Audit"
-      }
-      # backend/lambdas/audit/handler.py's AuditLogEntry requires
-      # review_id; the other fields are optional (read with event.get).
-      # baseline_answers comes from $.effective (including clarification
-      # rounds), guardrails_decisions from Ingest's inline check, and
-      # deterministic_rule_version from RuleEngine. corpus_version and
-      # model_id have no source in this state machine and are left absent
-      # rather than guessed.
-      Audit = {
-        Type     = "Task"
-        Resource = aws_lambda_function.this["audit"].arn
-        Parameters = {
-          "review_id.$"                  = "$.review_id"
-          "baseline_answers.$"           = "$.effective.baseline_answers"
-          "guardrails_decisions.$"       = "$.ingestResult.guardrails_decisions"
-          "deterministic_rule_version.$" = "$.ruleEngineResult.rule_version"
-        }
-        ResultPath = "$.auditResult"
-        Next       = "RecordStageFinalize"
-      }
-      RecordStageFinalize = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:dynamodb:updateItem"
-        Parameters = {
-          TableName = var.reviews_table_name
-          Key = {
-            reviewId = { "S.$" = "$.review_id" }
-          }
-          UpdateExpression = "SET currentStage = :stage"
-          ExpressionAttributeValues = {
-            ":stage" = { S = "finalize" }
-          }
-        }
-        ResultPath = null
-        Next       = "Finalize"
-      }
-      # backend/lambdas/finalize/handler.py requires review_id and
-      # findings. findings is Validate's valid_findings (the
-      # schema-validated list, not the agent's raw output), per ADR-0022's
-      # layer ordering. report_bucket and reviews_table_name are literal
-      # Terraform values, never part of the caller's request.
-      # workload_brief is written to the evidence ledger in S3, the source
-      # of truth for full review content (ADR-0007/0042), because
-      # deeper_review.handler (the "go deeper" endpoint) needs it later to
-      # re-invoke Reason. preflight_fields and defaults_version persist the
-      # completed review's baseline answers (ADR-0031);
-      # $.agentParsed.parsed is whichever InvokeAgent response completed
-      # the review, including a retry after a clarification round.
-      Finalize = {
-        Type     = "Task"
-        Resource = aws_lambda_function.this["finalize"].arn
-        Parameters = {
-          "review_id.$" = "$.review_id"
-          "findings.$"  = "$.validateResult.valid_findings"
-          # Effective brief: includes any clarification notes, so "go
-          # deeper" later reasons over the same context.
-          "workload_brief.$"   = "$.effective.workload_brief"
-          "preflight_fields.$" = "$.agentParsed.parsed.preflight_fields"
-          "defaults_version.$" = "$.agentParsed.parsed.defaults_version"
-          # Feeds compute_cost_estimate_tier. Always present here:
-          # IngestResponseGate routes rejected/blocked results to a Fail
-          # state before Finalize can run.
-          "resource_count.$" = "$.ingestResult.resource_count"
-          # ADR-0049's summary, stored in the ledger for the report chat
-          # (ADR-0050). RuleEngine always runs before Finalize.
-          "terraform_resources.$" = "$.ruleEngineResult.resource_summary"
-          # The report's diagram; Finalize places the final findings on it.
-          "architecture.$"     = "$.ruleEngineResult.architecture"
-          "report_bucket"      = var.reports_bucket_name
-          "reviews_table_name" = var.reviews_table_name
-        }
-        End = true
+        Error = "ReviewProcessingFailed"
+        Cause = "The review could not complete. Public status is stored on the review record."
       }
     }
   })

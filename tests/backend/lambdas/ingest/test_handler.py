@@ -4,6 +4,7 @@ import os
 import tarfile
 import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 
@@ -67,15 +68,72 @@ def test_parse_terraform_files_reads_resources(tmp_path):
     assert "data" in parsed.resources["aws_s3_bucket"]
 
 
+def test_automatic_variable_files_override_defaults_in_terraform_order(tmp_path):
+    from dataclasses import asdict
+
+    from backend.lambdas.rule_engine.hcl_eval import resolve
+
+    texts = {
+        "main.tf": 'variable "public" { default = false }\n',
+        "terraform.tfvars": "public = false\n",
+        "terraform.tfvars.json": '{"public": false}',
+        "a.auto.tfvars": "public = false\n",
+        "z.auto.tfvars.json": '{"public": true}',
+        "dev.tfvars": "public = false\n",
+        "child/child.auto.tfvars": "public = false\n",
+    }
+    files = []
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        files.append(str(path))
+    parsed = asdict(parse_terraform_files(list(reversed(files))))
+    assert resolve("${var.public}", parsed) is True
+    assert any("variable" in gap.lower() for gap in parsed["not_observable"])
+
+
+def test_archive_accepts_only_terraform_variable_json_files(tmp_path):
+    archive_path = str(tmp_path / "vars.tar")
+    _make_archive(archive_path, {
+        "terraform.tfvars.json": b'{"public": true}',
+        "prod.auto.tfvars.json": b'{"public": false}',
+        "unrelated.json": b'{"secret": "SYNTHETIC"}',
+    })
+    extracted = extract_archive(archive_path, str(tmp_path / "out"))
+    assert sorted(os.path.basename(p) for p in extracted) == [
+        "prod.auto.tfvars.json", "terraform.tfvars.json"
+    ]
+
+
+@pytest.mark.parametrize("content", [
+    b'resource "aws_s3_bucket" "x" {\n bucket = x ` SYNTHETIC_SECRET_MARKER\n}\n',
+    b'\xffSYNTHETIC_SECRET_MARKER',
+])
+def test_rejected_terraform_never_echoes_content_or_host_paths(tmp_path, capsys, content):
+    archive_path = str(tmp_path / "invalid.tar")
+    _make_archive(archive_path, {"main.tf": content})
+    result = handler({
+        "archive_path": archive_path, "workload_brief": "test", "review_id": "safe-error",
+        "dest_dir": str(tmp_path / "extracted"),
+    }, None)
+    assert result["status"] == "rejected"
+    captured = capsys.readouterr().out
+    for output in (result["reason"], captured):
+        assert "SYNTHETIC_SECRET_MARKER" not in output
+        assert str(tmp_path) not in output
+        assert "Unexpected token" not in output
+
+
 def test_parse_terraform_flags_remote_module_not_observable(tmp_path):
     tf_file = tmp_path / "main.tf"
     tf_file.write_text(
-        'resource "aws_lambda_function" "fn" {\n'
+        'module "remote" {\n'
         '  source = "git::https://example.com/module.git"\n'
         "}\n"
     )
     parsed = parse_terraform_files([str(tf_file)])
-    assert "aws_lambda_function.fn" in parsed.not_observable
+    assert any("remote" in gap and "unavailable" in gap for gap in parsed.not_observable)
 
 
 # Adversarial regression (ADR-0038): "instructions hidden in Terraform
@@ -209,9 +267,10 @@ def test_handler_rejection_short_circuits_before_guardrails(tmp_path):
 
 def test_ingest_module_has_no_terraform_subprocess_dependency():
     import ast
+
     import backend.lambdas.ingest.handler as handler_module
 
-    source = ast.parse(open(handler_module.__file__).read())
+    source = ast.parse(Path(handler_module.__file__).read_text(encoding="utf-8"))
     imported_names = set()
     for node in ast.walk(source):
         if isinstance(node, ast.Import):

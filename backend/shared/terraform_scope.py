@@ -9,6 +9,7 @@ where <module> is the directory relative to the archive root.
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 MODULE_FIELD = "__module__"
@@ -38,9 +39,13 @@ def display_name(key: str) -> str:
     Keeps the module path, restricts each segment to identifier
     characters, and truncates the name itself.
     """
-    *module_parts, name = key.split("/")
-    name = _IDENTIFIER_UNSAFE.sub("", name)
-    if len(name) > MAX_DISPLAY_NAME:
-        name = name[: MAX_DISPLAY_NAME - 1] + "…"
-    parts = [_IDENTIFIER_UNSAFE.sub("", part)[:MAX_DISPLAY_NAME] for part in module_parts]
-    return "/".join([*parts, name])
+    parts = key.split("/")
+    out = []
+    for index, part in enumerate(parts):
+        safe = _IDENTIFIER_UNSAFE.sub("", part)
+        if safe != part or len(safe) > MAX_DISPLAY_NAME or not safe:
+            identity = "/".join(parts[: index + 1])
+            suffix = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
+            safe = safe[: MAX_DISPLAY_NAME - 9] + "_" + suffix
+        out.append(safe)
+    return "/".join(out)

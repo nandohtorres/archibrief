@@ -23,6 +23,7 @@ clears them all.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import secrets
 import sys
@@ -32,6 +33,7 @@ from typing import Any
 
 from backend.chat.answer import ChatClients, answer_question
 from backend.chat.context import ReviewContext, build_review_context
+from backend.chat.pricing import GUARDRAIL_INPUT_MICRO_USD_PER_UNIT
 from backend.chat.traps import apply_patch, case_question, history_turns, load_cases, score
 from backend.shared.clients import (
     BedrockEmbeddingClient,
@@ -94,14 +96,21 @@ def _ask(ctx, question, history, clients, canary, guardrail):
         question = check_question(question)
     except QuestionRejected:
         return None, True, {}, 0, 0
+    screening_cost = GUARDRAIL_INPUT_MICRO_USD_PER_UNIT if guardrail is not None else 0
     if guardrail is not None and guardrail.assess(question).blocked:
-        return None, True, {}, 0, 0
+        return None, True, {}, screening_cost, 0
     result = answer_question(ctx, question, history, None, clients, canary)
-    return result.answer, False, result.usage, result.cost_micro_usd, result.latency_ms
+    return (
+        result.answer,
+        False,
+        result.usage,
+        result.cost_micro_usd + screening_cost,
+        result.latency_ms,
+    )
 
 
-def run_quality(clients, canary, guardrail) -> dict[str, Any]:
-    cases = json.loads(CASES.read_text(encoding="utf-8"))["cases"]
+def run_quality(clients, canary, guardrail, limit=None) -> dict[str, Any]:
+    cases = json.loads(CASES.read_text(encoding="utf-8"))["cases"][:limit]
     rows = []
     for case in cases:
         ctx = build_review_context(load_review(case["review"]))
@@ -155,10 +164,10 @@ def run_quality(clients, canary, guardrail) -> dict[str, Any]:
     return {"metrics": metrics, "rows": rows}
 
 
-def run_traps(clients, canary, guardrail) -> dict[str, Any]:
+def run_traps(clients, canary, guardrail, limit=None) -> dict[str, Any]:
     base = load_review("fixture")
     rows = []
-    for case in load_cases():
+    for case in load_cases()[:limit]:
         ctx = build_review_context(apply_patch(base, case.get("ledger_patch")))
         answer, blocked, _, cost, latency = _ask(
             ctx, case_question(case), history_turns(case), clients, canary, guardrail
@@ -179,7 +188,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--confirm-paid", action="store_true", help="required: this calls Bedrock")
     parser.add_argument("--traps", action="store_true", help="also run the trap suite")
-    parser.add_argument("--model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    parser.add_argument("--plan", action="store_true", help="print case IDs without AWS clients")
+    parser.add_argument("--limit", type=int, help="maximum cases per set; partial evaluation")
+    parser.add_argument("--model", default="us.anthropic.claude-sonnet-4-6")
     parser.add_argument("--guardrail-id", default="")
     parser.add_argument("--guardrail-version", default="1")
     parser.add_argument("--grounding-guardrail-id", default="")
@@ -187,6 +198,20 @@ def main() -> int:
     parser.add_argument("--vector-index", default="archibrief-dev-kb-index")
     parser.add_argument("--out", type=Path, default=Path("chat-eval-results.json"))
     args = parser.parse_args()
+    if args.limit is not None and args.limit <= 0:
+        parser.error("--limit must be positive")
+    sets = {"quality": json.loads(CASES.read_text(encoding="utf-8"))["cases"][: args.limit]}
+    if args.traps:
+        sets["traps"] = load_cases()[: args.limit]
+    metadata = {
+        "partial": args.limit is not None,
+        "case_ids": {name: [case["id"] for case in cases] for name, cases in sets.items()},
+        "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "max_output_tokens_per_question": 1500,
+    }
+    if args.plan:
+        print(json.dumps({"model": args.model, **metadata}, indent=2))
+        return 0
     if not args.confirm_paid:
         print("Refusing to run: this makes paid model calls; pass --confirm-paid.", file=sys.stderr)
         return 2
@@ -210,11 +235,12 @@ def main() -> int:
     started = time.time()
     results: dict[str, Any] = {
         "model": args.model,
+        "metadata": metadata,
         "guardrail": bool(guardrail),
-        "quality": run_quality(clients, canary, guardrail),
+        "quality": run_quality(clients, canary, guardrail, args.limit),
     }
     if args.traps:
-        results["traps"] = run_traps(clients, canary, guardrail)
+        results["traps"] = run_traps(clients, canary, guardrail, args.limit)
     results["seconds"] = round(time.time() - started)
     results["pass_bars"] = PASS_BARS
     args.out.write_text(json.dumps(results, indent=2), encoding="utf-8")

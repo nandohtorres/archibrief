@@ -1,0 +1,101 @@
+{
+ "status": "NOT RUN \u2014 prepared input only; no model was called",
+ "case": "F06-incomplete",
+ "family": "backup-plan-without-protection",
+ "variant": "incomplete",
+ "workload_brief": "Protected resources are supplied per environment.",
+ "rule_findings": [
+  {
+   "finding_id": "acb20a4c-91bf-4365-889a-b3c4252d96bb",
+   "category": "availability",
+   "type": "deterministic-rule-result",
+   "finding": "RDS instance 'dev_sandbox' is not configured multi_az",
+   "evidence": "resource \"aws_db_instance\" \"dev_sandbox\" has multi_az = false or unset",
+   "risk_impact": "A single AZ failure causes database unavailability.",
+   "recommendation": "Set multi_az = true if the workload's availability requirement warrants it.",
+   "concern": "rds_multi_az"
+  },
+  {
+   "finding_id": "c9699b5c-e72d-485f-9743-dd14f1d5bbe0",
+   "category": "observability",
+   "type": "deterministic-rule-result",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "concern": "cloudtrail_present"
+  }
+ ],
+ "terraform_resources": {
+  "resources": [
+   {
+    "type": "aws_backup_plan",
+    "name": "nightly",
+    "settings": {},
+    "rules": [
+     {
+      "schedule": "cron(0 1 * * ? *)",
+      "delete_after_days": 35,
+      "cold_storage_after_days": "not set",
+      "copied_to_another_vault": false,
+      "continuous_backup": "not set (default: false)"
+     }
+    ],
+    "rules_total": 1,
+    "rules_truncated": false
+   },
+   {
+    "type": "aws_backup_selection",
+    "name": "from_variable",
+    "settings": {}
+   },
+   {
+    "type": "aws_backup_vault",
+    "name": "primary",
+    "settings": {}
+   },
+   {
+    "type": "aws_backup_vault",
+    "name": "secondary",
+    "settings": {}
+   },
+   {
+    "type": "aws_db_instance",
+    "name": "dev_sandbox",
+    "settings": {
+     "engine": "postgres",
+     "instance_class": "db.t3.micro",
+     "multi_az": "not set (default: false)",
+     "storage_encrypted": true,
+     "publicly_accessible": "not set (default: false)",
+     "backup_retention_period": 7,
+     "deletion_protection": "not set (default: false)",
+     "iam_database_authentication_enabled": "not set (default: false)",
+     "auto_minor_version_upgrade": "not set (default: true)",
+     "skip_final_snapshot": "not set (default: false)",
+     "copy_tags_to_snapshot": "not set (default: false)"
+    }
+   },
+   {
+    "type": "aws_db_instance",
+    "name": "prod_ledger",
+    "settings": {
+     "engine": "postgres",
+     "instance_class": "db.t3.medium",
+     "multi_az": true,
+     "storage_encrypted": true,
+     "publicly_accessible": "not set (default: false)",
+     "backup_retention_period": 7,
+     "deletion_protection": true,
+     "iam_database_authentication_enabled": "not set (default: false)",
+     "auto_minor_version_upgrade": "not set (default: true)",
+     "skip_final_snapshot": "not set (default: false)",
+     "copy_tags_to_snapshot": "not set (default: false)"
+    }
+   }
+  ],
+  "truncated": false,
+  "note": "Only the settings named for each resource were checked. A setting not named here may still be set in the code: never describe it as missing. \"copies\" is how many instances count or for_each creates (\"unknown\" when it can't be worked out from the code); a resource without it is created once. \"rules\" on a backup plan lists each backup rule: its schedule, how many days recovery points are kept, and whether they are copied to another vault. rules_total and rules_truncated disclose omitted backup rules; when truncated, copy rules and short retention are prioritized and source_index is one-based."
+ },
+ "scoring": "model_eval/SCORING.md#backup-plan-without-protection"
+}

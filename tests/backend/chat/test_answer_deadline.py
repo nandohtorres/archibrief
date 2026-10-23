@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import time
 
+import pytest
+from botocore.exceptions import ReadTimeoutError
+
 from backend.chat.answer import GROUNDING_WORST_SECONDS, ChatClients, answer_question
 from backend.chat.context import build_review_context
 
@@ -69,7 +72,8 @@ def test_the_model_timeout_is_sized_after_retrieval_from_the_time_left(ledger):
     now = time.monotonic()
     assert model_read_timeout(now + 60) == 24
     assert 12 < model_read_timeout(now + 15) < 14.5
-    assert model_read_timeout(now + 1) == 5
+    with pytest.raises(ReadTimeoutError):
+        model_read_timeout(now + 1)
 
     built: list[float] = []
 
@@ -92,3 +96,40 @@ def test_a_client_is_required_without_a_deadline(ledger):
         answer_question(
             build_review_context(ledger), "Why?", [], None, ChatClients(), "c", None
         )
+
+
+def test_insufficient_time_does_not_construct_or_call_the_model(ledger):
+    def make(_timeout):
+        pytest.fail("no paid client should be constructed after the deadline")
+
+    with pytest.raises(ReadTimeoutError):
+        answer_question(
+            build_review_context(ledger),
+            "Why?",
+            [],
+            None,
+            ChatClients(make_reasoning=make),
+            "c",
+            time.monotonic() + 1,
+        )
+
+
+def test_failed_grounding_retains_its_possible_billing_estimate(ledger):
+    class FailedGrounding:
+        def grounding_scores(self, *args):
+            raise TimeoutError("possibly billed")
+
+    ctx = build_review_context(ledger)
+    plain = answer_question(
+        ctx, "Why?", [], None, ChatClients(reasoning=_Reasoning()), "canary"
+    )
+    failed = answer_question(
+        ctx,
+        "Why?",
+        [],
+        None,
+        ChatClients(reasoning=_Reasoning(), grounding=FailedGrounding()),
+        "canary",
+    )
+    assert failed.answer.status == "answered"
+    assert failed.cost_micro_usd > plain.cost_micro_usd

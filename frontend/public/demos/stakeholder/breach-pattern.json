@@ -168,11 +168,11 @@
       "title": "Storage traffic doesn't use a private route",
       "verdict": "quick-win",
       "verdict_label": "Quick win",
-      "what_could_happen": "If the bucket's settings slip, nothing makes it refuse requests from outside your network. A private endpoint lets the bucket accept only your own traffic."
+      "what_could_happen": "If the bucket's settings slip, nothing makes it refuse requests from outside your network. A private endpoint changes the route; a bucket policy that only accepts requests through it is what makes the bucket refuse outside traffic."
     },
     "cb07d6a3-579d-4501-a42c-1b344acbc411": {
-      "action": "Turn on a CloudTrail trail that writes to a locked-down bucket.",
-      "analogy": "Like an office building with no sign-in sheet and no cameras.",
+      "action": "If no trail exists yet, turn one on that writes to a locked-down bucket.",
+      "analogy": "Like a building that throws its sign-in sheet away after 90 days.",
       "concern": "cloudtrail_present",
       "fix": {
         "caveat": null,
@@ -202,10 +202,10 @@
       "severity": "high",
       "source": "rule",
       "subject": null,
-      "title": "There's no record of who did what in the AWS account",
+      "title": "The code doesn't set up a long-term record of who did what",
       "verdict": "worth-the-money",
       "verdict_label": "Worth the money",
-      "what_could_happen": "If something goes wrong, there's no way to tell who changed what, or when."
+      "what_could_happen": "AWS keeps 90 days of account changes by default. Without a trail, nothing older is kept and file-level access isn't recorded, so an investigation could come up short. A trail may already exist outside this code, so check first."
     },
     "cd120b0c-9d10-438e-ad83-4f61af51567c": {
       "action": "Replace the broad AWS policy with one that names only the resources the code uses.",
@@ -245,7 +245,7 @@
       "what_could_happen": "If the server or function is hacked, the attacker can reach everything this access allows, such as every storage bucket."
     },
     "d4831d89-2615-442e-bf98-81d30627e116": {
-      "action": "The fixes for IMDSv2, the server's access and the private storage route each break the chain. Once they're done, test that it's closed.",
+      "action": "Do all three fixes together: require IMDSv2, cut the server's access to what it needs, and limit the bucket to the private route with a bucket policy. No single fix is guaranteed to close the path, so test it once they're done.",
       "analogy": "Like an unlocked side door, a front desk that hands out keys, and a master key on the ring, all at once.",
       "concern": null,
       "fix": {
@@ -506,7 +506,7 @@
         "monthly_known": 0.0,
         "severity": "high",
         "subject": null,
-        "title": "There's no record of who did what in the AWS account",
+        "title": "The code doesn't set up a long-term record of who did what",
         "verdict": "worth-the-money",
         "verdict_label": "Worth the money"
       },

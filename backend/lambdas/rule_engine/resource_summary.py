@@ -44,6 +44,8 @@ COVERAGE_NOTE = (
     "it can't be worked out from the code); a resource without it is created once. "
     '"rules" on a backup plan lists each backup rule: its schedule, how many days '
     "recovery points are kept, and whether they are copied to another vault."
+    " rules_total and rules_truncated disclose omitted backup rules; when truncated, "
+    "copy rules and short retention are prioritized and source_index is one-based."
 )
 # A count above this is reported as unknown rather than trusted.
 MAX_COPIES = 1000
@@ -187,7 +189,7 @@ DEFAULTS: dict[str, dict[str, object]] = {
         "enable_log_file_validation": False,
         "include_global_service_events": True,
     },
-    "aws_cloudwatch_log_group": {"retention_in_days": 0},
+    "aws_cloudwatch_log_group": {"retention_in_days": "never expires"},
     "aws_kms_key": {"enable_key_rotation": False, "deletion_window_in_days": 30},
     "aws_sqs_queue": {"message_retention_seconds": 345600},
     "aws_subnet": {"map_public_ip_on_launch": False},
@@ -319,7 +321,7 @@ def _backup_rules(body: dict, parsed: dict, module: str) -> list[dict]:
     if not isinstance(rules, list):
         return []
     out = []
-    for rule in rules[:MAX_BACKUP_RULES]:
+    for rule in rules:
         if not isinstance(rule, dict):
             continue
         lifecycle = _first(rule.get("lifecycle"))
@@ -343,7 +345,19 @@ def _backup_rules(body: dict, parsed: dict, module: str) -> list[dict]:
                 ),
             }
         )
-    return out
+    if len(out) <= MAX_BACKUP_RULES:
+        return out
+    indexed = list(enumerate(out, start=1))
+    indexed.sort(
+        key=lambda item: (
+            not item[1]["copied_to_another_vault"],
+            item[1]["delete_after_days"]
+            if isinstance(item[1]["delete_after_days"], int)
+            else float("inf"),
+            item[0],
+        )
+    )
+    return [{**rule, "source_index": index} for index, rule in indexed[:MAX_BACKUP_RULES]]
 
 
 def _schedule(rule: dict, parsed: dict, module: str) -> str:
@@ -380,11 +394,23 @@ def build_resource_summary(parsed: dict) -> dict:
                 else UNKNOWN
                 for path in SETTINGS.get(resource_type, ())
             }
+            if (
+                resource_type == "aws_cloudwatch_log_group"
+                and settings.get("retention_in_days") == 0
+            ):
+                settings["retention_in_days"] = "never expires (configured: 0)"
             entry = {"type": resource_type, "name": display_name(key), "settings": settings}
             copies = copies_of(body, parsed, module) if isinstance(body, dict) else None
             if copies is not None:
                 entry["copies"] = copies
             if resource_type == "aws_backup_plan" and isinstance(body, dict):
                 entry["rules"] = _backup_rules(body, parsed, module)
+                raw_rules = body.get("rule", [])
+                raw_rules = raw_rules if isinstance(raw_rules, list) else [raw_rules]
+                entry["rules_total"] = sum(isinstance(rule, dict) for rule in raw_rules)
+                entry["rules_truncated"] = entry["rules_total"] > len(entry["rules"])
             entries.append(entry)
-    return {"resources": entries, "truncated": total > len(entries), "note": COVERAGE_NOTE}
+    result = {"resources": entries, "truncated": total > len(entries), "note": COVERAGE_NOTE}
+    if parsed.get("not_observable"):
+        result["not_observable"] = parsed["not_observable"]
+    return result

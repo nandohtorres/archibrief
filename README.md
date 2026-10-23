@@ -8,7 +8,7 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 **Deployed and admin-gated; public self-service is not open yet.** Anyone can open three finished demo reviews of real public Terraform (a security firm's breach lab, a Medicare data platform, and FEC databases). They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
 
-**Report chat is live, admin-only.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, quotas and a hard daily spend cap. The demos' suggested questions were answered once and are served free. The paid chat evaluation is still pending.
+**Report chat is live, admin-only.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, quotas and a hard daily spend cap on chat. That cap covers chat only; no single cap spans every paid path yet. The demos' suggested questions were answered once and are served free. The paid chat evaluation is still pending. [Public access](docs/public-access-implementation.md) (uploads, abuse protection, spending limits) is built and tested but switched off until live validation and a paid evaluation are done.
 
 ## How it works
 
@@ -27,7 +27,7 @@ The frontend exposes progress, clarification, findings, a stakeholder view of th
 - Counts, expressions, missing modules, and omitted settings limit what the model can observe. The demo audits found three such gaps (resource counts, backup plans, snapshot settings); each was fixed in the resource summary, and the FEC demo was re-run after the count fix.
 - Trap tests cover their fixtures. Mocked tests do not measure live model quality, production IAM correctness, or deployed accessibility.
 - “Go deeper” is synchronous with a bounded agent timeout; long requests can fail.
-- Anonymous admission, atomic quotas across paid paths, upload binding, secret scanning, retention enforcement, and a truthful privacy page remain public-launch work. A seven-day deletion guarantee is not established by this checkout.
+- Public uploads, shared spending limits and identifier-only workflow state are built but switched off. Live validation, a retention inventory and a final privacy notice come before opening them. There is no seven-day physical-deletion guarantee.
 
 ## Stack
 
@@ -44,7 +44,7 @@ The frontend exposes progress, clarification, findings, a stakeholder view of th
 
 ## Local development
 
-Backend dependencies and development extras are declared in `backend/pyproject.toml` (Python 3.12+). Frontend commands are in `frontend/package.json` (Node 22 or 24). With dependencies installed, from the repository root:
+Backend dependencies and development extras are declared in `backend/pyproject.toml` (Python 3.12+). Frontend commands are in `frontend/package.json` (Node 22.12+ or 24). With dependencies installed, from the repository root:
 
 ```text
 python -m pytest tests/backend -q
@@ -53,7 +53,7 @@ npm ci
 npm run dev
 ```
 
-Without `NEXT_PUBLIC_API_BASE_URL`, the UI uses the local fixture path. Playwright builds separate fixture and mocked-API static sites; its API tests do not require AWS credentials. Live retrieval/model evaluation harnesses are paid operations and separate from these tests. See [evaluation](docs/evaluation.md) for evidence and reproducible commands.
+Without `NEXT_PUBLIC_API_BASE_URL`, the UI uses the local fixture path. Playwright builds separate fixture, admin and public-preview mocked-API static sites; its API tests do not require AWS credentials. Live retrieval/model evaluation harnesses are paid operations and separate from these tests. See [evaluation](docs/evaluation.md) for evidence and reproducible commands.
 
 ## Screenshots
 

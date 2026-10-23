@@ -24,6 +24,7 @@ instead of guessing about settings no rule mentions.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 import uuid
@@ -36,7 +37,7 @@ from backend.lambdas.rule_engine.hcl_eval import (
     resolve,
     truthy,
 )
-from backend.lambdas.rule_engine.resource_summary import build_resource_summary
+from backend.lambdas.rule_engine.resource_summary import build_resource_summary, copies_of
 from backend.shared.clients import S3Client
 from backend.shared.models.finding import (
     ConfidenceInputs,
@@ -47,7 +48,7 @@ from backend.shared.models.finding import (
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
 from backend.shared.trivy_checks import TRIVY_OWNED_CONCERNS, TRUSTED_CHECKS
 
-RULE_VERSION = "rule_engine@2026-10-20"
+RULE_VERSION = "rule_engine@2026-10-21.1"
 
 ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}
@@ -221,8 +222,13 @@ def rule_s3_encryption(parsed: dict, review_id: str) -> list[Finding]:
                     FindingCategory.ENCRYPTION,
                     f"S3 bucket '{name}' has no server-side encryption configuration",
                     f'resource "aws_s3_bucket" "{name}" found with no matching SSE configuration',
-                    "Data at rest is unencrypted, violating baseline data-protection expectations.",
-                    "Attach aws_s3_bucket_server_side_encryption_configuration with SSE-KMS or SSE-S3.",
+                    "The bucket's encryption is not declared, so it can't be reviewed or kept "
+                    "consistent. S3 has encrypted new objects with SSE-S3 by default since "
+                    "January 2023, so this alone does not mean data is unencrypted; objects "
+                    "written earlier, and any need for a customer-managed KMS key, need checking.",
+                    "Attach aws_s3_bucket_server_side_encryption_configuration to declare the "
+                    "intended encryption: SSE-S3, or SSE-KMS where you need to control who can "
+                    "decrypt.",
                     ["AWS Well-Architected: Security Pillar", "SEC08-BP02"],
                 )
             )
@@ -264,6 +270,55 @@ def _is_public_principal(principal: object) -> bool:
     return False
 
 
+def _restricts_public_access(condition: object) -> bool:
+    """Only a proven positive identity/network restriction clears this check.
+
+    This is not a complete IAM evaluator. Unknown, negated, optional, or
+    wildcard restrictions cannot establish non-public access.
+    """
+    if not isinstance(condition, dict):
+        return False
+    keys = {
+        "aws:sourcevpce",
+        "aws:sourcevpc",
+        "aws:principalorgid",
+        "aws:principalaccount",
+        "aws:principalarn",
+        "aws:sourcearn",
+        "aws:sourceaccount",
+    }
+    for operator, entries in condition.items():
+        if not isinstance(entries, dict):
+            continue
+        for key, raw_values in entries.items():
+            values = _as_list(raw_values)
+            if not values or not all(
+                isinstance(value, str) and value and not any(c in value for c in "*?$%&{}")
+                for value in values
+            ):
+                continue
+            if (
+                operator in {"StringEquals", "ArnEquals", "StringLike", "ArnLike"}
+                and key.lower() in keys
+            ):
+                return True
+            if operator == "IpAddress" and key.lower() == "aws:sourceip":
+                try:
+                    networks = [ipaddress.ip_network(value) for value in values]
+                except ValueError:
+                    continue
+                collapsed = [
+                    network
+                    for version in (4, 6)
+                    for network in ipaddress.collapse_addresses(
+                        n for n in networks if n.version == version
+                    )
+                ]
+                if collapsed and all(network.prefixlen > 0 for network in collapsed):
+                    return True
+    return False
+
+
 @concern("s3_public_policy")
 def rule_s3_bucket_policy_public(parsed: dict, review_id: str) -> list[Finding]:
     """A bucket policy that allows anyone, whatever the bucket is called (trap t11)."""
@@ -275,7 +330,7 @@ def rule_s3_bucket_policy_public(parsed: dict, review_id: str) -> list[Finding]:
             for s in statements
             if s.get("Effect", "Allow") == "Allow"
             and _is_public_principal(s.get("Principal"))
-            and not s.get("Condition")
+            and not _restricts_public_access(s.get("Condition"))
         ]
         if not public:
             continue
@@ -288,8 +343,9 @@ def rule_s3_bucket_policy_public(parsed: dict, review_id: str) -> list[Finding]:
                 FindingCategory.EXPOSURE,
                 f"S3 bucket '{name}' has a bucket policy that allows anyone (Principal \"*\")",
                 f'resource "aws_s3_bucket_policy" "{display_name(key)}" allows Principal "*" '
-                f"with no condition for {', '.join(actions)[:120]}",
-                "Anyone on the internet can perform these actions on the bucket's objects.",
+                f"without a proven identity/network restriction for {', '.join(actions)[:120]}",
+                "The shown Allow statement permits public-principal access for matching requests; "
+                "effective access also depends on other policies and public-access settings.",
                 "Remove the public statement, or restrict it with a condition (for example a "
                 "CloudFront origin access control or a specific account).",
                 ["AWS Well-Architected: Security Pillar", "SEC08-BP04"],
@@ -393,7 +449,8 @@ def rule_security_group_open_ingress(parsed: dict, review_id: str) -> list[Findi
                 f"Security group rule '{name}' allows {cidr_text} ingress to sensitive port(s) "
                 f"{sorted(exposed)}",
                 f'resource "{resource_type}" "{name}" allows {cidr_text} for {span}',
-                "Sensitive management/database ports are reachable from the entire internet.",
+                "This rule permits internet-source traffic on sensitive ports if attached to a "
+                "resource. Actual reachability also depends on routing and listeners.",
                 "Restrict ingress to specific CIDR ranges or a bastion/VPN security group.",
                 ["AWS Well-Architected: Security Pillar", "SEC05-BP02", "CIS Controls v8: 4.4"],
             )
@@ -564,8 +621,20 @@ def _wildcard_grants(statements: list[dict]) -> list[str]:
     for statement in statements:
         if statement.get("Effect", "Allow") != "Allow":
             continue
-        if "*" not in {str(r) for r in _as_list(statement.get("Resource"))}:
+        resources = {str(r) for r in _as_list(statement.get("Resource"))}
+        excluded_resources = _as_list(statement.get("NotResource"))
+        excluded_actions = _as_list(statement.get("NotAction"))
+        if excluded_resources and "*" not in excluded_resources:
+            if excluded_actions and "*" not in excluded_actions:
+                grants.append("NotAction on NotResource complement")
+            elif any(
+                str(a) == "*" or str(a).endswith(":*") for a in _as_list(statement.get("Action"))
+            ):
+                grants.append("NotResource complement")
+        if "*" not in resources:
             continue
+        if excluded_actions and "*" not in excluded_actions:
+            grants.append("NotAction complement")
         for action in _as_list(statement.get("Action")):
             action = str(action)
             if action == "*" or action.endswith(":*"):
@@ -585,16 +654,21 @@ def rule_iam_policy_wildcard_action_resource(parsed: dict, review_id: str) -> li
         name = display_name(key)
         if "*" in grants:
             text = f"IAM policy '{name}' grants wildcard Action \"*\" on all resources (full admin)"
+        elif any("NotResource" in grant for grant in grants):
+            text = f"IAM policy '{name}' grants broad permissions using a NotResource complement"
         else:
             text = f"IAM policy '{name}' grants wildcard {', '.join(grants)} on all resources"
+        scope = (
+            "NotResource exclusions" if any("NotResource" in g for g in grants) else 'Resource "*"'
+        )
         findings.append(
             _finding(
                 review_id,
                 FindingCategory.IAM,
                 text,
-                f'resource "{resource_type}" "{name}" allows {", ".join(grants)} on Resource "*"',
+                f'resource "{resource_type}" "{name}" allows {", ".join(grants)} with {scope}',
                 "Overly broad permissions violate least privilege and widen blast radius on compromise.",
-                "Scope the policy to the specific actions and resource ARNs the role actually needs.",
+                "Scope the policy to the specific actions and resource ARNs the workload actually needs.",
                 ["AWS Well-Architected: Security Pillar", "SEC03-BP02", "CIS Controls v8: 5.4"],
             )
         )
@@ -750,6 +824,15 @@ def rule_compute_role_broad_managed_policy(parsed: dict, review_id: str) -> list
     for key, labels in sorted(_broad_compute_roles(parsed).items()):
         name = display_name(key)
         policies = ", ".join(labels)
+        role = parsed.get("resources", {}).get("aws_iam_role", {}).get(key, {})
+        boundary = bool(role.get("permissions_boundary"))
+        risk = (
+            "These attached policies have broad scope. A permissions boundary is configured; "
+            "effective permissions require evaluating that boundary and other applicable policies."
+            if boundary
+            else "Anyone who gets code running on this compute, or tricks it into a "
+            "request forgery, can exercise the attached policies subject to other applicable IAM controls."
+        )
         findings.append(
             _finding(
                 review_id,
@@ -757,8 +840,7 @@ def rule_compute_role_broad_managed_policy(parsed: dict, review_id: str) -> list
                 f"IAM role '{name}' is used by running code and has {policies}",
                 f'resource "aws_iam_role" "{name}" trusts a compute service '
                 f"(EC2, Lambda, ECS tasks or EKS pods) and has {policies} attached",
-                "Anyone who gets code running on this compute, or tricks it into a "
-                "request forgery, gets these permissions across the whole account.",
+                risk,
                 "Replace the managed policy with a customer-managed one that names only "
                 "the actions and resource ARNs this workload uses.",
                 ["AWS Well-Architected: Security Pillar", "SEC03-BP02", "CIS Controls v8: 5.4"],
@@ -776,9 +858,24 @@ def _profile_role(profile_ref: object, body: dict, parsed: dict) -> str | None:
     return _role_key(profile.get("role"), profile, parsed)
 
 
-def _account_requires_imdsv2(parsed: dict) -> bool:
+def _account_requires_imdsv2(parsed: dict, instance: dict) -> bool:
+    # The same provider identity and resource-level region prove a shared
+    # account/region scope without guessing credentials or provider defaults.
+    # Different aliases may share a region, but may also assume other roles.
+    if instance.get("__module_provider_unknown__"):
+        return False
+
+    def scope(body: dict) -> tuple[object, object, str]:
+        module = module_of(body)
+        return (
+            resolve(body.get("provider", "${aws}"), parsed, module),
+            resolve(body.get("region"), parsed, module),
+            module,
+        )
+
     return any(
         resolve(body.get("http_tokens"), parsed, module_of(body)) == "required"
+        and scope(body) == scope(instance)
         for _, body in _resources(parsed, "aws_ec2_instance_metadata_defaults")
     )
 
@@ -791,8 +888,6 @@ def rule_ec2_imdsv2_required(parsed: dict, review_id: str) -> list[Finding]:
     account default, which the code doesn't show, unless the code sets
     that account default itself (aws_ec2_instance_metadata_defaults).
     """
-    if _account_requires_imdsv2(parsed):
-        return []
     broad_roles = _broad_compute_roles(parsed)
     findings = []
     for resource_type in ("aws_instance", "aws_launch_template"):
@@ -803,6 +898,8 @@ def rule_ec2_imdsv2_required(parsed: dict, review_id: str) -> list[Finding]:
             if tokens == "required":
                 continue
             if resolve(options.get("http_endpoint"), parsed, module) == "disabled":
+                continue
+            if tokens is None and _account_requires_imdsv2(parsed, body):
                 continue
             name = display_name(key)
             setting = "is not set" if tokens is None else 'is not "required"'
@@ -870,8 +967,12 @@ def rule_cloudtrail_present(parsed: dict, review_id: str) -> list[Finding]:
             FindingCategory.OBSERVABILITY,
             "No aws_cloudtrail resource found in the submitted Terraform",
             "No resource of type aws_cloudtrail present in parsed configuration",
-            "API activity in the account would not be recorded for audit/incident response.",
-            "Add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+            "This code defines no trail. One may be managed elsewhere, such as an organization "
+            "trail. If none exists, CloudTrail keeps only 90 days of management events in Event "
+            "history, with no long-term record and no data events (such as S3 object reads) "
+            "for audit or incident response.",
+            "Confirm whether an organization or account trail already exists. If not, add an "
+            "aws_cloudtrail resource covering all regions with log file validation enabled.",
             ["AWS Well-Architected: Operational Excellence Pillar", "CIS Controls v8: 8.5"],
         )
     ]
@@ -979,7 +1080,7 @@ def _subject_key(result: dict, parsed: dict) -> str:
     """The resource a Trivy result is really about. A public access block
     result is reported against its bucket (trap t10)."""
     key = result["resource_key"]
-    if result["resource_type"] != "aws_s3_bucket_public_access_block":
+    if result.get("resource_type") != "aws_s3_bucket_public_access_block":
         return key
     body = parsed.get("resources", {}).get("aws_s3_bucket_public_access_block", {}).get(key)
     if isinstance(body, dict):
@@ -995,10 +1096,12 @@ def scanner_findings(scanner: dict, parsed: dict, review_id: str) -> list[Findin
         check = TRUSTED_CHECKS.get(result.get("check_id", ""))
         if check is None:
             continue
-        grouped.setdefault((check.concern, _subject_key(result, parsed)), []).append(result)
+        grouped.setdefault(
+            (check.concern, result.get("scope", "resource"), _subject_key(result, parsed)), []
+        ).append(result)
 
     findings = []
-    for (_, key), results in grouped.items():
+    for (_, scope, key), results in grouped.items():
         checks = [TRUSTED_CHECKS[r["check_id"]] for r in results]
         first = results[0]
         name = display_name(key)
@@ -1008,13 +1111,23 @@ def scanner_findings(scanner: dict, parsed: dict, review_id: str) -> list[Findin
         if lines:
             location += f" line {lines[0]}" if len(lines) == 1 else f" lines {lines[0]}-{lines[-1]}"
         details = "; ".join(dict.fromkeys(c.detail for c in checks))
+        title = checks[0].title.format(name=name)
+        evidence = (
+            f'resource "{first.get("resource_type")}" "{display_name(first["resource_key"])}" '
+            f"at {location}: {details} (Trivy {', '.join(ids)})"
+        )
+        if scope == "module":
+            title = f"Module call '{name}' has a scanner finding for {checks[0].concern}"
+            evidence = (
+                f"Module call '{name}' at {location}: {details} "
+                f"(Trivy {', '.join(ids)}); exact resource attribution unavailable"
+            )
         findings.append(
             _finding(
                 review_id,
                 FindingCategory(checks[0].category),
-                checks[0].title.format(name=name),
-                f'resource "{first["resource_type"]}" "{display_name(first["resource_key"])}" '
-                f"at {location}: {details} (Trivy {', '.join(ids)})",
+                title,
+                evidence,
                 checks[0].risk,
                 checks[0].recommendation,
                 [*checks[0].framework, *(f"Trivy {i}" for i in ids)],
@@ -1045,19 +1158,129 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
     every ArchiBrief rule runs. A scanner that reported "unavailable" also
     falls back to every rule, and the report says so.
     """
+    module_scan_partial = False
+    if scanner and scanner.get("status") == "ok" and parsed.get("module_evaluation") == "calls":
+        module_scan_partial = any(
+            module_of(body)
+            for bodies in parsed.get("resources", {}).values()
+            for body in bodies.values()
+        )
+        # Child scanner addresses use source directories, not bound call
+        # instances. They cannot establish input values or deployment.
+        retained = []
+        for result in scanner.get("results", []):
+            key = result.get("resource_key", "")
+            if result.get("scope") == "module" or result.get("module_origin") or "/" in key:
+                module_scan_partial = True
+                continue
+            body = parsed.get("resources", {}).get(result.get("resource_type"), {}).get(key)
+            if not isinstance(body, dict) or not is_created(body, parsed):
+                module_scan_partial = True
+                continue
+            retained.append(result)
+        scanner = {**scanner, "results": retained}
     trivy_ran = bool(scanner) and scanner.get("status") == "ok"
-    working = {**parsed, _TRIVY_RAN: trivy_ran}
+    partial_attribution = trivy_ran and any(
+        r.get("scope") == "module" for r in scanner.get("results", [])
+    )
+    complete_scan = (
+        trivy_ran
+        and not scanner.get("truncated", False)
+        and not partial_attribution
+        and not module_scan_partial
+    )
+    working = {**parsed, _TRIVY_RAN: complete_scan}
     findings: list[Finding] = []
     for rule in ALL_RULES:
-        if trivy_ran and _RULE_CONCERNS.get(rule) in TRIVY_OWNED_CONCERNS:
+        if complete_scan and _RULE_CONCERNS.get(rule) in TRIVY_OWNED_CONCERNS:
             continue
         # The stakeholder view's catalog is keyed by concern.
         name = _RULE_CONCERNS.get(rule)
         findings.extend(f.model_copy(update={"concern": name}) for f in rule(working, review_id))
     if trivy_ran:
-        findings.extend(scanner_findings(scanner, working, review_id))
+        for finding in scanner_findings(scanner, working, review_id):
+            names = set(re.findall(r"'([^']+)'", finding.finding))
+            if not any(
+                own.concern == finding.concern
+                and names.intersection(re.findall(r"'([^']+)'", own.finding))
+                for own in findings
+            ):
+                findings.append(finding)
+        if scanner.get("truncated", False):
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.OBSERVABILITY,
+                    "Trivy results were truncated; ArchiBrief's own rules also ran",
+                    f"Retained {len(scanner.get('results', []))} of "
+                    f"{scanner.get('results_total', 'unknown')} trusted scanner results",
+                    "Scanner-only issues may be omitted; this is not a complete scan.",
+                    "Review a smaller configuration slice to obtain complete scanner coverage.",
+                    [],
+                    finding_type=FindingType.NOT_OBSERVABLE,
+                )
+            )
+        if partial_attribution:
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.OBSERVABILITY,
+                    "Some Trivy findings have only module-level attribution; ArchiBrief's own rules also ran",
+                    "Scanner results identify a module call without an exact resource attribution",
+                    "The affected resource cannot be identified reliably from these scanner results.",
+                    "Inspect the module's resources before acting on its scanner findings.",
+                    [],
+                    finding_type=FindingType.NOT_OBSERVABLE,
+                )
+            )
     elif scanner is not None:
         findings.append(_scanner_unavailable(review_id))
+    if module_scan_partial:
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.OBSERVABILITY,
+                "Module scanner evidence could not be bound to evaluated resources; own rules also ran",
+                "Source-directory scanner results were excluded rather than attributed to module call instances",
+                "Module-specific scanner coverage is incomplete; supported local inputs were evaluated by own rules.",
+                "Review module resources and their bound inputs before relying on scanner-only coverage.",
+                [],
+                finding_type=FindingType.NOT_OBSERVABLE,
+            )
+        )
+    if gaps := parsed.get("not_observable", []):
+        # Ingest emits identifier-only module notices and fixed coverage
+        # descriptions. No source URL or expression is echoed here.
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.OBSERVABILITY,
+                "Terraform module or input coverage is incomplete",
+                "; ".join(str(gap) for gap in gaps),
+                "Unobserved inputs or modules may change this architecture's findings.",
+                "Supply the missing local configuration or inspect the disclosed gap separately.",
+                [],
+                finding_type=FindingType.NOT_OBSERVABLE,
+            )
+        )
+    unknown_creation = {
+        f'resource "{kind}" "{display_name(key)}"'
+        for kind, resources in parsed.get("resources", {}).items()
+        for key, body in resources.items()
+        if isinstance(body, dict) and copies_of(body, parsed, module_of(body)) == "unknown"
+    }
+    findings = [
+        finding.model_copy(
+            update={
+                "finding": "If created: " + finding.finding,
+                "risk_impact": "Resource creation could not be resolved statically. "
+                + finding.risk_impact,
+            }
+        )
+        if any(marker in finding.evidence for marker in unknown_creation)
+        else finding
+        for finding in findings
+    ]
     return findings
 
 

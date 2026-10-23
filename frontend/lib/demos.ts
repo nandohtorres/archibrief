@@ -28,6 +28,12 @@ export interface DemoEntry {
   id: string;
   title: string;
   subtitle: string;
+  // Short label and one-line tag for the submission form's example strip.
+  shortTitle?: string;
+  tag?: string;
+  // The landing card: what kind of code it is, and what the review shows.
+  badge?: string;
+  shows?: string;
   source: string;
   sourceUrl: string;
   license: string;
@@ -75,6 +81,12 @@ export function isDemoEntry(value: unknown): value is DemoEntry {
   if (!fields.every((field) => isString(entry[field]))) return false;
   if (!/^[a-z0-9-]{1,64}$/.test(entry.id as string)) return false;
   if (!(entry.sourceUrl as string).startsWith("https://")) return false;
+  if (
+    ![entry.shortTitle, entry.tag, entry.badge, entry.shows].every(
+      (field) => field === undefined || isString(field),
+    )
+  )
+    return false;
   const notes = entry.reviewerNotes;
   return notes === undefined || (Array.isArray(notes) && notes.every(isReviewerNote));
 }

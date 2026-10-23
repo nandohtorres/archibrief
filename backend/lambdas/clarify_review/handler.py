@@ -30,6 +30,7 @@ ledger.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from typing import Any
@@ -37,9 +38,12 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
-from backend.shared.clients import DynamoDBClient
-from backend.shared.http import JSON_HEADERS
+from backend.shared.admission import AdmissionDenied, positive_setting, reserve_operation
+from backend.shared.clients import DynamoDBClient, S3Client
+from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
+from backend.shared.public_access import capability_allowed, is_admin
+from backend.shared.retention import review_is_live
 
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
@@ -50,6 +54,7 @@ def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@api_handler
 def handler(event: dict, _context: object) -> dict:
     review_id = (event.get("pathParameters") or {}).get("reviewId")
     if not review_id:
@@ -59,6 +64,8 @@ def handler(event: dict, _context: object) -> dict:
         payload = json.loads(event.get("body") or "{}")
     except json.JSONDecodeError:
         return _response(400, {"error": "request body must be valid JSON"})
+    if not isinstance(payload, dict):
+        return _response(400, {"error": "request body must be a JSON object"})
 
     answers = payload.get("answers")
     if not isinstance(answers, dict):
@@ -79,7 +86,7 @@ def handler(event: dict, _context: object) -> dict:
     client = DynamoDBClient(table_name=table_name)
 
     item = client.get_item({"reviewId": review_id})
-    if item is None:
+    if item is None or not review_is_live(item) or not capability_allowed(event, item, write=True):
         return _response(404, {"error": "review not found"})
 
     task_token = item.get("clarificationTaskToken")
@@ -91,6 +98,44 @@ def handler(event: dict, _context: object) -> dict:
     # resubmit once the switch is off.
     if not paid_work_allowed():
         return _response(503, {"error": "Reviews are temporarily paused. Try again later."})
+
+    try:
+        reserve_operation(
+            item,
+            "clarify:" + hashlib.sha256(task_token.encode()).hexdigest(),
+            {"answers": answers, "note": clarification_note},
+            positive_setting("CLARIFY_RESERVE_MICRO_USD", 200000),
+            admin=is_admin(event),
+        )
+    except AdmissionDenied as exc:
+        return _response(409 if "operation" in exc.code else 429, {"error": exc.code})
+
+    callback = {"baseline_answers": answers, "clarification_note": clarification_note}
+    if item.get("inputDigest"):
+        key = (
+            f"jobs/{review_id}/clarification-{hashlib.sha256(task_token.encode()).hexdigest()}.json"
+        )
+        try:
+            S3Client(bucket=os.environ["REPORTS_BUCKET_NAME"]).put_object(
+                key,
+                json.dumps(
+                    {
+                        "review_id": review_id,
+                        "input_digest": item["inputDigest"],
+                        "answers": answers,
+                        "note": clarification_note,
+                    }
+                ).encode(),
+                if_absent=True,
+            )
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] not in {"PreconditionFailed", "412"}:
+                return _response(503, {"error": "could not store answers; please try again"})
+        except Exception:  # noqa: BLE001 - no callback or paid continuation on storage failure
+            return _response(503, {"error": "could not store answers; please try again"})
+        callback = {"resume_key": key}
+    # Old admin-only executions retain their original ASL definition. Their
+    # existing payload history cannot be retroactively removed by this release.
 
     # Claim the token with a conditional field-level update before resuming.
     # Resuming first and writing back a whole-item snapshot could overwrite
@@ -104,9 +149,7 @@ def handler(event: dict, _context: object) -> dict:
     try:
         sfn.send_task_success(
             taskToken=task_token,
-            output=json.dumps(
-                {"baseline_answers": answers, "clarification_note": clarification_note}
-            ),
+            output=json.dumps(callback),
         )
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")

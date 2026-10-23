@@ -1,4 +1,5 @@
 import json
+import time
 
 import backend.lambdas.get_review.handler as handler_module
 from backend.lambdas.get_review.handler import handler
@@ -25,10 +26,14 @@ class _FakeS3Client:
 
 
 def _event(review_id: str | None) -> dict:
-    return {"pathParameters": {"reviewId": review_id} if review_id else {}}
+    return {
+        "headers": {"x-admin-key": "admin-secret"},
+        "pathParameters": {"reviewId": review_id} if review_id else {},
+    }
 
 
 def _setup(monkeypatch, items: dict, objects: dict | None = None):
+    monkeypatch.setenv("ADMIN_KEY", "admin-secret")
     monkeypatch.setenv("REVIEWS_TABLE_NAME", "archibrief-dev-reviews")
     monkeypatch.setenv("REPORTS_BUCKET_NAME", "archibrief-dev-reports")
     monkeypatch.setattr(handler_module, "DynamoDBClient", _FakeDynamoDBClient)
@@ -44,6 +49,7 @@ def test_returns_pending_pointer_subset_for_incomplete_review(monkeypatch):
             "r1": {
                 "reviewId": "r1",
                 "status": "needs_clarification",
+                "ttl": int(time.time()) + 86400,
                 "needsClarification": ["budget_ceiling"],
                 "internalTaskToken": "should-never-leak",
                 "clarificationTaskToken": "should-never-leak-either",
@@ -107,6 +113,7 @@ def test_returns_full_review_report_for_complete_review(monkeypatch):
             "r1": {
                 "reviewId": "r1",
                 "status": "complete",
+                "ttl": int(time.time()) + 86400,
                 "reportS3Key": "reports/r1/evidence-ledger.json",
                 "completedAt": "2026-09-17T00:00:00Z",
             }
@@ -132,6 +139,21 @@ def test_returns_404_for_unknown_review(monkeypatch):
     result = handler(_event("missing"), None)
 
     assert result["statusCode"] == 404
+
+
+def test_expired_review_is_hidden_before_any_ledger_read(monkeypatch):
+    _setup(
+        monkeypatch,
+        {
+            "r1": {
+                "reviewId": "r1",
+                "status": "complete",
+                "ttl": 1,
+                "reportS3Key": "not-present",
+            }
+        },
+    )
+    assert handler(_event("r1"), None)["statusCode"] == 404
 
 
 def test_returns_400_when_review_id_missing(monkeypatch):

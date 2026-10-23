@@ -14,6 +14,7 @@ import {
   type SubmitReviewRequest,
   type SubmitReviewResponse,
 } from "./contracts";
+import { reviewAccessHeaders, storeReviewAccess } from "./review-access";
 
 export class ApiRequestError extends Error {
   constructor(
@@ -33,20 +34,38 @@ export function getApiBaseUrl(): string | null {
 // No user accounts (ADR-0044) — gated endpoints check a single
 // pre-shared admin credential sent as x-admin-key, not a per-user
 // bearer token.
-function requestHeaders(adminKey?: string): HeadersInit {
+function requestHeaders(adminKey?: string, reviewId?: string, write = false): HeadersInit {
   return {
     "Content-Type": "application/json",
     ...(adminKey ? { "x-admin-key": adminKey } : {}),
+    ...(reviewId ? reviewAccessHeaders(reviewId, write) : {}),
   };
 }
 
 async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!response.ok) {
-    throw new ApiRequestError(
-      text || `ArchiBrief API returned ${response.status}.`,
-      response.status,
-    );
+    const messages: Record<string, string> = {
+      upload_limit_reached: "Today's upload allowance is used up. Please try again tomorrow.",
+      paid_limit_reached: "The review allowance is used up. Please try again tomorrow.",
+      challenge_required: "Complete verification before starting a review.",
+      challenge_rejected: "Verification expired or was rejected. Complete it and try again.",
+      challenge_unavailable: "Verification is unavailable. Please try again shortly.",
+      public_access_closed: "Public submissions are not open yet.",
+      admission_unavailable: "Reviews are temporarily unavailable. Please try again later.",
+      upload_mismatch: "The uploaded file doesn't match this reservation. Start a new review.",
+      upload_expired: "This upload reservation expired. Start a new review.",
+      dispatch_unavailable: "The review could not start. Please retry the same submission.",
+      operation_conflict: "This reservation belongs to a different submission. Start a new review.",
+    };
+    let message = text || `ArchiBrief API returned ${response.status}.`;
+    try {
+      const body = JSON.parse(text) as { error?: string };
+      if (body.error && messages[body.error]) message = messages[body.error];
+    } catch {
+      /* Older endpoints can return plain text. */
+    }
+    throw new ApiRequestError(message, response.status);
   }
   try {
     return JSON.parse(text) as unknown;
@@ -79,15 +98,11 @@ export async function submitReview(
   // sent, not parsed back out of the response.
   const response = await fetch(`${requireApiBaseUrl()}/reviews`, {
     method: "POST",
-    headers: requestHeaders(adminKey),
+    headers: requestHeaders(adminKey, request.review_id, true),
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new ApiRequestError(
-      text || `ArchiBrief API rejected the review submission (${response.status}).`,
-      response.status,
-    );
+    await readJson(response);
   }
   return { reviewId: request.review_id, status: "pending" };
 }
@@ -104,18 +119,50 @@ export async function requestUpload(
     headers: requestHeaders(adminKey),
     body: JSON.stringify(request),
   });
-  return (await readJson(response)) as CreateUploadResponse;
+  const upload = (await readJson(response)) as CreateUploadResponse;
+  if (upload.uploadMethod === "PUT") {
+    if (
+      !upload.reviewId ||
+      !upload.readToken ||
+      !upload.writeToken ||
+      !upload.expiresAt ||
+      !upload.uploadHeaders
+    ) {
+      throw new ApiRequestError("The upload reservation is incomplete.", response.status);
+    }
+    storeReviewAccess(upload.reviewId, {
+      readToken: upload.readToken,
+      writeToken: upload.writeToken,
+      expiresAt: upload.expiresAt,
+    });
+  } else if (!adminKey || !upload.uploadFields) {
+    throw new ApiRequestError("A bound upload reservation is required.", response.status);
+  }
+  return upload;
 }
 
-// The second half: POSTs the file straight to S3 using the presigned
-// fields from requestUpload() — deliberately NOT routed through this
-// API or through requestHeaders()/x-admin-key at all. S3's own presigned
-// POST policy is the only authorization this request carries; adding an
-// unrelated admin-key header here would do nothing but could confuse a
-// future reader into thinking it's required.
-export async function uploadArchiveToS3(upload: CreateUploadResponse, file: File): Promise<void> {
+// Upload directly to S3 with its signed headers, without application credentials.
+// A recovered grant can return an already-uploaded version after response loss.
+export async function uploadArchiveToS3(
+  upload: CreateUploadResponse,
+  file: File,
+): Promise<string | undefined> {
+  if (upload.uploadMethod === "PUT") {
+    if (upload.uploadedVersionId) return upload.uploadedVersionId;
+    const response = await fetch(upload.uploadUrl, {
+      method: "PUT",
+      headers: upload.uploadHeaders,
+      body: file,
+    });
+    if (!response.ok)
+      throw new ApiRequestError("Archive upload failed. Please try again.", response.status);
+    const version = response.headers.get("x-amz-version-id");
+    if (!version || version === "null")
+      throw new ApiRequestError("Storage did not return an upload version.", response.status);
+    return version;
+  }
   const formData = new FormData();
-  for (const [field, value] of Object.entries(upload.uploadFields)) {
+  for (const [field, value] of Object.entries(upload.uploadFields ?? {})) {
     formData.append(field, value);
   }
   formData.append("file", file);
@@ -135,7 +182,7 @@ export async function fetchReview(
   adminKey?: string,
 ): Promise<ReviewReport | ReviewStatusPointer> {
   const response = await fetch(`${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}`, {
-    headers: requestHeaders(adminKey),
+    headers: requestHeaders(adminKey, reviewId),
   });
   return (await readJson(response)) as ReviewReport | ReviewStatusPointer;
 }
@@ -164,7 +211,7 @@ export async function submitClarification(
     `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/clarify`,
     {
       method: "POST",
-      headers: requestHeaders(adminKey),
+      headers: requestHeaders(adminKey, reviewId, true),
       body: JSON.stringify(request),
     },
   );
@@ -185,7 +232,7 @@ export async function requestDeeperFinding(
 ): Promise<unknown> {
   const response = await fetch(
     `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/findings/${encodeURIComponent(findingId)}/deeper`,
-    { method: "POST", headers: requestHeaders(adminKey) },
+    { method: "POST", headers: requestHeaders(adminKey, reviewId, true) },
   );
   return readJson(response);
 }
@@ -232,7 +279,11 @@ export async function askQuestion(
 ): Promise<AskQuestionResponse> {
   const response = await fetch(
     `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/questions`,
-    { method: "POST", headers: requestHeaders(adminKey), body: JSON.stringify(request) },
+    {
+      method: "POST",
+      headers: requestHeaders(adminKey, reviewId, true),
+      body: JSON.stringify(request),
+    },
   );
   const value = await readChatJson(response);
   if (!isChatTurn(value)) {
@@ -251,7 +302,7 @@ export async function fetchQuestions(
 ): Promise<QuestionsTranscript> {
   const response = await fetch(
     `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/questions`,
-    { headers: requestHeaders(adminKey) },
+    { headers: requestHeaders(adminKey, reviewId) },
   );
   const value = await readChatJson(response);
   if (!isQuestionsTranscript(value)) {
