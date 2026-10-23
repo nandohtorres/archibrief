@@ -83,3 +83,6 @@ frontend/.lighthouseci/
 
 # Old design experiments and internal working pages, kept local only.
 docs/site/
+
+# Local Terraform plan text output (account details).
+infra/environments/dev/tmp/
