@@ -199,7 +199,7 @@ export function FindingDetail({
       </details>
 
       <div className="finding-actions">
-        {record.type !== "not-observable" && (
+        {record.type !== "not-observable" && !record.parent_finding_id && (
           <button
             className="button secondary"
             type="button"

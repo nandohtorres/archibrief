@@ -14,6 +14,7 @@ import { isArchitectureGraph, type ArchitectureGraph } from "@/lib/architecture"
 import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
 import { reviewerNotesById, type DemoEntry } from "@/lib/demos";
 import { buildReportHtml, downloadFile } from "@/lib/chat";
+import { buildReportExport, reportSnapshotLabel, withEvidenceLabel } from "@/lib/report-review";
 import {
   filterAndSortFindings,
   formatFindingId,
@@ -62,7 +63,7 @@ export function ReportWorkspace({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FindingFilter>("all");
   const [sort, setSort] = useState<FindingSort>("priority");
-  const [findings, setFindings] = useState<ReportFinding[]>(report.findings);
+  const [findings, setFindings] = useState<ReportFinding[]>(report.findings.map(withEvidenceLabel));
   const [architectureFocus, setArchitectureFocus] = useState<{
     findingId: string;
     at: number;
@@ -81,7 +82,9 @@ export function ReportWorkspace({
   );
   const selected =
     visibleFindings.find(({ record }) => record.finding_id === selectedId) ?? visibleFindings[0];
-  const highCount = findings.filter(({ presentation }) => presentation.priority === "high").length;
+  const ruleCount = findings.filter(
+    ({ record }) => record.type === "deterministic-rule-result",
+  ).length;
   const assumptionCount = findings.filter(({ record }) => record.type === "assumption").length;
 
   function selectFinding(findingId: string) {
@@ -144,6 +147,12 @@ export function ReportWorkspace({
   }
 
   function askAboutFinding(finding: ReportFinding) {
+    if (finding.record.parent_finding_id) {
+      setStatus(
+        "Questions currently use the original report. Choose an original finding to ask about it; deeper findings are included in this session's download.",
+      );
+      return;
+    }
     setQuestionSeed(`Explain this finding: ${finding.record.finding}`);
     setSeedFindingId(finding.record.finding_id);
     window.requestAnimationFrame(() =>
@@ -183,10 +192,18 @@ export function ReportWorkspace({
         setStatus(`The deeper request for ${formatFindingId(findingId)} returned no new findings.`);
         return;
       }
-      setFindings((current) => [...current, ...newFindings]);
+      setFindings((current) => {
+        const known = new Set(current.map(({ record }) => record.finding_id));
+        return [
+          ...current,
+          ...newFindings
+            .filter(({ record }) => !known.has(record.finding_id))
+            .map(withEvidenceLabel),
+        ];
+      });
       selectFinding(newFindings[0].record.finding_id);
       setStatus(
-        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} added below ${formatFindingId(findingId)}.`,
+        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} available below ${formatFindingId(findingId)}. The guided budget still describes the original report. Download to keep these findings with this session.`,
       );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "The deeper-analysis request failed.");
@@ -198,7 +215,7 @@ export function ReportWorkspace({
     // GET /reviews/{id}/questions (ADR-0050 §10).
     downloadFile(
       `${report.review_id}-evidence-ledger.json`,
-      JSON.stringify({ ...report, findings, chat_transcript: transcript }, null, 2),
+      JSON.stringify(buildReportExport({ ...report, findings }, transcript, demo), null, 2),
       "application/json",
     );
     setStatus(
@@ -213,7 +230,7 @@ export function ReportWorkspace({
     // conversation; Print → PDF works from it (ADR-0050 §10).
     downloadFile(
       `${report.review_id}-report.html`,
-      buildReportHtml({ ...report, findings }, transcript, title),
+      buildReportHtml({ ...report, findings }, transcript, title, demo),
       "text/html",
     );
     setStatus("Report downloaded with this conversation.");
@@ -287,15 +304,15 @@ export function ReportWorkspace({
             }
           />
           <Metric
-            label="Needs action"
-            value={String(highCount)}
-            detail="High-risk findings to validate"
+            label="Rule results"
+            value={String(ruleCount)}
+            detail="Deterministic checks, not a severity count"
             emphasis
           />
           <Metric
-            label="Cost tier"
+            label="Configuration size"
             value={report.cost_estimate_tier}
-            detail="Not a dollar forecast"
+            detail="Resource-count band, not a bill estimate"
           />
           <Metric
             label="Assumptions"
@@ -303,6 +320,12 @@ export function ReportWorkspace({
             detail="Named and versioned"
           />
         </div>
+        {findings.some(({ record }) => record.parent_finding_id) && (
+          <p className="field-help">
+            The guided budget, diagram and chat context cover the original report. Added deeper
+            findings are shown in the technical view and downloads.
+          </p>
+        )}
       </div>
 
       <div className="report-content">
@@ -357,11 +380,21 @@ export function ReportWorkspace({
                     aria-pressed={filter === value}
                     onClick={() => setFilter(value)}
                   >
-                    {value === "all" ? `All (${findings.length})` : value}
+                    {value === "all"
+                      ? `All (${findings.length})`
+                      : value === "high"
+                        ? "Rule results"
+                        : value === "confirmed"
+                          ? "Reported facts"
+                          : value}
                   </button>
                 ),
               )}
             </div>
+            <p className="field-help">
+              Groups describe evidence type, not severity. A reported fact may describe a risk; a
+              rule result is not automatically high risk.
+            </p>
             <div className="finding-toolbar">
               <label htmlFor="finding-search">
                 Find findings
@@ -384,7 +417,7 @@ export function ReportWorkspace({
                   value={sort}
                   onChange={(event) => setSort(event.target.value as FindingSort)}
                 >
-                  <option value="priority">Risk: high to low</option>
+                  <option value="priority">Review order</option>
                   <option value="confidence">Confidence: high to low</option>
                   <option value="title">Title: A–Z</option>
                 </select>
@@ -478,7 +511,7 @@ export function ReportWorkspace({
             tabIndex={0}
           >
             <GuidedReport
-              report={report}
+              report={{ ...report, findings: report.findings.map(withEvidenceLabel) }}
               reviewerNotes={reviewerNotes}
               titled={demo !== null}
               onOpenTechnicalFinding={openTechnicalFinding}
@@ -514,15 +547,13 @@ export function ReportWorkspace({
           questionSeed={questionSeed}
           seedFindingId={seedFindingId}
           demoChat={demoChat}
+          reviewerNotes={demo?.reviewerNotes}
           onQuestionSeedConsumed={consumeQuestionSeed}
           onOpenFinding={openTechnicalFinding}
           onTranscriptChange={setTranscript}
           onDownload={downloadReport}
         />
-        <div className="snapshot-bar">
-          Snapshot · rules 2026.09.1 · corpus 2026-09-06 · prompt 1.4 where used · static review
-          only
-        </div>
+        <div className="snapshot-bar">{reportSnapshotLabel(findings)}</div>
       </div>
     </section>
   );

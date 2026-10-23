@@ -154,7 +154,11 @@ function costIntro(budget: BudgetSummary): string {
     budget.free_count > 0
       ? `${budget.free_count} of them ${budget.free_count === 1 ? "is a free settings change" : "are free settings changes"}; `
       : "";
-  return `${items} attention. ${free ? `${free}the` : "The"} recommended fixes add ${monthly} a month to the AWS bill and take ${effort}.`;
+  const cost =
+    budget.monthly_recommended === 0 && budget.recommended_has_unpriced
+      ? "have usage-dependent AWS costs"
+      : `add ${monthly} a month to the AWS bill`;
+  return `${items} attention. ${free ? `${free}the` : "The"} recommended fixes ${cost} and take ${effort}.`;
 }
 
 // The stakeholder view's headline text, built from the real report rather
@@ -170,10 +174,10 @@ export function stakeholderSummary(report: ReviewReport, titled = false): Stakeh
   const toReview = plural(review.length, "item", "items");
   const findingsIntro =
     high.length > 0
-      ? `${plural(high.length, "high-risk configuration gap was", "high-risk configuration gaps were")} found by deterministic checks` +
+      ? `${plural(high.length, "rule result was", "rule results were")} reported by deterministic checks` +
         (review.length > 0 ? `, plus ${toReview} to review` : "") +
-        ". Each points to specific settings to change; none of them alone means the architecture needs a redesign."
-      : "No high-risk configuration gaps were found by the deterministic checks." +
+        ". Review each result against the workload requirements and evidence before acting."
+      : "No rule results were reported by the deterministic checks; this is not a safety guarantee." +
         (review.length > 0
           ? ` ${toReview} to review ${review.length === 1 ? "is" : "are"} listed below.`
           : "");

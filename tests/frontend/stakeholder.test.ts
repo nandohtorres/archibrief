@@ -138,7 +138,7 @@ describe("stakeholder view: cost-first intro and report download", () => {
       "11 items need attention. 6 of them are free settings changes; the recommended fixes add $29.86 + usage a month to the AWS bill and take 2 to 5 working days of engineering.",
     );
     expect(stakeholderSummary(report).intro).toMatch(
-      /^6 high-risk configuration gaps/,
+      /^6 rule results were reported/,
     );
     const allFree = { ...merged, budget: budget({ free_count: 3 }) };
     expect(stakeholderSummary(allFree).intro).toBe(

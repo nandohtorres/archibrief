@@ -18,6 +18,8 @@ import {
   remainingLabel,
 } from "@/lib/chat";
 import { formatFindingId, type ReportSource } from "@/lib/workflow";
+import type { ReviewerNote } from "@/lib/demos";
+import { notesForTurn } from "@/lib/report-review";
 
 interface ReportQuestionsProps {
   reviewId: string;
@@ -29,6 +31,7 @@ interface ReportQuestionsProps {
   // Pregenerated suggested answers for a demo review, served as a static
   // file (scripts/pregenerate_demo_chats.py). Samples never call the API.
   demoChat?: DemoChat | null;
+  reviewerNotes?: ReviewerNote[];
   onQuestionSeedConsumed: () => void;
   onOpenFinding: (findingId: string) => void;
   onTranscriptChange: (turns: ChatTurn[]) => void;
@@ -71,6 +74,7 @@ export function ReportQuestions({
   questionSeed,
   seedFindingId,
   demoChat,
+  reviewerNotes = [],
   onQuestionSeedConsumed,
   onOpenFinding,
   onTranscriptChange,
@@ -265,6 +269,24 @@ export function ReportQuestions({
         </p>
       </div>
 
+      {mode === "sample" && reviewerNotes.length > 0 && (
+        <aside className="reviewer-note" aria-label="Saved answer corrections">
+          <strong>Saved answers may repeat errors in the original report.</strong>
+          <p>
+            These answers have not been regenerated after the hand review. Read the corrections
+            alongside them; cited text is not necessarily correct.
+          </p>
+          <details>
+            <summary>Review corrections for this demo</summary>
+            {reviewerNotes.map((note) => (
+              <p key={note.findingId}>
+                <strong>{note.verdict}:</strong> {note.note}
+              </p>
+            ))}
+          </details>
+        </aside>
+      )}
+
       {mode === "live" && suggested.length > 0 && (
         <div className="suggested-prompts" aria-label="Suggested questions">
           {suggested.map((s) => (
@@ -324,6 +346,7 @@ export function ReportQuestions({
             turn={turn}
             onOpenFinding={onOpenFinding}
             preview={mode === "fixture"}
+            reviewerNotes={notesForTurn(turn, reviewerNotes)}
           />
         ))}
         {pending && (
@@ -430,10 +453,12 @@ function ChatExchange({
   turn,
   onOpenFinding,
   preview,
+  reviewerNotes,
 }: {
   turn: ChatTurn;
   onOpenFinding: (findingId: string) => void;
   preview: boolean;
+  reviewerNotes: ReviewerNote[];
 }) {
   return (
     <>
@@ -448,6 +473,16 @@ function ChatExchange({
           {preview ? "ArchiBrief · preview" : `ArchiBrief · ${STATUS_LABELS[turn.status]}`}
         </span>
         <div>
+          {reviewerNotes.map((note) => (
+            <aside
+              className="reviewer-note"
+              aria-label="Cited finding correction"
+              key={note.findingId}
+            >
+              <strong>Reviewer note · {note.verdict}</strong>
+              <p>{note.note}</p>
+            </aside>
+          ))}
           {turn.answer.map((paragraph, index) => (
             <AnswerParagraph
               key={index}

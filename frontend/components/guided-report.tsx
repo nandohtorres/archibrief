@@ -63,6 +63,7 @@ function CostBoxes({ card }: { card: StakeholderCard }) {
         <span>Cost of not fixing</span>
         <strong>{inaction.headline}</strong>
         <p>{inaction.detail}</p>
+        {inaction.source_name && <p>Industry benchmark, not a predicted loss for this system.</p>}
         {inaction.method && (
           <p>
             <em>How to estimate it:</em> {inaction.method}
@@ -264,10 +265,10 @@ export function GuidedReport({
 
       {confirmedFindings.length > 0 && (
         <>
-          <h3 className="guided-section-heading">Confirmed from the code</h3>
+          <h3 className="guided-section-heading">Reported facts</h3>
           <p className="guided-section-note">
-            Settings read directly from the Terraform. Some are only context; check whether any of
-            them matter for your workload.
+            Findings classified as facts in the original review. This is not a safety rating; check
+            their evidence and any reviewer corrections.
           </p>
           <div className="guided-findings">
             {confirmedFindings.map((finding) => (

@@ -144,7 +144,7 @@ describe("stakeholder summary", () => {
         finding("confirmed", "Multi-AZ enabled"),
       ],
     });
-    expect(summary.intro).toMatch(/^2 high-risk configuration gaps were found/);
+    expect(summary.intro).toMatch(/^2 rule results were reported/);
     expect(summary.intro).toContain("plus 1 item to review");
     expect(summary.startWith).toEqual([
       "Database is public",
@@ -155,7 +155,7 @@ describe("stakeholder summary", () => {
   it("says plainly when there is nothing high-risk", () => {
     const summary = stakeholderSummary({ ...fixtureReport, findings: [] });
     expect(summary.intro).toBe(
-      "No high-risk configuration gaps were found by the deterministic checks.",
+      "No rule results were reported by the deterministic checks; this is not a safety guarantee.",
     );
     expect(summary.startWith).toEqual([]);
   });

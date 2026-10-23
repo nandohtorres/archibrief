@@ -90,6 +90,8 @@ test.describe("live critical path (mocked network)", () => {
           ...fixtureReport.findings[0].record,
           finding_id: "finding-e2e-deeper-001",
           review_id: REVIEW_ID,
+          parent_finding_id: fixtureReport.findings[0].record.finding_id,
+          finding: "Deeper explanation of bucket access",
         },
       };
       await route.fulfill({
@@ -116,7 +118,20 @@ test.describe("live critical path (mocked network)", () => {
 
     await expect(page.getByRole("button", { name: "Go deeper" }).first()).toBeVisible();
     await page.getByRole("button", { name: "Go deeper" }).first().click();
-    await expect(page.getByText(/deeper finding.*added below/)).toBeVisible();
+    await expect(page.locator("#finding-detail h3")).toHaveText(
+      "Deeper explanation of bucket access",
+    );
+    await expect(page.locator(".finding-list > li")).toHaveCount(fixtureReport.findings.length + 1);
+    await expect(page.getByRole("button", { name: "Go deeper", exact: true })).toHaveCount(0);
+    await expect(
+      page.getByText(/guided budget, diagram and chat context cover the original report/),
+    ).toBeVisible();
+    await page.locator(".finding-list button").first().click();
+    await page.getByRole("button", { name: "Go deeper", exact: true }).click();
+    await expect(page.locator("#finding-detail h3")).toHaveText(
+      "Deeper explanation of bucket access",
+    );
+    await expect(page.locator(".finding-list > li")).toHaveCount(fixtureReport.findings.length + 1);
   });
 
   test("pasted Terraform is uploaded as a tar holding main.tf", async ({ page }) => {

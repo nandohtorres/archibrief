@@ -1,5 +1,49 @@
 // Capabilities stay in this tab, out of URLs and persistent localStorage.
 type Capabilities = { readToken: string; writeToken: string; expiresAt: number };
+const ACTIVE_REVIEW_KEY = "archibrief.active-review";
+
+export function saveActiveReview(reviewId: string, apiBase: string, startedAt = Date.now()): void {
+  try {
+    window.sessionStorage.setItem(
+      ACTIVE_REVIEW_KEY,
+      JSON.stringify({ reviewId, apiBase, startedAt }),
+    );
+  } catch {
+    // The current in-memory review still works when browser storage is denied.
+  }
+}
+
+export function clearActiveReview(): void {
+  try {
+    window.sessionStorage.removeItem(ACTIVE_REVIEW_KEY);
+  } catch {
+    /* Storage unavailable. */
+  }
+}
+
+export function loadActiveReview(
+  apiBase: string | null,
+): { reviewId: string; startedAt: number } | null {
+  if (!apiBase || typeof window === "undefined") return null;
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(ACTIVE_REVIEW_KEY) ?? "null");
+    if (
+      !value ||
+      value.apiBase !== apiBase ||
+      typeof value.reviewId !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.reviewId) ||
+      typeof value.startedAt !== "number" ||
+      !Number.isFinite(value.startedAt) ||
+      value.startedAt <= 0 ||
+      value.startedAt > Date.now() ||
+      !reviewAccessHeaders(value.reviewId)["x-review-read-token"]
+    )
+      return null;
+    return { reviewId: value.reviewId, startedAt: value.startedAt };
+  } catch {
+    return null;
+  }
+}
 
 export function storeReviewAccess(reviewId: string, value: Capabilities): void {
   if (typeof window === "undefined") return;

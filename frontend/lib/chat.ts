@@ -5,6 +5,8 @@ import type {
   ReviewReport,
   StakeholderCard,
 } from "./contracts";
+import type { DemoEntry, ReviewerNote } from "./demos";
+import { evidenceLabel, notesForTurn, reportSnapshotLabel } from "./report-review";
 import { formatDollars, formatMonthly } from "./workflow";
 
 // Plain messages for the chat API's error codes (backend/lambdas/
@@ -127,7 +129,7 @@ function budgetHtml(budget: BudgetSummary): string {
   return `
 <p><strong>${escapeHtml(formatMonthly(budget.monthly_recommended, budget.recommended_has_unpriced))}/month</strong> more on the AWS bill for the recommended fixes${optional}. Engineering time: ${escapeHtml(budget.effort_label)}. Free fixes: ${budget.free_count} of ${budget.item_count}.</p>
 <table><thead><tr><th>Fix</th><th>Monthly cost</th><th>Effort</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table>
-<p class="meta">${unpriced} ${escapeHtml(budget.note)}</p>`;
+<p class="meta">${unpriced} ${escapeHtml(budget.note)} Effort is summed per finding; overlapping fixes may share work.</p>`;
 }
 
 function stakeholderHtml(card: StakeholderCard): string {
@@ -147,7 +149,11 @@ function stakeholderHtml(card: StakeholderCard): string {
   const method = card.inaction.method ? ` ${escapeHtml(card.inaction.method)}` : "";
   return `${plain}
       <p><strong>Cost to fix.</strong> ${escapeHtml(formatMonthly(card.fix.monthly_known, card.fix.has_unpriced))}/month: ${escapeHtml(lines)}. Engineering time: ${escapeHtml(card.fix.effort_label)}. <span class="meta">${escapeHtml(card.verdict_label)}</span></p>
-      <p><strong>Cost of not fixing.</strong> ${escapeHtml(card.inaction.headline)}. ${escapeHtml(card.inaction.detail)}${method}${source}</p>`;
+      <p><strong>Cost of not fixing.</strong> ${escapeHtml(card.inaction.headline)}. ${escapeHtml(card.inaction.detail)}${method}${source} Industry figures are context, not a predicted loss for this system.</p>`;
+}
+
+function reviewerNoteHtml(note: ReviewerNote): string {
+  return `<aside class="reviewer-note"><strong>Reviewer note · ${escapeHtml(note.verdict)}</strong><p>${escapeHtml(note.note)}</p></aside>`;
 }
 
 // One self-contained HTML file: inline CSS, no scripts, print-friendly
@@ -157,13 +163,19 @@ export function buildReportHtml(
   report: ReviewReport,
   transcript: ChatTurn[],
   title: string,
+  demo?: DemoEntry | null,
 ): string {
+  const notes = demo?.reviewerNotes ?? [];
   const findings = report.findings
     .map(
-      ({ record, presentation, stakeholder }) => `
+      ({ record, stakeholder }) => `
     <article class="finding">
       <h3>${escapeHtml(record.finding)}</h3>
-      <p class="meta">${escapeHtml(presentation.short_label)} · ${escapeHtml(record.category)} · ${escapeHtml(record.type)} · confidence ${Math.round(record.confidence * 100)}%</p>
+      <p class="meta">${escapeHtml(evidenceLabel(record.type))} · ${escapeHtml(record.category)} · ${escapeHtml(record.type)} · evidence confidence ${Math.round(record.confidence * 100)}% (heuristic, not correctness probability)</p>
+      ${notes
+        .filter((note) => note.findingId === record.finding_id)
+        .map(reviewerNoteHtml)
+        .join("")}
       <p><strong>Evidence.</strong> ${escapeHtml(record.evidence)}</p>
       <p><strong>Risk.</strong> ${escapeHtml(record.risk_impact)}</p>
       <p><strong>Recommendation.</strong> ${escapeHtml(record.recommendation)}</p>
@@ -192,6 +204,7 @@ export function buildReportHtml(
           (turn) => `
     <article class="turn">
       <p class="q"><strong>Q.</strong> ${escapeHtml(turn.question)}</p>
+      ${notesForTurn(turn, notes).map(reviewerNoteHtml).join("")}
       ${turn.answer.map((p) => paragraphHtml(p.text)).join("")}
       ${
         turn.answer.some((p) => p.citations.length)
@@ -233,8 +246,11 @@ export function buildReportHtml(
 <body>
 <h1>${escapeHtml(title)}</h1>
 <p class="meta">${escapeHtml(report.terraform_repo_ref)} · ${escapeHtml(report.created_at)} · review ${escapeHtml(report.review_id)}</p>
+<p class="meta">${escapeHtml(reportSnapshotLabel(report.findings))}</p>
+${demo ? `<h2>Demo source and review corrections</h2><p>${escapeHtml(demo.source)} · ${escapeHtml(demo.license)}</p><p>${escapeHtml(demo.disclaimer)}</p>${safeHref(demo.sourceUrl) ? `<p><a href="${escapeHtml(safeHref(demo.sourceUrl))}">Original source</a></p>` : ""}<p>Original generated text is preserved. Reviewer notes correct or qualify it, including saved answers. Annotation format: demo-review@1; historical review date not recorded.</p>${notes.map(reviewerNoteHtml).join("")}` : ""}
 <h2>Requirements used</h2>
 <ul>${baseline || "<li>None recorded.</li>"}</ul>
+${report.findings.some(({ record }) => record.parent_finding_id) ? "<p>Budget totals and guided explanations cover the original report. Added deeper findings are listed separately below and are not included in those totals.</p>" : ""}
 ${report.budget ? `<h2>What it costs to fix</h2>${budgetHtml(report.budget)}` : ""}
 <h2>Findings (${report.findings.length})</h2>
 ${findings}

@@ -95,6 +95,48 @@ test("upload uses the server ID, exact S3 version and separate capabilities", as
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
 });
 
+test("reload resumes the same review without a new upload or dispatch", async ({ page }) => {
+  await mockTurnstile(page);
+  await reservation(page, PUBLIC_URL);
+  let uploads = 0;
+  let dispatches = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/mock-api/uploads")) uploads++;
+    if (request.url().endsWith("/mock-api/reviews")) dispatches++;
+  });
+  await fill(page);
+  await page.getByRole("button", { name: "Start review" }).click();
+  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await page.getByRole("button", { name: "New review", exact: true }).click();
+  await page.getByRole("button", { name: "Resume last review in this tab" }).click();
+  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  expect(uploads).toBe(1);
+  expect(dispatches).toBe(1);
+  expect(page.url()).not.toContain("token");
+});
+
+test("a transient status failure retries the same accepted review", async ({ page }) => {
+  await mockTurnstile(page);
+  await reservation(page, PUBLIC_URL);
+  let reads = 0;
+  await page.route(`**/mock-api/reviews/${REVIEW_ID}`, async (route) => {
+    reads++;
+    await route.fulfill({
+      status: reads === 1 ? 503 : 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        reads === 1 ? { error: "busy" } : { ...fixtureReport, review_id: REVIEW_ID },
+      ),
+    });
+  });
+  await fill(page);
+  await page.getByRole("button", { name: "Start review" }).click();
+  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  expect(reads).toBe(2);
+});
+
 test("verification completes before bound upload admission", async ({ page }) => {
   await mockTurnstile(page);
   await reservation(page, PUBLIC_URL);

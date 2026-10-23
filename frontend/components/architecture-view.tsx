@@ -214,7 +214,7 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
 
         <div className="diagram-legend" aria-label="Diagram legend">
           <span>
-            <i className="architecture-badge high">n</i> High risk
+            <i className="architecture-badge high">n</i> Rule result
           </span>
           <span>
             <i className="architecture-badge review">n</i> Needs review
@@ -223,7 +223,7 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
             <i className="architecture-badge unknown">n</i> Unknown
           </span>
           <span>
-            <i className="architecture-badge confirmed">n</i> Confirmed fine
+            <i className="architecture-badge confirmed">n</i> Reported fact, not a safety rating
           </span>
           <span>Arrow: one resource references the other in the code</span>
         </div>
