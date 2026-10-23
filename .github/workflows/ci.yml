@@ -1,5 +1,5 @@
-# ArchiBrief CI. Advisory for now: these jobs are not yet required status
-# checks for merging.
+# ArchiBrief CI. All five jobs are required status checks for merging
+# into master.
 #
 # Third-party actions are pinned to full commit SHAs (tag in the trailing
 # comment) so a moved or compromised tag cannot change what CI runs.
