@@ -33,6 +33,7 @@ from backend.shared.clients import (
     S3VectorsClient,
 )
 from backend.shared.evaluation_budget import add_budget_options, admit_budget, budget_plan
+from backend.shared.evaluation_manifest import attach_manifest
 
 _VECTOR_BUCKET_NAME = os.environ.get("ARCHIBRIEF_VECTOR_BUCKET", "archibrief-dev-kb")
 _VECTOR_INDEX_NAME = os.environ.get("ARCHIBRIEF_VECTOR_INDEX", "archibrief-dev-kb-index")
@@ -94,6 +95,27 @@ def main() -> None:
     parser.add_argument("--confirm-paid", action="store_true")
     add_budget_options(parser)
     args = parser.parse_args()
+    attach_manifest(
+        args,
+        {
+            "component": [
+                {
+                    "workload_brief": _WORKLOAD_BRIEF,
+                    "retrieval_query": _RETRIEVAL_QUERY,
+                    "rule_findings": _RULE_FINDINGS,
+                }
+            ]
+        },
+        {
+            "model": _MODEL_ID,
+            "region": _REGION,
+            "vector_bucket": _VECTOR_BUCKET_NAME,
+            "vector_index": _VECTOR_INDEX_NAME,
+            "guardrail_id": _GUARDRAIL_ID,
+            "guardrail_version": _GUARDRAIL_VERSION,
+            "max_output_tokens": 8192,
+        },
+    )
     plan = {
         "case_ids": {"component": ["reason-node-diagnostic"]},
         "model": _MODEL_ID,

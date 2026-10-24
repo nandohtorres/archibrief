@@ -16,11 +16,12 @@ python -m backend.agent.validate_reason_node --plan
 python -m backend.corpus.validate_retrieval --plan --limit 1
 python -m backend.corpus.validate_retrieve_node --plan --limit 1
 python -m backend.corpus.validate_retrieve_node --plan
+python -m tests.backend.adversarial.evaluate_review --plan --case F06-dangerous
 ```
 
 These previews construct no AWS clients. They report selected case IDs and
 service-call bounds; model evaluators also report model/output limits and runner
-fingerprints. All five CLI entrypoints reject a paid invocation without both
+fingerprints. All six CLI entrypoints reject a paid invocation without both
 `--confirm-paid` and an explicit `--max-paid-calls N`, before constructing clients.
 The selected scope must fit that cap. The component diagnostic is a single case;
 the other commands accept `--limit`.
@@ -84,9 +85,29 @@ estimates still cover only their measured scope; inspect the call journal and
 
 These are **call/request controls, not a verified dollar ceiling**. Every plan
 and journal says `monetary_limit_enforced: false`. Complete service-specific
-pricing/billing admission, a total token policy, full version manifests and
-production-graph evaluation remain open. No report dollar amounts or engineering
+pricing/billing admission, input-token accounting and paid production-graph
+evaluation remain open. No report dollar amounts or engineering
 effort estimates are changed by these evaluation controls.
+
+`--max-generated-tokens` bounds aggregate requested generation. The selected
+case count times its model output limit must fit before clients are constructed;
+the meter reserves each actual generation's requested maximum before dispatch.
+Failures keep that reservation and SDK retries remain disabled. This covers
+generation output, not embedding/input/Guardrail charges or a verified bill.
+Without an explicit value, the conservative ceiling is planned service calls
+times 8192; previews also show the tighter selected-generation upper bound.
+
+All five previews/journals include the same start-of-run manifest: Git commit
+(ordinary checkout only), working source/case/fixture/rubric fingerprints, prompt
+versions, downstream finding-schema hash, dependency locks and installed versions,
+Python version and configured models, SDK endpoint Region, index and guards.
+The working hash captures uncommitted source too; a commit alone is insufficient.
+Missing local corpus files and unreadable sources are explicit. Configured Region
+does not establish cross-Region model execution. Live index verification stays
+false until independently checked. Actual query/merged-evidence records retain
+bounded chunk IDs, versions, hashes and timestamps, excluding source text/URLs;
+missing or invalid metadata remains unknown. This records evidence identity,
+not semantic support or independent source-content verification.
 
 ## Proposed first paid batch — requires separate authorization
 
@@ -172,3 +193,38 @@ journal continues to exclude raw content.
 P08 remains partial: paid integrated production evaluation, complete semantic
 grading, live citation/source verification and the full evaluator counterexample
 matrix are still open. Expanded Terraform extraction belongs to P11–P16.
+
+## Integrated local application evaluation
+
+`tests.backend.adversarial.evaluate_review` is the sixth guarded runner. Its
+offline preview lists required baseline fields. Paid execution additionally
+requires a fresh private output file, completed baseline answers and the same
+call/generation admission as the other runners. A baseline file maps frozen case
+IDs to answer objects; no required answers are fabricated. `--case` is repeatable
+for distinct cases, and `--limit` marks the run partial. Duplicate/unknown IDs
+are rejected. The upper bound is five service calls per case: two input screens,
+embedding, vector retrieval and one generation.
+
+After separate authorization, this mode can call real SDK clients through the
+same graph/report assembly used by free replay. It reuses archive/parse, local
+rules/facts/diagram helpers, the compiled preflight/retrieval/reasoning graph,
+verification/merging, schema validation, quality, audit-entry and ledger/report
+assembly. The ingestion input screen uses the production Guardrails check after
+local fixture preparation; it does not emulate upload admission or the entire
+Ingest Lambda transport. Local Trivy is the default; `--scanner rules`, missing
+local lexical corpus or an unconfigured guard labels the diagnostic partial.
+
+Every case is recorded before execution and updated atomically. One failure
+cannot erase later scheduled cases. Raw/malformed output and rejected findings
+are retained privately. Guardrail blocks and budget stops are distinct; no paid
+retry is automatic. Missing baselines cannot spend a preliminary Guardrail call.
+The contract gate exits nonzero for incomplete/rejected/blocked cases, without
+declaring a valid block a semantic model defect. Semantic verdicts stay unscored
+pending contextual review.
+
+Audit and report content are assembled locally, never persisted to live tables
+or buckets. API Gateway/WAF/capabilities, AgentCore network transport, durable
+workflows, deployed IAM and persistence remain separate integration checks.
+This adds the runnable local application path; it does not establish paid model
+quality, live source-content verification, a complete token/billing ceiling or
+deployment success. Only offline previews and fake SDK calls were run here.

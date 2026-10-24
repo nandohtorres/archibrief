@@ -73,6 +73,24 @@ def test_unbudgeted_methods_cannot_bypass_the_meter(tmp_path):
     assert calls == []
 
 
+def test_failed_generation_keeps_its_aggregate_token_reservation(tmp_path):
+    run = budget(tmp_path, max_generated_tokens=150)
+    calls = []
+
+    def fail(**kwargs):
+        calls.append(kwargs)
+        raise RuntimeError("PRIVATE-FAILURE-CANARY")
+
+    client = run.wrap(SimpleNamespace(converse_structured=fail), "reasoning")
+    with pytest.raises(RuntimeError):
+        client.converse_structured(user_content="PRIVATE-PROMPT", max_tokens=100)
+    with pytest.raises(EvaluationLimitReached, match="generated_token_limit"):
+        client.converse_structured(user_content="second", max_tokens=100)
+    assert len(calls) == 1
+    assert run.summary()["reserved_output_tokens"] == 100
+    assert "PRIVATE" not in run.path.read_text()
+
+
 def test_known_usage_is_allowlisted_and_never_includes_model_text(tmp_path):
     run = budget(tmp_path)
     client = run.wrap(

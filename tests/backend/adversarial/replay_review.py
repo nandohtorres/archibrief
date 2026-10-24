@@ -17,11 +17,14 @@ from copy import deepcopy
 from pathlib import Path
 
 from backend.agent.graph import compiled_graph
+from backend.agent.nodes.reason import GuardrailBlocked
+from backend.lambdas.audit.handler import build_audit_entry
 from backend.lambdas.finalize.handler import (
     assemble_baseline_answers,
     assemble_evidence_ledger,
     place_findings,
 )
+from backend.lambdas.rule_engine.handler import RULE_VERSION
 from backend.lambdas.validate.handler import validate_findings
 from backend.shared.analysis_quality import build_analysis_quality
 from backend.shared.report import build_review_report
@@ -43,6 +46,7 @@ class RecordedServices:
         self.screened_input: str | None = None
         self.model_input: dict | None = None
         self.model_response = None
+        self.guardrails_decisions = []
 
     def _call(self, name):
         self.calls.append(name)
@@ -63,6 +67,14 @@ class RecordedServices:
         allowed = self.transcript["guardrail_allowed"]
         if type(allowed) is not bool:
             raise ValueError("recorded guardrail outcome must be boolean")
+        self.guardrails_decisions.append(
+            {
+                "stage": "reason_input"
+                if "embedding" in self.calls
+                else "ingest_input",
+                "allowed": allowed,
+            }
+        )
         return allowed
 
     def converse_structured(self, **kwargs):
@@ -72,12 +84,26 @@ class RecordedServices:
         return self.model_response
 
 
-def replay_case(case: dict, transcript: dict, work: Path) -> dict:
-    services = RecordedServices(transcript)
+def replay_case(
+    case: dict,
+    transcript: dict,
+    work: Path,
+    *,
+    services=None,
+    mode="free-local-contract-replay",
+    scanner="rules",
+) -> dict:
+    recorded = services is None
+    if not recorded and mode == "free-local-contract-replay":
+        raise ValueError(
+            "injected service clients require an explicit integrated evaluation label"
+        )
+    services = RecordedServices(transcript) if recorded else services
     artifact = {
         "case": case["id"],
-        "mode": "free-local-contract-replay",
-        "paid_calls": 0,
+        "mode": mode,
+        "paid_calls": 0 if recorded else None,
+        "scanner_mode": scanner,
         "deployment_validated": False,
         "semantic_review": semantic_review(case["id"], load_semantic_oracle()),
         "semantic_verdict": "not_scored",
@@ -87,8 +113,13 @@ def replay_case(case: dict, transcript: dict, work: Path) -> dict:
     try:
         review_id = f"replay-{case['id']}"
         fixture = run_fixture(
-            case["fixture"], "rules", work, case["brief"], review_id=review_id
+            case["fixture"], scanner, work, case["brief"], review_id=review_id
         )
+        artifact["scanner"] = fixture.scanner
+        if transcript.get("screen_ingest") and not services.check(
+            case["brief"], source="INPUT"
+        ):
+            raise GuardrailBlocked("ingest_input")
         initial = {
             "review_id": review_id,
             "workload_brief": case["brief"],
@@ -103,6 +134,7 @@ def replay_case(case: dict, transcript: dict, work: Path) -> dict:
             "lexical_corpus_index": transcript.get("lexical_corpus_index", {}),
             "corpus_version": transcript.get("corpus_version", "unknown"),
             "max_tokens": 8192,
+            "deterministic_rule_version": RULE_VERSION,
         }
         result = compiled_graph().invoke(initial)
         artifact["preflight_fields"] = result.get("preflight_fields", {})
@@ -130,6 +162,15 @@ def replay_case(case: dict, transcript: dict, work: Path) -> dict:
         )
         ledger["analysis_quality"] = quality
         ledger["architecture"] = place_findings(fixture.graph, valid)
+        artifact["audit_entry"] = build_audit_entry(
+            {
+                **initial,
+                "model_id": services.model_id,
+                "guardrails_decisions": services.guardrails_decisions,
+            }
+        ).to_item()
+        artifact["audit_persisted"] = False
+        artifact["ledger_persisted"] = False
         artifact.update(
             attempt_outcome="returned",
             contract_passed=not rejected and not result.get("dropped_model_findings"),
@@ -144,8 +185,12 @@ def replay_case(case: dict, transcript: dict, work: Path) -> dict:
         )
     except Exception as exc:  # noqa: BLE001 - retain failure without echoing submitted error text
         artifact["error_kind"] = type(exc).__name__
+        if isinstance(exc, GuardrailBlocked):
+            artifact["attempt_outcome"] = "blocked"
     finally:
-        artifact["replayed_operations"] = services.calls
+        artifact["service_operations"] = services.calls
+        if recorded:
+            artifact["replayed_operations"] = services.calls
         artifact["screened_input"] = services.screened_input
         artifact["model_input"] = services.model_input
         artifact["raw_model_response"] = services.model_response

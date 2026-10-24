@@ -24,6 +24,7 @@ from backend.shared.evaluation_budget import (
     admit_budget,
     budget_plan,
 )
+from backend.shared.evaluation_manifest import attach_manifest
 
 _VECTOR_BUCKET_NAME = os.environ.get("ARCHIBRIEF_VECTOR_BUCKET", "archibrief-dev-kb")
 _VECTOR_INDEX_NAME = os.environ.get("ARCHIBRIEF_VECTOR_INDEX", "archibrief-dev-kb-index")
@@ -86,6 +87,19 @@ def main() -> int:
         parser.error("--limit must be positive")
     dev, holdout = EVAL_QUERIES[: args.limit], HOLDOUT_QUERIES[: args.limit]
     calls = 2 * (len(dev) + len(holdout))
+    attach_manifest(
+        args,
+        {
+            "dev": [query.model_dump(mode="json") for query in dev],
+            "holdout": [query.model_dump(mode="json") for query in holdout],
+        },
+        {
+            "region": _REGION,
+            "vector_bucket": _VECTOR_BUCKET_NAME,
+            "vector_index": _VECTOR_INDEX_NAME,
+            "top_k": _TOP_K,
+        },
+    )
     plan = {
         "partial": args.limit is not None,
         "case_ids": {"dev": [q.query_id for q in dev], "holdout": [q.query_id for q in holdout]},

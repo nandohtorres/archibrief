@@ -7,8 +7,55 @@ from backend.agent import validate_reasoning_eval as reasoning
 from backend.chat import chat_eval as chat
 from backend.corpus import validate_retrieval as retrieval
 from backend.corpus import validate_retrieve_node as merged
+from tests.backend.adversarial import evaluate_review as integrated
 
-ALL_RUNNERS = [reasoning, chat, component, retrieval, merged]
+ALL_RUNNERS = [reasoning, chat, component, retrieval, merged, integrated]
+
+
+@pytest.mark.parametrize("runner", ALL_RUNNERS)
+def test_all_previews_include_case_fingerprints_and_resolved_configuration(
+    runner, monkeypatch, capsys
+):
+    monkeypatch.setattr("sys.argv", ["eval", "--plan"])
+    runner.main()
+    plan = json.loads(capsys.readouterr().out)
+    manifest = plan["admission"]["manifest"]
+    assert manifest["version"] == "evaluation-manifest@1"
+    assert manifest["selected_set_sizes"] == {
+        name: len(ids) for name, ids in plan["case_ids"].items()
+    }
+    assert len(manifest["selected_cases_sha256"]) == 64
+    assert manifest["configuration"]["region"] == "us-east-1"
+    assert manifest["live_index_verified"] is False
+    assert plan["admission"]["max_generated_tokens"] > 0
+
+
+@pytest.mark.parametrize("runner", [reasoning, chat, component])
+def test_generation_scope_rejected_before_clients_or_paid_retrieval(
+    runner, monkeypatch, tmp_path
+):
+    def forbidden(*args, **kwargs):
+        pytest.fail("insufficient generation allowance constructed a client")
+
+    monkeypatch.setattr(runner, "BedrockEmbeddingClient", forbidden)
+    path = tmp_path / "calls.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "eval",
+            "--confirm-paid",
+            "--max-paid-calls",
+            "100",
+            "--max-generated-tokens",
+            "1",
+            "--run-log",
+            str(path),
+        ],
+    )
+    with pytest.raises(SystemExit) as error:
+        runner.main()
+    assert error.value.code == 2
+    assert not path.exists()
 
 
 @pytest.mark.parametrize("runner", [reasoning, chat])

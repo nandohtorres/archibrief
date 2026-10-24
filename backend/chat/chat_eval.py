@@ -48,6 +48,7 @@ from backend.shared.evaluation_budget import (
     admit_budget,
     budget_plan,
 )
+from backend.shared.evaluation_manifest import attach_manifest
 from backend.shared.sanitize import QuestionRejected, check_question
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -291,6 +292,21 @@ def main() -> int:
         sets["traps"] = load_cases()[: args.limit]
     calls_per_case = 3 + bool(args.guardrail_id) + bool(args.grounding_guardrail_id)
     planned_calls = calls_per_case * sum(len(cases) for cases in sets.values())
+    attach_manifest(
+        args,
+        sets,
+        {
+            "model": args.model,
+            "region": "us-east-1",
+            "vector_bucket": args.vector_bucket,
+            "vector_index": args.vector_index,
+            "guardrail_id": args.guardrail_id,
+            "guardrail_version": args.guardrail_version,
+            "grounding_guardrail_id": args.grounding_guardrail_id,
+            "grounding_guardrail_version": "1",
+            "max_output_tokens": 1500,
+        },
+    )
     metadata = {
         "partial": args.limit is not None,
         "case_ids": {name: [case["id"] for case in cases] for name, cases in sets.items()},

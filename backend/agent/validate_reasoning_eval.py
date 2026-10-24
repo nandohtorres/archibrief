@@ -49,6 +49,7 @@ from backend.shared.evaluation_budget import (
     admit_budget,
     budget_plan,
 )
+from backend.shared.evaluation_manifest import attach_manifest, evidence_manifest
 
 _VECTOR_BUCKET_NAME = os.environ.get("ARCHIBRIEF_VECTOR_BUCKET", "archibrief-dev-kb")
 _VECTOR_INDEX_NAME = os.environ.get("ARCHIBRIEF_VECTOR_INDEX", "archibrief-dev-kb-index")
@@ -85,12 +86,14 @@ def _run_brief(
         }
     )
     retrieved_chunks = retrieve_result["retrieved_chunks"]
+    evidence = evidence_manifest(retrieved_chunks)
 
     allowed = guardrails_client.check(brief.workload_brief, source="INPUT")
     if not allowed:
         return {
             "brief_id": brief.brief_id,
             "blocked_by_guardrails": True,
+            "retrieved_evidence": evidence,
         }
 
     corpus_version = retrieved_chunks[0]["corpus_version"] if retrieved_chunks else "unknown"
@@ -124,10 +127,12 @@ def _run_brief(
             "raw_model_findings": raw_findings,
             "accepted_model_findings": [],
             "raw_model_finding_count": len(raw_findings),
+            "retrieved_evidence": evidence,
         }
 
     result = score_reasoning(model_findings, brief)
     result["retrieved_chunk_count"] = len(retrieved_chunks)
+    result["retrieved_evidence"] = evidence
     result["raw_model_finding_count"] = len(raw_findings)
     result["dropped_findings"] = failures
     # Private diagnostic artifacts keep rejected/unknown/quoted output too.
@@ -219,6 +224,22 @@ def main() -> int:
     )
     selected = {name: briefs[: args.limit] for name, briefs in selected.items()}
     planned_calls = 4 * sum(len(briefs) for briefs in selected.values())
+    attach_manifest(
+        args,
+        {
+            name: [brief.model_dump(mode="json") for brief in briefs]
+            for name, briefs in selected.items()
+        },
+        {
+            "model": _MODEL_ID,
+            "region": _REGION,
+            "vector_bucket": _VECTOR_BUCKET_NAME,
+            "vector_index": _VECTOR_INDEX_NAME,
+            "guardrail_id": _GUARDRAIL_ID,
+            "guardrail_version": _GUARDRAIL_VERSION,
+            "max_output_tokens": _MAX_TOKENS,
+        },
+    )
     metadata = {
         "model": _MODEL_ID,
         "partial": args.limit is not None,

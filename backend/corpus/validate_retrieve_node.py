@@ -37,6 +37,7 @@ from backend.shared.evaluation_budget import (
     admit_budget,
     budget_plan,
 )
+from backend.shared.evaluation_manifest import attach_manifest, evidence_manifest
 from backend.shared.models.finding import Citation
 
 _VECTOR_BUCKET_NAME = os.environ.get("ARCHIBRIEF_VECTOR_BUCKET", "archibrief-dev-kb")
@@ -176,6 +177,7 @@ def run(queries: list[EvalQuery], budget: EvaluationBudget | None = None) -> lis
                 "citation_errors": errors,
                 "merged_chunk_ids": [c["chunk_id"] for c in chunks],
                 "merged_match_types": [c["match_type"] for c in chunks],
+                "retrieved_evidence": evidence_manifest(chunks),
                 "evidence_text_bytes": sum(len(c["text"].encode("utf-8")) for c in chunks),
                 "sample_chunk_ids": [c["chunk_id"] for c in chunks[:5]],
             }
@@ -224,6 +226,20 @@ def main() -> int:
     selected = {name: cases[: args.limit] for name, cases in selected.items()}
     queries = [query for cases in selected.values() for query in cases]
     calls = 2 * len(queries)
+    attach_manifest(
+        args,
+        {
+            name: [query.model_dump(mode="json") for query in cases]
+            for name, cases in selected.items()
+        },
+        {
+            "region": _REGION,
+            "vector_bucket": _VECTOR_BUCKET_NAME,
+            "vector_index": _VECTOR_INDEX_NAME,
+            "vector_top_k": 8,
+            "merge": "lexical-first-deduplicate-by-chunk-id",
+        },
+    )
     plan = {
         "partial": args.limit is not None or args.sample,
         "case_ids": {name: [q.query_id for q in cases] for name, cases in selected.items()},

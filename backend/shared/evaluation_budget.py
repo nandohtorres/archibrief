@@ -11,8 +11,11 @@ import argparse
 import json
 import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from backend.shared.evaluation_manifest import evidence_manifest
 
 METHODS = {
     "embed",
@@ -31,6 +34,11 @@ class EvaluationLimitReached(RuntimeError):
 
 
 def add_budget_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--max-generated-tokens",
+        type=int,
+        help="aggregate requested generation ceiling; failed calls keep their reservation",
+    )
     parser.add_argument(
         "--max-paid-calls",
         type=int,
@@ -55,10 +63,18 @@ def add_budget_options(parser: argparse.ArgumentParser) -> None:
 def budget_plan(
     args: argparse.Namespace, parser: argparse.ArgumentParser, planned_calls: int
 ) -> dict:
-    for name in ("max_paid_calls", "max_seconds", "max_request_bytes"):
+    for name in ("max_paid_calls", "max_seconds", "max_request_bytes", "max_generated_tokens"):
         value = getattr(args, name)
         if value is not None and value <= 0:
             parser.error(f"--{name.replace('_', '-')} must be positive")
+    manifest = getattr(args, "evaluation_manifest", None)
+    selected = sum(manifest["selected_set_sizes"].values()) if manifest else 0
+    output_per_case = manifest["configuration"].get("max_output_tokens", 0) if manifest else 0
+    planned_generation = selected * output_per_case
+    if args.max_generated_tokens is not None and planned_generation > args.max_generated_tokens:
+        parser.error(
+            "selected scope exceeds --max-generated-tokens; reduce --limit or deliberately raise the cap"
+        )
     return {
         "planned_service_calls_upper_bound": planned_calls,
         "max_paid_calls": args.max_paid_calls,
@@ -66,6 +82,9 @@ def budget_plan(
         "max_request_bytes": args.max_request_bytes,
         "max_model_output_tokens_per_call": 8192,
         "monetary_limit_enforced": False,
+        "max_generated_tokens": args.max_generated_tokens or planned_calls * 8192,
+        "planned_output_token_upper_bound": planned_generation,
+        "manifest": manifest,
     }
 
 
@@ -92,6 +111,7 @@ class EvaluationBudget:
     def __init__(self, plan: dict, path: Path, *, clock=time.monotonic):
         self.plan, self.path, self.clock = plan, path, clock
         self.started = clock()
+        self.started_at = datetime.now(UTC).isoformat()
         self.calls: list[dict] = []
         self.stop_reason: str | None = None
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -108,9 +128,13 @@ class EvaluationBudget:
         return {
             "version": "evaluation-admission@1",
             "limits": self.plan,
+            "started_at": self.started_at,
             "dispatched_calls": len(self.calls),
             "stop_reason": self.stop_reason,
             "calls": self.calls,
+            "reserved_output_tokens": sum(
+                row.get("reserved_output_tokens", 0) for row in self.calls
+            ),
         }
 
     def _deny(self, reason: str) -> None:
@@ -137,6 +161,14 @@ class EvaluationBudget:
             or not 0 < kwargs["max_tokens"] <= self.plan["max_model_output_tokens_per_call"]
         ):
             self._deny("output_token_limit")
+        reserved = kwargs["max_tokens"] if method.startswith("converse") else 0
+        total = sum(row.get("reserved_output_tokens", 0) for row in self.calls)
+        ceiling = self.plan.get(
+            "max_generated_tokens",
+            self.plan["max_paid_calls"] * self.plan["max_model_output_tokens_per_call"],
+        )
+        if total + reserved > ceiling:
+            self._deny("generated_token_limit")
         # An attempt remains counted on timeout, malformed output or interruption.
         # Persist before dispatch so a killed process leaves evidence of uncertainty.
         row = {
@@ -144,6 +176,8 @@ class EvaluationBudget:
             "outcome": "started",
             "request_bytes": size,
             "usage": None,
+            "reserved_output_tokens": reserved,
+            "started_at": datetime.now(UTC).isoformat(),
         }
         self.calls.append(row)
         self._save()
@@ -166,6 +200,10 @@ class EvaluationBudget:
             result = getattr(client, method)(*args, **kwargs)
             if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], dict):
                 capture({"usage": result[1]})
+            if method == "query_vectors" and isinstance(result, list):
+                row["retrieved_evidence"] = evidence_manifest(
+                    [item.get("metadata", {}) for item in result if isinstance(item, dict)]
+                )
             row["outcome"] = "returned"
             return result
         except BaseException as exc:
@@ -173,6 +211,7 @@ class EvaluationBudget:
             row["error_kind"] = type(exc).__name__
             raise
         finally:
+            row["finished_at"] = datetime.now(UTC).isoformat()
             if events is not None:
                 events.unregister("after-call", unique_id=identity)
             self._save()
