@@ -259,3 +259,13 @@ attempt and commits results with job completion; the browser recovers status on
 reload. Job status is separate from retained-output quality. See the
 [asynchronous contract](reviews/2026-10-23-async-deeper.md) and
 [report redesign review](reviews/2026-10-23-report-redesign.md).
+
+## Configuration observations and scope
+
+Ingest preserves only provider Region configuration and bounded local module
+bindings, never provider credentials. RuleEngine emits versioned typed facts and
+direct relationships with known/absent/unknown/unsupported states and conditional
+creation. Region/AZ details on diagrams use those same observations. The stored
+summary flows to reasoning, deeper reviews and report chat; sanitized scope
+limits accompany API reports and HTML/JSON exports. Chat discloses any detail it
+omits under its context limit. See [coverage and explicit limits](terraform-coverage.md).

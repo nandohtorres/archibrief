@@ -51,7 +51,7 @@ _MODEL_MAX_QUANTITY = 4
 # Bump whenever the model-facing contract changes (tool schema, input
 # fields, prompt rules), so a persisted finding can be traced to the exact
 # prompt that produced it (ADR-0039).
-PROMPT_VERSION = "reason_prompt@2026-10-23b"
+PROMPT_VERSION = "reason_prompt@2026-10-23c"
 
 _TOOL_NAME = "emit_findings"
 
@@ -94,6 +94,16 @@ results — never answer in plain text. You must:
   static slice, not a complete inventory of deployed resources. Respect
   truncation, coverage notices, conditional creation, unsupported modules
   and unresolved inputs. Omitted resources/settings are not proof of absence.
+  Versioned observations distinguish known configuration, inspected absence,
+  unknown values and unsupported expressions. A known observation is not a
+  runtime measurement. Respect analysis_coverage and per-resource omissions.
+  Provider aliases do not prove different Regions or accounts. Routes do not
+  prove packet reachability; URL authentication does not prove invocation
+  permission. Native backup retention differs from AWS Backup selection, and
+  derived copy retention is not an explicit destination override. Bucket names
+  do not establish replication. An invalid SQS mapping is a configuration
+  rejection, not evidence of running retries. Do not repeat deterministic
+  findings as new model insights.
   For common types, settings are extracted by application code. Never
   claim a listed setting is absent, unknown or "likely" anything other
   than its listed value. "not set (default: X)" means the setting is left

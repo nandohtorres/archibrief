@@ -120,6 +120,19 @@ def _trim(review_data: dict[str, Any]) -> dict[str, Any]:
     def size() -> int:
         return len(json.dumps(review_data, ensure_ascii=False))
 
+    summary = review_data.get("terraform_resources", {})
+    omitted_observations = 0
+    for resource in reversed(summary.get("resources", [])):
+        if size() <= REVIEW_BLOCK_CHARS:
+            break
+        if resource.pop("observations", None) is not None:
+            resource["observation_details_omitted"] = True
+            omitted_observations += 1
+    if omitted_observations:
+        summary["context_omitted_observation_resources"] = omitted_observations
+        summary["context_scope_note"] = (
+            "Some extracted observations were omitted from this chat context. Unshown settings are not evidence of absence."
+        )
     findings = review_data["findings"]
     for finding in reversed(findings):
         if size() <= REVIEW_BLOCK_CHARS:
@@ -133,6 +146,14 @@ def _trim(review_data: dict[str, Any]) -> dict[str, Any]:
         omitted += 1
     if omitted:
         review_data["omitted_findings"] = omitted
+    omitted_resources = 0
+    resources = summary.get("resources", [])
+    while resources and size() > REVIEW_BLOCK_CHARS - 256:
+        resources.pop()
+        omitted_resources += 1
+    if omitted_resources:
+        summary["truncated"] = True
+        summary["context_omitted_resources"] = omitted_resources
     return review_data
 
 
@@ -192,6 +213,7 @@ def build_review_context(ledger: dict[str, Any]) -> ReviewContext:
             "resources": resources,
             "truncated": bool(summary.get("truncated")),
             "note": _text(summary.get("note"), 800),
+            "analysis_coverage": summary.get("analysis_coverage"),
         }
         notices = summary.get("not_observable")
         if isinstance(notices, list):
@@ -230,4 +252,8 @@ def build_review_context(ledger: dict[str, Any]) -> ReviewContext:
         ctx.finding_citations.pop(f"C-{alias}", None)
     ctx.not_observable_aliases = [a for a in ctx.not_observable_aliases if a in shown]
     ctx.alternatives = [(a, o) for a, o in ctx.alternatives if a in shown]
+    ctx.resource_addresses = {
+        f"{entry['type']}.{entry['name']}"
+        for entry in ctx.review_data["terraform_resources"]["resources"]
+    }
     return ctx

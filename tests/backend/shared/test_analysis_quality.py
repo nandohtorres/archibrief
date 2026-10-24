@@ -6,8 +6,29 @@ from backend.chat.context import build_review_context
 from backend.shared.analysis_quality import (
     build_analysis_quality,
     public_analysis_quality,
+    public_analysis_scope,
     stage_counts,
 )
+
+
+def test_analysis_scope_is_allowlisted_and_never_claims_runtime_verification():
+    raw = {
+        "version": "terraform-observations@2026-10-23",
+        "facts_emitted": 10,
+        "omitted_resources": 2,
+        "omitted_items": 0,
+        "incomplete_resources": 1,
+        "runtime_verified": True,
+        "private": "PRIVATE-CANARY",
+    }
+    public = public_analysis_scope(raw)
+    assert public["truncated"] is True
+    assert public["runtime_verified"] is False
+    assert "PRIVATE-CANARY" not in json.dumps(public)
+    assert public_analysis_scope({**raw, "omitted_resources": True}) is None
+    assert public_analysis_scope(None) is None
+
+
 from backend.shared.report import build_review_report
 
 

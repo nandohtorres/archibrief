@@ -38,7 +38,7 @@ import { FindingDetail } from "./finding-detail";
 import { GuidedReport } from "./guided-report";
 import { ReportQuestions } from "./report-questions";
 import { AssessmentTag } from "./assessment-tag";
-import { qualityMessage } from "@/lib/analysis-quality";
+import { qualityMessage, scopeMessage } from "@/lib/analysis-quality";
 
 interface ReportWorkspaceProps {
   report: ReviewReport;
@@ -455,6 +455,12 @@ export function ReportWorkspace({
         <aside className="scope-note" aria-label="Analysis quality">
           <strong>Analysis quality</strong>
           <p>{qualityMessage(report.analysis_quality)}</p>
+          {report.analysis_scope && (
+            <p>
+              <strong>Configuration scope. </strong>
+              {scopeMessage(report.analysis_scope)}
+            </p>
+          )}
           {report.deeper_jobs?.map((job) => (
             <p key={job.job_id}>
               Deeper review of {formatFindingId(job.parent_finding_id)}: {job.status}.

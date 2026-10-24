@@ -190,6 +190,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/rule_engine/hcl_eval.py",
             "backend/shared/hcl_eval.py",
             "backend/lambdas/rule_engine/resource_summary.py",
+            "backend/shared/terraform_observations.py",
+            "backend/shared/configuration_checks.py",
             "backend/shared/__init__.py",
             "backend/shared/architecture_links.py",
             "backend/shared/clients/__init__.py",

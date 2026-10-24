@@ -43,7 +43,11 @@ def test_report_text_is_normalized_and_clipped(ledger):
     ledger["findings"][1]["evidence"] = "hid\u200bden " + "x" * 5000
     ledger["workload_brief"] = "ｂrief\u202e"
     ctx = build_review_context(ledger)
-    first = next(f for f in ctx.review_data["findings"] if f["type"] == "deterministic-rule-result")
+    first = next(
+        f
+        for f in ctx.review_data["findings"]
+        if f["type"] == "deterministic-rule-result"
+    )
     assert "\u200b" not in first["evidence"]
     assert len(first["evidence"]) <= 1200
     assert ctx.review_data["workload_brief"] == "brief"
@@ -115,3 +119,25 @@ def test_findings_trimmed_out_of_the_prompt_cannot_be_cited(ledger):
     shown = {f["ref"] for f in ctx.review_data["findings"]}
     assert ctx.review_data.get("omitted_findings")
     assert set(ctx.finding_ids) == shown
+
+
+def test_observation_detail_is_bounded_and_omission_is_disclosed(ledger):
+    ledger["terraform_resources"]["resources"] = [
+        {
+            "type": "aws_instance",
+            "name": f"worker{i}",
+            "settings": {},
+            "observations": {
+                "facts": [{"setting": "availability_zone", "value": "us-east-1a"}] * 200
+            },
+        }
+        for i in range(12)
+    ]
+    ctx = build_review_context(ledger)
+    summary = ctx.review_data["terraform_resources"]
+    assert len(json.dumps(ctx.review_data, ensure_ascii=False)) <= REVIEW_BLOCK_CHARS
+    assert summary["context_omitted_observation_resources"] > 0
+    assert "not evidence of absence" in summary["context_scope_note"]
+    assert ctx.resource_addresses == {
+        f"{e['type']}.{e['name']}" for e in summary["resources"]
+    }

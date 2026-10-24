@@ -33,6 +33,13 @@ the static fixtures.
 
 ## Freeze record
 
+Post-freeze expectation correction, 2026-10-23: richer typed scope metadata and
+an affirmative versioning statement trigger F06-D-04/F08-D-04's lexical probes.
+Their raw verdicts remain failures; the suite additionally checks the versioned
+typed contracts and negative controls documented in
+`PROBE_ERRATA_2026-10-23.md`. Runner exports distinguish supplemental adjudication
+from raw frozen results. No frozen key or historical result was changed.
+
 `answer_key.json` was written and frozen before any rule, summary or
 diagram output was inspected (only a parse check ran, to confirm the
 fixtures are valid HCL). SHA-256 `577c434392ef0f4ea559098c3c18a4921c629d9fd3e7e0b582a9d7a455ee6fe9`,

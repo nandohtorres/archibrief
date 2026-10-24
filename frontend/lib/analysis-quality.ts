@@ -1,4 +1,14 @@
-import type { AnalysisQuality } from "./contracts";
+import type { AnalysisQuality, ReviewReport } from "./contracts";
+
+export function scopeMessage(scope: NonNullable<ReviewReport["analysis_scope"]>): string {
+  return (
+    "These checks cover supported settings in the submitted configuration. They do not verify deployment, effective access or successful recovery." +
+    (scope.truncated
+      ? " Some details were omitted due to analysis limits; missing details do not establish absence."
+      : "") +
+    (scope.incomplete_resources ? " Some expressions could not be checked." : "")
+  );
+}
 
 export function qualityMessage(quality?: AnalysisQuality): string {
   const descriptions: Record<AnalysisQuality["outcome"], string> = {

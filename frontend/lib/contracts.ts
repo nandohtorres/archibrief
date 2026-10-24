@@ -199,6 +199,15 @@ export interface ReviewReport {
   baseline_answers: BaselineAnswer[];
   findings: ReportFinding[];
   analysis_quality?: AnalysisQuality;
+  analysis_scope?: {
+    version: "terraform-observations@2026-10-23";
+    facts_emitted: number;
+    omitted_resources: number;
+    omitted_items: number;
+    incomplete_resources: number;
+    truncated: boolean;
+    runtime_verified: false;
+  };
   report_projection?: {
     version: 1;
     children_available: boolean;

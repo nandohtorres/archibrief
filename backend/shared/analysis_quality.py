@@ -95,3 +95,22 @@ def public_analysis_quality(value: Any) -> dict[str, Any]:
             if isinstance(code, str) and code in REASONS
         ],
     }
+
+
+def public_analysis_scope(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or value.get("version") != "terraform-observations@2026-10-23":
+        return None
+    fields = ("facts_emitted", "omitted_resources", "omitted_items", "incomplete_resources")
+    if not all(
+        type(value.get(key)) in (int, Decimal)
+        and 0 <= value[key] <= 100000
+        and value[key] == int(value[key])
+        for key in fields
+    ):
+        return None
+    return {
+        "version": value["version"],
+        **{key: int(value[key]) for key in fields},
+        "truncated": bool(value["omitted_resources"] or value["omitted_items"]),
+        "runtime_verified": False,
+    }

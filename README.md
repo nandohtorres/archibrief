@@ -84,6 +84,10 @@ Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo
 
 ## Repository map
 
+[Static coverage and limits](docs/terraform-coverage.md) describe supported
+configuration observations and unknowns. Local redesigns remain subject to
+review and deployment; passing source tests does not establish live behavior.
+
 `backend/lambdas/` contains pipeline and API handlers; `backend/agent/` contains reasoning and its evaluation harnesses; `backend/chat/` contains the built chat path; `backend/corpus/` builds and evaluates retrieval. `frontend/` is the static web app, `tests/` holds unit tests, and `docs/adr/` records decisions.
 
 ## License

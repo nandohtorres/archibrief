@@ -11,6 +11,12 @@ from typing import Any
 
 from backend.shared.stakeholder.catalog import RECIPES, SEVERITIES
 
+CONFIGURATION_ASSESSMENTS = {
+    "placement_single_az": "high",
+    "invalid_sqs_mapping": "high",
+    "versioned_retention_gap": "medium",
+}
+
 
 def finding_assessment(finding: dict[str, Any]) -> dict[str, Any]:
     unknown = {
@@ -26,6 +32,13 @@ def finding_assessment(finding: dict[str, Any]) -> dict[str, Any]:
         # insufficient provenance for assigning a risk assessment.
         concern = finding.get("concern")
         recipe = RECIPES.get(concern) if isinstance(concern, str) else None
+        if isinstance(concern, str) and concern in CONFIGURATION_ASSESSMENTS:
+            return {
+                "version": 1,
+                "severity": CONFIGURATION_ASSESSMENTS[concern],
+                "action": "needed",
+                "source": "rule",
+            }
         if recipe is not None:
             return {
                 "version": 1,

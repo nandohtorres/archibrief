@@ -11,6 +11,14 @@ all four categories; mobile 93 performance, 100 in the rest).
 
 ## Free test results
 
+The local configuration-coverage continuation records a backend regression of
+1,209 passed / 5 skipped / 26 coverage-gap cases deselected, followed by focused
+relationship/public-scope checks. The separate frozen coverage selection has
+18 passing and 8 failing cases. These are local source/contract measurements;
+see [coverage reconciliation](terraform-coverage.md) and the
+[checkpoint ledger](reviews/2026-10-24-configuration-coverage.md). Historical
+tables below are preserved, not presented as a rolling score for the new branch.
+
 The counts below record earlier saved runs, not a rolling measurement of HEAD.
 The [bounded-fixes review ledger](reviews/2026-10-23-bounded-fixes.md) records
 that branch's later checks and their scope separately. A passing CI selection

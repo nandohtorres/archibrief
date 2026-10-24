@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from backend.shared.analysis_quality import public_analysis_quality
+from backend.shared.analysis_quality import public_analysis_quality, public_analysis_scope
 from backend.shared.assessment import finding_assessment
 from backend.shared.models.finding import Finding, FindingType
 from backend.shared.stakeholder.brief import build_stakeholder_view
@@ -98,6 +98,14 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
     }
     if view is not None:
         report["budget"] = view["budget"]
+    summary = ledger.get("terraform_resources")
+    scope = (
+        public_analysis_scope(summary.get("analysis_coverage"))
+        if isinstance(summary, dict)
+        else None
+    )
+    if scope:
+        report["analysis_scope"] = scope
     for field in ("report_projection", "deeper_reviews", "deeper_jobs"):
         if field in ledger:
             report[field] = ledger[field]

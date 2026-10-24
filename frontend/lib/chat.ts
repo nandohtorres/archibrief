@@ -9,7 +9,7 @@ import type { DemoEntry, ReviewerNote } from "./demos";
 import { evidenceLabel, notesForTurn, reportSnapshotLabel } from "./report-review";
 import { formatDollars, formatMonthly } from "./workflow";
 import { assessmentFor, assessmentLabel } from "./assessment";
-import { qualityMessage } from "./analysis-quality";
+import { qualityMessage, scopeMessage } from "./analysis-quality";
 
 // Plain messages for the chat API's error codes (backend/lambdas/
 // ask_question ERROR_MESSAGES). The server's own text is never shown, so
@@ -252,6 +252,7 @@ export function buildReportHtml(
 <p class="meta">${escapeHtml(report.terraform_repo_ref)} · ${escapeHtml(report.created_at)} · review ${escapeHtml(report.review_id)}</p>
 <p class="meta">${escapeHtml(reportSnapshotLabel(report.findings))}</p>
 <h2>Analysis quality</h2><p>${escapeHtml(qualityMessage(report.analysis_quality))}</p>
+${report.analysis_scope ? `<h2>Configuration scope</h2><p>${escapeHtml(scopeMessage(report.analysis_scope))}</p>` : ""}
 ${(report.deeper_jobs ?? []).map((job) => `<p>Deeper review of ${escapeHtml(job.parent_finding_id)}: ${escapeHtml(job.status)}. Saved findings reflect completed work only.</p>`).join("")}
 ${(report.deeper_reviews ?? []).map((run) => `<p>Deeper review of ${escapeHtml(run.parent_finding_id)}: ${escapeHtml(qualityMessage(run.analysis_quality))}</p>`).join("")}
 ${report.report_projection?.excluded_child_count ? "<p>Some saved deeper findings could not be included. Report completeness and totals are limited.</p>" : ""}

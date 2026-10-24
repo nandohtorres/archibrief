@@ -59,7 +59,11 @@ review ledger records its local verification separately from older results.
 
 This does not establish recall on arbitrary Terraform, deployed-account
 security, compliance, successful restores or a hard AWS billing ceiling.
-Full severity scoring, end-to-end analysis-quality metadata, durable deeper
-result assembly and broader static coverage remain explicit follow-up work.
+The local redesign branch now separates severity/action from evidence type,
+publishes output-quality counts, assembles durable child results and runs
+recoverable background deeper reviews. Its bounded observations cover placement,
+routing, retention, backup selection and entry-path declarations;
+[coverage and limits](terraform-coverage.md) separate those slices from unknown
+runtime behavior. These changes still require review and deployment.
 Fresh before/after and paired-workload model demonstrations require measured
 runs; no synthetic results are presented as evidence of those capabilities.

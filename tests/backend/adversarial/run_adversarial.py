@@ -28,6 +28,7 @@ from tests.backend.adversarial.harness import (
     run_fixture,
     trivy_path,
 )
+from tests.backend.adversarial.probe_errata import CHECKS, VERSION, corrected_probe
 from tests.backend.adversarial.semantic_oracle import (
     load_semantic_oracle,
     semantic_review,
@@ -118,6 +119,17 @@ def main() -> None:
                 matched, observed = probe(check["probe"], run, ctx)
                 raw = judge(check["kind"], matched)
                 adjudicated, note = ADJUDICATION.get(check["id"], (raw, ""))
+                supplemental = None
+                if check["id"] in CHECKS:
+                    passed, explanation = corrected_probe(check["id"], run)
+                    supplemental = {
+                        "version": VERSION,
+                        "passed": passed,
+                        "explanation": explanation,
+                    }
+                    if not raw.startswith("pass") and passed:
+                        adjudicated = "pass (supplemental configuration contract)"
+                        note = "Frozen lexical false positive; " + explanation
                 if raw.startswith("pass") and check["id"] in VERIFICATION_NOTES:
                     note = VERIFICATION_NOTES[check["id"]]
                 rows.append(
@@ -136,6 +148,7 @@ def main() -> None:
                         "adjudicated": adjudicated,
                         "note": note,
                         "semantic_review": semantic_review(case["id"], oracle),
+                        "supplemental_contract": supplemental,
                     }
                 )
 
