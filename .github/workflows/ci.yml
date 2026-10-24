@@ -81,6 +81,9 @@ jobs:
       - run: npm run test
         if: steps.has_app.outputs.present == 'true'
         working-directory: frontend
+      - run: npm run test:tooling
+        if: steps.has_app.outputs.present == 'true'
+        working-directory: frontend
 
   e2e:
     runs-on: ubuntu-latest
@@ -108,6 +111,7 @@ jobs:
           path: |
             frontend/playwright-report/
             frontend/test-results/
+            frontend/e2e-build-logs/
           retention-days: 7
 
   infra:
