@@ -94,6 +94,7 @@ def test_corrected_spread_az_fixture_is_not_flagged():
     "extra",
     [
         "noncurrent_version_expiration { noncurrent_days = 1 }",
+        "noncurrent_version_expiration { newer_noncurrent_versions = 5 }",
         'dynamic "noncurrent_version_expiration" { for_each = var.rules content { noncurrent_days = 1 } }',
     ],
 )

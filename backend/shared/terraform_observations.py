@@ -13,7 +13,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal, TypedDict
 
-from backend.shared.hcl_eval import is_created, resolve
+from backend.shared.hcl_eval import ResolutionBudgetExceeded, is_created
+from backend.shared.hcl_eval import resolve as static_resolve
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
 
 VERSION = "terraform-observations@2026-10-23"
@@ -32,6 +33,17 @@ REFERENCE = re.compile(
 )
 ABSENT = object()
 UNRESOLVED = object()
+
+
+def resolve(value, parsed, module=""):
+    if value is ABSENT or value is UNRESOLVED:
+        return value
+    if isinstance(value, str) and len(value) > 4096:
+        return UNRESOLVED
+    try:
+        return static_resolve(value, parsed, module, _budget=[8192])
+    except ResolutionBudgetExceeded:
+        return UNRESOLVED
 
 
 def boolean(value):
@@ -400,6 +412,16 @@ class ResourceObservations:
                     filtered |= any(key not in {"__is_block__"} for key in block)
             self.emit(
                 prefix + ".filter_scope", "restricted_or_unknown" if filtered else "all_objects"
+            )
+            noncurrent = read(rule, "noncurrent_version_expiration")
+            self.emit(
+                prefix + ".noncurrent_expiration_block",
+                True if isinstance(noncurrent, (dict, list)) and noncurrent else None,
+                state="absent"
+                if noncurrent is ABSENT
+                else "known"
+                if isinstance(noncurrent, (dict, list)) and noncurrent
+                else "unknown",
             )
             for path in (
                 "expiration.days",

@@ -260,7 +260,7 @@ def configuration_issues(summary):
                 for prefix in enabled
             )
             all_absent = bool(enabled) and all(
-                state(bundle, prefix + ".noncurrent_version_expiration.noncurrent_days") == "absent"
+                state(bundle, prefix + ".noncurrent_expiration_block") == "absent"
                 for prefix in enabled
             )
             if versioned and current and all_absent:

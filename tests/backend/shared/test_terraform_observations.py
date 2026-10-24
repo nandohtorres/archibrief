@@ -15,6 +15,18 @@ def fact(bundle, path):
     return next(item for item in bundle["facts"] if item["setting"] == path)
 
 
+def test_observation_resolution_budget_preserves_unknown_instead_of_expanding_large_values():
+    parsed = {
+        "resources": {
+            "aws_instance": {"worker": {"availability_zone": "${local.large}"}}
+        },
+        "locals": {"large": ["PRIVATE-CANARY"] * 10000},
+    }
+    observed = observations(parsed)["worker"]
+    assert fact(observed, "availability_zone")["state"] == "unknown"
+    assert "PRIVATE" not in json.dumps(observed)
+
+
 def test_provider_region_is_configuration_not_alias_or_account_guess(tmp_path):
     parsed = parse(
         tmp_path,

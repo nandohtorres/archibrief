@@ -37,6 +37,10 @@ serialized UTF-8 bytes and 256 facts, 16 expanded instances, 32 rule/reference
 items and 16 copy actions per rule. Omissions are counted; dynamic blocks are
 incomplete. Tokenizer counts remain explicitly unmeasured; byte bounds are not
 presented as an exact model token budget. Missing output never proves absence.
+Each observation resolution also has an 8,192-byte work budget and a 4,096-character
+expression bound; exhaustion stays unknown. A configured noncurrent-expiration
+block is distinct from an absent block, even when its day field is uninspected
+or incomplete.
 
 Reports and HTML/JSON exports include sanitized scope limits. Chat uses the
 same observations, removes detail under its context bound with explicit omission
