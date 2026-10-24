@@ -1,0 +1,93 @@
+{
+  "generated_at": "2026-10-24T12:30:55.918715+00:00",
+  "mode": "deterministic-static-example",
+  "rule_version": "rule_engine@2026-10-23",
+  "passed": true,
+  "paid_calls": 0,
+  "terraform_executed": false,
+  "model_quality_measured": false,
+  "source_sha256": {
+    "before.tf": "4b0dc0a33a300b4b9889e7b1f531ace098ef1c6ec65915ab27b97967e4ffc5b4",
+    "after.tf": "8ee1a44c0f9187390c24e7e0f1032e4c8c31ec2fb88cbb588101db8a1a005b0f"
+  },
+  "removed": [
+    {
+      "category": "recovery",
+      "concern": "versioned_retention_gap",
+      "evidence": "resource \"aws_s3_bucket_lifecycle_configuration\" \"documents\": bucket versioning is Enabled; enabled rules omit noncurrent expiration",
+      "finding": "Lifecycle 'documents' expires current objects without noncurrent-version expiration",
+      "recommendation": "If the retention requirement covers old versions, configure suitable noncurrent-version expiration and review backups, filters and legal holds separately.",
+      "risk_impact": "Current-object expiration creates delete markers while old versions remain. This declaration does not establish a physical deletion deadline.",
+      "type": "deterministic-rule-result"
+    }
+  ],
+  "added": [],
+  "unchanged_count": 3,
+  "before": [
+    {
+      "concern": "versioned_retention_gap",
+      "category": "recovery",
+      "type": "deterministic-rule-result",
+      "finding": "Lifecycle 'documents' expires current objects without noncurrent-version expiration",
+      "evidence": "resource \"aws_s3_bucket_lifecycle_configuration\" \"documents\": bucket versioning is Enabled; enabled rules omit noncurrent expiration",
+      "risk_impact": "Current-object expiration creates delete markers while old versions remain. This declaration does not establish a physical deletion deadline.",
+      "recommendation": "If the retention requirement covers old versions, configure suitable noncurrent-version expiration and review backups, filters and legal holds separately."
+    },
+    {
+      "concern": "s3_public_access",
+      "category": "exposure",
+      "type": "deterministic-rule-result",
+      "finding": "S3 bucket 'documents' has no aws_s3_bucket_public_access_block resource",
+      "evidence": "resource \"aws_s3_bucket\" \"documents\" found with no matching public access block",
+      "risk_impact": "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
+      "recommendation": "Attach aws_s3_bucket_public_access_block with all four settings enabled."
+    },
+    {
+      "concern": "s3_encryption",
+      "category": "encryption",
+      "type": "deterministic-rule-result",
+      "finding": "S3 bucket 'documents' has no server-side encryption configuration",
+      "evidence": "resource \"aws_s3_bucket\" \"documents\" found with no matching SSE configuration",
+      "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+      "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt."
+    },
+    {
+      "concern": "cloudtrail_present",
+      "category": "observability",
+      "type": "deterministic-rule-result",
+      "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+      "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+      "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+      "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled."
+    }
+  ],
+  "after": [
+    {
+      "concern": "s3_public_access",
+      "category": "exposure",
+      "type": "deterministic-rule-result",
+      "finding": "S3 bucket 'documents' has no aws_s3_bucket_public_access_block resource",
+      "evidence": "resource \"aws_s3_bucket\" \"documents\" found with no matching public access block",
+      "risk_impact": "Bucket contents may be exposed publicly if a future ACL/policy change is misconfigured.",
+      "recommendation": "Attach aws_s3_bucket_public_access_block with all four settings enabled."
+    },
+    {
+      "concern": "s3_encryption",
+      "category": "encryption",
+      "type": "deterministic-rule-result",
+      "finding": "S3 bucket 'documents' has no server-side encryption configuration",
+      "evidence": "resource \"aws_s3_bucket\" \"documents\" found with no matching SSE configuration",
+      "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+      "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt."
+    },
+    {
+      "concern": "cloudtrail_present",
+      "category": "observability",
+      "type": "deterministic-rule-result",
+      "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+      "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+      "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+      "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled."
+    }
+  ]
+}

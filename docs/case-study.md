@@ -65,5 +65,8 @@ recoverable background deeper reviews. Its bounded observations cover placement,
 routing, retention, backup selection and entry-path declarations;
 [coverage and limits](terraform-coverage.md) separate those slices from unknown
 runtime behavior. These changes still require review and deployment.
-Fresh before/after and paired-workload model demonstrations require measured
-runs; no synthetic results are presented as evidence of those capabilities.
+The [owned retention remediation example](examples/retention-remediation/README.md)
+has a measured custom-rule comparison: one targeted finding disappears and three
+others remain unchanged, with no model or Terraform execution. A paired-workload
+model demonstration still requires an approved measured run; no synthetic model
+result is presented as evidence of contextual accuracy.

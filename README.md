@@ -33,7 +33,7 @@ The [engineering case study](docs/case-study.md) explains the tradeoffs and a re
 - This is static review of the submitted slice, not inspection of deployed AWS resources, a complete dependency graph, a compliance certification, or a penetration test. Remote modules are neutralized before scanning.
 - Counts, expressions, missing modules, and omitted settings limit what the model can observe. The demo audits found three such gaps (resource counts, backup plans, snapshot settings); each was fixed in the resource summary, and the FEC demo was re-run after the count fix.
 - Trap tests cover their fixtures. Mocked tests do not measure live model quality, production IAM correctness, or deployed accessibility.
-- “Go deeper” is synchronous with a bounded agent timeout; long requests can fail.
+- This candidate runs “Go deeper” as a background job with reload recovery. That requires the reviewed workflow and worker deployment; source tests do not establish the live site's behavior.
 - Reviews are reachable for seven days, but deletion is asynchronous and backups last longer; there is no seven-day physical-deletion guarantee ([privacy](https://archibrief.dev/privacy.html)).
 
 ## Stack
@@ -87,6 +87,8 @@ Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo
 [Static coverage and limits](docs/terraform-coverage.md) describe supported
 configuration observations and unknowns. Local redesigns remain subject to
 review and deployment; passing source tests does not establish live behavior.
+The [release handoff](docs/release-readiness.md) records validation and remaining
+review, model-quality and deployed-integration gates.
 
 `backend/lambdas/` contains pipeline and API handlers; `backend/agent/` contains reasoning and its evaluation harnesses; `backend/chat/` contains the built chat path; `backend/corpus/` builds and evaluates retrieval. `frontend/` is the static web app, `tests/` holds unit tests, and `docs/adr/` records decisions.
 
