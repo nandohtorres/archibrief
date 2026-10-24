@@ -121,12 +121,21 @@ def _run_brief(
             "brief_id": brief.brief_id,
             "finding_validation_failed": True,
             "failures": failures,
+            "raw_model_findings": raw_findings,
+            "accepted_model_findings": [],
+            "raw_model_finding_count": len(raw_findings),
         }
 
     result = score_reasoning(model_findings, brief)
     result["retrieved_chunk_count"] = len(retrieved_chunks)
     result["raw_model_finding_count"] = len(raw_findings)
     result["dropped_findings"] = failures
+    # Private diagnostic artifacts keep rejected/unknown/quoted output too.
+    # Scoring only retained topics must not erase whole-output safety evidence.
+    result["raw_model_findings"] = raw_findings
+    result["accepted_model_findings"] = [
+        finding.model_dump(mode="json") for finding in model_findings
+    ]
     return result
 
 
@@ -309,6 +318,8 @@ def main() -> int:
         ]
         for r in trap_results:
             verdict = {True: "PASS", False: "FAIL", None: "BLOCKED/INVALID"}[r["trap_passed"]]
+            if r.get("whole_output_review", {}).get("status") == "requires_review":
+                verdict = "REVIEW REQUIRED"
             print(f"{verdict:16} {r['brief_id']}: {r['trick']}")
             if r.get("forbidden_phrase_hits"):
                 print(f"{'':16} took the bait: {r['forbidden_phrase_hits']}")
@@ -321,6 +332,7 @@ def main() -> int:
                 r.get("execution_error_kind")
                 or r.get("finding_validation_failed")
                 or r.get("trap_passed") is False
+                or r.get("whole_output_review", {}).get("status") == "requires_review"
                 for r in trap_results
             )
             else 0

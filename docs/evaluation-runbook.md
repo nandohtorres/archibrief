@@ -15,6 +15,7 @@ python -m backend.chat.chat_eval --plan --traps
 python -m backend.agent.validate_reason_node --plan
 python -m backend.corpus.validate_retrieval --plan --limit 1
 python -m backend.corpus.validate_retrieve_node --plan --limit 1
+python -m backend.corpus.validate_retrieve_node --plan
 ```
 
 These previews construct no AWS clients. They report selected case IDs and
@@ -25,6 +26,20 @@ The selected scope must fit that cap. The component diagnostic is a single case;
 the other commands accept `--limit`.
 `--limit N` selects at most N cases **per selected set**, and labels results
 partial. Invalid/nonpositive limits fail before any clients are created.
+
+Merged retrieval defaults to all 18 development and 14 holdout queries, reported
+separately. `--sample` explicitly selects the old five-query development
+diagnostic and marks it partial. The full preview budgets 64 service calls;
+it does not authorize those calls. `--out` writes structured per-set attempts,
+including failures, original merged ordering, match types and evidence text
+bytes. This measures evidence size without changing production ranking.
+
+The merged diagnostic exercises the actual `Citation` schema, requires nonempty
+provenance and text, parses retrieval timestamps, and checks snapshot hash shape.
+Empty retrievals or citation-contract failures exit nonzero. Hash shape is not
+source-content verification. An expected-chunk hit is not semantic support.
+An optional `--min-hit-rate 0..1` sets an explicit all-attempt threshold separately
+for each selected set; no new recall threshold is assumed by default.
 
 | Set | Full count | Source | Output-token limit per model call |
 |---|---:|---|---:|
@@ -108,3 +123,52 @@ being a full benchmark. Without `--traps`, `trap_pass_rate` is listed under
 does not establish trap coverage, semantic support or general model accuracy.
 Verified monetary admission and production-parity runners remain separate work;
 request limits and output-token limits are not a monetary ceiling.
+
+## Corrected oracle and free graph replay
+
+The frozen adversarial answer key, fixtures and saved historical scores remain
+unchanged. `tests/backend/adversarial/semantic_oracle.json` pins reviewed E01–E06
+criteria, relationships, ownership, uncertainty and forbidden claims. Eight
+supplementary tests check fixture premises and honest export behavior. New
+exports retain raw frozen verdicts and historical probe adjudication, with
+supplemental semantic status `not_scored`. The model rubric uses the corrections.
+
+With the existing backend dependencies (including pinned LangGraph), replay
+recorded service responses through archive extraction, parsing, deterministic
+rules and facts, the real Preflight → Retrieve → Reason graph, verification,
+schema validation, quality counters, ledger and report assembly:
+
+```powershell
+python -m tests.backend.adversarial.replay_review --case F06-dangerous --transcript private-recording.json --out private-fresh-result.json
+```
+
+The transcript is a JSON object with `baseline_answers`, `vector_matches`
+(recorded QueryVectors SDK result entries), boolean `guardrail_allowed`, and
+`model_response` (the structured tool input containing `findings`). Optional
+`lexical_corpus_index`, `retrieval_query` and `corpus_version` reuse the production
+contracts. Missing required baseline answers pause before retrieval/model work;
+none are fabricated. `fail_at` can replay a failure at `embedding`, `vectors`,
+`guardrail` or `model`. Existing output files are never overwritten.
+
+This mode constructs no AWS clients. It returns nonzero for pauses, failures or
+rejected findings and retains raw/malformed responses, checked inputs, actual
+model inputs and stage outcomes in the private artifact. Its `paid_calls: 0`
+and `deployment_validated: false` labels distinguish it from a model-quality
+benchmark. Recorded Guardrail outcomes do not measure the real service. Scanner,
+IAM, Step Functions, AgentCore transport, persistence and deployed behavior need
+separate integration checks. Production monetary and effort fields are assembled
+unchanged by existing functions; no pricing policy is redesigned here.
+
+The reasoning component runner now retains raw and accepted model findings,
+including all-rejected batches. Trap artifacts add `whole_output_review` across
+all raw fields, including quotes, unknowns, rejected items and nested plain text.
+A forbidden-phrase hit means contextual review is required, not that the model
+necessarily endorsed the text. The console shows `REVIEW REQUIRED` and returns
+nonzero while unresolved. No hits still means semantic correctness is unscored.
+Historical artifacts without raw output disclose the narrower retained-only
+scope. These private results contain submitted/model text; the separate call
+journal continues to exclude raw content.
+
+P08 remains partial: paid integrated production evaluation, complete semantic
+grading, live citation/source verification and the full evaluator counterexample
+matrix are still open. Expanded Terraform extraction belongs to P11–P16.

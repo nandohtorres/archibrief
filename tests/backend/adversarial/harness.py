@@ -73,7 +73,14 @@ class Run:
     scanner: dict | None
 
 
-def run_fixture(fixture: str, mode: str, work: Path, brief: str = "") -> Run:
+def run_fixture(
+    fixture: str,
+    mode: str,
+    work: Path,
+    brief: str = "",
+    *,
+    review_id: str = "adversarial",
+) -> Run:
     source = FIXTURES / fixture
     work.mkdir(parents=True, exist_ok=True)
     archive = work / "submission.tar"
@@ -93,13 +100,12 @@ def run_fixture(fixture: str, mode: str, work: Path, brief: str = "") -> Run:
         scanner = scan_files(str(scan_dir), sorted(scan_files_list), binary)
 
     findings = [
-        f.model_dump(mode="json")
-        for f in run_rules(parsed, "adversarial", scanner=scanner)
+        f.model_dump(mode="json") for f in run_rules(parsed, review_id, scanner=scanner)
     ]
     summary = build_resource_summary(parsed)
     graph = build_architecture(parsed, findings)
     report = build_review_report(
-        {"reviewId": "adversarial", "terraformRepoRef": fixture},
+        {"reviewId": review_id, "terraformRepoRef": fixture},
         {
             "findings": findings,
             "terraform_resources": summary,

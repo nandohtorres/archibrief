@@ -25,6 +25,7 @@ inputs are prepared but **NOT RUN**: [model_eval/SCORING.md](model_eval/SCORING.
 | `run_adversarial.py` | Writes `results/results.json`, `results/results_table.md` and `model_eval/inputs/` |
 | `semantic_oracle.json` | Versioned corrections E01–E06 with expected facts, relationships, owners, uncertainty, forbidden claims and primary sources |
 | `test_semantic_oracle.py` | Executable fixture-premise assertions; semantic prose grading remains unscored |
+| `replay_review.py` | Free recorded-response replay through the real graph and production report functions; see `docs/evaluation-runbook.md` |
 
 Family 10's cases are generated from the code's constants at test time,
 which the suite first checks against the frozen values. Families 1-9 use
