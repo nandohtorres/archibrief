@@ -41,13 +41,11 @@ def compute_presentation(finding: Finding) -> dict[str, str]:
 def stakeholder_view(findings: list[Finding], ledger: dict[str, Any]) -> dict | None:
     """The plain-language cards and budget summary, or None if building
     them fails: like the diagram, never worth failing a report over."""
+    # Every finding is priced, as before assessments existed: report money,
+    # effort and aggregation stay unchanged until they are redesigned.
     try:
         return build_stakeholder_view(
-            [
-                f
-                for f in findings
-                if finding_assessment(f.model_dump(mode="json"))["action"] != "unknown"
-            ],
+            findings,
             ledger.get("terraform_resources"),
             ledger.get("baseline_answers") or [],
         )

@@ -39,12 +39,10 @@ The public demo audit found incorrect/overstated claims about S3 encryption,
 CloudTrail and transfer costs. Reviewer notes corrected those claims in the UI,
 but the HTML download omitted the notes and a saved answer repeated them.
 
-The bounded-fixes branch makes corrections travel with HTML/JSON exports and
-saved answers. It preserves the original generated output, identifies stale
-answers and checks each demo's annotation propagation with unit/browser tests.
+Corrections now travel with HTML/JSON exports and saved answers. The fix
+preserves the original generated output, identifies stale answers and checks each demo's annotation propagation with unit/browser tests.
 It also replaces hardcoded snapshot versions and avoids presenting finding
-type as a safety rating. These changes require an approved deployment before
-they describe the live site's behavior. [Review ledger](reviews/2026-10-23-bounded-fixes.md)
+type as a safety rating. [Review ledger](reviews/2026-10-23-bounded-fixes.md)
 
 The lesson is that verification must cover the delivered artifact and its
 follow-ups, not just the first report view. Passing schema and quote checks
@@ -59,12 +57,12 @@ review ledger records its local verification separately from older results.
 
 This does not establish recall on arbitrary Terraform, deployed-account
 security, compliance, successful restores or a hard AWS billing ceiling.
-The local redesign branch now separates severity/action from evidence type,
+ArchiBrief now separates severity/action from evidence type,
 publishes output-quality counts, assembles durable child results and runs
 recoverable background deeper reviews. Its bounded observations cover placement,
 routing, retention, backup selection and entry-path declarations;
 [coverage and limits](terraform-coverage.md) separate those slices from unknown
-runtime behavior. These changes still require review and deployment.
+runtime behavior.
 The [owned retention remediation example](examples/retention-remediation/README.md)
 has a measured custom-rule comparison: one targeted finding disappears and three
 others remain unchanged, with no model or Terraform execution. A paired-workload

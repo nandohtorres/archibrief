@@ -194,6 +194,9 @@ class EvaluationBudget:
                     if key in USAGE_KEYS and type(value) is int and value >= 0
                 }
 
+        # The hook sees every call on this SDK client while registered, so usage
+        # is attributed correctly only because runners dispatch one call at a
+        # time. A concurrent runner needs per-request correlation first.
         if events is not None:
             events.register("after-call", capture, unique_id=identity)
         try:

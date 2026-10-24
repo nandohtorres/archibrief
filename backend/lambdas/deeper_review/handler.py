@@ -85,7 +85,11 @@ def handler(event: dict, _context: object) -> dict:
                 positive_setting("DEEPER_RESERVE_MICRO_USD", 200000),
             )
         except AdmissionDenied as exc:
-            return _response(409 if "operation" in exc.code else 429, {"error": exc.code})
+            # An earlier day's claim for this same finding was already paid;
+            # the job row was never written (crash between the two writes,
+            # or a failed pre-job synchronous attempt). Recover, don't recharge.
+            if exc.code != "operation_expired":
+                return _response(409 if "operation" in exc.code else 429, {"error": exc.code})
         now = int(time.time())
         job = {
             **key,

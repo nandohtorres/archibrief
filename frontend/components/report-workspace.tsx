@@ -82,11 +82,18 @@ export function ReportWorkspace({
   } | null>(null);
   const [selectedId, setSelectedId] = useState(report.findings[0]?.record.finding_id ?? "");
   const [status, setStatus] = useState("");
+  // Keyed on the active jobs themselves, so a poll that only refreshes the
+  // report keeps this loop running instead of tearing it down and restarting it.
+  const activeJobsKey = (report.deeper_jobs ?? [])
+    .filter((job) => job.status === "pending" || job.status === "running")
+    .map((job) => `${job.job_id}:${job.deadline}`)
+    .join(",");
   useEffect(() => {
-    const active =
-      report.deeper_jobs?.filter((job) => job.status === "pending" || job.status === "running") ??
-      [];
-    if (source !== "live" || active.length === 0) return;
+    if (source !== "live" || !activeJobsKey) return;
+    const active = activeJobsKey.split(",").map((entry) => {
+      const [job_id, deadline] = entry.split(":");
+      return { job_id, deadline: Number(deadline) };
+    });
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     function timedOut() {
@@ -133,6 +140,8 @@ export function ReportWorkspace({
             setSelectedId((current) =>
               current === finished.parent_finding_id ? child.record.finding_id : current,
             );
+        } else {
+          timer = setTimeout(poll, 2000);
         }
       } catch {
         if (!controller.signal.aborted) timer = setTimeout(poll, 2000);
@@ -144,7 +153,7 @@ export function ReportWorkspace({
       clearTimeout(timer);
       clearTimeout(deadlineTimer);
     };
-  }, [report.review_id, report.deeper_jobs, source]);
+  }, [report.review_id, activeJobsKey, source]);
   const [questionSeed, setQuestionSeed] = useState("");
   const [seedFindingId, setSeedFindingId] = useState("");
   const [transcript, setTranscript] = useState<ChatTurn[]>([]);

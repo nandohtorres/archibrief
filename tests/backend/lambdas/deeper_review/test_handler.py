@@ -223,6 +223,25 @@ def test_ambiguous_dispatch_is_recovered_with_the_same_execution_and_reservation
     assert env.calls == []
 
 
+def test_paid_claim_from_an_earlier_day_recovers_without_a_second_charge(env):
+    # A crash between the reservation and the job write leaves a paid claim
+    # with no job; a retry after UTC midnight must not dead-end or recharge.
+    assert api.handler(event(), None)["statusCode"] == 202
+    env.tables["findings"].delete_item(Key=job_key("r1", "base"))
+    claim_key = {"counterKey": "operation#r1#deeper:base"}
+    env.tables["counters"].update_item(
+        Key=claim_key,
+        UpdateExpression="SET #d = :d",
+        ExpressionAttributeNames={"#d": "day"},
+        ExpressionAttributeValues={":d": "19990101"},
+    )
+    spent = env.tables["counters"].scan()["Items"]
+    assert api.handler(event(), None)["statusCode"] == 202
+    assert job(env)["status"] == "pending"
+    assert env.tables["counters"].scan()["Items"] == spent
+    assert env.calls == []
+
+
 def test_invalid_write_capability_does_not_reserve_or_dispatch(env):
     request = event()
     request["headers"]["x-review-write-token"] = "x" * 43

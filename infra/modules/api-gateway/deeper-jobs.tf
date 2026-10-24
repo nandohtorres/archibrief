@@ -88,7 +88,9 @@ resource "aws_iam_role_policy" "deeper_workflow" {
 }
 
 resource "aws_cloudwatch_log_group" "deeper_workflow" {
-  name              = "/aws/vendedlogs/states/${var.name_prefix}-deeper-review"
+  # Same prefix as the review workflow's group; the deploy role may create
+  # only /aws/states/<prefix>-* and /aws/lambda/<prefix>-* log groups.
+  name              = "/aws/states/${var.name_prefix}-deeper-review"
   retention_in_days = 7
   tags              = var.tags
 }

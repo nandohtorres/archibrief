@@ -161,6 +161,17 @@ def test_report_carries_the_cards_and_budget():
     assert report["budget"]["item_count"] == 1
 
 
+def test_unassessed_findings_stay_in_the_budget():
+    # An older finding has no concern key, so its assessment is unknown, but
+    # report pricing and aggregation still treat it as they always have.
+    title = "No aws_cloudtrail resource found in the submitted Terraform"
+    ledger = {"findings": [_rule("f1", title).model_dump(mode="json")]}
+    report = build_review_report({"reviewId": "r1"}, ledger)
+    assert report["findings"][0]["assessment"]["action"] == "unknown"
+    assert report["findings"][0]["stakeholder"]["concern"] == "cloudtrail_present"
+    assert report["budget"]["item_count"] == 1
+
+
 def test_a_failing_view_never_fails_the_report(monkeypatch):
     def broken(*_args, **_kwargs):
         raise RuntimeError("boom")
