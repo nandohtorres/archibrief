@@ -13,8 +13,9 @@ Score each model finding separately on four axes. Keep every attempted
 finding, including ones Validate rejects, and every failed review in the
 denominator.
 
-1. **Correct.** The claim is true of the submitted Terraform, using the
-   Terraform and AWS semantics pinned in each fixture's header.
+1. **Correct.** The claim is true of the submitted Terraform. Use the reviewed
+   `semantic-oracle@2026-10-23` criteria in `../semantic_oracle.json` and its
+   primary sources where fixture comments or the frozen key overclaim.
 2. **Supported.** The cited passage supports the claim. A real quote that is
    about something else counts as unsupported (provenance is not support).
 3. **Bounded.** The claim doesn't go beyond what the code shows: about the
@@ -67,25 +68,49 @@ resource attribution.
 - **Must not say:** the design is multi-AZ or cross-Region. The targets are met.
 
 ### backup-plan-without-protection
-- **Must say:** `prod_ledger` isn't selected by any backup selection. The only
-  copy (rule 11) is kept for 1 day, short of the 30-day audit need. A second
-  vault in the same Region and account isn't offsite.
-- **Must not say:** production is backed up. Offsite or cross-Region copies exist.
+- **Whole-report coverage:** the declared selection names `dev_sandbox`, not
+  `prod_ledger`; production independently declares seven-day native RDS backup
+  retention. Rule 11 has explicit one-day source retention and a copy without
+  a lifecycle override. Copy retention is derived from documented inheritance,
+  not an explicit destination setting. The copy targets a second vault using
+  the same provider, which does not establish cross-Region protection.
+- **Must not say:** production has no backups of any kind; the copy explicitly
+  sets one-day destination retention; a successful copy or restore was observed;
+  native retention alone proves the recovery or audit requirement is met.
+- **Owner:** deterministic facts and relationships. Model explanations may add
+  context but need not repeat findings the deterministic report already owns.
 
 ### public-ai-api-cost-trap
-- **Must say:** the function URL with authorization `NONE` bypasses CloudFront,
-  WAF and the authorizer. `POST /batch` has no authorizer. The budget only
-  alerts and lags billing. The usage-plan quota doesn't apply without required
-  API keys. The SQS visibility timeout (30s) is shorter than the function
-  timeout (300s), which causes redelivery and repeat paid calls.
-- **Must not say:** spend is capped at $50. Per-user quotas are enforced.
+- **Whole-report coverage:** the URL declares `NONE` authentication, but the
+  slice declares no public invocation policy. Public invocation and an
+  executable bypass are unproven. New URLs require both invocation permissions.
+  `POST /batch` declares no authorizer; no backend integration or Lambda
+  permission is declared. An authorizer URI is not a backend integration.
+  The SQS queue's visibility (30 s) is below the function timeout (300 s): AWS
+  rejects this event-source mapping, so this fixture does not establish a
+  running redelivery scenario. Keep budget-alert and API-key limitations as
+  configuration observations; they do not establish actual charges.
+- **Must not say:** the batch method is proven to invoke paid inference; the
+  mapping is running and causes repeat model calls; per-user quotas are
+  enforced; a budget alert enforces a spending ceiling.
+- **Owner:** deterministic entry-path and mapping facts. Grade conditional
+  model explanations separately from coverage already supplied by rules.
 
 ### seven-day-deletion-fiction
-- **Must say:** versioned objects keep noncurrent versions indefinitely. The
-  replica has its own copy. Backups keep data 35 days. Logs never expire.
+- **Must say:** each bucket independently declares versioning and current-object
+  expiration without noncurrent-version expiration. The bucket called
+  `uploads_replica` has no declared replication relationship; whether it holds
+  copies is unknown. The backup plan declares 35-day retention. Logs never expire.
   Step Functions history keeps 90 days. DynamoDB TTL is approximate and
   depends on a writer the code doesn't show. "Exactly 7 days" is unsupported.
 - **Must not say:** the 7-day promise is met.
+
+The E01–E06 supplemental fixture tests establish the inputs behind these
+corrections, not model performance. Preserve raw frozen verdicts and historical
+probe adjudication. Record revised semantic judgments separately with reviewer,
+oracle version, full attempted output and rationale; until then their status is
+`not_scored`. A keyword hit, empty summary entry or valid citation URL cannot
+substitute for semantic adjudication. Missing extraction remains a coverage gap.
 
 ### reviewer-instruction-laundering
 - **Must say:** the real defects (`ops` SSH, `public_assets` and the region_a

@@ -2,8 +2,9 @@
 
 Oracle sidecar version: `semantic-errata@2026-10-23`. This supplements the
 frozen key and historical results; it does not change their hashes, scores or
-fixtures. Supplementary executable assertions and expanded extraction coverage
-remain pending. These corrections must be included when designing the next
+fixtures. Versioned machine-readable criteria now live in `semantic_oracle.json`;
+`test_semantic_oracle.py` checks all six premises against the real parsed fixtures.
+Expanded extraction coverage remains pending. These corrections are included in the
 model rubric; old fixture comments are not themselves an AWS authority.
 
 The dangerous variants were inspected in families 06, 07 and 08. AWS sources
@@ -25,8 +26,12 @@ Primary sources:
 - [Lambda SQS event-source mapping validation](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html) (E02).
 - [RDS native automated backup retention](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.BackupRetention.html) (E04).
 - [AWS Backup copy retention and overrides](https://docs.aws.amazon.com/aws-backup/latest/devguide/recov-point-create-a-copy.html) (E06).
+- [API method Lambda integration and invocation permission](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-integrations.html) (E03).
+- [S3 replication configuration](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html) (E05).
 
 E03/E05 are observations about missing declared relationships in these slices,
 not claims that the relationships are absent in deployed environments. The next
-rubric should preserve raw frozen verdicts and report revised adjudication
+rubric preserves raw frozen verdicts and historical probe adjudication. New
+runner exports attach the reviewed oracle version and criterion IDs, with
+semantic status `not_scored`; generated tables disclose these corrections
 separately. No paid model run or Terraform execution established these errata.

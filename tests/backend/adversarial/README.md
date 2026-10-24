@@ -23,6 +23,8 @@ inputs are prepared but **NOT RUN**: [model_eval/SCORING.md](model_eval/SCORING.
 | `test_evidence_overflow.py` | Family 10: every bound, one below, at and one above |
 | `test_post_freeze_probes.py` | Probes written after the frozen run to explain individual results; not scored |
 | `run_adversarial.py` | Writes `results/results.json`, `results/results_table.md` and `model_eval/inputs/` |
+| `semantic_oracle.json` | Versioned corrections E01–E06 with expected facts, relationships, owners, uncertainty, forbidden claims and primary sources |
+| `test_semantic_oracle.py` | Executable fixture-premise assertions; semantic prose grading remains unscored |
 
 Family 10's cases are generated from the code's constants at test time,
 which the suite first checks against the frozen values. Families 1-9 use
