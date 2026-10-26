@@ -337,12 +337,12 @@ export function ArchiBriefApp() {
       const id = demoIdFromUrl(window.location.href);
       let navigation = ++demoNavigation.current;
       if (!id) {
+        // Always land on the home page. A review saved in this tab is only
+        // offered there (the "Open your last review" button), never reopened
+        // on its own.
         const active = loadActiveReview(getApiBaseUrl());
-        if (active) {
-          setLiveReviewId(active.reviewId);
-          setProgressMode("live");
-          setScreen("progress");
-        } else setScreen("submission");
+        if (active) setLiveReviewId(active.reviewId);
+        setScreen("submission");
         setSampleLoading(false);
         return;
       }
@@ -519,7 +519,7 @@ export function ArchiBriefApp() {
                     }
                   }}
                 >
-                  Resume last review in this tab
+                  Open your last review
                 </button>
               </div>
             )}

@@ -237,12 +237,14 @@ test.describe("live critical path (mocked network)", () => {
     await page.getByRole("button", { name: "Go deeper", exact: true }).click();
     await expect(page.getByText(/running in the background/)).toBeVisible();
     await page.reload();
+    await page.getByRole("button", { name: "Open your last review" }).click();
     await expect(page.getByLabel("Analysis quality")).toContainText("running");
     saved = true;
     await expect(page.getByText(/Deeper analysis finished/)).toBeVisible({ timeout: 12000 });
     await page.getByRole("tab", { name: /Guided Report/ }).click();
     await expect(page.getByText("Durable deeper bucket assessment", { exact: true })).toBeVisible();
     await page.reload();
+    await page.getByRole("button", { name: "Open your last review" }).click();
     await expect(page.locator(".finding-list > li")).toHaveCount(fixtureReport.findings.length + 1);
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "Export ledger", exact: true }).click();
@@ -290,6 +292,7 @@ test.describe("live critical path (mocked network)", () => {
     await page.getByRole("button", { name: "Go deeper", exact: true }).click();
     await expect(page.getByText(/Deeper analysis could not finish/)).toBeVisible();
     await page.reload();
+    await page.getByRole("button", { name: "Open your last review" }).click();
     await expect(page.getByLabel("Analysis quality")).toContainText("failed");
     await expect(page.locator(".finding-list > li")).toHaveCount(fixtureReport.findings.length);
     expect(requested).toBe(1);
