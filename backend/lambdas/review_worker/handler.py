@@ -18,6 +18,7 @@ from botocore.exceptions import ClientError
 
 from backend.shared.admission import release_operation, request_digest
 from backend.shared.analysis_quality import build_analysis_quality
+from backend.shared.architecture_links import link_findings
 from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.retention import review_is_live
@@ -66,6 +67,27 @@ def _progress(table: DynamoDBClient, review_id: str, stage: str) -> str:
         ExpressionAttributeValues={":stage": stage},
     )
     return stage
+
+
+def _save_preview_diagram(
+    s3: S3Client, table: DynamoDBClient, review_id: str, graph: object
+) -> None:
+    """The report's diagram, saved as soon as RuleEngine builds it so the
+    progress screen can show it while the model runs. Best effort: a
+    failure here only means no preview."""
+    if not isinstance(graph, dict):
+        return
+    key = f"jobs/{review_id}/architecture.json"
+    try:
+        _write_json(s3, key, link_findings(graph, []))
+        table.update_item(
+            Key={"reviewId": review_id},
+            UpdateExpression="SET previewArchitectureKey = :key",
+            ConditionExpression="attribute_exists(reviewId)",
+            ExpressionAttributeValues={":key": key},
+        )
+    except Exception as exc:  # noqa: BLE001 - the review continues without a preview
+        print(json.dumps({"event": "preview_diagram_failed", "kind": type(exc).__name__}))
 
 
 def _fail(table: DynamoDBClient, review_id: str, code: str) -> dict:
@@ -167,6 +189,7 @@ def handler(event: dict, _context: object) -> dict:
                     "scanner": scanner,
                 },
             )
+            _save_preview_diagram(s3, table, review_id, rules.get("architecture"))
             state = {
                 "submission": submission,
                 "ingest": ingest,

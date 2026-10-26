@@ -340,3 +340,77 @@ test.describe("live critical path (mocked network)", () => {
     expect(requested).toBe(1);
   });
 });
+
+test("the progress screen appears at once and shows the diagram while the review runs", async ({
+  page,
+}) => {
+  await mockTurnstile(page);
+  let releaseUpload!: () => void;
+  const uploadHeld = new Promise<void>((resolve) => (releaseUpload = resolve));
+  await page.route("**/mock-api/uploads", async (route) => {
+    await uploadHeld;
+    await route.fulfill({
+      json: {
+        reviewId: REVIEW_ID,
+        archiveKey: `uploads/${REVIEW_ID}/archive.tar`,
+        uploadUrl: `${PUBLIC_URL}/mock-api/bound-upload`,
+        uploadMethod: "PUT",
+        uploadHeaders: { "Content-Type": "application/x-tar", "If-None-Match": "*" },
+        readToken: "r".repeat(43),
+        writeToken: "w".repeat(43),
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      },
+    });
+  });
+  await page.route("**/mock-api/bound-upload", (route) =>
+    route.fulfill({ status: 200, headers: { "x-amz-version-id": "v" }, body: "" }),
+  );
+  await page.route("**/mock-api/reviews", (route) =>
+    route.fulfill({ status: 202, json: { reviewId: REVIEW_ID, status: "pending" } }),
+  );
+  const preview = {
+    version: 1,
+    lanes: ["data"],
+    nodes: [
+      {
+        id: "aws_s3_bucket.audit_logs",
+        type: "aws_s3_bucket",
+        label: "s3 bucket",
+        name: "audit_logs",
+        module: "",
+        lane: "data",
+        details: [],
+        findings: [],
+      },
+    ],
+    edges: [],
+    account_findings: [],
+    truncated: false,
+  };
+  let finished = false;
+  await page.route(/\/mock-api\/reviews\/[^/]+$/, (route) =>
+    route.fulfill({
+      json: finished
+        ? { ...fixtureReport, review_id: REVIEW_ID }
+        : {
+            reviewId: REVIEW_ID,
+            status: "pending",
+            currentStage: "reasoning",
+            architecture: preview,
+          },
+    }),
+  );
+
+  await page.goto(PUBLIC_URL);
+  await fillSubmission(page);
+  await page.getByRole("button", { name: "Start review" }).click();
+  // Before the upload has even been answered.
+  await expect(page.getByText("Uploading your Terraform")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back to home" })).toHaveCount(0);
+  releaseUpload();
+  await expect(page.getByRole("heading", { name: "Your architecture" })).toBeVisible();
+  await expect(page.getByText("Reasoning over the architecture and evidence")).toBeVisible();
+  await expect(page.getByText(/GET \/reviews/)).toHaveCount(0);
+  finished = true;
+  await expect(page.locator("#report-heading")).toBeVisible({ timeout: 15_000 });
+});

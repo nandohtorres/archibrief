@@ -265,6 +265,9 @@ export interface PreflightFieldState {
 export interface ReviewStatusPointer {
   reviewId: string;
   status: string;
+  // The report's diagram, saved before the model runs (unvalidated here;
+  // see isArchitectureGraph).
+  architecture?: unknown;
   findingCount?: number;
   reportS3Key?: string;
   completedAt?: string;

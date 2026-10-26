@@ -3892,3 +3892,20 @@ h4 {
   background: var(--unknown-bg);
   color: var(--text);
 }
+
+/* The diagram on the progress screen, shown while the model runs. */
+.progress-architecture {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.progress-architecture h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.progress-architecture > p {
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--text-muted);
+}

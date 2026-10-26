@@ -59,6 +59,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/lambdas/review_worker/__init__.py",
             "backend/lambdas/review_worker/handler.py",
             "backend/shared/analysis_quality.py",
+            "backend/shared/architecture_links.py",
             "backend/shared/__init__.py",
             "backend/shared/clients/__init__.py",
             "backend/shared/admission.py",

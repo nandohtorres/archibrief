@@ -166,3 +166,43 @@ def test_returns_400_when_review_id_missing(monkeypatch):
     result = handler(_event(None), None)
 
     assert result["statusCode"] == 400
+
+
+def test_running_review_includes_the_saved_diagram_preview(monkeypatch):
+    graph = {
+        "version": 1,
+        "lanes": [],
+        "nodes": [],
+        "edges": [],
+        "account_findings": [],
+    }
+    item = {
+        "reviewId": "r1",
+        "status": "pending",
+        "currentStage": "reasoning",
+        "ttl": int(time.time()) + 86400,
+        "previewArchitectureKey": "jobs/r1/architecture.json",
+    }
+    _setup(
+        monkeypatch,
+        {"r1": item},
+        {"jobs/r1/architecture.json": json.dumps(graph).encode()},
+    )
+    body = json.loads(handler(_event("r1"), None)["body"])
+    assert body["architecture"] == graph
+    assert "previewArchitectureKey" not in body
+
+
+def test_preview_is_left_out_when_missing_or_pointing_elsewhere(monkeypatch):
+    base = {"reviewId": "r1", "status": "pending", "ttl": int(time.time()) + 86400}
+    _setup(
+        monkeypatch,
+        {"r1": {**base, "previewArchitectureKey": "jobs/r2/architecture.json"}},
+    )
+    assert "architecture" not in json.loads(handler(_event("r1"), None)["body"])
+    _setup(
+        monkeypatch,
+        {"r1": {**base, "previewArchitectureKey": "jobs/r1/architecture.json"}},
+    )
+    # Key recorded but the object is unreadable.
+    assert json.loads(handler(_event("r1"), None)["body"])["status"] == "pending"

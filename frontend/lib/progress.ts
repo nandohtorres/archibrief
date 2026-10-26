@@ -26,6 +26,12 @@ const TOTAL_MACRO_STAGES = 4;
 // Order matters only for documentation here — percent is computed from
 // each stage's own `index`, not array position.
 const STAGE_MAP: Record<string, StageInfo> = {
+  // Browser-side, before the review exists: the upload and submission.
+  uploading: {
+    index: 1,
+    macroLabel: "Preparing",
+    microLabel: "Uploading your Terraform",
+  },
   ingest: {
     index: 1,
     macroLabel: "Preparing",

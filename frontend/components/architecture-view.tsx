@@ -20,6 +20,8 @@ interface ArchitectureViewProps {
   onOpenFinding: (findingId: string) => void;
   // "Show on architecture" from a finding: select the resource it sits on.
   focus?: { findingId: string; at: number } | null;
+  // Shown while a review runs: the drawing only, without finding chrome.
+  preview?: boolean;
 }
 
 function topPriority(findingIds: string[], byId: Map<string, ReportFinding>): Severity | "unknown" {
@@ -68,7 +70,13 @@ function FindingButtons({
   );
 }
 
-export function ArchitectureView({ graph, findings, onOpenFinding, focus }: ArchitectureViewProps) {
+export function ArchitectureView({
+  graph,
+  findings,
+  onOpenFinding,
+  focus,
+  preview = false,
+}: ArchitectureViewProps) {
   const layout = useMemo(() => layoutArchitecture(graph), [graph]);
   const byId = useMemo(
     () => new Map(findings.map((finding) => [finding.record.finding_id, finding])),
@@ -108,22 +116,25 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
   return (
     <section
       className="report-section"
-      id="architecture-impact"
-      aria-labelledby="architecture-heading"
+      id={preview ? undefined : "architecture-impact"}
+      aria-labelledby={preview ? undefined : "architecture-heading"}
+      aria-label={preview ? "Architecture diagram" : undefined}
     >
-      <div className="section-heading-row">
-        <div>
-          <span className="section-kicker">System context</span>
-          <h2 id="architecture-heading">Architecture</h2>
-          <p>
-            What the submitted Terraform creates, how its resources reference each other, and where
-            each finding sits. Select a resource to see its findings.
-          </p>
+      {!preview && (
+        <div className="section-heading-row">
+          <div>
+            <span className="section-kicker">System context</span>
+            <h2 id="architecture-heading">Architecture</h2>
+            <p>
+              What the submitted Terraform creates, how its resources reference each other, and
+              where each finding sits. Select a resource to see its findings.
+            </p>
+          </div>
+          <span className="concept-label">
+            {layout.nodes.length} resources · {layout.edges.length} links
+          </span>
         </div>
-        <span className="concept-label">
-          {layout.nodes.length} resources · {layout.edges.length} links
-        </span>
-      </div>
+      )}
 
       <div className="architecture-shell">
         <p className="diagram-swipe-hint" aria-hidden="true">
@@ -212,18 +223,22 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
         </div>
 
         <div className="diagram-legend" aria-label="Diagram legend">
-          <span>
-            <i className="architecture-badge high">n</i> Rule result
-          </span>
-          <span>
-            <i className="architecture-badge review">n</i> Needs review
-          </span>
-          <span>
-            <i className="architecture-badge unknown">n</i> Unknown
-          </span>
-          <span>
-            <i className="architecture-badge confirmed">n</i> Reported fact, not a safety rating
-          </span>
+          {!preview && (
+            <>
+              <span>
+                <i className="architecture-badge high">n</i> Rule result
+              </span>
+              <span>
+                <i className="architecture-badge review">n</i> Needs review
+              </span>
+              <span>
+                <i className="architecture-badge unknown">n</i> Unknown
+              </span>
+              <span>
+                <i className="architecture-badge confirmed">n</i> Reported fact, not a safety rating
+              </span>
+            </>
+          )}
           <span>Arrow: one resource references the other in the code</span>
         </div>
       </div>
@@ -248,7 +263,7 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
                   .join(", ")}
               </p>
             )}
-            {selected.findings.length > 0 ? (
+            {preview ? null : selected.findings.length > 0 ? (
               <FindingButtons ids={selected.findings} byId={byId} onOpenFinding={onOpenFinding} />
             ) : (
               <p className="architecture-meta">No findings name this resource.</p>
@@ -256,14 +271,16 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
           </>
         ) : (
           <p className="architecture-meta">
-            {placedCount > 0
-              ? "Select a resource with a badge to list the findings about it."
-              : "No finding names a specific resource in this review."}
+            {preview
+              ? "Select a resource to see how it's configured and what it links to."
+              : placedCount > 0
+                ? "Select a resource with a badge to list the findings about it."
+                : "No finding names a specific resource in this review."}
           </p>
         )}
       </div>
 
-      {graph.account_findings.length > 0 && (
+      {!preview && graph.account_findings.length > 0 && (
         <div
           className="architecture-account"
           data-focused={

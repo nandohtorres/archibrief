@@ -48,7 +48,7 @@ import type {
   ReviewStatusPointer,
   SubmitReviewRequest,
 } from "@/lib/contracts";
-import type { ArchitectureGraph } from "@/lib/architecture";
+import { isArchitectureGraph, type ArchitectureGraph } from "@/lib/architecture";
 import { FEATURED_DEMO_ID, fetchDemo, fetchDemoIndex, type DemoEntry } from "@/lib/demos";
 import {
   REVIEW_DEADLINE_MS,
@@ -83,6 +83,8 @@ export function ArchiBriefApp() {
   const [recent, setRecent] = useState<RecentReview[]>([]);
   const [liveCurrentStage, setLiveCurrentStage] = useState<string | null>(null);
   const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
+  // The diagram the backend saved before the model ran, shown while waiting.
+  const [liveArchitecture, setLiveArchitecture] = useState<ArchitectureGraph | null>(null);
   const [clarifyFields, setClarifyFields] = useState<string[]>([]);
   const [clarifySubmitting, setClarifySubmitting] = useState(false);
   const [clarifyError, setClarifyError] = useState<string | null>(null);
@@ -151,6 +153,8 @@ export function ArchiBriefApp() {
         if (cancelled) return;
         failures = 0;
         setLiveCurrentStage((result as ReviewStatusPointer).currentStage ?? null);
+        const preview = (result as ReviewStatusPointer).architecture;
+        if (isArchitectureGraph(preview)) setLiveArchitecture(preview);
         if (result.status === "complete") {
           setReport(result as ReviewReport);
           setReportSource("live");
@@ -246,6 +250,12 @@ export function ArchiBriefApp() {
     }
 
     setSubmitting(true);
+    // Show the progress screen at once; the upload and submission run behind it.
+    setLiveReviewId(null);
+    setLiveArchitecture(null);
+    setLiveCurrentStage("uploading");
+    setProgressMode("live");
+    setScreen("progress");
     try {
       const digest = await archiveDigest(values.archiveFile);
       const fingerprint = JSON.stringify([digest, values.terraformRepoRef, values.workloadBrief]);
@@ -281,8 +291,9 @@ export function ArchiBriefApp() {
       setScreen("progress");
     } catch (error) {
       if (error instanceof ApiRequestError && (error.status === 403 || error.status === 429)) {
-        // Verification and daily limits: the message says what to do next.
+        // Verification and daily limits: back to the form, which says what to do next.
         setSubmitNotice(error.message);
+        setScreen("submission");
         return;
       }
       setFailureMessage(
@@ -353,6 +364,7 @@ export function ArchiBriefApp() {
     if (active?.reviewId !== reviewId) saveActiveReview(reviewId, getApiBaseUrl()!);
     setLiveReviewId(reviewId);
     setLiveCurrentStage(null);
+    setLiveArchitecture(null);
     setProgressMode("live");
     setScreen("progress");
     if (updateLocation) setReviewLocation(reviewId);
@@ -571,12 +583,13 @@ export function ArchiBriefApp() {
             onContinue={handlePreflightComplete}
           />
         )}
-        {screen === "progress" && progressMode === "live" && liveReviewId && (
+        {screen === "progress" && progressMode === "live" && (
           <LiveProgressStep
-            reviewId={liveReviewId}
+            started={Boolean(liveReviewId)}
             currentStage={liveCurrentStage}
             elapsedSeconds={liveElapsedSeconds}
-            onCancel={() => setScreen("submission")}
+            architecture={liveArchitecture}
+            onCancel={goHome}
           />
         )}
         {screen === "progress" && progressMode === "fixture" && (
