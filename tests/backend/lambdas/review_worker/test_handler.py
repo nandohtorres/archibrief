@@ -1,4 +1,5 @@
 import json
+import os
 from types import SimpleNamespace
 
 import boto3
@@ -265,3 +266,77 @@ def test_agent_service_error_logs_stage_and_code_without_content(
         "kind": "ClientError",
         "code": "RuntimeClientError",
     }
+
+
+GRAPH = {
+    "version": 1,
+    "lanes": ["data"],
+    "nodes": [
+        {
+            "id": "aws_s3_bucket.logs",
+            "type": "aws_s3_bucket",
+            "name": "logs",
+            "label": "S3 bucket",
+            "lane": "data",
+            "details": [],
+            "findings": [],
+        }
+    ],
+    "edges": [],
+    "account_findings": [],
+    "truncated": False,
+}
+
+
+def test_diagram_is_saved_for_the_progress_screen_before_the_model_runs(
+    prepared, monkeypatch
+):
+    review_id, s3, _calls, _replies, agent_calls = prepared
+    original = worker._invoke
+    seen_before_model = []
+
+    def stage(name, payload):
+        result = original(name, payload)
+        return {**result, "architecture": GRAPH} if name == "rule_engine" else result
+
+    def invoke(**kwargs):
+        seen_before_model.append(
+            s3.get_object(Bucket="reports", Key=f"jobs/{review_id}/architecture.json")
+        )
+        return {"status": "complete", "findings": [], "preflight_fields": {}}
+
+    monkeypatch.setattr(worker, "_invoke", stage)
+    monkeypatch.setattr(
+        worker,
+        "AgentCoreRuntimeClient",
+        lambda **kwargs: SimpleNamespace(invoke=invoke),
+    )
+    assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
+    assert len(seen_before_model) == 1
+    saved = json.loads(seen_before_model[0]["Body"].read())
+    assert [node["id"] for node in saved["nodes"]] == ["aws_s3_bucket.logs"]
+    assert saved["nodes"][0]["findings"] == []
+    item = (
+        boto3.resource("dynamodb")
+        .Table(os.environ["REVIEWS_TABLE_NAME"])
+        .get_item(Key={"reviewId": review_id})["Item"]
+    )
+    assert item["previewArchitectureKey"] == f"jobs/{review_id}/architecture.json"
+
+
+def test_a_failed_diagram_preview_does_not_fail_the_review(
+    prepared, monkeypatch, capsys
+):
+    review_id, *_ = prepared
+    original = worker._invoke
+    monkeypatch.setattr(
+        worker,
+        "_invoke",
+        lambda name, payload: (
+            {**original(name, payload), "architecture": {"nodes": "not-a-graph"}}
+            if name == "rule_engine"
+            else original(name, payload)
+        ),
+    )
+    assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
+    assert "preview_diagram_failed" in capsys.readouterr().out

@@ -1,24 +1,24 @@
+import type { ArchitectureGraph } from "@/lib/architecture";
 import { describeProgress } from "@/lib/progress";
+import { ArchitectureView } from "./architecture-view";
 
 interface LiveProgressStepProps {
-  reviewId: string;
+  // False while the archive is still uploading and the review doesn't exist yet.
+  started: boolean;
   currentStage: string | null;
   elapsedSeconds: number;
+  // The diagram RuleEngine built, available before the model finishes.
+  architecture: ArchitectureGraph | null;
   onCancel: () => void;
 }
 
-// Deliberately NOT the raw internal pipeline status — this project's own
-// stage names (Ingest/RuleEngine/InvokeAgent/...) stay internal.
-// describeProgress() (lib/progress.ts) maps the real "currentStage"
-// value, written directly by the pipeline's RecordStage* Step Functions
-// states, to a small set of generic macro-stage labels plus a friendlier
-// micro-step description and a percent-complete figure. Still honest
-// about being real, polled status (not a simulated fixture) — just
-// abstracted rather than exposing internal structure.
+// describeProgress() (lib/progress.ts) maps the pipeline's real
+// "currentStage" to a few generic steps; internal stage names stay internal.
 export function LiveProgressStep({
-  reviewId,
+  started,
   currentStage,
   elapsedSeconds,
+  architecture,
   onCancel,
 }: LiveProgressStepProps) {
   const progress = describeProgress(currentStage);
@@ -26,13 +26,9 @@ export function LiveProgressStep({
   return (
     <section className="flow-card progress-card" aria-labelledby="live-progress-heading">
       <div className="step-kicker">
-        Review running · Step {progress.stageIndex} of {progress.totalStages}
+        Step {progress.stageIndex} of {progress.totalStages}
       </div>
       <h1 id="live-progress-heading">{progress.macroLabel}</h1>
-      <p className="lede">
-        Review <code>{reviewId}</code> was accepted and is running. This polls{" "}
-        <code>GET /reviews/{"{reviewId}"}</code> for its real status — nothing here is simulated.
-      </p>
       <div
         className="progress-bar-track"
         role="progressbar"
@@ -44,14 +40,29 @@ export function LiveProgressStep({
         <div className="progress-bar-fill" style={{ width: `${progress.percent}%` }} />
       </div>
       <p aria-live="polite">
-        {progress.microLabel} · {progress.percent}% · waiting {elapsedSeconds}s
+        {progress.microLabel}
+        {started && ` · ${elapsedSeconds}s`}
       </p>
-      <div className="progress-footer">
-        <button className="button secondary" type="button" onClick={onCancel}>
-          Return to submission
-        </button>
-        <p>Returning does not cancel the running review.</p>
-      </div>
+      {architecture && (
+        <div className="progress-architecture" aria-label="Your architecture">
+          <h2>Your architecture</h2>
+          <p>Mapped from your code. Findings appear on it when the review finishes.</p>
+          <ArchitectureView
+            graph={architecture}
+            findings={[]}
+            onOpenFinding={() => undefined}
+            preview
+          />
+        </div>
+      )}
+      {started && (
+        <div className="progress-footer">
+          <button className="button secondary" type="button" onClick={onCancel}>
+            Back to home
+          </button>
+          <p>The review keeps running. Reopen it from &ldquo;Your recent reviews&rdquo;.</p>
+        </div>
+      )}
     </section>
   );
 }

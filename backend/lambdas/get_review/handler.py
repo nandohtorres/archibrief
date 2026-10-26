@@ -52,6 +52,19 @@ def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _preview_architecture(item: dict, review_id: str) -> dict | None:
+    """The diagram the review worker saved before the model ran, if any.
+    Best effort: a missing or unreadable preview is simply left out."""
+    key = item.get("previewArchitectureKey")
+    if key != f"jobs/{review_id}/architecture.json":
+        return None
+    try:
+        graph = json.loads(S3Client(bucket=os.environ["REPORTS_BUCKET_NAME"]).get_object(key))
+    except Exception:  # noqa: BLE001 - the status response must not fail on a preview
+        return None
+    return graph if isinstance(graph, dict) else None
+
+
 @api_handler
 def handler(event: dict, _context: object) -> dict:
     review_id = (event.get("pathParameters") or {}).get("reviewId")
@@ -67,6 +80,9 @@ def handler(event: dict, _context: object) -> dict:
     report_s3_key = item.get("reportS3Key")
     if item.get("status") != "complete" or not report_s3_key:
         public_item = {k: item[k] for k in _PENDING_ALLOWED_FIELDS if k in item}
+        preview = _preview_architecture(item, review_id)
+        if preview is not None:
+            public_item["architecture"] = preview
         return _response(200, public_item)
 
     reports_bucket = os.environ["REPORTS_BUCKET_NAME"]
