@@ -64,7 +64,11 @@ resource "aws_lambda_function" "get_review" {
   runtime          = "python3.12"
   filename         = var.get_review_zip_path
   source_code_hash = fileexists(var.get_review_zip_path) ? filebase64sha256(var.get_review_zip_path) : null
-  timeout          = 3
+  # A finished report is read from S3, merged with deeper findings from
+  # DynamoDB and projected; at 128 MB and 3 s that timed out every time.
+  # Lambda CPU scales with memory.
+  timeout     = 10
+  memory_size = 512
 
   environment {
     variables = merge(local.admission_environment, {
@@ -199,7 +203,8 @@ resource "aws_lambda_function" "deeper_review" {
   filename         = var.deeper_review_zip_path
   source_code_hash = fileexists(var.deeper_review_zip_path) ? filebase64sha256(var.deeper_review_zip_path) : null
   # Admission and idempotent dispatch only; the model runs outside HTTP.
-  timeout = 10
+  timeout     = 10
+  memory_size = 256
 
   environment {
     variables = merge(local.admission_environment, {
