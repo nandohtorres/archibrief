@@ -1,9 +1,8 @@
 # Terraform module: cost-controls
 # ADR-0030/ADR-0040's infra-layer cost controls: a multi-tier AWS Budgets
-# alert (a target/alert threshold, not an enforced cap; AWS Budgets has no
-# native action to halt Bedrock spend). The application kill switch
-# ADR-0030 also calls for lives in the separate kill-switch module to
-# avoid a module dependency cycle.
+# alert plus a stop tier (spend-stop.tf) that turns the application kill
+# switch on. AWS Budgets has no native action to halt Bedrock spend, so the
+# stop goes through the kill switch, which lives in its own module.
 #
 # WAF can't attach to an HTTP API (v2), so the public front door is a
 # separate REST API stage with its own Web ACL (api-gateway module,
@@ -47,5 +46,14 @@ resource "aws_budgets_budget" "monthly" {
     threshold_type            = "PERCENTAGE"
     notification_type         = "FORECASTED"
     subscriber_sns_topic_arns = [aws_sns_topic.budget_alerts.arn]
+  }
+
+  # The stop tier: emails, and turns the kill switch on (spend-stop.tf).
+  notification {
+    comparison_operator       = "GREATER_THAN"
+    threshold                 = var.stop_threshold_percent
+    threshold_type            = "PERCENTAGE"
+    notification_type         = "ACTUAL"
+    subscriber_sns_topic_arns = [aws_sns_topic.budget_alerts.arn, aws_sns_topic.spend_stop.arn]
   }
 }

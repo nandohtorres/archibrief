@@ -84,8 +84,8 @@ variable "alert_email" {
 
 variable "monthly_budget_usd" {
   type        = number
-  default     = 20
-  description = "ADR-0024/ADR-0040 target/alert threshold, not an enforced ceiling."
+  default     = 100
+  description = "Monthly AWS budget: alert tiers, and at 90% actual spend the kill switch turns on (cost-controls module)."
 }
 
 # Titan V2's output dimension (ADR-0035). Immutable once the index

@@ -46,16 +46,17 @@ needs a migration.
 ## Spending limits
 
 Every public paid path (initial review, clarification, deeper review, chat)
-reserves estimated cost against global daily, visitor daily and review
-lifetime allowances in the same transaction as its operation claim. There is
+reserves estimated cost against a global monthly ceiling and global daily,
+visitor daily and review lifetime allowances in the same transaction as its
+operation claim. There is
 no separate owner allowance: the owner's reviews count against the same
 limits.
 
 The module defaults are in `paid_limits` (`infra/modules/api-gateway/admission.tf`);
-the live values are set in `infra/environments/dev/main.tf`: global $1.20 and
-15 requests a day (about three initial reviews), visitor $1.00 and 8, review
-$1.00 and 10. Initial reviews reserve $0.40; clarification and
-deeper review reserve $0.20. A
+the live values are set in `infra/environments/dev/main.tf`: $75 a UTC
+month, global $8 and 150 requests a day (about 20 initial reviews), visitor
+$2 and 30, review $1.00 and 10. Uploads: 40 a day, 6 per visitor. Initial
+reviews reserve $0.40; clarification and deeper review reserve $0.20. A
 `tests/backend/test_defaults_match_terraform.py` check fails if the handler
 fallbacks drift from these defaults.
 
@@ -65,6 +66,13 @@ stays, so the operation can't be dispatched again. Other failures and
 successes keep the conservative estimate. Chat additionally settles its own
 estimates in a chat-specific ledger. These are estimates, not an AWS billing
 ceiling.
+
+The billing backstop is the $100 monthly AWS budget
+(`infra/modules/cost-controls`): emails at 50%, 80% and 100% of actual spend
+and 100% forecast, and at 90% actual a dedicated SNS topic invokes the
+`spend-stop` Lambda, which turns the kill switch on. Billing data lags by
+hours, so the monthly admission ceiling is the real-time limit. The switch
+stays on until the owner turns it off.
 
 Duplicate requests reuse durable claims only where dispatch is idempotent, or
 return the saved result. A claim from an earlier UTC day can't authorize new

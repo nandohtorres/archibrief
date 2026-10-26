@@ -46,7 +46,9 @@ def test_global_budget_is_shared_across_reviews_visitors_and_paid_paths(counters
     reserve_operation(_review("r2", "v2"), "deeper:f1", {}, 400000)
     with pytest.raises(AdmissionDenied):
         reserve_operation(_review("r3", "v3"), "clarify:token", {}, 400000)
-    assert len(counters.scan()["Items"]) == 7  # 2 claims, global, 2 visitors, 2 reviews
+    assert (
+        len(counters.scan()["Items"]) == 8
+    )  # 2 claims, month, global, 2 visitors, 2 reviews
 
 
 def test_stale_preliminary_reads_cannot_overdraw_the_last_slot(counters, monkeypatch):
@@ -123,4 +125,26 @@ def test_release_leaves_the_claim_unreleased_if_a_counter_expired(counters):
 def test_every_reservation_uses_the_global_visitor_and_review_scopes(counters):
     reserve_operation(_review(), "initial", {}, 400000)
     keys = {row["counterKey"].split("#")[1] for row in counters.scan()["Items"]}
-    assert keys == {"r1", "global", "visitor", "review"}
+    assert keys == {"r1", "month", "global", "visitor", "review"}
+
+
+def test_monthly_ceiling_refuses_paid_work_once_the_month_is_spent(
+    counters, monkeypatch
+):
+    monkeypatch.setenv("PAID_MONTHLY_BUDGET_MICRO_USD", "800000")
+    reserve_operation(_review(), "initial", {}, 400000)
+    reserve_operation(_review("r2", "v2"), "initial", {}, 400000)
+    # Day, visitor and review allowances all have room; only the month is full.
+    with pytest.raises(AdmissionDenied, match="paid_limit_reached"):
+        reserve_operation(_review("r3", "v3"), "initial", {}, 400000)
+    month = time.strftime("%Y%m", time.gmtime())
+    row = counters.get_item(Key={"counterKey": f"paid#month#{month}"})["Item"]
+    assert row["spent"] == 800000
+
+
+def test_release_gives_the_month_its_reservation_back(counters):
+    reserve_operation(_review(), "initial", {}, 400000)
+    assert release_operation("r1", "initial")
+    month = time.strftime("%Y%m", time.gmtime())
+    row = counters.get_item(Key={"counterKey": f"paid#month#{month}"})["Item"]
+    assert row["spent"] == 0

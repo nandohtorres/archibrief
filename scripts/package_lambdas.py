@@ -386,6 +386,15 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
         ],
         "packages": ["pydantic>=2.0"],
     },
+    "spend_stop": {
+        "sources": [
+            "backend/__init__.py",
+            "backend/lambdas/__init__.py",
+            "backend/lambdas/spend_stop/__init__.py",
+            "backend/lambdas/spend_stop/handler.py",
+        ],
+        "packages": [],
+    },
     # validate is listed too, so every Lambda builds the same way.
     # tests/backend/test_package_lambdas.py keeps these lists honest.
     "validate": {

@@ -90,6 +90,16 @@ def budget_actions(
 
 def _public_scopes(review: dict, visitor: str, day: str, now: float) -> list[tuple]:
     return [
+        # The month's hard ceiling on reserved spend, across every paid path.
+        # Kept 40 days so it outlives the UTC month it counts.
+        (
+            f"paid#month#{day[:6]}",
+            "PAID_MONTHLY_BUDGET_MICRO_USD",
+            75_000_000,
+            "PAID_MONTHLY_MAX_REQUESTS",
+            1000,
+            int(now) + 3456000,
+        ),
         (
             f"paid#global#{day}",
             "PAID_DAILY_BUDGET_MICRO_USD",
