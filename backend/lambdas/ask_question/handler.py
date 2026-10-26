@@ -85,6 +85,7 @@ from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.public_access import capability_allowed
 from backend.shared.retention import review_expires_at, review_is_live
+from backend.shared.review_projection import current_ledger
 from backend.shared.sanitize import QuestionRejected, check_question
 
 # The small calls (Guardrails, embedding, S3 Vectors) normally take well
@@ -657,7 +658,7 @@ def handler(event: dict, context: object) -> dict:
     ledger = json.loads(
         S3Client(bucket=os.environ["REPORTS_BUCKET_NAME"]).get_object(review["reportS3Key"])
     )
-    ctx: ReviewContext = build_review_context(ledger)
+    ctx: ReviewContext = build_review_context(current_ledger(ledger, review_id))
     asked_at = datetime.fromtimestamp(now, UTC).isoformat()
     base_item: dict[str, Any] = {
         "reviewId": review_id,

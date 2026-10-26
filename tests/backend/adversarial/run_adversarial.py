@@ -28,6 +28,11 @@ from tests.backend.adversarial.harness import (
     run_fixture,
     trivy_path,
 )
+from tests.backend.adversarial.probe_errata import CHECKS, VERSION, corrected_probe
+from tests.backend.adversarial.semantic_oracle import (
+    load_semantic_oracle,
+    semantic_review,
+)
 
 RESULTS = HERE / "results"
 MODEL_INPUTS = HERE / "model_eval" / "inputs"
@@ -88,6 +93,7 @@ def category(check: dict) -> str:
 
 def main() -> None:
     key = load_answer_key()
+    oracle = load_semantic_oracle()
     modes = ["rules"] + (["trivy"] if trivy_path() else [])
     cache: dict[tuple[str, str], object] = {}
     work_root = Path(tempfile.mkdtemp(prefix="archibrief-adversarial-"))
@@ -113,6 +119,17 @@ def main() -> None:
                 matched, observed = probe(check["probe"], run, ctx)
                 raw = judge(check["kind"], matched)
                 adjudicated, note = ADJUDICATION.get(check["id"], (raw, ""))
+                supplemental = None
+                if check["id"] in CHECKS:
+                    passed, explanation = corrected_probe(check["id"], run)
+                    supplemental = {
+                        "version": VERSION,
+                        "passed": passed,
+                        "explanation": explanation,
+                    }
+                    if not raw.startswith("pass") and passed:
+                        adjudicated = "pass (supplemental configuration contract)"
+                        note = "Frozen lexical false positive; " + explanation
                 if raw.startswith("pass") and check["id"] in VERIFICATION_NOTES:
                     note = VERIFICATION_NOTES[check["id"]]
                 rows.append(
@@ -130,6 +147,8 @@ def main() -> None:
                         "verdict": raw,
                         "adjudicated": adjudicated,
                         "note": note,
+                        "semantic_review": semantic_review(case["id"], oracle),
+                        "supplemental_contract": supplemental,
                     }
                 )
 
@@ -180,6 +199,28 @@ def _write_table(rows: list[dict], modes: list[str]) -> None:
     lines.append(
         "Citation provenance and semantic support: **not measured**. Deterministic findings carry no citations, and no model ran."
     )
+    lines.extend(
+        [
+            "",
+            "## Supplemental semantic review (not scored)",
+            "",
+            (
+                "The frozen probe verdicts and historical adjudication above do not establish "
+                "semantic correctness. The following versioned criteria correct known oracle "
+                "overclaims; no revised semantic pass rate has been measured."
+            ),
+            "",
+        ]
+    )
+    oracle = load_semantic_oracle()
+    lines.append(f"Oracle: `{oracle['version']}`; scope: {oracle['scope']}")
+    lines.append("")
+    for case in oracle["cases"]:
+        lines.append(
+            f"- **{case['id']} / {case['case']}**: "
+            f"{case['acceptable_uncertainty']} "
+            f"[Primary source]({case['source']})."
+        )
     lines.append("")
     counts = Counter((r["mode"], r["verdict"].split(" ")[0]) for r in rows)
     lines.append(
@@ -212,6 +253,7 @@ def _write_model_inputs(key: dict, get) -> None:
     """What the reasoning node would receive (rules-only mode), for a later
     paid evaluation. Scoring criteria live in model_eval/SCORING.md."""
     MODEL_INPUTS.mkdir(parents=True, exist_ok=True)
+    oracle = load_semantic_oracle()
     for case in key["cases"]:
         run = get(case["fixture"], "rules")
         payload = {
@@ -238,6 +280,10 @@ def _write_model_inputs(key: dict, get) -> None:
             ],
             "terraform_resources": run.summary,
             "scoring": "model_eval/SCORING.md#" + case["family"],
+            "semantic_review": semantic_review(case["id"], oracle),
+            "supplemental_criteria": [
+                entry for entry in oracle["cases"] if entry["case"] == case["id"]
+            ],
         }
         (MODEL_INPUTS / f"{case['id']}.json").write_text(
             json.dumps(payload, indent=1) + "\n", encoding="utf-8", newline="\n"

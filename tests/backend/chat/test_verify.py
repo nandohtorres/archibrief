@@ -53,7 +53,7 @@ def test_each_citation_kind_resolves_against_this_review(ctx):
                             "exact_quote": "grant only the permissions required",
                         },
                         {
-                            "ref": "C-F2",
+                            "ref": next(iter(ctx.finding_citations)),
                             "exact_quote": "Use resource-level permissions",
                         },
                         {"ref": "resource:aws_lambda_function.api", "exact_quote": ""},

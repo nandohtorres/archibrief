@@ -15,6 +15,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import shutil
 import tempfile
 from dataclasses import dataclass, field
@@ -61,6 +62,8 @@ class ParsedTerraform:
     data: dict[str, dict[str, dict]] = field(default_factory=dict)
     locals: dict[str, object] = field(default_factory=dict)
     module_evaluation: str = ""
+    # Only region configuration is retained, never provider credentials.
+    providers: dict[str, dict] = field(default_factory=dict)
 
 
 def _module_for(path: str, root: str) -> str:
@@ -127,6 +130,19 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
                     key = scoped_key(module, name)
                     parsed.resources.setdefault(resource_type, {})[key] = _scoped_body(body, module)
         config_directories.add(module)
+        for block in document.get("provider", []):
+            for kind, body in block.items():
+                if kind != "aws" or not isinstance(body, dict):
+                    continue
+                alias = body.get("alias")
+                if alias is not None and not isinstance(alias, str):
+                    continue
+                name = "aws" + (f".{alias}" if alias else "")
+                key = scoped_key(module, name)
+                region = body.get("region", "${unresolved.provider_region}")
+                if key in parsed.providers:
+                    region = "${unresolved.duplicate_provider}"
+                parsed.providers[key] = {"region": region, MODULE_FIELD: module}
         for block in document.get("module", []):
             module_calls.setdefault(module, {}).update(block)
 
@@ -215,7 +231,9 @@ def _evaluate_modules(
         expanded_bytes += available - budget[0]
         return resolved
 
-    def instantiate(source: str, scope: str, inputs: dict, ancestry: tuple[str, ...]) -> None:
+    def instantiate(
+        source: str, scope: str, inputs: dict, ancestry: tuple[str, ...], inherited: dict
+    ) -> None:
         nonlocal visited, resource_total
         visited += 1
         if visited > 64 or len(ancestry) > 6 or resource_total >= 1000:
@@ -239,6 +257,16 @@ def _evaluate_modules(
                 if value is omitted:
                     return
                 result.locals[scoped_key(scope, key.rsplit("/", 1)[-1])] = value
+        bindings = dict(inherited)
+        for key, body in raw.providers.items():
+            if key.rpartition("/")[0] == source:
+                name = key.rsplit("/", 1)[-1]
+                provider_key = scoped_key(scope, name)
+                cloned = clone(body, scope)
+                if cloned is omitted:
+                    return
+                result.providers[provider_key] = {**cloned, MODULE_FIELD: scope}
+                bindings[name] = provider_key
         for field_name in ("resources", "data"):
             for kind, bodies in getattr(raw, field_name).items():
                 for key, body in bodies.items():
@@ -253,6 +281,12 @@ def _evaluate_modules(
                     if cloned is omitted:
                         return
                     cloned[MODULE_FIELD] = scope
+                    provider = cloned.get("provider", "aws")
+                    if isinstance(provider, str):
+                        provider = provider.removeprefix("${").removesuffix("}").strip()
+                    cloned["__provider_binding__"] = (
+                        bindings.get(provider) if isinstance(provider, str) else None
+                    )
                     if scope:
                         # Provider inheritance/mapping is not evaluated. It
                         # cannot prove a shared account/region default.
@@ -318,11 +352,24 @@ def _evaluate_modules(
                 attempt += 1
                 child_scope = scoped_key(f"{call_name}_{attempt}", relative)
             result.not_observable.append(
-                f"Module '{display_name(call_name)}': provider inheritance and mappings are not evaluated"
+                f"Module '{display_name(call_name)}': static provider mapping does not establish deployed account identity"
             )
-            instantiate(relative, child_scope, bound_inputs, (*ancestry, source))
+            child_bindings = {"aws": bindings["aws"]} if "aws" in bindings else {}
+            if "providers" in call:
+                child_bindings = {}
+                mapping = call["providers"]
+                if isinstance(mapping, dict):
+                    for local, parent in mapping.items():
+                        if isinstance(parent, str):
+                            parent = parent.removeprefix("${").removesuffix("}").strip()
+                            if (
+                                re.fullmatch(r"aws(?:\.[A-Za-z0-9_-]+)?", str(local))
+                                and parent in bindings
+                            ):
+                                child_bindings[local] = bindings[parent]
+            instantiate(relative, child_scope, bound_inputs, (*ancestry, source), child_bindings)
 
-    instantiate("", "", {}, ())
+    instantiate("", "", {}, (), {})
     return result
 
 
@@ -459,6 +506,7 @@ def _ingest(
         "variables": parsed.variables,
         "data": parsed.data,
         "locals": parsed.locals,
+        "providers": parsed.providers,
         # Paths relative to the archive root; the temp dir is deleted after.
         "files_parsed": [os.path.relpath(p, dest_dir) for p in parsed.files_parsed],
         "not_observable": parsed.not_observable,

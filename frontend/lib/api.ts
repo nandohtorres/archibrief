@@ -4,6 +4,7 @@ import {
   isReviewReport,
   isSubmitReviewResponse,
   type AskQuestionRequest,
+  type AnalysisQuality,
   type AskQuestionResponse,
   type ClarificationRequest,
   type QuestionsTranscript,
@@ -15,6 +16,7 @@ import {
   type SubmitReviewResponse,
 } from "./contracts";
 import { reviewAccessHeaders, storeReviewAccess } from "./review-access";
+import { qualityMessage } from "./analysis-quality";
 
 export class ApiRequestError extends Error {
   constructor(
@@ -54,6 +56,11 @@ async function readJson(response: Response): Promise<unknown> {
       upload_mismatch: "The uploaded file doesn't match this reservation. Start a new review.",
       upload_expired: "This upload reservation expired. Start a new review.",
       dispatch_unavailable: "The review could not start. Please retry the same submission.",
+      deeper_dispatch_unavailable:
+        "We couldn't confirm the deeper job started. Retry Go deeper to recover the same request.",
+      deeper_job_failed:
+        "Deeper analysis could not finish. Your original report and saved findings remain available.",
+      reviews_paused: "Reviews are temporarily paused. Please try again later.",
       operation_conflict: "This reservation belongs to a different submission. Start a new review.",
     };
     // 429 comes from API Gateway throttling or the WAF rate rule, not a handler.
@@ -62,8 +69,9 @@ async function readJson(response: Response): Promise<unknown> {
         ? "Too many requests right now. Wait a minute and try again."
         : text || `ArchiBrief API returned ${response.status}.`;
     try {
-      const body = JSON.parse(text) as { error?: string };
+      const body = JSON.parse(text) as { error?: string; analysis_quality?: AnalysisQuality };
       if (body.error && messages[body.error]) message = messages[body.error];
+      if (body.analysis_quality?.version === 1) message = qualityMessage(body.analysis_quality);
     } catch {
       /* Older endpoints can return plain text. */
     }
@@ -156,9 +164,13 @@ export async function uploadArchiveToS3(
   throw new ApiRequestError("A bound upload reservation is required.", null);
 }
 
-export async function fetchReview(reviewId: string): Promise<ReviewReport | ReviewStatusPointer> {
+export async function fetchReview(
+  reviewId: string,
+  signal?: AbortSignal,
+): Promise<ReviewReport | ReviewStatusPointer> {
   const response = await fetch(`${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}`, {
     headers: requestHeaders(reviewId),
+    signal,
   });
   return (await readJson(response)) as ReviewReport | ReviewStatusPointer;
 }

@@ -23,6 +23,7 @@ from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.public_access import capability_allowed
 from backend.shared.report import build_review_report
 from backend.shared.retention import review_is_live
+from backend.shared.review_projection import current_ledger
 
 _PENDING_ALLOWED_FIELDS = (
     "reviewId",
@@ -70,4 +71,5 @@ def handler(event: dict, _context: object) -> dict:
 
     reports_bucket = os.environ["REPORTS_BUCKET_NAME"]
     ledger = json.loads(S3Client(bucket=reports_bucket).get_object(report_s3_key))
+    ledger = current_ledger(ledger, review_id)
     return _response(200, build_review_report(item, ledger))

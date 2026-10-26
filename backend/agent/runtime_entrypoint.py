@@ -81,14 +81,16 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
     """Go-deeper pass: Retrieve -> Reason(deep) only, scoped to one
     finding. Called by deeper_review.handler (behind
     POST /reviews/{reviewId}/findings/{findingId}/deeper), never by the
-    outer Step Functions state machine — see build_deeper_graph's
-    docstring for why PreflightGate/baseline_answers don't apply here.
+    outer Step Functions state machine. PreflightGate is not rerun;
+    the original settled requirements and resource observations are reused.
     """
     initial_state: ReviewState = {
         "review_id": payload["review_id"],
         "workload_brief": payload["workload_brief"],
         "retrieval_query": payload["retrieval_query"],
         "rule_findings": [],
+        "terraform_resources": payload.get("terraform_resources", {}),
+        "preflight_fields": payload.get("preflight_fields", {}),
         "embedding_client": _EMBEDDING_CLIENT,
         "vectors_client": _VECTORS_CLIENT,
         "lexical_corpus_index": _LEXICAL_CORPUS_INDEX,
@@ -99,12 +101,14 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
         "deterministic_rule_version": payload.get("deterministic_rule_version"),
         "deep_mode": True,
         "parent_finding_id": payload["parent_finding_id"],
+        "parent_finding": payload.get("parent_finding"),
     }
     result_state = _DEEPER_GRAPH.invoke(initial_state)
     return {
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
         "dropped_model_findings": result_state.get("dropped_model_findings", []),
+        "model_output_counts": result_state.get("model_output_counts"),
     }
 
 
@@ -177,6 +181,7 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
         "dropped_model_findings": result_state.get("dropped_model_findings", []),
+        "model_output_counts": result_state.get("model_output_counts"),
         # Returned on the success path too, so Finalize can persist
         # per-field preflight outcomes for a completed review.
         "preflight_fields": result_state.get("preflight_fields", {}),

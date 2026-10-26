@@ -15,10 +15,11 @@
 // sibling `out/` (that's only where it lands with the default ".next"
 // distDir), so the distDir name doubles as the final served directory -
 // no separate build-then-rename step needed.
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runLoggedCommand } from "./build-log.mjs";
 
 const FRONTEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -39,9 +40,11 @@ if (!config) {
   );
 }
 
-execFileSync("npm", ["run", "build:e2e"], {
+runLoggedCommand({
+  command: "npm",
+  args: ["run", "build:e2e"],
   cwd: FRONTEND_DIR,
-  stdio: "inherit",
+  logFile: path.join(FRONTEND_DIR, "e2e-build-logs", `${variant}.log`),
   shell: process.platform === "win32",
   env: {
     ...process.env,
@@ -65,5 +68,6 @@ const result = spawnSync("npx", ["serve", config.outDir, "-s", "-l", String(conf
   cwd: FRONTEND_DIR,
   stdio: "inherit",
   shell: process.platform === "win32",
+  windowsHide: true,
 });
 process.exit(result.status ?? 1);

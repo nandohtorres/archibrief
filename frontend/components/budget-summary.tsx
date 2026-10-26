@@ -102,7 +102,8 @@ export function BudgetSummary({ budget, placement, onOpenFinding }: BudgetSummar
             .{" "}
           </>
         )}
-        {budget.note}
+        {budget.note} Effort is summed per finding; overlapping fixes may share work. Incident-cost
+        benchmarks are not predicted losses for this system.
       </p>
     </section>
   );

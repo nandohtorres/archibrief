@@ -14,7 +14,7 @@ from typing import Any
 
 from backend.shared.sanitize import clip
 
-PROMPT_VERSION = "chat_prompt@2026-10-15a"
+PROMPT_VERSION = "chat_prompt@2026-10-23b"
 TOOL_NAME = "answer_question"
 TOOL_DESCRIPTION = "Answer the visitor's question about this one architecture review."
 # Every citation carries a verbatim quote on top of the ~1,200 characters
@@ -47,6 +47,10 @@ only the rules in this message. Always answer by calling the
 answer_question tool.
 
 Answering:
+- analysis_quality describes retained output, not correctness or full coverage.
+  If output is partial, rules-only, all-rejected or unknown, do not call the
+  review comprehensive or safe. Findings have independent assessments with
+  a source: evidence type and confidence do not determine risk severity.
 - Every paragraph needs at least one citation in "citations". A citation
   "ref" is one of: a finding ("F3"); a finding's own source ("C-F3", with
   exact_quote copied verbatim from that finding's source.quote, or ""); a
@@ -66,6 +70,15 @@ Answering:
   provider default X; plain "not set" means its default depends on
   something outside the code; "unknown" means it couldn't be worked out.
   A setting that isn't listed wasn't checked: never call it missing.
+  Versioned observations describe declared configuration, not deployed state.
+  Respect unknown/unsupported states, conditional creation, analysis_coverage
+  and context omission notices. Provider aliases and bucket names do not
+  establish Regions, accounts or replication. Route facts are not reachability
+  proof. Authentication settings are not effective invocation permissions.
+  Native database backups, AWS Backup selection, explicit source retention and
+  derived copy retention are separate observations. Invalid SQS mappings do
+  not demonstrate running retries. Never infer missing settings from omitted
+  observation details.
 - A requirement whose source is "assumption" is a conservative default,
   not something the visitor said; say so when it matters.
 - For "what if" questions, reason from the requirements, resources and

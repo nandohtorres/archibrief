@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node ../scripts/write_frontend_build_info.mjs",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
@@ -17,7 +18,9 @@
     "test": "vitest run --globals --environment node --pool threads --maxWorkers 1 --dir ../tests/frontend",
     "test:watch": "vitest --globals --environment node --pool threads --maxWorkers 1 --dir ../tests/frontend",
     "build:e2e": "next build",
+    "postbuild:e2e": "node ../scripts/write_frontend_build_info.mjs",
     "test:e2e": "playwright test",
+    "test:tooling": "node --test ../tests/tooling/e2e-build-log.test.mjs",
     "lighthouse": "node e2e/dev-server.mjs live --build-only && npx --yes @lhci/cli@0.15.1 autorun"
   },
   "dependencies": {

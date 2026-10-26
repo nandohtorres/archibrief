@@ -85,6 +85,12 @@ export interface FindingPresentation {
 }
 
 export type Severity = "critical" | "high" | "medium" | "low";
+export interface FindingAssessment {
+  version: 1;
+  severity: Severity | null;
+  action: "needed" | "none" | "unknown";
+  source: "rule" | "model" | "reviewer" | "unassessed";
+}
 export type Verdict = "fix-today" | "quick-win" | "worth-the-money" | "when-budget-allows";
 
 // backend/shared/stakeholder/brief.py. Every dollar figure comes from
@@ -168,6 +174,8 @@ export interface BudgetSummary {
 export interface ReportFinding {
   record: Finding;
   presentation: FindingPresentation;
+  // Independent of evidence type and evidence confidence. Absent in old reports.
+  assessment?: FindingAssessment;
   // The plain-language card. Absent for findings with nothing to say in
   // plain terms, and for reviews saved before the stakeholder view.
   stakeholder?: StakeholderCard;
@@ -190,11 +198,51 @@ export interface ReviewReport {
   cost_estimate_tier: "low" | "medium" | "high";
   baseline_answers: BaselineAnswer[];
   findings: ReportFinding[];
+  analysis_quality?: AnalysisQuality;
+  analysis_scope?: {
+    version: "terraform-observations@2026-10-23";
+    facts_emitted: number;
+    omitted_resources: number;
+    omitted_items: number;
+    incomplete_resources: number;
+    truncated: boolean;
+    runtime_verified: false;
+  };
+  report_projection?: {
+    version: 1;
+    children_available: boolean;
+    child_count: number;
+    excluded_child_count: number;
+  };
+  deeper_reviews?: Array<{ parent_finding_id: string; analysis_quality: AnalysisQuality }>;
+  deeper_jobs?: DeeperJob[];
   // Totals across every finding that needs action. Absent on older reviews.
   budget?: BudgetSummary;
   // The diagram built from the code (lib/architecture.ts). Older reviews
   // have none. Checked with isArchitectureGraph before use.
   architecture?: unknown;
+}
+
+export interface DeeperJob {
+  job_id: string;
+  parent_finding_id: string;
+  status: "pending" | "running" | "complete" | "failed";
+  deadline: number;
+  failure_code: string | null;
+}
+
+export interface AnalysisStageCounts {
+  attempted: number;
+  accepted: number;
+  rejected: number;
+}
+
+export interface AnalysisQuality {
+  version: 1;
+  outcome: "complete" | "partial" | "rules-only" | "all-rejected" | "no-findings" | "unknown";
+  model_verification: AnalysisStageCounts | null;
+  schema_validation: AnalysisStageCounts | null;
+  reason_codes: string[];
 }
 
 // GET /reviews/{reviewId}'s shape for a review that isn't complete yet

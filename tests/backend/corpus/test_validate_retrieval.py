@@ -1,17 +1,45 @@
 import io
 import json
+from types import SimpleNamespace
 
 from botocore.response import StreamingBody
 from botocore.stub import Stubber
 
-from backend.corpus.eval import EvalQuery
+from backend.corpus.eval import EVAL_QUERIES, EvalQuery
 from backend.corpus.validate_retrieval import run_validation
 from backend.shared.clients import BedrockEmbeddingClient, S3VectorsClient
 
 
+def test_failed_query_does_not_erase_later_queries_or_its_denominator():
+    calls = []
+
+    def embed(text):
+        calls.append(text)
+        if len(calls) == 1:
+            raise RuntimeError("PRIVATE-CANARY")
+        return [0.1]
+
+    result = run_validation(
+        SimpleNamespace(embed=embed),
+        SimpleNamespace(query_vectors=lambda *args, **kw: []),
+        EVAL_QUERIES[:2],
+    )
+    assert result["total_queries"] == len(result["attempts"]) == len(calls) == 2
+    assert [row["attempt_outcome"] for row in result["attempts"]] == [
+        "failed",
+        "returned",
+    ]
+    assert "PRIVATE-CANARY" not in str(result["attempts"])
+
+
 def _invoke_model_response(embedding: list[float]) -> dict:
-    body = json.dumps({"embedding": embedding, "inputTextTokenCount": 5}).encode("utf-8")
-    return {"body": StreamingBody(io.BytesIO(body), len(body)), "contentType": "application/json"}
+    body = json.dumps({"embedding": embedding, "inputTextTokenCount": 5}).encode(
+        "utf-8"
+    )
+    return {
+        "body": StreamingBody(io.BytesIO(body), len(body)),
+        "contentType": "application/json",
+    }
 
 
 def test_run_validation_scores_a_hit_when_retrieval_finds_the_expected_chunk():
@@ -29,11 +57,19 @@ def test_run_validation_scores_a_hit_when_retrieval_finds_the_expected_chunk():
     embed_stubber.add_response("invoke_model", _invoke_model_response([0.1, 0.2]))
     embed_stubber.activate()
 
-    vectors_client = S3VectorsClient(bucket_name="bkt", index_name="idx", region_name="us-east-1")
+    vectors_client = S3VectorsClient(
+        bucket_name="bkt", index_name="idx", region_name="us-east-1"
+    )
     query_stubber = Stubber(vectors_client._client)
     query_stubber.add_response(
         "query_vectors",
-        {"vectors": [{"key": "iam-best-practices-0003"}, {"key": "some-other-chunk"}], "distanceMetric": "cosine"},
+        {
+            "vectors": [
+                {"key": "iam-best-practices-0003"},
+                {"key": "some-other-chunk"},
+            ],
+            "distanceMetric": "cosine",
+        },
         {
             "vectorBucketName": "bkt",
             "indexName": "idx",
@@ -67,7 +103,9 @@ def test_run_validation_scores_a_miss_when_expected_chunk_is_absent():
     embed_stubber.add_response("invoke_model", _invoke_model_response([0.1, 0.2]))
     embed_stubber.activate()
 
-    vectors_client = S3VectorsClient(bucket_name="bkt", index_name="idx", region_name="us-east-1")
+    vectors_client = S3VectorsClient(
+        bucket_name="bkt", index_name="idx", region_name="us-east-1"
+    )
     query_stubber = Stubber(vectors_client._client)
     query_stubber.add_response(
         "query_vectors",

@@ -86,6 +86,13 @@ visible reviewer note on the site: `reviewerNotes` in
 `frontend/public/demos/demos.json`, kept apart from the saved reports so
 those stay the pipeline's unedited output.
 
+The frontend also includes these notes and demo provenance in HTML/JSON
+downloads. JSON uses the additive `demo_review` block (`demo-review@1`);
+historical review dates were not recorded and are not invented. Saved chat
+answers remain original model output: they are explicitly labeled as potentially
+stale, with corrections beside cited findings and a complete correction list.
+This is annotation propagation, not a claim that the answers were regenerated.
+
 ### breach-pattern
 
 | Finding | Verdict |

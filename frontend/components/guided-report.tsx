@@ -9,6 +9,8 @@ import {
   stakeholderSummary,
 } from "@/lib/workflow";
 import { BudgetSummary, verdictClass } from "./budget-summary";
+import { assessmentFor } from "@/lib/assessment";
+import { AssessmentTag } from "./assessment-tag";
 
 interface GuidedReportProps {
   report: ReviewReport;
@@ -63,6 +65,7 @@ function CostBoxes({ card }: { card: StakeholderCard }) {
         <span>Cost of not fixing</span>
         <strong>{inaction.headline}</strong>
         <p>{inaction.detail}</p>
+        {inaction.source_name && <p>Industry benchmark, not a predicted loss for this system.</p>}
         {inaction.method && (
           <p>
             <em>How to estimate it:</em> {inaction.method}
@@ -92,9 +95,7 @@ function FindingCard({
   return (
     <details open={open} id={cardElementId(finding.record.finding_id)}>
       <summary>
-        <span className={`priority-pill ${finding.presentation.priority}`}>
-          {finding.presentation.short_label}
-        </span>
+        <AssessmentTag finding={finding} />
         <span>
           <small>
             {formatFindingId(finding.record.finding_id)} · {finding.record.category}
@@ -105,7 +106,6 @@ function FindingCard({
         {card?.verdict && card.verdict_label && (
           <span className={`verdict-tag ${verdictClass[card.verdict]}`}>{card.verdict_label}</span>
         )}
-        {card && !card.needs_action && <span className="verdict-tag none">No action needed</span>}
         <i aria-hidden="true">›</i>
       </summary>
       <div className="guided-finding-body">
@@ -178,7 +178,7 @@ export function GuidedReport({
   titled = false,
 }: GuidedReportProps) {
   const decisionFindings = orderByBudget(
-    report.findings.filter(({ presentation }) => presentation.priority !== "confirmed"),
+    report.findings.filter((f) => assessmentFor(f).action !== "none"),
     report.budget,
   );
   // Facts read straight from the code. Some are only context ("Multi-AZ
@@ -186,7 +186,7 @@ export function GuidedReport({
   // disabled"), so they're shown, in their own labeled section, rather
   // than hidden.
   const confirmedFindings = orderByBudget(
-    report.findings.filter(({ presentation }) => presentation.priority === "confirmed"),
+    report.findings.filter((f) => assessmentFor(f).action === "none"),
     report.budget,
   );
   const summary = stakeholderSummary(report, titled);
@@ -224,7 +224,7 @@ export function GuidedReport({
                 </ul>
               </>
             ) : (
-              <p>No high-risk gaps need fixing first; review the items below.</p>
+              <p>No action assessments were recorded. Review the evidence below.</p>
             ))}
           {summary.coverageLimits.map((limit) => (
             <p key={limit}>
@@ -264,10 +264,10 @@ export function GuidedReport({
 
       {confirmedFindings.length > 0 && (
         <>
-          <h3 className="guided-section-heading">Confirmed from the code</h3>
+          <h3 className="guided-section-heading">No action proposed</h3>
           <p className="guided-section-note">
-            Settings read directly from the Terraform. Some are only context; check whether any of
-            them matter for your workload.
+            These findings have an explicit no-action assessment. This is not a safety guarantee;
+            check their evidence, assessment source and any reviewer corrections.
           </p>
           <div className="guided-findings">
             {confirmedFindings.map((finding) => (

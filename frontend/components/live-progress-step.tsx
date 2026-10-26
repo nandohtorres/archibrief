@@ -48,8 +48,9 @@ export function LiveProgressStep({
       </p>
       <div className="progress-footer">
         <button className="button secondary" type="button" onClick={onCancel}>
-          Cancel and return to submission
+          Return to submission
         </button>
+        <p>Returning does not cancel the running review.</p>
       </div>
     </section>
   );

@@ -48,7 +48,7 @@ from backend.shared.models.finding import (
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
 from backend.shared.trivy_checks import TRIVY_OWNED_CONCERNS, TRUSTED_CHECKS
 
-RULE_VERSION = "rule_engine@2026-10-21.1"
+RULE_VERSION = "rule_engine@2026-10-23"
 
 ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}
@@ -1191,6 +1191,21 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
     )
     working = {**parsed, _TRIVY_RAN: complete_scan}
     findings: list[Finding] = []
+    from backend.shared.configuration_checks import configuration_issues
+
+    for issue in configuration_issues(build_resource_summary(parsed)):
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory(issue.category),
+                issue.finding,
+                issue.evidence,
+                issue.risk,
+                issue.recommendation,
+                [],
+                concern_name=issue.concern,
+            )
+        )
     for rule in ALL_RULES:
         if complete_scan and _RULE_CONCERNS.get(rule) in TRIVY_OWNED_CONCERNS:
             continue

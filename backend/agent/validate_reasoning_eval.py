@@ -3,8 +3,8 @@ real Bedrock.
 
 Sibling to backend/agent/validate_reason_node.py and
 backend/corpus/validate_retrieval.py — same convention: not a pytest test,
-run directly with real AWS credentials. UNLIKE validate_retrieval.py, this
-is NOT near-zero cost: it runs a full retrieve_node + reason_node pass
+run directly with real AWS credentials and explicit paid admission. This
+controlled component diagnostic runs retrieval and reasoning
 (one embed call, one vector query, one Claude Converse tool-use call, one
 ApplyGuardrail call) PER BRIEF across both EVAL_BRIEFS and HOLDOUT_BRIEFS
 (6 briefs total as of authoring), so each run costs real money. Run it
@@ -43,6 +43,13 @@ from backend.shared.clients import (
     GuardrailsClient,
     S3VectorsClient,
 )
+from backend.shared.evaluation_budget import (
+    EvaluationLimitReached,
+    add_budget_options,
+    admit_budget,
+    budget_plan,
+)
+from backend.shared.evaluation_manifest import attach_manifest, evidence_manifest
 
 _VECTOR_BUCKET_NAME = os.environ.get("ARCHIBRIEF_VECTOR_BUCKET", "archibrief-dev-kb")
 _VECTOR_INDEX_NAME = os.environ.get("ARCHIBRIEF_VECTOR_INDEX", "archibrief-dev-kb-index")
@@ -79,12 +86,14 @@ def _run_brief(
         }
     )
     retrieved_chunks = retrieve_result["retrieved_chunks"]
+    evidence = evidence_manifest(retrieved_chunks)
 
     allowed = guardrails_client.check(brief.workload_brief, source="INPUT")
     if not allowed:
         return {
             "brief_id": brief.brief_id,
             "blocked_by_guardrails": True,
+            "retrieved_evidence": evidence,
         }
 
     corpus_version = retrieved_chunks[0]["corpus_version"] if retrieved_chunks else "unknown"
@@ -108,18 +117,30 @@ def _run_brief(
         corpus_version=corpus_version,
         retrieved_chunks=retrieved_chunks,
         deterministic_rule_version=None,
+        terraform_resources=brief.terraform_resources,
     )
     if raw_findings and not model_findings:
         return {
             "brief_id": brief.brief_id,
             "finding_validation_failed": True,
             "failures": failures,
+            "raw_model_findings": raw_findings,
+            "accepted_model_findings": [],
+            "raw_model_finding_count": len(raw_findings),
+            "retrieved_evidence": evidence,
         }
 
     result = score_reasoning(model_findings, brief)
     result["retrieved_chunk_count"] = len(retrieved_chunks)
+    result["retrieved_evidence"] = evidence
     result["raw_model_finding_count"] = len(raw_findings)
     result["dropped_findings"] = failures
+    # Private diagnostic artifacts keep rejected/unknown/quoted output too.
+    # Scoring only retained topics must not erase whole-output safety evidence.
+    result["raw_model_findings"] = raw_findings
+    result["accepted_model_findings"] = [
+        finding.model_dump(mode="json") for finding in model_findings
+    ]
     return result
 
 
@@ -150,6 +171,9 @@ def _print_report(label: str, results: list[dict]) -> None:
         print(f"No briefs scored ({len(blocked)} blocked, {len(failed)} failed validation)\n")
     for r in results:
         print(f"--- {r['brief_id']} ---")
+        if r.get("execution_error_kind"):
+            print(f"  {r['attempt_outcome']}: {r['execution_error_kind']}")
+            continue
         if r.get("blocked_by_guardrails"):
             print("  BLOCKED by guardrails")
             continue
@@ -182,7 +206,7 @@ def _print_report(label: str, results: list[dict]) -> None:
     print()
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--confirm-paid", action="store_true")
     parser.add_argument("--plan", action="store_true", help="print case IDs without AWS clients")
@@ -191,6 +215,7 @@ def main() -> None:
         "--limit", type=int, help="maximum briefs per selected set; partial evaluation"
     )
     parser.add_argument("--out", type=Path, help="write structured results for review")
+    add_budget_options(parser)
     args = parser.parse_args()
     if args.limit is not None and args.limit <= 0:
         parser.error("--limit must be positive")
@@ -198,6 +223,23 @@ def main() -> None:
         {"traps": TRAP_BRIEFS} if args.traps else {"dev": EVAL_BRIEFS, "holdout": HOLDOUT_BRIEFS}
     )
     selected = {name: briefs[: args.limit] for name, briefs in selected.items()}
+    planned_calls = 4 * sum(len(briefs) for briefs in selected.values())
+    attach_manifest(
+        args,
+        {
+            name: [brief.model_dump(mode="json") for brief in briefs]
+            for name, briefs in selected.items()
+        },
+        {
+            "model": _MODEL_ID,
+            "region": _REGION,
+            "vector_bucket": _VECTOR_BUCKET_NAME,
+            "vector_index": _VECTOR_INDEX_NAME,
+            "guardrail_id": _GUARDRAIL_ID,
+            "guardrail_version": _GUARDRAIL_VERSION,
+            "max_output_tokens": _MAX_TOKENS,
+        },
+    )
     metadata = {
         "model": _MODEL_ID,
         "partial": args.limit is not None,
@@ -206,86 +248,133 @@ def main() -> None:
             name: [brief.brief_id for brief in briefs] for name, briefs in selected.items()
         },
         "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "mode": "controlled-model-component",
+        "admission": budget_plan(args, parser, planned_calls),
     }
     if args.plan:
         print(json.dumps(metadata, indent=2))
-        return
+        return 0
     if not args.confirm_paid:
         parser.error(
             "paid AWS evaluation requires --confirm-paid and explicit operator authorization"
         )
+    budget = admit_budget(args, parser, planned_calls)
 
     def publish(result):
-        artifact = {"metadata": metadata, **result}
+        artifact = {
+            "metadata": metadata,
+            "admission": budget.summary(),
+            "call_journal": str(budget.path),
+            **result,
+        }
         if args.out:
             args.out.write_text(json.dumps(artifact, indent=2, default=str), encoding="utf-8")
         print(json.dumps(artifact, indent=2, default=str))
 
-    embedding_client = BedrockEmbeddingClient(region_name=_REGION)
-    vectors_client = S3VectorsClient(
-        bucket_name=_VECTOR_BUCKET_NAME, index_name=_VECTOR_INDEX_NAME, region_name=_REGION
+    embedding_client = budget.wrap(
+        BedrockEmbeddingClient(region_name=_REGION, no_retries=True, read_timeout_seconds=30),
+        "embedding",
+    )
+    vectors_client = budget.wrap(
+        S3VectorsClient(
+            bucket_name=_VECTOR_BUCKET_NAME,
+            index_name=_VECTOR_INDEX_NAME,
+            region_name=_REGION,
+            no_retries=True,
+            read_timeout_seconds=30,
+        ),
+        "vectors",
     )
     lexical_corpus_index = build_lexical_corpus_index_from_disk()
-    guardrails_client = GuardrailsClient(
-        guardrail_id=_GUARDRAIL_ID, guardrail_version=_GUARDRAIL_VERSION, region_name=_REGION
+    guardrails_client = budget.wrap(
+        GuardrailsClient(
+            guardrail_id=_GUARDRAIL_ID,
+            guardrail_version=_GUARDRAIL_VERSION,
+            region_name=_REGION,
+            no_retries=True,
+            read_timeout_seconds=30,
+        ),
+        "guardrails",
     )
-    reasoning_client = BedrockReasoningClient(model_id=_MODEL_ID, region_name=_REGION)
+    reasoning_client = budget.wrap(
+        BedrockReasoningClient(
+            model_id=_MODEL_ID, region_name=_REGION, no_retries=True, read_timeout_seconds=60
+        ),
+        "reasoning",
+    )
 
-    # `--traps` runs ONLY the adversarial trap set (backend/agent/trap_eval.py),
-    # never mixed into the dev/held-out numbers - same separation rule.
-    if args.traps:
-        trap_results = [
-            score_trap(
-                _run_brief(
-                    b,
+    def attempt(brief):
+        try:
+            return {
+                **_run_brief(
+                    brief,
                     embedding_client,
                     vectors_client,
                     lexical_corpus_index,
                     guardrails_client,
                     reasoning_client,
                 ),
+                "attempt_outcome": "returned",
+            }
+        except Exception as exc:  # noqa: BLE001 - retain every scheduled case without leaking error content
+            return {
+                "brief_id": brief.brief_id,
+                "finding_validation_failed": True,
+                "failures": [],
+                "attempt_outcome": "not_run"
+                if isinstance(exc, EvaluationLimitReached)
+                else "failed",
+                "execution_error_kind": type(exc).__name__,
+            }
+
+    # `--traps` runs ONLY the adversarial trap set (backend/agent/trap_eval.py),
+    # never mixed into the dev/held-out numbers - same separation rule.
+    if args.traps:
+        trap_results = [
+            score_trap(
+                attempt(b),
                 b,
             )
             for b in selected["traps"]
         ]
         for r in trap_results:
             verdict = {True: "PASS", False: "FAIL", None: "BLOCKED/INVALID"}[r["trap_passed"]]
+            if r.get("whole_output_review", {}).get("status") == "requires_review":
+                verdict = "REVIEW REQUIRED"
             print(f"{verdict:16} {r['brief_id']}: {r['trick']}")
             if r.get("forbidden_phrase_hits"):
                 print(f"{'':16} took the bait: {r['forbidden_phrase_hits']}")
             if r.get("dropped_findings"):
                 print(f"{'':16} {len(r['dropped_findings'])} finding(s) dropped: citation failed")
         publish({"traps": trap_results})
-        return
-
-    dev_results = [
-        _run_brief(
-            b,
-            embedding_client,
-            vectors_client,
-            lexical_corpus_index,
-            guardrails_client,
-            reasoning_client,
+        return (
+            1
+            if any(
+                r.get("execution_error_kind")
+                or r.get("finding_validation_failed")
+                or r.get("trap_passed") is False
+                or r.get("whole_output_review", {}).get("status") == "requires_review"
+                for r in trap_results
+            )
+            else 0
         )
-        for b in selected["dev"]
-    ]
+
+    dev_results = [attempt(b) for b in selected["dev"]]
     _print_report("Dev set (EVAL_BRIEFS)", dev_results)
 
-    holdout_results = [
-        _run_brief(
-            b,
-            embedding_client,
-            vectors_client,
-            lexical_corpus_index,
-            guardrails_client,
-            reasoning_client,
-        )
-        for b in selected["holdout"]
-    ]
+    holdout_results = [attempt(b) for b in selected["holdout"]]
     _print_report("Held-out set (HOLDOUT_BRIEFS)", holdout_results)
 
     publish({"dev": dev_results, "holdout": holdout_results})
+    return (
+        1
+        if any(
+            r.get("execution_error_kind") or r.get("finding_validation_failed")
+            for r in [*dev_results, *holdout_results]
+        )
+        else 0
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

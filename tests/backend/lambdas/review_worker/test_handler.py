@@ -68,6 +68,41 @@ def test_completed_worker_returns_only_status_and_uses_bound_archive_version(pre
     assert len(agent_calls) == 1
 
 
+def test_rejected_output_remains_visible_after_worker_finalize_and_report_read(
+    prepared, monkeypatch
+):
+    from backend.chat.context import build_review_context
+    from backend.lambdas.validate.handler import handler as validate
+    from backend.shared.report import build_review_report
+
+    review_id, s3, _calls, replies, _agent_calls = prepared
+    replies[0].update(
+        findings=[{"private": "REJECTED-CONTENT-CANARY"}],
+        model_output_counts={"attempted": 3, "accepted": 1, "rejected": 2},
+    )
+    original = worker._invoke
+    monkeypatch.setattr(
+        worker,
+        "_invoke",
+        lambda name, payload: (
+            validate(payload, None) if name == "validate" else original(name, payload)
+        ),
+    )
+    assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
+    ledger = json.loads(
+        s3.get_object(
+            Bucket="reports", Key=f"reports/{review_id}/evidence-ledger.json"
+        )["Body"].read()
+    )
+    report = build_review_report({"reviewId": review_id}, ledger)
+    quality = report["analysis_quality"]
+    assert quality["outcome"] == "all-rejected"
+    assert quality["model_verification"]["rejected"] == 2
+    assert quality["schema_validation"]["rejected"] == 1
+    assert build_review_context(ledger).review_data["analysis_quality"] == quality
+    assert "REJECTED-CONTENT-CANARY" not in json.dumps(report)
+
+
 def test_clarification_history_contains_only_an_opaque_reference(prepared, monkeypatch):
     review_id, s3, _calls, replies, agent_calls = prepared
     replies.insert(

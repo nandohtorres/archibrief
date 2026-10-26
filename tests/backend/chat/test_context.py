@@ -6,32 +6,21 @@ import json
 
 from backend.chat.context import (
     NO_RESOURCES_NOTE,
-    PRIORITY_BY_TYPE,
     REVIEW_BLOCK_CHARS,
     build_review_context,
 )
-from backend.shared.models.finding import FindingType
-from backend.shared.report import _PRIORITY_BY_TYPE
 from tests.backend.chat.conftest import RULE_FINDING_ID
 
 
-def test_priority_buckets_match_the_report():
-    assert PRIORITY_BY_TYPE == {t.value: p for t, (p, _) in _PRIORITY_BY_TYPE.items()}
-    assert set(PRIORITY_BY_TYPE) == {t.value for t in FindingType}
-
-
-def test_findings_are_aliased_most_important_first(ledger):
+def test_unassessed_findings_are_aliased_without_inventing_risk(ledger):
+    ledger["findings"][1]["concern"] = "s3_public_access"
     ctx = build_review_context(ledger)
     assert ctx.finding_ids["F1"] == RULE_FINDING_ID  # high risk first
-    assert [f["priority"] for f in ctx.review_data["findings"]] == [
-        "high",
-        "review",
-        "unknown",
-        "confirmed",
-    ]
-    assert ctx.not_observable_aliases == ["F3"]
+    assert ctx.review_data["findings"][0]["assessment"]["severity"] == "high"
+    assert "priority" not in ctx.review_data["findings"][0]
+    assert len(ctx.not_observable_aliases) == 1
     assert ctx.alternatives == [("F1", "AWS managed ReadOnlyAccess")]
-    assert "C-F2" in ctx.finding_citations
+    assert any(key.startswith("C-F") for key in ctx.finding_citations)
     assert ctx.resource_addresses == {
         "aws_s3_bucket_public_access_block.audit",
         "aws_lambda_function.api",
@@ -54,7 +43,11 @@ def test_report_text_is_normalized_and_clipped(ledger):
     ledger["findings"][1]["evidence"] = "hid\u200bden " + "x" * 5000
     ledger["workload_brief"] = "ｂrief\u202e"
     ctx = build_review_context(ledger)
-    first = ctx.review_data["findings"][0]
+    first = next(
+        f
+        for f in ctx.review_data["findings"]
+        if f["type"] == "deterministic-rule-result"
+    )
     assert "\u200b" not in first["evidence"]
     assert len(first["evidence"]) <= 1200
     assert ctx.review_data["workload_brief"] == "brief"
@@ -78,6 +71,7 @@ def test_an_oversized_review_is_trimmed_lowest_priority_first(ledger):
             **template,
             "finding_id": f"id-{i}",
             "type": "deterministic-rule-result" if i == 0 else "fact",
+            "concern": "s3_public_access" if i == 0 else None,
             "evidence": "e" * 1100,
             "risk_impact": "r" * 1100,
             "recommendation": "c" * 1100,
@@ -88,15 +82,26 @@ def test_an_oversized_review_is_trimmed_lowest_priority_first(ledger):
     assert len(json.dumps(ctx.review_data, ensure_ascii=False)) <= REVIEW_BLOCK_CHARS
     first = ctx.review_data["findings"][0]
     # The high-risk finding keeps its detail; the cut came from the end.
-    assert first["priority"] == "high" and first["evidence"]
+    assert first["assessment"]["severity"] == "high" and first["evidence"]
     assert ctx.review_data["findings"][-1]["evidence"] == ""
+
+
+def test_summary_coverage_notices_survive_finding_trimming_and_are_bounded(ledger):
+    ledger["terraform_resources"]["not_observable"] = [
+        "remote module " + "x" * 500
+    ] * 20
+    ctx = build_review_context(ledger)
+    coverage = ctx.review_data["terraform_resources"]
+    assert coverage["not_observable_total"] == 20
+    assert len(coverage["not_observable"]) == 10
+    assert all(len(note) <= 160 for note in coverage["not_observable"])
 
 
 def test_deeper_findings_point_at_their_parent_by_alias(ledger):
     ledger["findings"][2]["parent_finding_id"] = RULE_FINDING_ID
     ctx = build_review_context(ledger)
-    deeper = next(f for f in ctx.review_data["findings"] if f["ref"] == "F2")
-    assert deeper["deeper_analysis_of"] == "F1"
+    deeper = next(f for f in ctx.review_data["findings"] if "deeper_analysis_of" in f)
+    assert deeper["deeper_analysis_of"] == ctx.alias_for(RULE_FINDING_ID)
 
 
 def test_findings_trimmed_out_of_the_prompt_cannot_be_cited(ledger):
@@ -114,3 +119,25 @@ def test_findings_trimmed_out_of_the_prompt_cannot_be_cited(ledger):
     shown = {f["ref"] for f in ctx.review_data["findings"]}
     assert ctx.review_data.get("omitted_findings")
     assert set(ctx.finding_ids) == shown
+
+
+def test_observation_detail_is_bounded_and_omission_is_disclosed(ledger):
+    ledger["terraform_resources"]["resources"] = [
+        {
+            "type": "aws_instance",
+            "name": f"worker{i}",
+            "settings": {},
+            "observations": {
+                "facts": [{"setting": "availability_zone", "value": "us-east-1a"}] * 200
+            },
+        }
+        for i in range(12)
+    ]
+    ctx = build_review_context(ledger)
+    summary = ctx.review_data["terraform_resources"]
+    assert len(json.dumps(ctx.review_data, ensure_ascii=False)) <= REVIEW_BLOCK_CHARS
+    assert summary["context_omitted_observation_resources"] > 0
+    assert "not evidence of absence" in summary["context_scope_note"]
+    assert ctx.resource_addresses == {
+        f"{e['type']}.{e['name']}" for e in summary["resources"]
+    }

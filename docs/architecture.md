@@ -1,6 +1,8 @@
 # ArchiBrief Architecture
 
-This describes the deployed system. Diagrams are Mermaid rather than
+This describes the source architecture. Deployment checks are recorded separately;
+reading this document does not establish that a particular revision is live.
+Diagrams are Mermaid rather than
 `mingrammer/diagrams` (ADR-0025's stated tool), which needs a local
 Graphviz install; ADR-0025 calls its own choice "low-stakes, easily
 revisited," so this is a documented substitution, not a reversal.
@@ -23,6 +25,8 @@ flowchart LR
 
     subgraph Orchestration["Orchestration"]
         SFN["Step Functions<br/>(Standard workflow)"]
+        Worker["review_worker<br/>(content-bearing stages)"]
+        DeeperJob["Standard deeper workflow<br/>(identifiers only)"]
     end
 
     subgraph Compute["Bounded, stateless Lambdas"]
@@ -34,6 +38,7 @@ flowchart LR
         Finalize["Finalize"]
         Clarify["clarify_review /<br/>store_clarification_token"]
         Deeper["deeper_review"]
+        DeeperWorker["deeper worker"]
         GetReview["get_review"]
         GetDemo["get_demo"]
         CreateUpload["create_upload"]
@@ -67,22 +72,34 @@ flowchart LR
     Submit --> SFN
     APIGW --> GetDemo
     APIGW --> GetReview
+    GetReview -->|base evidence| S3R
+    GetReview -->|saved children| DDB
+    APIGW --> Chat
+    Chat --> S3R
+    Chat -->|saved children and transcript| DDB
     APIGW --> Clarify
     APIGW --> Deeper
+    Deeper --> DeeperJob --> DeeperWorker
+    DeeperWorker --> Retrieve
+    DeeperWorker --> DDB
+    DeeperWorker --> S3R
     APIGW --> CreateUpload
 
-    SFN --> Ingest --> GR
-    SFN --> Scan
-    SFN --> Rules
-    SFN --> Preflight --> Retrieve --> S3V
+    SFN -->|review ID / phase / resume reference| Worker
+    Worker --> Ingest --> GR
+    Worker --> Scan
+    Worker --> Rules
+    Worker --> Preflight --> Retrieve --> S3V
     Retrieve --> Reason
     Reason --> Claude
     Reason --> GR
-    SFN --> Validate --> Audit --> Finalize
+    Worker --> Validate --> Audit --> Finalize
     Finalize --> S3R
     SFN --> DDB
-    SFN -.->|checked first| SSM
-    Ingest --> Titan
+    Worker --> DDB
+    Worker --> S3R
+    Worker -.->|before paid work| SSM
+    Retrieve --> Titan
     CreateUpload -.->|verifies Turnstile| Turnstile
 ```
 
@@ -95,11 +112,13 @@ flowchart LR
    `submit_review` verifies the exact upload, reserves the review's
    estimated cost against the spending limits and starts the Step
    Functions execution.
-2. **IdempotencyGate** — a conditional `PutItem` using the client's
-   `review_id` as the idempotency key; a duplicate submission succeeds
-   immediately without re-running anything.
-3. **CheckKillSwitch** — an SSM `GetParameter` read; if set, the
-   execution fails fast here, before any Bedrock/AgentCore work starts.
+2. **Dispatch and worker claim** — upload IDs are server-issued. Admission,
+   immutable input binding and a stable Standard execution name prevent retries
+   from starting another paid job. `review_worker` conditionally claims the
+   initial or resumed work using the stored review record.
+3. **Kill switch** — admission and the worker check the SSM switch before
+   paid work. The worker loads content from `jobs/<review_id>/` in S3;
+   Step Functions state carries identifiers/status, not briefs or findings.
 4. **Ingest** — downloads the archive from S3, statically parses the
    Terraform with `python-hcl2` (never executes it), runs the content
    through Bedrock Guardrails.
@@ -124,9 +143,11 @@ flowchart LR
    field truly can't be resolved, the workflow pauses at
    `StoreClarificationToken` (a `waitForTaskToken` state, up to 7 days)
    until the visitor answers via `POST /reviews/{reviewId}/clarify`.
-8. **Validate** — schema-checks every returned finding and independently
-   verifies each citation resolves to a real retrieved chunk; a finding
-   that fails either check is rejected, not silently kept.
+8. **Validate** — schema-checks returned findings. Quote provenance is checked
+   earlier in Reason against its retrieved chunks; Validate is not a second
+   retrieval or semantic-support check. Rejected items are excluded. Carrying
+   rejection/completeness metadata into the published report remains follow-up
+   work, so lifecycle `complete` must not be read as complete analysis coverage.
 9. **Audit → Finalize** — assembles the evidence ledger, persists it to
    S3, and updates the review's DynamoDB pointer item.
 10. **Read results** — `GET /reviews/{reviewId}` returns the assembled
@@ -172,9 +193,9 @@ are written by hand in `scripts/demo_plain_language.json`, and
 from them. A test fails if those files fall out of date with the price
 table or catalog.
 
-`GET /demo` is the one route with no Lambda/Step Functions/Bedrock cost
-at all — a precomputed, static reference report, deliberately
-unauthenticated (ADR-0029).
+`GET /demo` invokes a Lambda serving a precomputed reference report, without
+starting a new review or model call. The three real demos load static frontend
+files instead. Neither path is evidence of a fresh model execution.
 
 ## Human-in-the-loop: the clarification pause
 
@@ -188,22 +209,27 @@ ADR-0031's per-field missing-data policy, it returns
 sequenceDiagram
     participant Visitor
     participant SFN as Step Functions
+    participant Worker as review_worker
     participant Agent as AgentCore Runtime
     participant SCT as StoreClarificationToken<br/>(Lambda)
     participant CR as clarify_review<br/>(Lambda)
 
-    SFN->>Agent: InvokeAgent
-    Agent-->>SFN: status: needs_clarification
-    SFN->>SFN: AgentResponseGate (Choice)
+    SFN->>Worker: review_id, phase: initial
+    Worker->>Agent: Stored brief, requirements, facts
+    Agent-->>Worker: needs_clarification
+    Worker-->>SFN: status: needs_clarification
+    SFN->>SFN: Outcome (Choice)
     SFN->>SCT: lambda:invoke.waitForTaskToken
     SCT->>SFN: DynamoDB: currentStage = needs_clarification
     Note over SFN: Execution pauses here.<br/>Task token held, up to 7 days.
     Visitor->>CR: POST /reviews/{id}/clarify<br/>(answers + optional notes)
-    CR->>SFN: SendTaskSuccess(taskToken, answers)
-    SFN->>SFN: ApplyClarification<br/>(appends clarification_note to the brief,<br/>merges answers over earlier rounds)
-    SFN->>SFN: ClarificationRoundGate<br/>(fails the review past max_clarification_rounds)
-    SFN->>Agent: InvokeAgent (retry, with clarification folded in)
-    Agent-->>SFN: findings
+    CR->>CR: Persist answers in S3; reserve continuation
+    CR->>SFN: SendTaskSuccess(taskToken, resume_key)
+    SFN->>Worker: review_id, phase: resume, resume_key
+    Worker->>Worker: Claim resume; load answers; bound rounds
+    Worker->>Agent: Brief and settled requirements
+    Agent-->>Worker: Findings
+    Worker-->>SFN: status: complete after publication
 ```
 
 The frontend never sees `needs_clarification` as a generic "still
@@ -211,12 +237,35 @@ pending" state — polling explicitly branches on it (otherwise a paused
 review would look like a dead one) and renders a yes/no + multi-select
 question UI instead of continuing to spin.
 
-## Why Step Functions owns orchestration, not a Lambda
+## Durable lifecycle and content-bearing work
 
-Per ADR-0028: Step Functions (Standard) owns only the durable outer job
-lifecycle — accept, validate, persist input, invoke the agent stage
-once, validate/persist the result, publish status. The actual
-reasoning subworkflow (PreflightGate → Retrieve → Reason) runs as its
-own LangGraph graph inside Bedrock AgentCore Runtime, invoked once via
-a direct AWS SDK integration task, not re-implemented as more Step
-Functions states.
+Step Functions owns the outer lifecycle, outcome branching and clarification
+callback. A worker Lambda invokes content-bearing stages and publishes progress
+to DynamoDB. It reads/writes full context in S3, keeping that content outside
+new execution histories. The LangGraph PreflightGate → Retrieve → Reason graph
+runs in AgentCore, called by the worker. Earlier executions retain their
+historical definition/content; changing the source cannot erase old history.
+
+Deeper HTTP admission dispatches its own Standard job, whose worker calls the shorter AgentCore graph with
+the stored resource summary, settled requirements, and bounded parent evidence
+and alternatives. Children and their completion marker commit together in
+DynamoDB. Report GET and chat use the same projection of original S3 evidence
+plus live, validated children. The report rebuilds diagram and budget from that
+projection, and the browser refreshes it after a deeper result is saved.
+The S3 ledger stays unchanged. Output quality is recorded independently of job
+completion; all-rejected deeper results are retained for free idempotent replay.
+The HTTP handler never calls the model. Its durable worker permits one model
+attempt and commits results with job completion; the browser recovers status on
+reload. Job status is separate from retained-output quality. See the
+[asynchronous contract](reviews/2026-10-23-async-deeper.md) and
+[report redesign review](reviews/2026-10-23-report-redesign.md).
+
+## Configuration observations and scope
+
+Ingest preserves only provider Region configuration and bounded local module
+bindings, never provider credentials. RuleEngine emits versioned typed facts and
+direct relationships with known/absent/unknown/unsupported states and conditional
+creation. Region/AZ details on diagrams use those same observations. The stored
+summary flows to reasoning, deeper reviews and report chat; sanitized scope
+limits accompany API reports and HTML/JSON exports. Chat discloses any detail it
+omits under its context limit. See [coverage and explicit limits](terraform-coverage.md).

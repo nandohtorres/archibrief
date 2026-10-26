@@ -1,0 +1,80 @@
+{
+  "version": "semantic-oracle@2026-10-23",
+  "reviewed_on": "2026-10-23",
+  "scope": "Submitted dangerous fixture slices only; not deployed account or runtime state.",
+  "grading": "Human semantic adjudication required. Fixture assertions establish oracle premises, not model correctness. Deterministic owners need not be repeated by the model.",
+  "cases": [
+    {
+      "id": "E01",
+      "case": "F07-dangerous",
+      "fixture": "07_public_ai_api_cost_trap/dangerous",
+      "affected_checks": ["F07-D-03", "F07-D-05"],
+      "owner": "deterministic entry-path facts; model may explain conditional risk",
+      "expected_facts": ["inference_direct declares authorization_type NONE", "No aws_lambda_permission is declared in this fixture slice"],
+      "relationships": ["inference_direct names inference.function_name"],
+      "acceptable_uncertainty": "Public invocation cannot be established without the effective resource policy; new URLs need both invocation actions.",
+      "forbidden_claims": ["The URL is proven publicly invokable", "The declared URL proves an executable paid bypass"],
+      "source": "https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html"
+    },
+    {
+      "id": "E02",
+      "case": "F07-dangerous",
+      "fixture": "07_public_ai_api_cost_trap/dangerous",
+      "affected_checks": [],
+      "owner": "deterministic event-source configuration validation",
+      "expected_facts": ["inference timeout is 300 seconds", "jobs visibility timeout is 30 seconds", "Lambda rejects a mapping whose function timeout exceeds queue visibility"],
+      "relationships": ["jobs event source mapping references jobs queue and inference function"],
+      "acceptable_uncertainty": "No successful mapping deployment or runtime retries are observed. A deployable poor-tuning case requires a separate fixture.",
+      "forbidden_claims": ["This mapping is running and causes concurrent redelivery", "Repeated model calls were observed"],
+      "source": "https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html"
+    },
+    {
+      "id": "E03",
+      "case": "F07-dangerous",
+      "fixture": "07_public_ai_api_cost_trap/dangerous",
+      "affected_checks": ["F07-D-04"],
+      "owner": "deterministic API method and integration facts",
+      "expected_facts": ["post_batch declares authorization NONE", "No aws_api_gateway_integration or aws_lambda_permission is declared in this fixture slice"],
+      "relationships": ["post_batch references the batch API resource", "An authorizer URI is not a method backend integration"],
+      "acceptable_uncertainty": "Authentication configuration is known; a callable batch-to-inference path and actual model use remain unproven.",
+      "forbidden_claims": ["POST /batch is proven to invoke the paid inference backend"],
+      "source": "https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-integrations.html"
+    },
+    {
+      "id": "E04",
+      "case": "F06-dangerous",
+      "fixture": "06_backup_plan_without_protection/dangerous",
+      "affected_checks": ["F06-D-03"],
+      "owner": "deterministic backup selection and native retention facts",
+      "expected_facts": ["dev_only explicitly selects dev_sandbox, not prod_ledger", "prod_ledger independently declares seven-day native RDS retention"],
+      "relationships": ["dev_only references nightly backup plan and dev_sandbox ARN"],
+      "acceptable_uncertainty": "The declared AWS Backup selection excludes prod; native retention is configured, but recovery success and adequacy for the workload are unproven.",
+      "forbidden_claims": ["Production has no backups of any kind", "The seven-day setting proves the recovery target is met"],
+      "source": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.BackupRetention.html"
+    },
+    {
+      "id": "E05",
+      "case": "F08-dangerous",
+      "fixture": "08_seven_day_deletion_fiction/dangerous",
+      "affected_checks": [],
+      "owner": "deterministic bucket lifecycle and replication relationship facts",
+      "expected_facts": ["uploads and uploads_replica each declare versioning and seven-day current expiration", "Neither lifecycle declares noncurrent_version_expiration", "No aws_s3_bucket_replication_configuration is declared in this slice"],
+      "relationships": ["Each lifecycle names its own bucket; no replication edge is established by the replica name"],
+      "acceptable_uncertainty": "Data presence and replication outside the submitted slice are unknown.",
+      "forbidden_claims": ["uploads_replica is proven to contain replicated uploads"],
+      "source": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html"
+    },
+    {
+      "id": "E06",
+      "case": "F06-dangerous",
+      "fixture": "06_backup_plan_without_protection/dangerous",
+      "affected_checks": ["F06-D-02"],
+      "owner": "deterministic source retention, copy override and documented derivation",
+      "expected_facts": ["nightly has eleven rules", "rule_11 explicitly retains the source for one day", "rule_11 copy_action has no lifecycle override", "AWS documents source retention inheritance with optional overrides"],
+      "relationships": ["rule_11 copy targets secondary vault; both vaults use the same provider"],
+      "acceptable_uncertainty": "Derived copy retention follows documented inheritance; it is not an explicitly configured destination lifecycle or evidence of successful copying.",
+      "forbidden_claims": ["The destination explicitly sets delete_after to one day", "The copy is proven cross-Region or successfully created"],
+      "source": "https://docs.aws.amazon.com/aws-backup/latest/devguide/recov-point-create-a-copy.html"
+    }
+  ]
+}

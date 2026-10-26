@@ -62,8 +62,8 @@ class DynamoDBClient:
         self._resource = boto3.resource("dynamodb", region_name=self.region_name)
         self._table = self._resource.Table(self.table_name)
 
-    def put_item(self, item: dict[str, Any]) -> None:
-        self._table.put_item(Item=_dynamodb_safe(item))
+    def put_item(self, item: dict[str, Any], **kwargs: Any) -> None:
+        self._table.put_item(Item=_dynamodb_safe(item), **kwargs)
 
     def get_item(self, key: dict[str, Any], *, consistent: bool = False) -> dict[str, Any] | None:
         response = self._table.get_item(Key=key, **({"ConsistentRead": True} if consistent else {}))
@@ -72,6 +72,23 @@ class DynamoDBClient:
     def query(self, **kwargs: Any) -> list[dict[str, Any]]:
         response = self._table.query(**kwargs)
         return response.get("Items", [])
+
+    def query_all(self, *, max_pages: int = 20, **kwargs: Any) -> list[dict[str, Any]]:
+        """Follow every page, including empty filtered pages; fail on bounds.
+
+        Separate from query() so callers requesting one page retain that
+        contract. A bounded reader must never silently return half a report.
+        """
+        items = []
+        request = dict(kwargs)
+        for _ in range(max_pages):
+            response = self._table.query(**request)
+            items.extend(response.get("Items", []))
+            cursor = response.get("LastEvaluatedKey")
+            if not cursor:
+                return items
+            request["ExclusiveStartKey"] = cursor
+        raise ValueError("query pagination limit exceeded")
 
     def update_item(self, **kwargs: Any) -> None:
         """Field-level update (with an optional ConditionExpression), so

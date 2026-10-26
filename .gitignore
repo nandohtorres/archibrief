@@ -49,6 +49,7 @@ out-live/
 
 # Playwright E2E
 playwright-report/
+frontend/e2e-build-logs/
 test-results/
 
 # Secrets / local config

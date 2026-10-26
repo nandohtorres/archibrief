@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from backend.shared.analysis_quality import public_analysis_quality, public_analysis_scope
+from backend.shared.assessment import finding_assessment
 from backend.shared.models.finding import Finding, FindingType
 from backend.shared.stakeholder.brief import build_stakeholder_view
 
@@ -22,8 +24,8 @@ from backend.shared.stakeholder.brief import build_stakeholder_view
 # confirmed fact nor a rule violation. Not yet validated against a large
 # sample of real model output.
 _PRIORITY_BY_TYPE: dict[FindingType, tuple[str, str]] = {
-    FindingType.DETERMINISTIC_RULE_RESULT: ("high", "High risk"),
-    FindingType.FACT: ("confirmed", "Confirmed"),
+    FindingType.DETERMINISTIC_RULE_RESULT: ("high", "Rule result"),
+    FindingType.FACT: ("confirmed", "Reported fact"),
     FindingType.ASSUMPTION: ("review", "Review"),
     FindingType.INFERENCE: ("review", "Review"),
     FindingType.RECOMMENDATION: ("review", "Review"),
@@ -39,9 +41,13 @@ def compute_presentation(finding: Finding) -> dict[str, str]:
 def stakeholder_view(findings: list[Finding], ledger: dict[str, Any]) -> dict | None:
     """The plain-language cards and budget summary, or None if building
     them fails: like the diagram, never worth failing a report over."""
+    # Every finding is priced, as before assessments existed: report money,
+    # effort and aggregation stay unchanged until they are redesigned.
     try:
         return build_stakeholder_view(
-            findings, ledger.get("terraform_resources"), ledger.get("baseline_answers") or []
+            findings,
+            ledger.get("terraform_resources"),
+            ledger.get("baseline_answers") or [],
         )
     except Exception as exc:  # noqa: BLE001 - any failure just drops the view
         print(json.dumps({"event": "stakeholder_view_failed", "error": type(exc).__name__}))
@@ -52,7 +58,13 @@ def report_findings(findings: list[Finding], view: dict | None) -> list[dict[str
     blocks = (view or {}).get("blocks", {})
     entries = []
     for f in findings:
-        entry = {"record": f.model_dump(mode="json"), "presentation": compute_presentation(f)}
+        record = f.model_dump(mode="json")
+        entry = {
+            "record": record,
+            # Legacy display keys remain for older clients only.
+            "presentation": compute_presentation(f),
+            "assessment": finding_assessment(record),
+        }
         if f.finding_id in blocks:
             entry["stakeholder"] = blocks[f.finding_id]
         entries.append(entry)
@@ -70,6 +82,7 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
         # holds a fixed placeholder.
         "owner_id": "admin",
         "status": "complete",
+        "analysis_quality": public_analysis_quality(ledger.get("analysis_quality")),
         # terraformRepoRef is persisted by IdempotencyGate's PutItem
         # (infra/modules/step-functions-lambda/main.tf); costEstimateTier is
         # computed by finalize.handler.compute_cost_estimate_tier, a
@@ -83,6 +96,17 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
     }
     if view is not None:
         report["budget"] = view["budget"]
+    summary = ledger.get("terraform_resources")
+    scope = (
+        public_analysis_scope(summary.get("analysis_coverage"))
+        if isinstance(summary, dict)
+        else None
+    )
+    if scope:
+        report["analysis_scope"] = scope
+    for field in ("report_projection", "deeper_reviews", "deeper_jobs"):
+        if field in ledger:
+            report[field] = ledger[field]
     # The architecture diagram; older ledgers don't have one.
     if isinstance(ledger.get("architecture"), dict):
         report["architecture"] = ledger["architecture"]

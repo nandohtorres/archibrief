@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { FindingPriority, ReportFinding } from "@/lib/contracts";
+import type { ReportFinding, Severity } from "@/lib/contracts";
+import { assessmentFor, compareAssessments } from "@/lib/assessment";
+import { AssessmentTag } from "./assessment-tag";
 import {
   NODE_HEIGHT,
   NODE_WIDTH,
@@ -10,7 +12,7 @@ import {
   type ArchitectureGraph,
   type PlacedNode,
 } from "@/lib/architecture";
-import { formatFindingId, priorityRank } from "@/lib/workflow";
+import { formatFindingId } from "@/lib/workflow";
 
 interface ArchitectureViewProps {
   graph: ArchitectureGraph;
@@ -20,14 +22,13 @@ interface ArchitectureViewProps {
   focus?: { findingId: string; at: number } | null;
 }
 
-function topPriority(
-  findingIds: string[],
-  byId: Map<string, ReportFinding>,
-): FindingPriority | null {
-  let top: FindingPriority | null = null;
+function topPriority(findingIds: string[], byId: Map<string, ReportFinding>): Severity | "unknown" {
+  let top: Severity | "unknown" = "unknown";
+  const rank = { critical: 4, high: 3, medium: 2, low: 1, unknown: 0 };
   for (const id of findingIds) {
-    const priority = byId.get(id)?.presentation.priority;
-    if (priority && (top === null || priorityRank[priority] > priorityRank[top])) top = priority;
+    const finding = byId.get(id);
+    const severity = finding ? assessmentFor(finding).severity : null;
+    if (severity && rank[severity] > rank[top]) top = severity;
   }
   return top;
 }
@@ -49,18 +50,16 @@ function FindingButtons({
   const listed = ids
     .map((id) => byId.get(id))
     .filter((finding): finding is ReportFinding => finding !== undefined)
-    .sort((a, b) => priorityRank[b.presentation.priority] - priorityRank[a.presentation.priority]);
+    .sort(compareAssessments);
   return (
     <ul className="architecture-finding-list">
-      {listed.map(({ record, presentation }) => (
-        <li key={record.finding_id}>
-          <button type="button" onClick={() => onOpenFinding(record.finding_id)}>
-            <span className={`priority-pill ${presentation.priority}`}>
-              {presentation.short_label}
-            </span>
-            <span className="architecture-finding-text">{record.finding}</span>
+      {listed.map((finding) => (
+        <li key={finding.record.finding_id}>
+          <button type="button" onClick={() => onOpenFinding(finding.record.finding_id)}>
+            <AssessmentTag finding={finding} />
+            <span className="architecture-finding-text">{finding.record.finding}</span>
             <span className="architecture-finding-open">
-              Open {formatFindingId(record.finding_id)} ↑
+              Open {formatFindingId(finding.record.finding_id)} ↑
             </span>
           </button>
         </li>
@@ -202,7 +201,7 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
                   <strong>{node.name}</strong>
                   {node.module && <span className="architecture-node-module">{node.module}</span>}
                   {count > 0 && priority && (
-                    <span className={`architecture-badge ${priority}`} aria-hidden="true">
+                    <span className={`architecture-badge severity-${priority}`} aria-hidden="true">
                       {count}
                     </span>
                   )}
@@ -214,7 +213,7 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
 
         <div className="diagram-legend" aria-label="Diagram legend">
           <span>
-            <i className="architecture-badge high">n</i> High risk
+            <i className="architecture-badge high">n</i> Rule result
           </span>
           <span>
             <i className="architecture-badge review">n</i> Needs review
@@ -223,7 +222,7 @@ export function ArchitectureView({ graph, findings, onOpenFinding, focus }: Arch
             <i className="architecture-badge unknown">n</i> Unknown
           </span>
           <span>
-            <i className="architecture-badge confirmed">n</i> Confirmed fine
+            <i className="architecture-badge confirmed">n</i> Reported fact, not a safety rating
           </span>
           <span>Arrow: one resource references the other in the code</span>
         </div>

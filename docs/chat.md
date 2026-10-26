@@ -93,7 +93,7 @@ the Lambda, so they change without a code deploy):
   status code, limits, replay, refunds, suggestions, logging),
   `tests/frontend/chat.test.ts`, `frontend/e2e/report-chat.spec.ts`.
 - Paid, run deliberately and never in CI:
-  `python -m backend.chat.chat_eval --confirm-paid [--traps] --model <id>`
+  `python -m backend.chat.chat_eval --confirm-paid --max-paid-calls <approved-cap> [--traps] --model <id>`
   runs 24 quality cases over the demo reviews and the 31 trap cases
   against the real model, scored by fixed rules. The model choice is
   the cheapest that clears the bars in `PASS_BARS`.

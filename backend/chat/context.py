@@ -19,6 +19,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from backend.shared.analysis_quality import public_analysis_quality
+from backend.shared.assessment import assessment_rank, finding_assessment
 from backend.shared.sanitize import clip, normalize_text
 
 FIELD_CHARS = 1200
@@ -28,19 +30,6 @@ ALTERNATIVES_PER_FINDING = 3
 # About 9k tokens. Over this, lower-priority findings are cut down to their
 # one-line text, then dropped, rather than failing the question.
 REVIEW_BLOCK_CHARS = 36000
-
-# Same buckets as backend/shared/report.py's _PRIORITY_BY_TYPE (a test
-# keeps them equal), without importing the pydantic models into the chat
-# Lambda.
-PRIORITY_BY_TYPE = {
-    "deterministic-rule-result": "high",
-    "fact": "confirmed",
-    "assumption": "review",
-    "inference": "review",
-    "recommendation": "review",
-    "not-observable": "unknown",
-}
-_PRIORITY_RANK = {"high": 0, "review": 1, "unknown": 2, "confirmed": 3}
 
 NO_RESOURCES_NOTE = (
     "This review was stored before resource summaries were kept with it, so "
@@ -80,7 +69,7 @@ def _order(findings: list[dict]) -> list[dict]:
     indexed = list(enumerate(findings))
     indexed.sort(
         key=lambda pair: (
-            _PRIORITY_RANK.get(PRIORITY_BY_TYPE.get(pair[1].get("type", ""), "review"), 1),
+            *assessment_rank(pair[1]),
             -float(pair[1].get("confidence") or 0),
             pair[0],
         )
@@ -102,7 +91,7 @@ def _compact_finding(alias: str, finding: dict, parent_alias: str | None) -> dic
         "ref": alias,
         "category": _text(finding.get("category"), 40),
         "type": _text(finding.get("type"), 40),
-        "priority": PRIORITY_BY_TYPE.get(finding.get("type", ""), "review"),
+        "assessment": finding_assessment(finding),
         "finding": _text(finding.get("finding")),
         "evidence": _text(finding.get("evidence")),
         "risk_impact": _text(finding.get("risk_impact")),
@@ -131,6 +120,19 @@ def _trim(review_data: dict[str, Any]) -> dict[str, Any]:
     def size() -> int:
         return len(json.dumps(review_data, ensure_ascii=False))
 
+    summary = review_data.get("terraform_resources", {})
+    omitted_observations = 0
+    for resource in reversed(summary.get("resources", [])):
+        if size() <= REVIEW_BLOCK_CHARS:
+            break
+        if resource.pop("observations", None) is not None:
+            resource["observation_details_omitted"] = True
+            omitted_observations += 1
+    if omitted_observations:
+        summary["context_omitted_observation_resources"] = omitted_observations
+        summary["context_scope_note"] = (
+            "Some extracted observations were omitted from this chat context. Unshown settings are not evidence of absence."
+        )
     findings = review_data["findings"]
     for finding in reversed(findings):
         if size() <= REVIEW_BLOCK_CHARS:
@@ -144,6 +146,14 @@ def _trim(review_data: dict[str, Any]) -> dict[str, Any]:
         omitted += 1
     if omitted:
         review_data["omitted_findings"] = omitted
+    omitted_resources = 0
+    resources = summary.get("resources", [])
+    while resources and size() > REVIEW_BLOCK_CHARS - 256:
+        resources.pop()
+        omitted_resources += 1
+    if omitted_resources:
+        summary["truncated"] = True
+        summary["context_omitted_resources"] = omitted_resources
     return review_data
 
 
@@ -203,13 +213,30 @@ def build_review_context(ledger: dict[str, Any]) -> ReviewContext:
             "resources": resources,
             "truncated": bool(summary.get("truncated")),
             "note": _text(summary.get("note"), 800),
+            "analysis_coverage": summary.get("analysis_coverage"),
         }
+        notices = summary.get("not_observable")
+        if isinstance(notices, list):
+            terraform_resources["not_observable"] = [
+                _text(notice, 160) for notice in notices[:10] if isinstance(notice, str)
+            ]
+            terraform_resources["not_observable_total"] = len(notices)
     else:
         terraform_resources = {"resources": [], "available": False, "note": NO_RESOURCES_NOTE}
 
     ctx.review_data = _trim(
         {
             "workload_brief": _text(ledger.get("workload_brief"), BRIEF_CHARS),
+            "analysis_quality": public_analysis_quality(ledger.get("analysis_quality")),
+            "report_projection": ledger.get("report_projection"),
+            "deeper_reviews": [
+                {
+                    "parent_ref": aliases.get(run["parent_finding_id"]),
+                    "analysis_quality": public_analysis_quality(run.get("analysis_quality")),
+                }
+                for run in ledger.get("deeper_reviews", [])[:10]
+            ],
+            "deeper_review_count": len(ledger.get("deeper_reviews", [])),
             "requirements": requirements,
             "findings": compact_findings,
             "terraform_resources": terraform_resources,
@@ -225,4 +252,8 @@ def build_review_context(ledger: dict[str, Any]) -> ReviewContext:
         ctx.finding_citations.pop(f"C-{alias}", None)
     ctx.not_observable_aliases = [a for a in ctx.not_observable_aliases if a in shown]
     ctx.alternatives = [(a, o) for a, o in ctx.alternatives if a in shown]
+    ctx.resource_addresses = {
+        f"{entry['type']}.{entry['name']}"
+        for entry in ctx.review_data["terraform_resources"]["resources"]
+    }
     return ctx

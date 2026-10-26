@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -9,11 +10,20 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import type { ChatTurn, DemoChat, ReportFinding, ReviewReport } from "@/lib/contracts";
+import type {
+  AnalysisQuality,
+  ChatTurn,
+  DemoChat,
+  DeeperJob,
+  ReportFinding,
+  ReviewReport,
+} from "@/lib/contracts";
+import { isReviewReport } from "@/lib/contracts";
 import { isArchitectureGraph, type ArchitectureGraph } from "@/lib/architecture";
-import { getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
+import { fetchReview, getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
 import { reviewerNotesById, type DemoEntry } from "@/lib/demos";
 import { buildReportHtml, downloadFile } from "@/lib/chat";
+import { buildReportExport, reportSnapshotLabel, withEvidenceLabel } from "@/lib/report-review";
 import {
   filterAndSortFindings,
   formatFindingId,
@@ -27,6 +37,8 @@ import { ArchitectureView } from "./architecture-view";
 import { FindingDetail } from "./finding-detail";
 import { GuidedReport } from "./guided-report";
 import { ReportQuestions } from "./report-questions";
+import { AssessmentTag } from "./assessment-tag";
+import { qualityMessage, scopeMessage } from "@/lib/analysis-quality";
 
 interface ReportWorkspaceProps {
   report: ReviewReport;
@@ -46,13 +58,14 @@ const MIN_DETAIL_PANE_WIDTH = 45;
 const MAX_DETAIL_PANE_WIDTH = 85;
 
 export function ReportWorkspace({
-  report,
+  report: initialReport,
   source,
   demo = null,
   demoChat = null,
   architecture: demoArchitecture = null,
   onNewReview,
 }: ReportWorkspaceProps) {
+  const [report, setReport] = useState(initialReport);
   const reviewerNotes = useMemo(() => reviewerNotesById(demo), [demo]);
   const architecture =
     demoArchitecture ?? (isArchitectureGraph(report.architecture) ? report.architecture : null);
@@ -62,13 +75,85 @@ export function ReportWorkspace({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FindingFilter>("all");
   const [sort, setSort] = useState<FindingSort>("priority");
-  const [findings, setFindings] = useState<ReportFinding[]>(report.findings);
+  const [findings, setFindings] = useState<ReportFinding[]>(report.findings.map(withEvidenceLabel));
   const [architectureFocus, setArchitectureFocus] = useState<{
     findingId: string;
     at: number;
   } | null>(null);
   const [selectedId, setSelectedId] = useState(report.findings[0]?.record.finding_id ?? "");
   const [status, setStatus] = useState("");
+  // Keyed on the active jobs themselves, so a poll that only refreshes the
+  // report keeps this loop running instead of tearing it down and restarting it.
+  const activeJobsKey = (report.deeper_jobs ?? [])
+    .filter((job) => job.status === "pending" || job.status === "running")
+    .map((job) => `${job.job_id}:${job.deadline}`)
+    .join(",");
+  useEffect(() => {
+    if (source !== "live" || !activeJobsKey) return;
+    const active = activeJobsKey.split(",").map((entry) => {
+      const [job_id, deadline] = entry.split(":");
+      return { job_id, deadline: Number(deadline) };
+    });
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    function timedOut() {
+      controller.abort();
+      clearTimeout(timer);
+      setStatus(
+        "We couldn't confirm the deeper job's status in time. Your report remains available. Reload to check the saved result.",
+      );
+    }
+    // Stop even if an individual status fetch never resolves.
+    const deadlineTimer = setTimeout(
+      timedOut,
+      Math.max(
+        0,
+        Math.min(8 * 60 * 1000, Math.max(...active.map((job) => job.deadline)) * 1000 - Date.now()),
+      ),
+    );
+    async function poll() {
+      if (active.every((job) => job.deadline * 1000 <= Date.now())) {
+        timedOut();
+        return;
+      }
+      try {
+        const refreshed = await fetchReview(report.review_id, controller.signal);
+        if (controller.signal.aborted) return;
+        if (!isReviewReport(refreshed)) throw new Error("Report status unavailable");
+        setReport(refreshed);
+        setFindings(refreshed.findings.map(withEvidenceLabel));
+        const finished = refreshed.deeper_jobs?.find(
+          (job) =>
+            active.some((a) => a.job_id === job.job_id) &&
+            (job.status === "complete" || job.status === "failed"),
+        );
+        if (finished) {
+          setStatus(
+            finished.status === "complete"
+              ? "Deeper analysis finished. The saved report has been refreshed."
+              : "Deeper analysis could not finish. Your original report and saved findings remain available.",
+          );
+          const child = refreshed.findings.find(
+            (f) => f.record.parent_finding_id === finished.parent_finding_id,
+          );
+          if (child)
+            setSelectedId((current) =>
+              current === finished.parent_finding_id ? child.record.finding_id : current,
+            );
+        } else {
+          timer = setTimeout(poll, 2000);
+        }
+      } catch {
+        if (!controller.signal.aborted) timer = setTimeout(poll, 2000);
+      }
+    }
+    timer = setTimeout(poll, 2000);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+      clearTimeout(deadlineTimer);
+    };
+  }, [report.review_id, activeJobsKey, source]);
   const [questionSeed, setQuestionSeed] = useState("");
   const [seedFindingId, setSeedFindingId] = useState("");
   const [transcript, setTranscript] = useState<ChatTurn[]>([]);
@@ -81,7 +166,9 @@ export function ReportWorkspace({
   );
   const selected =
     visibleFindings.find(({ record }) => record.finding_id === selectedId) ?? visibleFindings[0];
-  const highCount = findings.filter(({ presentation }) => presentation.priority === "high").length;
+  const ruleCount = findings.filter(
+    ({ record }) => record.type === "deterministic-rule-result",
+  ).length;
   const assumptionCount = findings.filter(({ record }) => record.type === "assumption").length;
 
   function selectFinding(findingId: string) {
@@ -144,6 +231,12 @@ export function ReportWorkspace({
   }
 
   function askAboutFinding(finding: ReportFinding) {
+    if (finding.record.parent_finding_id) {
+      setStatus(
+        "Questions currently use the original report. Choose an original finding to ask about it; deeper findings are included in this session's download.",
+      );
+      return;
+    }
     setQuestionSeed(`Explain this finding: ${finding.record.finding}`);
     setSeedFindingId(finding.record.finding_id);
     window.requestAnimationFrame(() =>
@@ -176,19 +269,84 @@ export function ReportWorkspace({
     }
     try {
       const result = (await requestDeeperFinding(report.review_id, findingId)) as {
-        findings: ReportFinding[];
+        findings?: ReportFinding[];
+        analysis_quality?: AnalysisQuality;
+        job?: DeeperJob;
       };
-      const newFindings = result.findings ?? [];
-      if (newFindings.length === 0) {
-        setStatus(`The deeper request for ${formatFindingId(findingId)} returned no new findings.`);
+      if (result.job) {
+        const job = result.job;
+        setReport((current) => ({
+          ...current,
+          deeper_jobs: [
+            ...(current.deeper_jobs ?? []).filter((saved) => saved.job_id !== job.job_id),
+            job,
+          ],
+        }));
+        setStatus(
+          "Deeper analysis is running in the background. You can keep using this report or reload to check its saved status.",
+        );
         return;
       }
-      setFindings((current) => [...current, ...newFindings]);
+      const newFindings = result.findings ?? [];
+      if (newFindings.length === 0) {
+        try {
+          const refreshed = await fetchReview(report.review_id);
+          if (isReviewReport(refreshed)) {
+            setReport(refreshed);
+            setFindings(refreshed.findings.map(withEvidenceLabel));
+          }
+        } catch {
+          /* The completed run can be recovered on reload. */
+        }
+        setStatus(
+          `The deeper request for ${formatFindingId(findingId)} returned no new findings. ${qualityMessage(result.analysis_quality)}`,
+        );
+        return;
+      }
+      try {
+        const refreshed = await fetchReview(report.review_id);
+        if (
+          isReviewReport(refreshed) &&
+          refreshed.report_projection?.children_available &&
+          newFindings.every((child) =>
+            refreshed.findings.some((f) => f.record.finding_id === child.record.finding_id),
+          )
+        ) {
+          setReport(refreshed);
+          setFindings(refreshed.findings.map(withEvidenceLabel));
+          selectFinding(newFindings[0].record.finding_id);
+          setStatus(
+            `Deeper findings saved. The report, guided budget, diagram and chat now use the saved findings. ${qualityMessage(result.analysis_quality)}`,
+          );
+          return;
+        }
+      } catch {
+        // Results were saved by POST, but a failed read must not claim the
+        // original budget/diagram has been refreshed. Keep the bounded view.
+      }
+      setFindings((current) => {
+        const known = new Set(current.map(({ record }) => record.finding_id));
+        return [
+          ...current,
+          ...newFindings
+            .filter(({ record }) => !known.has(record.finding_id))
+            .map(withEvidenceLabel),
+        ];
+      });
       selectFinding(newFindings[0].record.finding_id);
       setStatus(
-        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} added below ${formatFindingId(findingId)}.`,
+        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} available below ${formatFindingId(findingId)}. ${qualityMessage(result.analysis_quality)} The guided budget still describes the original report. Download to keep these findings with this session.`,
       );
     } catch (error) {
+      try {
+        const refreshed = await fetchReview(report.review_id);
+        if (isReviewReport(refreshed)) {
+          setReport(refreshed);
+          setFindings(refreshed.findings.map(withEvidenceLabel));
+        }
+      } catch {
+        /* Keep the last readable report. */
+      }
       setStatus(error instanceof Error ? error.message : "The deeper-analysis request failed.");
     }
   }
@@ -198,7 +356,7 @@ export function ReportWorkspace({
     // GET /reviews/{id}/questions (ADR-0050 §10).
     downloadFile(
       `${report.review_id}-evidence-ledger.json`,
-      JSON.stringify({ ...report, findings, chat_transcript: transcript }, null, 2),
+      JSON.stringify(buildReportExport({ ...report, findings }, transcript, demo), null, 2),
       "application/json",
     );
     setStatus(
@@ -213,7 +371,7 @@ export function ReportWorkspace({
     // conversation; Print → PDF works from it (ADR-0050 §10).
     downloadFile(
       `${report.review_id}-report.html`,
-      buildReportHtml({ ...report, findings }, transcript, title),
+      buildReportHtml({ ...report, findings }, transcript, title, demo),
       "text/html",
     );
     setStatus("Report downloaded with this conversation.");
@@ -287,15 +445,15 @@ export function ReportWorkspace({
             }
           />
           <Metric
-            label="Needs action"
-            value={String(highCount)}
-            detail="High-risk findings to validate"
+            label="Rule results"
+            value={String(ruleCount)}
+            detail="Deterministic checks, not a severity count"
             emphasis
           />
           <Metric
-            label="Cost tier"
+            label="Configuration size"
             value={report.cost_estimate_tier}
-            detail="Not a dollar forecast"
+            detail="Resource-count band, not a bill estimate"
           />
           <Metric
             label="Assumptions"
@@ -303,6 +461,44 @@ export function ReportWorkspace({
             detail="Named and versioned"
           />
         </div>
+        <aside className="scope-note" aria-label="Analysis quality">
+          <strong>Analysis quality</strong>
+          <p>{qualityMessage(report.analysis_quality)}</p>
+          {report.analysis_scope && (
+            <p>
+              <strong>Configuration scope. </strong>
+              {scopeMessage(report.analysis_scope)}
+            </p>
+          )}
+          {report.deeper_jobs?.map((job) => (
+            <p key={job.job_id}>
+              Deeper review of {formatFindingId(job.parent_finding_id)}: {job.status}.
+              {job.status === "failed" && " Your original report remains available."}
+            </p>
+          ))}
+          {report.deeper_reviews?.map((run) => (
+            <p key={run.parent_finding_id}>
+              Deeper review of {formatFindingId(run.parent_finding_id)}:{" "}
+              {qualityMessage(run.analysis_quality)}
+            </p>
+          ))}
+          {report.report_projection && !report.report_projection.children_available && (
+            <p>Saved deeper findings are unavailable in this report configuration.</p>
+          )}
+          {!!report.report_projection?.excluded_child_count && (
+            <p>
+              Some saved deeper findings could not be included. Report completeness is limited;
+              reload before relying on its totals.
+            </p>
+          )}
+        </aside>
+        {findings.some(({ record }) => record.parent_finding_id) &&
+          !report.report_projection?.children_available && (
+            <p className="field-help">
+              The guided budget, diagram and chat context cover the original report. Added deeper
+              findings are shown in the technical view and downloads.
+            </p>
+          )}
       </div>
 
       <div className="report-content">
@@ -348,20 +544,41 @@ export function ReportWorkspace({
         {view === "technical" ? (
           <div id="technical-panel" role="tabpanel" aria-labelledby="technical-tab" tabIndex={0}>
             <div className="finding-filters" aria-label="Filter findings">
-              {(["all", "high", "review", "confirmed", "unknown"] as FindingFilter[]).map(
-                (value) => (
-                  <button
-                    className={`finding-filter-${value}`}
-                    type="button"
-                    key={value}
-                    aria-pressed={filter === value}
-                    onClick={() => setFilter(value)}
-                  >
-                    {value === "all" ? `All (${findings.length})` : value}
-                  </button>
-                ),
-              )}
+              {(
+                [
+                  "all",
+                  "needed",
+                  "critical",
+                  "high",
+                  "medium",
+                  "low",
+                  "none",
+                  "unknown",
+                ] as FindingFilter[]
+              ).map((value) => (
+                <button
+                  className={`finding-filter-${value}`}
+                  type="button"
+                  key={value}
+                  aria-pressed={filter === value}
+                  onClick={() => setFilter(value)}
+                >
+                  {value === "all"
+                    ? `All (${findings.length})`
+                    : value === "needed"
+                      ? "Action proposed"
+                      : value === "none"
+                        ? "No action proposed"
+                        : value === "unknown"
+                          ? "Unassessed"
+                          : `${value} risk`}
+                </button>
+              ))}
             </div>
+            <p className="field-help">
+              Risk and action assessments are separate from evidence type and confidence. Each
+              assessment names its source; unassessed findings are not safety confirmations.
+            </p>
             <div className="finding-toolbar">
               <label htmlFor="finding-search">
                 Find findings
@@ -384,7 +601,7 @@ export function ReportWorkspace({
                   value={sort}
                   onChange={(event) => setSort(event.target.value as FindingSort)}
                 >
-                  <option value="priority">Risk: high to low</option>
+                  <option value="priority">Action first, then severity</option>
                   <option value="confidence">Confidence: high to low</option>
                   <option value="title">Title: A–Z</option>
                 </select>
@@ -412,9 +629,7 @@ export function ReportWorkspace({
                         <span className="finding-list-main">
                           <strong>{finding.record.finding}</strong>
                           <span>
-                            <i className={`priority-pill ${finding.presentation.priority}`}>
-                              {finding.presentation.short_label}
-                            </i>
+                            <AssessmentTag finding={finding} />
                             <i className="category-tag">{finding.record.category}</i>
                             <i className="type-tag">{finding.record.type}</i>
                           </span>
@@ -478,7 +693,7 @@ export function ReportWorkspace({
             tabIndex={0}
           >
             <GuidedReport
-              report={report}
+              report={{ ...report, findings: report.findings.map(withEvidenceLabel) }}
               reviewerNotes={reviewerNotes}
               titled={demo !== null}
               onOpenTechnicalFinding={openTechnicalFinding}
@@ -514,15 +729,13 @@ export function ReportWorkspace({
           questionSeed={questionSeed}
           seedFindingId={seedFindingId}
           demoChat={demoChat}
+          reviewerNotes={demo?.reviewerNotes}
           onQuestionSeedConsumed={consumeQuestionSeed}
           onOpenFinding={openTechnicalFinding}
           onTranscriptChange={setTranscript}
           onDownload={downloadReport}
         />
-        <div className="snapshot-bar">
-          Snapshot · rules 2026.09.1 · corpus 2026-09-06 · prompt 1.4 where used · static review
-          only
-        </div>
+        <div className="snapshot-bar">{reportSnapshotLabel(findings)}</div>
       </div>
     </section>
   );

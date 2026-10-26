@@ -2,8 +2,55 @@
 // public/demos with no admin key and no API call at all.
 import { expect, test } from "@playwright/test";
 import { LIVE_URL } from "../playwright.config";
+import { readFile } from "node:fs/promises";
 
 test.describe("demo reviews from saved files", () => {
+  test("a direct demo link survives reload and browser history", async ({ page }) => {
+    await page.goto(`${LIVE_URL}/?demo=fec-database`);
+    await expect(page.locator("#report-heading")).toHaveText(
+      "Federal Election Commission databases",
+    );
+    await page.reload();
+    await expect(page.locator("#report-heading")).toHaveText(
+      "Federal Election Commission databases",
+    );
+    await page.getByRole("button", { name: "New review", exact: true }).click();
+    await expect(page).not.toHaveURL(/demo=/);
+    await page.goBack();
+    await expect(page.locator("#report-heading")).toHaveText(
+      "Federal Election Commission databases",
+    );
+    await page.goForward();
+    await expect(page.locator("#report-heading")).toHaveCount(0);
+  });
+
+  test("corrections accompany saved answers and both downloads", async ({ page }) => {
+    await page.goto(`${LIVE_URL}/?demo=breach-pattern`);
+    await expect(page.locator("#report-heading")).toBeVisible();
+    await expect(
+      page.getByRole("complementary", { name: "Saved answer corrections" }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Which issues should I fix first, and why?", exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole("complementary", { name: "Cited finding correction" })
+        .filter({ hasText: "SSE-S3" }),
+    ).toBeVisible();
+    const htmlWait = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download report", exact: true }).click();
+    const htmlDownload = await htmlWait;
+    const html = await readFile((await htmlDownload.path())!, "utf8");
+    expect(html).toContain("Reviewer note");
+    expect(html).toContain("SSE-S3");
+    const jsonWait = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export ledger", exact: true }).click();
+    const jsonDownload = await jsonWait;
+    const data = JSON.parse(await readFile((await jsonDownload.path())!, "utf8"));
+    expect(data.demo_review.reviewer_notes).toHaveLength(5);
+    expect(data.chat_transcript).toHaveLength(1);
+  });
   test("the submission form's example strip opens a full report with no upload", async ({
     page,
   }) => {

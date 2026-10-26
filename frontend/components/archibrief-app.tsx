@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppHeader, BrandEmblem } from "./app-header";
 import { DemoCards } from "./demo-cards";
 import { FailurePanel } from "./state-panel";
@@ -21,7 +21,13 @@ import {
   submitReview,
   uploadArchiveToS3,
 } from "@/lib/api";
-import { archiveDigest } from "@/lib/review-access";
+import {
+  archiveDigest,
+  clearActiveReview,
+  loadActiveReview,
+  saveActiveReview,
+} from "@/lib/review-access";
+import { demoIdFromUrl, setDemoLocation } from "@/lib/report-location";
 import { publicSubmissionEnabled } from "@/lib/public-access";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
 import type {
@@ -85,6 +91,7 @@ export function ArchiBriefApp() {
     request?: SubmitReviewRequest;
   } | null>(null);
   const apiConfigured = Boolean(getApiBaseUrl());
+  const demoNavigation = useRef(0);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
@@ -122,14 +129,15 @@ export function ArchiBriefApp() {
   useEffect(() => {
     if (screen !== "progress" || progressMode !== "live" || !liveReviewId) return;
     let cancelled = false;
-    let attempts = 0;
+    let failures = 0;
     const intervalMs = 3000;
-    const maxAttempts = Math.ceil(REVIEW_DEADLINE_MS / intervalMs);
+    const startedAt = loadActiveReview(getApiBaseUrl())?.startedAt ?? Date.now();
+    let nextPoll: number | undefined;
     const poll = async () => {
-      attempts += 1;
       try {
         const result = await fetchReview(liveReviewId);
         if (cancelled) return;
+        failures = 0;
         setLiveCurrentStage((result as ReviewStatusPointer).currentStage ?? null);
         if (result.status === "complete") {
           setReport(result as ReviewReport);
@@ -150,11 +158,12 @@ export function ArchiBriefApp() {
           return;
         }
         if (result.status === "failed") {
+          clearActiveReview();
           setFailureMessage(failureMessageFor((result as ReviewStatusPointer).failureCode));
           setScreen("failure");
           return;
         }
-        if (attempts >= maxAttempts) {
+        if (Date.now() - startedAt >= REVIEW_DEADLINE_MS) {
           console.error("review polling deadline exceeded", {
             reviewId: liveReviewId,
             lastStatus: result.status,
@@ -165,18 +174,28 @@ export function ArchiBriefApp() {
           setScreen("failure");
           return;
         }
-        window.setTimeout(poll, intervalMs);
+        nextPoll = window.setTimeout(poll, intervalMs);
       } catch (error) {
         if (cancelled) return;
+        const retryable =
+          !(error instanceof ApiRequestError) ||
+          error.status === null ||
+          error.status === 408 ||
+          error.status === 429 ||
+          error.status >= 500;
+        if (retryable && ++failures <= 3 && Date.now() - startedAt < REVIEW_DEADLINE_MS) {
+          nextPoll = window.setTimeout(poll, intervalMs * 2 ** (failures - 1));
+          return;
+        }
         setFailureMessage(
-          error instanceof Error
-            ? `Could not retrieve review status: ${error.message}`
-            : "Could not retrieve review status.",
+          error instanceof ApiRequestError && (error.status === 403 || error.status === 404)
+            ? "This review is unavailable or your access has expired. Returning does not start another review."
+            : "Could not retrieve review status. The review may still be running. Retry to check the same review without submitting again.",
         );
         setScreen("failure");
       }
     };
-    setLiveElapsedSeconds(0);
+    setLiveElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
     const elapsedTimer = window.setInterval(
       () => setLiveElapsedSeconds((seconds) => seconds + 1),
       1000,
@@ -186,6 +205,7 @@ export function ArchiBriefApp() {
       cancelled = true;
       window.clearInterval(elapsedTimer);
       window.clearTimeout(firstPoll);
+      window.clearTimeout(nextPoll);
     };
   }, [screen, progressMode, liveReviewId]);
 
@@ -240,6 +260,7 @@ export function ArchiBriefApp() {
         };
       }
       const response = await submitReview(pending.request);
+      saveActiveReview(response.reviewId, getApiBaseUrl()!);
       setLiveReviewId(response.reviewId);
       setLiveCurrentStage(null);
       setProgressMode("live");
@@ -262,6 +283,8 @@ export function ArchiBriefApp() {
   }
 
   function goHome() {
+    demoNavigation.current += 1;
+    setDemoLocation(null);
     setScreen("submission");
     window.scrollTo({ top: 0 });
   }
@@ -269,6 +292,8 @@ export function ArchiBriefApp() {
   // Header links: scroll to a home page section, rendering home first when
   // another screen is showing.
   function goToSection(id: string) {
+    demoNavigation.current += 1;
+    setDemoLocation(null);
     if (screen === "submission") {
       document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
       return;
@@ -291,15 +316,61 @@ export function ArchiBriefApp() {
   }
 
   // Opens a finished demo review from its saved files (lib/demos.ts).
-  async function showDemo(entry: DemoEntry) {
+  const showDemo = useCallback(async (entry: DemoEntry, updateLocation = true) => {
+    const navigation = ++demoNavigation.current;
     const loaded = await fetchDemo(entry);
+    if (navigation !== demoNavigation.current) return;
     setReport(loaded.report);
     setReportSource("demo");
     setDemo(loaded.entry);
     setDemoChat(loaded.chat);
     setDemoArchitecture(loaded.architecture);
     setScreen("report");
-  }
+    if (updateLocation) setDemoLocation(entry.id);
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let restore = 0;
+    async function restoreDemo() {
+      const attempt = ++restore;
+      const id = demoIdFromUrl(window.location.href);
+      let navigation = ++demoNavigation.current;
+      if (!id) {
+        const active = loadActiveReview(getApiBaseUrl());
+        if (active) {
+          setLiveReviewId(active.reviewId);
+          setProgressMode("live");
+          setScreen("progress");
+        } else setScreen("submission");
+        setSampleLoading(false);
+        return;
+      }
+      setSampleLoading(true);
+      try {
+        const entries = await fetchDemoIndex();
+        if (disposed || attempt !== restore || navigation !== demoNavigation.current) return;
+        const entry = entries.find((candidate) => candidate.id === id);
+        if (!entry) throw new Error("Unknown demo");
+        navigation += 1; // showDemo owns the next navigation ticket.
+        await showDemo(entry, false);
+      } catch {
+        if (disposed || attempt !== restore || navigation !== demoNavigation.current) return;
+        setFailureMessage("That demo link could not be opened. Choose a demo from the home page.");
+        setScreen("failure");
+      } finally {
+        if (!disposed && attempt === restore && navigation === demoNavigation.current)
+          setSampleLoading(false);
+      }
+    }
+    void restoreDemo();
+    window.addEventListener("popstate", restoreDemo);
+    return () => {
+      disposed = true;
+      demoNavigation.current += 1;
+      window.removeEventListener("popstate", restoreDemo);
+    };
+  }, [showDemo]);
 
   async function openDemo(entry: DemoEntry) {
     setOpeningDemoId(entry.id);
@@ -366,6 +437,7 @@ export function ArchiBriefApp() {
         answers,
         additional_notes: additionalNotes || undefined,
       });
+      saveActiveReview(liveReviewId, getApiBaseUrl()!);
       // Resuming via SendTaskSuccess happens server-side (clarify_review
       // Lambda); re-entering "progress" restarts the same live-polling
       // effect from a fresh attempt count, same as the original submission.
@@ -429,6 +501,28 @@ export function ArchiBriefApp() {
               onOpenSample={openSample}
               demos={<DemoCards variant="landing" openingId={openingDemoId} onOpen={openDemo} />}
             />
+            {apiConfigured && liveReviewId && (
+              <div className="landing-submit">
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => {
+                    const active = loadActiveReview(getApiBaseUrl());
+                    if (active) {
+                      setLiveReviewId(active.reviewId);
+                      setProgressMode("live");
+                      setScreen("progress");
+                    } else {
+                      setSubmitNotice(
+                        "Access to the previous review has expired or is unavailable in this tab.",
+                      );
+                    }
+                  }}
+                >
+                  Resume last review in this tab
+                </button>
+              </div>
+            )}
             <div id="submit" className="landing-submit">
               <SubmissionStep
                 apiConfigured={apiConfigured}
@@ -476,18 +570,26 @@ export function ArchiBriefApp() {
         )}
         {screen === "report" && (
           <ReportWorkspace
+            key={report.review_id}
             report={report}
             source={reportSource}
             demo={demo}
             demoChat={demoChat}
             architecture={demoArchitecture}
-            onNewReview={() => setScreen("submission")}
+            onNewReview={goHome}
           />
         )}
         {screen === "failure" && (
           <FailurePanel
             message={failureMessage}
-            onRetry={() => setScreen("submission")}
+            onRetry={() => {
+              const active = loadActiveReview(getApiBaseUrl());
+              if (active) {
+                setLiveReviewId(active.reviewId);
+                setProgressMode("live");
+                setScreen("progress");
+              } else goHome();
+            }}
             onOpenSample={openSample}
             sampleLoading={sampleLoading}
           />

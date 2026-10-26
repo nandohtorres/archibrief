@@ -25,7 +25,7 @@ import re
 from typing import Any
 
 from backend.lambdas.rule_engine.hcl_eval import is_created
-from backend.lambdas.rule_engine.resource_summary import copies_of
+from backend.lambdas.rule_engine.resource_summary import build_resource_summary, copies_of
 from backend.shared.architecture_links import INTERNET_ID, link_findings
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
 
@@ -167,6 +167,11 @@ def build_graph(parsed: dict) -> dict:
     """{"version", "lanes", "nodes", "edges", "account_findings", "truncated"},
     with no findings placed yet (architecture_links.link_findings does that)."""
     resources = _created_resources(parsed)
+    summary = build_resource_summary(parsed)
+    observed = {
+        f"{entry['type']}.{entry['name']}": entry.get("observations", {})
+        for entry in summary["resources"]
+    }
     known: dict[str, str] = {}
     for resource_type, key, _body in resources:
         known[f"{resource_type}.{key}"] = f"{resource_type}.{key}"
@@ -197,6 +202,23 @@ def build_graph(parsed: dict) -> dict:
         copies = copies_of(body, parsed, module_of(body))
         if copies is not None:
             node["copies"] = copies
+        observations = observed.get(f"{resource_type}.{display_name(key)}", {})
+        regions = [
+            fact["value"]
+            for fact in observations.get("facts", [])
+            if fact["setting"] == "resource.region" and fact["state"] == "known"
+        ]
+        zones = sorted(
+            {
+                fact["value"]
+                for fact in observations.get("facts", [])
+                if fact["setting"].startswith("availability_zone") and fact["state"] == "known"
+            }
+        )
+        if regions:
+            node["details"].append("Region: " + regions[0])
+        if zones:
+            node["details"].append("Declared AZs: " + ", ".join(zones[:MAX_NODES]))
         nodes[node_id] = node
 
     edges: set[tuple[str, str]] = set()
@@ -270,6 +292,7 @@ def build_graph(parsed: dict) -> dict:
         "edges": [{"from": a, "to": b} for a, b in sorted(edges)],
         "account_findings": [],
         "truncated": truncated,
+        "analysis_coverage": summary["analysis_coverage"],
     }
 
 

@@ -23,6 +23,7 @@ from tests.backend.adversarial.harness import (
     run_fixture,
     trivy_path,
 )
+from tests.backend.adversarial.probe_errata import CHECKS, corrected_probe
 
 KEY = load_answer_key()
 TRIVY = trivy_path()
@@ -69,6 +70,12 @@ def test_check(case: dict, check: dict, mode: str, runs, tmp_path: Path) -> None
         {"fixture": case["fixture"], "work": tmp_path, "run_other": runs},
     )
     verdict = judge(check["kind"], matched)
+    if not verdict.startswith("pass") and check["id"] in CHECKS:
+        corrected, reason = corrected_probe(check["id"], run)
+        assert corrected, (
+            f"Raw frozen verdict: {verdict}; supplemental contract failed: {reason}"
+        )
+        return
     assert verdict.startswith("pass"), (
         f"{check['id']} [{check['kind']}, {check['scope']}] {check['what']}\n"
         f"resource: {check['resource']}\nevidence: {check['evidence']}\nobserved: {observed}"

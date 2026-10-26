@@ -1,6 +1,7 @@
 import type { ReportFinding } from "@/lib/contracts";
 import { citationGap, confidenceLabel, formatFindingId } from "@/lib/workflow";
 import type { ReviewerNote } from "@/lib/demos";
+import { AssessmentTag } from "./assessment-tag";
 
 interface FindingDetailProps {
   finding: ReportFinding;
@@ -17,21 +18,21 @@ function percentage(value: number): string {
 }
 
 export function FindingDetail({
-  finding: { record, presentation },
+  finding,
   onAsk,
   onShowArchitecture,
   onGoDeeper,
   reviewerNote = null,
 }: FindingDetailProps) {
+  const { record, presentation } = finding;
   return (
     <article className="finding-detail" id="finding-detail" aria-live="polite">
       <div className="finding-detail-heading">
         <span className="finding-id">{formatFindingId(record.finding_id)}</span>
         <h3>{record.finding}</h3>
         <div className="finding-tags">
-          <span className={`priority-pill ${presentation.priority}`}>
-            {presentation.short_label}
-          </span>
+          <AssessmentTag finding={finding} />
+          <span className="type-tag">{presentation.short_label}</span>
           <span className="category-tag">{record.category}</span>
           <span className="type-tag">{record.type}</span>
           <span className="confidence-tag">
@@ -199,7 +200,7 @@ export function FindingDetail({
       </details>
 
       <div className="finding-actions">
-        {record.type !== "not-observable" && (
+        {record.type !== "not-observable" && !record.parent_finding_id && (
           <button
             className="button secondary"
             type="button"

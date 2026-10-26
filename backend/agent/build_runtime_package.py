@@ -214,6 +214,9 @@ def _write_zip(staging_dir: Path, dest_zip: Path) -> None:
     permission bits, neither of which AWS's AgentCore Runtime tolerates
     correctly by default on a Windows-built archive."""
     tmp_zip = dest_zip.with_suffix(".zip.tmp")
+    # The temporary zip is written beside the destination, so a fresh
+    # checkout needs the build directory before anything is written.
+    dest_zip.parent.mkdir(parents=True, exist_ok=True)
     if tmp_zip.exists():
         tmp_zip.unlink()
 
@@ -259,7 +262,6 @@ def _write_zip(staging_dir: Path, dest_zip: Path) -> None:
             f"{[n for n in names if n.startswith('backend/agent/') and n.endswith('.py')]}"
         )
 
-    dest_zip.parent.mkdir(parents=True, exist_ok=True)
     if dest_zip.exists():
         dest_zip.unlink()
     tmp_zip.rename(dest_zip)

@@ -139,9 +139,14 @@ def test_count_zero_resources_are_left_out():
 
 def test_types_without_listed_settings_still_appear():
     summary = build_resource_summary(_parse_fixture("t09_sg_ipv6_open"))
-    assert summary["resources"] == [
-        {"type": "aws_security_group", "name": "admin", "settings": {}}
-    ]
+    assert [
+        {key: entry[key] for key in ("type", "name", "settings")}
+        for entry in summary["resources"]
+    ] == [{"type": "aws_security_group", "name": "admin", "settings": {}}]
+    assert (
+        summary["resources"][0]["observations"]["coverage"]["entry_paths"]
+        == "not_inspected"
+    )
     assert "never describe it as missing" in summary["note"]
 
 
@@ -335,21 +340,43 @@ resource "aws_backup_plan" "this" {
 
 
 def test_backup_rule_overflow_is_disclosed_and_keeps_the_only_short_retention_copy():
-    rules = [{"schedule": "cron(0 0 * * ? *)", "lifecycle": [{"delete_after": 35}]} for _ in range(10)]
-    rules.append({"schedule": "cron(0 0 * * ? *)", "lifecycle": [{"delete_after": 1}], "copy_action": [{}]})
+    rules = [
+        {"schedule": "cron(0 0 * * ? *)", "lifecycle": [{"delete_after": 35}]}
+        for _ in range(10)
+    ]
+    rules.append(
+        {
+            "schedule": "cron(0 0 * * ? *)",
+            "lifecycle": [{"delete_after": 1}],
+            "copy_action": [{}],
+        }
+    )
     parsed = {"resources": {"aws_backup_plan": {"plan": {"rule": rules}}}}
     (entry,) = build_resource_summary(parsed)["resources"]
     assert entry["rules_total"] == 11
     assert entry["rules_truncated"] is True
     assert len(entry["rules"]) == 10
-    assert any(rule["copied_to_another_vault"] and rule["delete_after_days"] == 1 for rule in entry["rules"])
+    assert any(
+        rule["copied_to_another_vault"] and rule["delete_after_days"] == 1
+        for rule in entry["rules"]
+    )
     assert "source_index" in entry["rules"][0]
 
 
 def test_log_retention_default_and_explicit_zero_mean_never_expires():
-    parsed = {"resources": {"aws_cloudwatch_log_group": {"default": {}, "explicit": {"retention_in_days": 0}}}}
+    parsed = {
+        "resources": {
+            "aws_cloudwatch_log_group": {
+                "default": {},
+                "explicit": {"retention_in_days": 0},
+            }
+        }
+    }
     entries = build_resource_summary(parsed)["resources"]
-    assert all("never expires" in str(entry["settings"]["retention_in_days"]) for entry in entries)
+    assert all(
+        "never expires" in str(entry["settings"]["retention_in_days"])
+        for entry in entries
+    )
 
 
 def test_rds_cluster_snapshot_settings_are_stated(tmp_path):
@@ -369,7 +396,9 @@ resource "aws_rds_cluster" "prod" {
     assert settings["copy_tags_to_snapshot"] is True
     assert settings["skip_final_snapshot"] is True
     bare = _settings(
-        build_resource_summary(_parse_text(tmp_path, 'resource "aws_rds_cluster" "b" {}\n')),
+        build_resource_summary(
+            _parse_text(tmp_path, 'resource "aws_rds_cluster" "b" {}\n')
+        ),
         "aws_rds_cluster",
     )
     assert bare["copy_tags_to_snapshot"] == "not set (default: false)"

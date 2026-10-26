@@ -31,6 +31,8 @@ from __future__ import annotations
 import re
 
 from backend.lambdas.rule_engine.hcl_eval import is_created, resolve
+from backend.shared.configuration_checks import enrich_observations
+from backend.shared.terraform_observations import ObservationBudget, ResourceObservations
 from backend.shared.terraform_scope import display_name, module_of
 
 NOT_SET = "not set"
@@ -374,6 +376,7 @@ def build_resource_summary(parsed: dict) -> dict:
     "note": str}."""
     entries: list[dict] = []
     total = 0
+    observation_budget = ObservationBudget()
     for resource_type in sorted(parsed.get("resources", {})):
         if not _RESOURCE_TYPE.fullmatch(resource_type):
             continue
@@ -403,6 +406,9 @@ def build_resource_summary(parsed: dict) -> dict:
             copies = copies_of(body, parsed, module) if isinstance(body, dict) else None
             if copies is not None:
                 entry["copies"] = copies
+            if isinstance(body, dict):
+                bundle = ResourceObservations(resource_type, key, body, parsed, copies).build()
+                entry["observations"] = bundle
             if resource_type == "aws_backup_plan" and isinstance(body, dict):
                 entry["rules"] = _backup_rules(body, parsed, module)
                 raw_rules = body.get("rule", [])
@@ -410,7 +416,19 @@ def build_resource_summary(parsed: dict) -> dict:
                 entry["rules_total"] = sum(isinstance(rule, dict) for rule in raw_rules)
                 entry["rules_truncated"] = entry["rules_total"] > len(entry["rules"])
             entries.append(entry)
+    enrich_observations(entries)
+    for entry in entries:
+        if (bundle := entry.pop("observations", None)) and (
+            observed := observation_budget.admit(bundle)
+        ):
+            entry["observations"] = observed
     result = {"resources": entries, "truncated": total > len(entries), "note": COVERAGE_NOTE}
+    result["analysis_coverage"] = observation_budget.manifest()
+    result["analysis_coverage"]["omitted_resources"] += total - len(entries)
+    result["analysis_coverage"]["truncated"] = bool(
+        result["analysis_coverage"]["omitted_resources"]
+        or result["analysis_coverage"]["omitted_items"]
+    )
     if parsed.get("not_observable"):
         result["not_observable"] = parsed["not_observable"]
     return result
