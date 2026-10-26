@@ -54,10 +54,12 @@ export default function PrivacyPage() {
 
         <h2>Access to your review</h2>
         <p>
-          Your browser keeps the keys to your review in this tab&apos;s session storage, never in a
-          URL. Closing the tab loses access. Anyone you give the read key to can read the review;
-          follow-up actions also need your original network. Your theme choice (light or dark) is
-          kept in local storage on your device.
+          Your browser keeps the keys to your reviews in its local storage on your device, never in
+          a URL, so you can reopen them from &ldquo;Your recent reviews&rdquo; until they expire
+          after 7 days. A review link contains only its ID and opens only in the browser that
+          submitted it. Clearing site data or using a private window removes that access. Anyone you
+          give the read key to can read the review; follow-up actions also need your original
+          network. Your theme choice (light or dark) is kept in local storage too.
         </p>
 
         <h2>How long it&apos;s kept</h2>

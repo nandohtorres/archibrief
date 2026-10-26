@@ -23,11 +23,21 @@ import {
 } from "@/lib/api";
 import {
   archiveDigest,
+  canOpenReview,
   clearActiveReview,
   loadActiveReview,
+  recentReviews,
+  rememberReview,
   saveActiveReview,
+  type RecentReview,
 } from "@/lib/review-access";
-import { demoIdFromUrl, setDemoLocation } from "@/lib/report-location";
+import {
+  demoIdFromUrl,
+  reviewIdFromUrl,
+  setDemoLocation,
+  setReviewLocation,
+} from "@/lib/report-location";
+import { RecentReviews } from "./recent-reviews";
 import { publicSubmissionEnabled } from "@/lib/public-access";
 import { fixturePreflightFields, fixtureProgressStages, fixtureReport } from "@/lib/fixtures";
 import type {
@@ -69,6 +79,7 @@ export function ArchiBriefApp() {
   const [progressIndex, setProgressIndex] = useState(0);
   const [progressMode, setProgressMode] = useState<"fixture" | "live">("fixture");
   const [liveReviewId, setLiveReviewId] = useState<string | null>(null);
+  const [recent, setRecent] = useState<RecentReview[]>([]);
   const [liveCurrentStage, setLiveCurrentStage] = useState<string | null>(null);
   const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
   const [clarifyFields, setClarifyFields] = useState<string[]>([]);
@@ -261,6 +272,8 @@ export function ArchiBriefApp() {
       }
       const response = await submitReview(pending.request);
       saveActiveReview(response.reviewId, getApiBaseUrl()!);
+      rememberReview(response.reviewId, values.terraformRepoRef);
+      setReviewLocation(response.reviewId);
       setLiveReviewId(response.reviewId);
       setLiveCurrentStage(null);
       setProgressMode("live");
@@ -285,6 +298,7 @@ export function ArchiBriefApp() {
   function goHome() {
     demoNavigation.current += 1;
     setDemoLocation(null);
+    setRecent(recentReviews());
     setScreen("submission");
     window.scrollTo({ top: 0 });
   }
@@ -329,6 +343,20 @@ export function ArchiBriefApp() {
     if (updateLocation) setDemoLocation(entry.id);
   }, []);
 
+  // Opens one of this browser's reviews: a finished one shows its saved
+  // report on the first poll; one still running resumes polling.
+  const openReview = useCallback((reviewId: string, updateLocation = true) => {
+    const active = loadActiveReview(getApiBaseUrl());
+    // The polling deadline counts from when this review was submitted, if
+    // this tab knows; reopening must not restart another review's clock.
+    if (active?.reviewId !== reviewId) saveActiveReview(reviewId, getApiBaseUrl()!);
+    setLiveReviewId(reviewId);
+    setLiveCurrentStage(null);
+    setProgressMode("live");
+    setScreen("progress");
+    if (updateLocation) setReviewLocation(reviewId);
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     let restore = 0;
@@ -337,12 +365,20 @@ export function ArchiBriefApp() {
       const id = demoIdFromUrl(window.location.href);
       let navigation = ++demoNavigation.current;
       if (!id) {
-        // Always land on the home page. A review saved in this tab is only
-        // offered there (the "Open your last review" button), never reopened
-        // on its own.
-        const active = loadActiveReview(getApiBaseUrl());
-        if (active) setLiveReviewId(active.reviewId);
-        setScreen("submission");
+        // A review URL reopens that review; anything else lands home.
+        const reviewId = reviewIdFromUrl(window.location.href);
+        if (reviewId && getApiBaseUrl()) {
+          if (canOpenReview(reviewId)) openReview(reviewId, false);
+          else {
+            setFailureMessage(
+              "This review can't be opened here. Reviews open only in the browser that submitted them, for 7 days.",
+            );
+            setScreen("failure");
+          }
+        } else {
+          setRecent(recentReviews());
+          setScreen("submission");
+        }
         setSampleLoading(false);
         return;
       }
@@ -370,7 +406,7 @@ export function ArchiBriefApp() {
       demoNavigation.current += 1;
       window.removeEventListener("popstate", restoreDemo);
     };
-  }, [showDemo]);
+  }, [showDemo, openReview]);
 
   async function openDemo(entry: DemoEntry) {
     setOpeningDemoId(entry.id);
@@ -501,26 +537,9 @@ export function ArchiBriefApp() {
               onOpenSample={openSample}
               demos={<DemoCards variant="landing" openingId={openingDemoId} onOpen={openDemo} />}
             />
-            {apiConfigured && liveReviewId && (
+            {apiConfigured && recent.length > 0 && (
               <div className="landing-submit">
-                <button
-                  className="button secondary"
-                  type="button"
-                  onClick={() => {
-                    const active = loadActiveReview(getApiBaseUrl());
-                    if (active) {
-                      setLiveReviewId(active.reviewId);
-                      setProgressMode("live");
-                      setScreen("progress");
-                    } else {
-                      setSubmitNotice(
-                        "Access to the previous review has expired or is unavailable in this tab.",
-                      );
-                    }
-                  }}
-                >
-                  Open your last review
-                </button>
+                <RecentReviews reviews={recent} onOpen={(reviewId) => openReview(reviewId)} />
               </div>
             )}
             <div id="submit" className="landing-submit">
