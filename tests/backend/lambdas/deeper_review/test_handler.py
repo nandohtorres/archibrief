@@ -414,3 +414,24 @@ def test_worker_rejects_content_bearing_or_forged_envelopes(env):
             },
             None,
         )
+
+
+def test_worker_service_error_logs_its_code_without_content(env, capsys):
+    from botocore.exceptions import ClientError
+
+    api.handler(event(), None)
+    env.error = ClientError(
+        {"Error": {"Code": "RuntimeClientError", "Message": "PRIVATE-CANARY"}},
+        "InvokeAgentRuntime",
+    )
+    assert run() == {"status": "failed"}
+    out = capsys.readouterr().out
+    assert "PRIVATE-CANARY" not in out
+    failure = json.loads(
+        next(line for line in out.splitlines() if "deeper_job_failed" in line)
+    )
+    assert failure == {
+        "event": "deeper_job_failed",
+        "kind": "ClientError",
+        "code": "RuntimeClientError",
+    }

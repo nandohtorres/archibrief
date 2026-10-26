@@ -74,7 +74,18 @@ _GUARDRAILS_CLIENT = GuardrailsClient(
     region_name=_REGION,
     no_retries=True,
 )
-_REASONING_CLIENT = BedrockReasoningClient(model_id=_MODEL_ID, region_name=_REGION, no_retries=True)
+# Set explicitly: botocore's 60 s default cut off long reviews once retries
+# were turned off (2026-10-26). It must stay below the 300 s the review and
+# deeper workers wait for this runtime, so a slow call ends here first.
+_REASONING_READ_TIMEOUT_SECONDS = float(
+    os.environ.get("ARCHIBRIEF_REASONING_READ_TIMEOUT_SECONDS", "240")
+)
+_REASONING_CLIENT = BedrockReasoningClient(
+    model_id=_MODEL_ID,
+    region_name=_REGION,
+    no_retries=True,
+    read_timeout_seconds=_REASONING_READ_TIMEOUT_SECONDS,
+)
 
 
 def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:

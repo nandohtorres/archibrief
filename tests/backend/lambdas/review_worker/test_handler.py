@@ -228,3 +228,40 @@ def test_malformed_resume_key_fails_without_releasing_anything(prepared):
     assert worker.handler(event, None) == {"status": "failed"}
     counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
     assert not any(row.get("released") for row in counters)
+
+
+def test_agent_service_error_logs_stage_and_code_without_content(
+    prepared, monkeypatch, capsys
+):
+    from botocore.exceptions import ClientError
+
+    review_id, *_ = prepared
+
+    def invoke(**kwargs):
+        raise ClientError(
+            {
+                "Error": {
+                    "Code": "RuntimeClientError",
+                    "Message": "PRIVATE-CONTENT-CANARY",
+                }
+            },
+            "InvokeAgentRuntime",
+        )
+
+    monkeypatch.setattr(
+        worker,
+        "AgentCoreRuntimeClient",
+        lambda **kwargs: SimpleNamespace(invoke=invoke),
+    )
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    out = capsys.readouterr().out
+    assert "PRIVATE-CONTENT-CANARY" not in out
+    failure = json.loads(
+        next(line for line in out.splitlines() if "review_worker_failed" in line)
+    )
+    assert failure == {
+        "event": "review_worker_failed",
+        "stage": "reasoning",
+        "kind": "ClientError",
+        "code": "RuntimeClientError",
+    }

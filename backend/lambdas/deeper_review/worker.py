@@ -220,5 +220,9 @@ def run_job(event: dict, _context: object) -> dict:
         DynamoDBTransactionClient().transact_write(actions)
         return {"status": "complete"}
     except Exception as exc:  # noqa: BLE001 - no payloads/errors in durable history
-        print(json.dumps({"event": "deeper_job_failed", "kind": type(exc).__name__}))
+        failure = {"event": "deeper_job_failed", "kind": type(exc).__name__}
+        if isinstance(exc, ClientError):
+            # The AWS error code only: a message can echo request content.
+            failure["code"] = exc.response["Error"]["Code"]
+        print(json.dumps(failure))
         return _fail(table, rid, fid, jid, "analysis_failed")

@@ -58,13 +58,14 @@ def _read_json(s3: S3Client, key: str) -> dict:
     return value
 
 
-def _progress(table: DynamoDBClient, review_id: str, stage: str) -> None:
+def _progress(table: DynamoDBClient, review_id: str, stage: str) -> str:
     table.update_item(
         Key={"reviewId": review_id},
         UpdateExpression="SET currentStage = :stage",
         ConditionExpression="attribute_exists(reviewId)",
         ExpressionAttributeValues={":stage": stage},
     )
+    return stage
 
 
 def _fail(table: DynamoDBClient, review_id: str, code: str) -> dict:
@@ -117,6 +118,7 @@ def handler(event: dict, _context: object) -> dict:
     )
     # The claim submit_review or clarify_review reserved for this run.
     operation = "initial" if phase == "initial" else f"clarify:{match.group(1) if match else ''}"
+    stage = "admission"
     try:
         if not paid_work_allowed():
             return _fail_unpaid(table, review_id, "paused", operation)
@@ -137,7 +139,7 @@ def handler(event: dict, _context: object) -> dict:
             submission = _read_json(s3, review["inputKey"])
             if request_digest(submission) != review["inputDigest"]:
                 return _fail_unpaid(table, review_id, "invalid_submission", operation)
-            _progress(table, review_id, "ingest")
+            stage = _progress(table, review_id, "ingest")
             ingest = _invoke("ingest", {**submission, "report_bucket": bucket})
             if ingest.get("status") == "rejected":
                 return _fail_unpaid(table, review_id, "invalid_archive", operation)
@@ -155,7 +157,7 @@ def handler(event: dict, _context: object) -> dict:
                     "report_bucket": bucket,
                 },
             )
-            _progress(table, review_id, "rule_engine")
+            stage = _progress(table, review_id, "rule_engine")
             rules = _invoke(
                 "rule_engine",
                 {
@@ -196,7 +198,7 @@ def handler(event: dict, _context: object) -> dict:
             state["workload_brief"] += answer["note"]
         if not review_is_live(table.get_item({"reviewId": review_id}, consistent=True) or {}):
             return {"status": "failed"}
-        _progress(table, review_id, "reasoning")
+        stage = _progress(table, review_id, "reasoning")
         rules = state["rules"]
         agent = AgentCoreRuntimeClient(
             agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"], read_timeout_seconds=300
@@ -226,12 +228,12 @@ def handler(event: dict, _context: object) -> dict:
                 },
             )
             return {"status": "needs_clarification"}
-        _progress(table, review_id, "validate")
+        stage = _progress(table, review_id, "validate")
         validated = _invoke("validate", {"findings": agent["findings"]})
         quality = build_analysis_quality(
             agent.get("model_output_counts"), agent["findings"], validated["valid_findings"]
         )
-        _progress(table, review_id, "audit")
+        stage = _progress(table, review_id, "audit")
         _invoke(
             "audit",
             {
@@ -242,7 +244,7 @@ def handler(event: dict, _context: object) -> dict:
                 "deterministic_rule_version": rules["rule_version"],
             },
         )
-        _progress(table, review_id, "finalize")
+        stage = _progress(table, review_id, "finalize")
         _invoke(
             "finalize",
             {
@@ -261,9 +263,25 @@ def handler(event: dict, _context: object) -> dict:
         )
         return {"status": "complete"}
     except ClientError as exc:
-        if exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
+        code = exc.response["Error"]["Code"]
+        if code == "ConditionalCheckFailedException":
             return {"status": "in_progress"}
+        # Error type and code only: a stage's message can echo its payload.
+        print(
+            json.dumps(
+                {
+                    "event": "review_worker_failed",
+                    "stage": stage,
+                    "kind": type(exc).__name__,
+                    "code": code,
+                }
+            )
+        )
         return _fail(table, review_id, "internal_error")
     except Exception as exc:  # noqa: BLE001 - never put stage payloads/errors into workflow history
-        print(json.dumps({"event": "review_worker_failed", "kind": type(exc).__name__}))
+        print(
+            json.dumps(
+                {"event": "review_worker_failed", "stage": stage, "kind": type(exc).__name__}
+            )
+        )
         return _fail(table, review_id, "internal_error")

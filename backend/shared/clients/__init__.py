@@ -376,6 +376,21 @@ class BedrockReasoningClient:
                 "toolChoice": {"tool": {"name": tool_name}},
             },
         )
+        # Sizes and timing only, logged before the stop-reason check so a
+        # truncated call is measured too. Used to tune max_tokens.
+        usage = response.get("usage") or {}
+        print(
+            json.dumps(
+                {
+                    "event": "reasoning_call",
+                    "stop_reason": response.get("stopReason"),
+                    "input_tokens": usage.get("inputTokens"),
+                    "output_tokens": usage.get("outputTokens"),
+                    "max_tokens": max_tokens,
+                    "latency_ms": (response.get("metrics") or {}).get("latencyMs"),
+                }
+            )
+        )
         self._check_stop_reason(response, expected="tool_use")
         content_blocks = response["output"]["message"]["content"]
         matches = [
