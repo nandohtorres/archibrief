@@ -1,0 +1,33 @@
+// Short, evergreen facts shown on the progress screen while a review runs.
+// Kept to things that don't go stale (no prices, counts of Regions or
+// edge locations, or service limits likely to change).
+export const LOADING_FACTS: readonly string[] = [
+  "Amazon S3 launched in March 2006, one of the first AWS services.",
+  "Amazon S3 is designed for 99.999999999% (eleven nines) of durability.",
+  "Since December 2020, Amazon S3 reads return your latest write: strong read-after-write consistency.",
+  "Since April 2023, new S3 buckets block public access by default.",
+  "S3 Versioning keeps every version of an object, so overwrites and deletes can be undone.",
+  "The AWS Well-Architected Framework has six pillars. Sustainability was added in 2021.",
+  "Under the shared responsibility model, AWS secures the cloud; you secure what you put in it.",
+  "In IAM, an explicit Deny always wins over any Allow.",
+  "IAM is global: users, roles and policies aren't tied to a Region.",
+  "IAM roles hand out temporary credentials, so there are no long-lived keys to leak.",
+  "Least privilege means granting only the permissions a task actually needs.",
+  "AWS recommends not using the root user for everyday tasks.",
+  "HashiCorp released Terraform in 2014.",
+  "OpenTofu is an open-source fork of Terraform, started after Terraform's 2023 license change.",
+  "terraform plan shows what would change without changing anything.",
+  "Terraform state can hold secrets in plain text, so keep it encrypted and access-controlled.",
+  "Reviewing infrastructure as code catches problems before anything is deployed.",
+  "A Lambda function can run for at most 15 minutes per invocation.",
+  "Lambda gives a function more CPU as you give it more memory.",
+  "Step Functions Standard workflows can run for up to a year.",
+  "API Gateway REST APIs time out an integration after 29 seconds by default.",
+  "DynamoDB TTL deletes expired items automatically, at no extra cost.",
+  "Security groups are stateful; network ACLs are stateless.",
+  "AWS designs each Region with multiple, physically separate Availability Zones.",
+  "AWS KMS key material never leaves the service unencrypted.",
+  "CloudTrail records API activity in your account, and Event history shows the last 90 days of management events.",
+  "AWS Config records how your resources' configuration changes over time.",
+  "Amazon Bedrock Guardrails can screen prompts and responses for harmful content and sensitive information.",
+];

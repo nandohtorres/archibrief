@@ -1,6 +1,7 @@
 import type { ArchitectureGraph } from "@/lib/architecture";
 import { describeProgress } from "@/lib/progress";
 import { ArchitectureView } from "./architecture-view";
+import { LoadingFacts } from "./loading-facts";
 
 interface LiveProgressStepProps {
   // False while the archive is still uploading and the review doesn't exist yet.
@@ -43,6 +44,7 @@ export function LiveProgressStep({
         {progress.microLabel}
         {started && ` · ${elapsedSeconds}s`}
       </p>
+      <LoadingFacts />
       {architecture && (
         <div className="progress-architecture" aria-label="Your architecture">
           <h2>Your architecture</h2>

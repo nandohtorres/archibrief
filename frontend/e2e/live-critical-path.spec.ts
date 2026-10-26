@@ -406,6 +406,7 @@ test("the progress screen appears at once and shows the diagram while the review
   await page.getByRole("button", { name: "Start review" }).click();
   // Before the upload has even been answered.
   await expect(page.getByText("Uploading your Terraform")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Did you know?" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Back to home" })).toHaveCount(0);
   releaseUpload();
   await expect(page.getByRole("heading", { name: "Your architecture" })).toBeVisible();
