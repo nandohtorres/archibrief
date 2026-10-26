@@ -9,7 +9,8 @@ interface FindingDetailProps {
   onAsk: (finding: ReportFinding) => void;
   // Absent when the report has no architecture diagram.
   onShowArchitecture?: (findingId: string) => void;
-  onGoDeeper: (findingId: string) => Promise<void>;
+  // Absent when this browser can't start paid work (a shared, read-only link).
+  onGoDeeper?: (findingId: string) => Promise<void>;
   // This finding's Go deeper run, shown inline once one has started.
   deeper?: DeeperPanelState | null;
   onOpenFinding?: (findingId: string) => void;
@@ -206,7 +207,7 @@ export function FindingDetail({
       </details>
 
       <div className="finding-actions">
-        {record.type !== "not-observable" && !record.parent_finding_id && !deeper && (
+        {onGoDeeper && record.type !== "not-observable" && !record.parent_finding_id && !deeper && (
           <button
             className="button secondary"
             type="button"

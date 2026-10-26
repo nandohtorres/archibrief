@@ -22,6 +22,7 @@ import {
   uploadArchiveToS3,
 } from "@/lib/api";
 import {
+  acceptSharedAccess,
   archiveDigest,
   canOpenReview,
   clearActiveReview,
@@ -367,11 +368,19 @@ export function ArchiBriefApp() {
       if (!id) {
         // A review URL reopens that review; anything else lands home.
         const reviewId = reviewIdFromUrl(window.location.href);
+        if (reviewId && window.location.hash) {
+          // A shared link: keep its read key, then drop it from the address
+          // bar and this history entry.
+          acceptSharedAccess(reviewId, window.location.hash);
+          const url = new URL(window.location.href);
+          url.hash = "";
+          window.history.replaceState(null, "", url);
+        }
         if (reviewId && getApiBaseUrl()) {
           if (canOpenReview(reviewId)) openReview(reviewId, false);
           else {
             setFailureMessage(
-              "This review can't be opened here. Reviews open only in the browser that submitted them, for 7 days.",
+              "This review can't be opened here. It opens in the browser that submitted it, or from a shared link, for 7 days.",
             );
             setScreen("failure");
           }

@@ -152,6 +152,49 @@ export function recentReviews(): RecentReview[] {
   return [];
 }
 
+// Chat and Go deeper need the write key, which only the submitting browser has.
+export function canChangeReview(reviewId: string): boolean {
+  return Boolean(reviewAccessHeaders(reviewId, true)["x-review-write-token"]);
+}
+
+// A read-only link for sharing: the read key and its expiry travel in the
+// URL fragment, which browsers never send to a server.
+export function shareLink(reviewId: string, base: string): string | null {
+  const raw = storedAccess(reviewId);
+  if (!raw || !reviewAccessHeaders(reviewId)["x-review-read-token"]) return null;
+  try {
+    const value = JSON.parse(raw) as Capabilities;
+    const url = new URL(base);
+    url.search = "";
+    url.searchParams.set("review", reviewId);
+    url.hash = new URLSearchParams({
+      access: value.readToken,
+      expires: String(value.expiresAt),
+    }).toString();
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+// Takes a shared link's read key from the URL fragment. Never replaces
+// this browser's own (read and write) access to the same review.
+export function acceptSharedAccess(reviewId: string, hash: string): boolean {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const readToken = params.get("access") ?? "";
+  const expiresAt = Number(params.get("expires"));
+  if (
+    readToken.length < 32 ||
+    readToken.length > 128 ||
+    !Number.isFinite(expiresAt) ||
+    expiresAt <= Date.now() / 1000
+  )
+    return false;
+  if (!canChangeReview(reviewId))
+    storeReviewAccess(reviewId, { readToken, writeToken: "", expiresAt });
+  return true;
+}
+
 export function canOpenReview(reviewId: string): boolean {
   return REVIEW_ID.test(reviewId) && Boolean(reviewAccessHeaders(reviewId)["x-review-read-token"]);
 }
