@@ -137,24 +137,27 @@ module "api_gateway" {
   turnstile_hostnames             = [var.domain, "www.${var.domain}"]
   source                          = "../../modules/api-gateway"
 
-  # Launch limits for the public site (micro-USD; 1,000,000 = $1.00). The
-  # global budget fits about three initial reviews a day, and uploads are
-  # kept near that so visitors aren't refused after uploading. Retune from
-  # measured per-review cost.
+  # Public limits (micro-USD; 1,000,000 = $1.00). Reservations keep their
+  # full estimate ($0.40 per review), so these work as counts: about 20
+  # reviews a day site-wide and 5 per visitor. The monthly budget is the
+  # hard ceiling: $75 reserved per UTC month, under the $100 AWS budget
+  # whose 90% alert also trips the kill switch (cost-controls module).
   paid_limits = {
-    global_daily_budget    = 1200000
-    global_daily_requests  = 15
-    visitor_daily_budget   = 1000000
-    visitor_daily_requests = 8
-    review_budget          = 1000000
-    review_requests        = 10
-    initial_reserve        = 400000
-    clarify_reserve        = 200000
-    deeper_reserve         = 200000
+    global_monthly_budget   = 75000000
+    global_monthly_requests = 1000
+    global_daily_budget     = 8000000
+    global_daily_requests   = 150
+    visitor_daily_budget    = 2000000
+    visitor_daily_requests  = 30
+    review_budget           = 1000000
+    review_requests         = 10
+    initial_reserve         = 400000
+    clarify_reserve         = 200000
+    deeper_reserve          = 200000
   }
   upload_limits = {
-    global_daily  = 6
-    visitor_daily = 2
+    global_daily  = 40
+    visitor_daily = 6
   }
   chat_daily_budget_micro_usd = 500000
   name_prefix                 = "${var.name_prefix}-${var.environment}"
@@ -201,9 +204,12 @@ module "api_gateway" {
 }
 
 module "cost_controls" {
-  source             = "../../modules/cost-controls"
-  name_prefix        = "${var.name_prefix}-${var.environment}"
-  monthly_budget_usd = var.monthly_budget_usd
-  alert_email        = var.alert_email
-  tags               = var.tags
+  source                     = "../../modules/cost-controls"
+  name_prefix                = "${var.name_prefix}-${var.environment}"
+  monthly_budget_usd         = var.monthly_budget_usd
+  alert_email                = var.alert_email
+  kill_switch_parameter_name = module.kill_switch.parameter_name
+  kill_switch_parameter_arn  = module.kill_switch.parameter_arn
+  permissions_boundary_arn   = module.iam.runtime_permissions_boundary_arn
+  tags                       = var.tags
 }

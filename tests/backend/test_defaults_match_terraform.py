@@ -60,6 +60,10 @@ def test_paid_limit_fallbacks_match_terraform_defaults():
             admission._public_scopes(review, "v1", "20260101", 0)
         )
     }
+    assert public["paid#month#202601"] == (
+        limits["global_monthly_budget"],
+        limits["global_monthly_requests"],
+    )
     assert public["paid#global#20260101"] == (
         limits["global_daily_budget"],
         limits["global_daily_requests"],

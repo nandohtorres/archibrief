@@ -49,30 +49,35 @@ variable "verified_public_api_id" {
 }
 
 # Estimated-cost allowances in micro-USD (1,000,000 = $1.00), enforced by
-# backend/shared/admission.py. Every paid request draws on the global,
-# visitor and review scopes.
+# backend/shared/admission.py. Every paid request draws on the monthly,
+# global, visitor and review scopes. The monthly budget is the hard ceiling
+# on reserved spend for a UTC calendar month.
 variable "paid_limits" {
   type = object({
-    global_daily_budget    = number
-    global_daily_requests  = number
-    visitor_daily_budget   = number
-    visitor_daily_requests = number
-    review_budget          = number
-    review_requests        = number
-    initial_reserve        = number
-    clarify_reserve        = number
-    deeper_reserve         = number
+    global_monthly_budget   = number
+    global_monthly_requests = number
+    global_daily_budget     = number
+    global_daily_requests   = number
+    visitor_daily_budget    = number
+    visitor_daily_requests  = number
+    review_budget           = number
+    review_requests         = number
+    initial_reserve         = number
+    clarify_reserve         = number
+    deeper_reserve          = number
   })
   default = {
-    global_daily_budget    = 1000000
-    global_daily_requests  = 100
-    visitor_daily_budget   = 1000000
-    visitor_daily_requests = 30
-    review_budget          = 1000000
-    review_requests        = 20
-    initial_reserve        = 400000
-    clarify_reserve        = 200000
-    deeper_reserve         = 200000
+    global_monthly_budget   = 75000000
+    global_monthly_requests = 1000
+    global_daily_budget     = 1000000
+    global_daily_requests   = 100
+    visitor_daily_budget    = 1000000
+    visitor_daily_requests  = 30
+    review_budget           = 1000000
+    review_requests         = 20
+    initial_reserve         = 400000
+    clarify_reserve         = 200000
+    deeper_reserve          = 200000
   }
 }
 
@@ -100,6 +105,8 @@ locals {
     REPORTS_BUCKET_NAME             = var.reports_bucket_name
     KILL_SWITCH_PARAMETER_NAME      = var.kill_switch_parameter_name
     CORS_ALLOWED_ORIGINS            = jsonencode(concat([var.frontend_origin], var.additional_cors_origins))
+    PAID_MONTHLY_BUDGET_MICRO_USD   = tostring(var.paid_limits.global_monthly_budget)
+    PAID_MONTHLY_MAX_REQUESTS       = tostring(var.paid_limits.global_monthly_requests)
     PAID_DAILY_BUDGET_MICRO_USD     = tostring(var.paid_limits.global_daily_budget)
     PAID_DAILY_MAX_REQUESTS         = tostring(var.paid_limits.global_daily_requests)
     PAID_VISITOR_BUDGET_MICRO_USD   = tostring(var.paid_limits.visitor_daily_budget)

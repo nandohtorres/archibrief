@@ -181,6 +181,15 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
     resources = ["arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/${var.name_prefix}/*"]
   }
 
+  # The cost-controls spend-stop Lambda turns the kill switch on when the
+  # monthly budget's stop tier fires. Only that one parameter is writable.
+  statement {
+    sid       = "AllowKillSwitchTrip"
+    effect    = "Allow"
+    actions   = ["ssm:PutParameter"]
+    resources = ["arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/${var.name_prefix}/kill-switch"]
+  }
+
   # clarify_review (infra/modules/api-gateway/main.tf) calls
   # SendTaskSuccess/SendTaskFailure to resume a review paused at
   # StoreClarificationToken. Resource "*" because these actions identify
