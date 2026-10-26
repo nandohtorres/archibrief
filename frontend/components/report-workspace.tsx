@@ -34,6 +34,7 @@ import {
   type ReportSource,
 } from "@/lib/workflow";
 import { ArchitectureView } from "./architecture-view";
+import { type DeeperPanelState } from "./deeper-panel";
 import { FindingDetail } from "./finding-detail";
 import { GuidedReport } from "./guided-report";
 import { ReportQuestions } from "./report-questions";
@@ -56,6 +57,9 @@ interface ReportWorkspaceProps {
 const DEFAULT_DETAIL_PANE_WIDTH = 75;
 const MIN_DETAIL_PANE_WIDTH = 45;
 const MAX_DETAIL_PANE_WIDTH = 85;
+// backend/shared/deeper_jobs.py JOB_LIFETIME_SECONDS: a job's deadline is its
+// start plus this, so the panel can show elapsed time after a reload.
+const DEEPER_JOB_LIFETIME_SECONDS = 420;
 
 export function ReportWorkspace({
   report: initialReport,
@@ -127,20 +131,7 @@ export function ReportWorkspace({
             active.some((a) => a.job_id === job.job_id) &&
             (job.status === "complete" || job.status === "failed"),
         );
-        if (finished) {
-          setStatus(
-            finished.status === "complete"
-              ? "Deeper analysis finished. The saved report has been refreshed."
-              : "Deeper analysis could not finish. Your original report and saved findings remain available.",
-          );
-          const child = refreshed.findings.find(
-            (f) => f.record.parent_finding_id === finished.parent_finding_id,
-          );
-          if (child)
-            setSelectedId((current) =>
-              current === finished.parent_finding_id ? child.record.finding_id : current,
-            );
-        } else {
+        if (!finished) {
           timer = setTimeout(poll, 2000);
         }
       } catch {
@@ -252,6 +243,19 @@ export function ReportWorkspace({
     document.getElementById("architecture-impact")?.scrollIntoView({ block: "start" });
   }
 
+  // The inline Go deeper panel for a finding, from the saved report.
+  function deeperState(findingId: string): DeeperPanelState | null {
+    const job = report.deeper_jobs?.find((saved) => saved.parent_finding_id === findingId);
+    if (job && (job.status === "pending" || job.status === "running"))
+      return { kind: "running", startedAt: (job.deadline - DEEPER_JOB_LIFETIME_SECONDS) * 1000 };
+    if (job?.status === "failed") return { kind: "failed", failureCode: job.failure_code };
+    const children = findings.filter((f) => f.record.parent_finding_id === findingId);
+    const run = report.deeper_reviews?.find((saved) => saved.parent_finding_id === findingId);
+    if (job?.status === "complete" || run || children.length > 0)
+      return { kind: "complete", children, quality: run?.analysis_quality };
+    return null;
+  }
+
   async function goDeeper(findingId: string) {
     // The sample is precomputed and has no stored review behind it, so
     // there is nothing to take deeper (and no paid run to start).
@@ -282,9 +286,7 @@ export function ReportWorkspace({
             job,
           ],
         }));
-        setStatus(
-          "Deeper analysis is running in the background. You can keep using this report or reload to check its saved status.",
-        );
+        setStatus("");
         return;
       }
       const newFindings = result.findings ?? [];
@@ -628,6 +630,12 @@ export function ReportWorkspace({
                       >
                         <span className="finding-list-main">
                           <strong>{finding.record.finding}</strong>
+                          {finding.record.parent_finding_id && (
+                            <span className="finding-list-deeper">
+                              ↳ From deeper analysis of{" "}
+                              {formatFindingId(finding.record.parent_finding_id)}
+                            </span>
+                          )}
                           <span>
                             <AssessmentTag finding={finding} />
                             <i className="category-tag">{finding.record.category}</i>
@@ -662,6 +670,8 @@ export function ReportWorkspace({
                   onAsk={askAboutFinding}
                   onShowArchitecture={architecture ? showOnArchitecture : undefined}
                   onGoDeeper={goDeeper}
+                  deeper={deeperState(selected.record.finding_id)}
+                  onOpenFinding={selectFinding}
                 />
               </div>
             ) : (

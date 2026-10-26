@@ -2,6 +2,7 @@ import type { ReportFinding } from "@/lib/contracts";
 import { citationGap, confidenceLabel, formatFindingId } from "@/lib/workflow";
 import type { ReviewerNote } from "@/lib/demos";
 import { AssessmentTag } from "./assessment-tag";
+import { DeeperPanel, type DeeperPanelState } from "./deeper-panel";
 
 interface FindingDetailProps {
   finding: ReportFinding;
@@ -9,6 +10,9 @@ interface FindingDetailProps {
   // Absent when the report has no architecture diagram.
   onShowArchitecture?: (findingId: string) => void;
   onGoDeeper: (findingId: string) => Promise<void>;
+  // This finding's Go deeper run, shown inline once one has started.
+  deeper?: DeeperPanelState | null;
+  onOpenFinding?: (findingId: string) => void;
   // A demo's hand-check note on this finding (lib/demos.ts), if any.
   reviewerNote?: ReviewerNote | null;
 }
@@ -22,6 +26,8 @@ export function FindingDetail({
   onAsk,
   onShowArchitecture,
   onGoDeeper,
+  deeper = null,
+  onOpenFinding,
   reviewerNote = null,
 }: FindingDetailProps) {
   const { record, presentation } = finding;
@@ -200,7 +206,7 @@ export function FindingDetail({
       </details>
 
       <div className="finding-actions">
-        {record.type !== "not-observable" && !record.parent_finding_id && (
+        {record.type !== "not-observable" && !record.parent_finding_id && !deeper && (
           <button
             className="button secondary"
             type="button"
@@ -226,6 +232,7 @@ export function FindingDetail({
           Ask about this finding
         </button>
       </div>
+      {deeper && onOpenFinding && <DeeperPanel state={deeper} onOpenFinding={onOpenFinding} />}
     </article>
   );
 }

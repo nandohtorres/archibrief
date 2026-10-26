@@ -3717,3 +3717,120 @@ h4 {
   line-height: 24px;
   color: var(--text-muted);
 }
+
+/* Go deeper: an inline panel under the finding it belongs to. */
+.deeper-panel {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.deeper-panel h4 {
+  margin: 0;
+}
+
+.deeper-panel p {
+  margin: var(--space-1) 0 0;
+}
+
+.deeper-panel.failed {
+  border-left-color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.deeper-panel-heading,
+.deeper-panel.complete > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.deeper-panel.complete > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.deeper-panel.complete > summary::-webkit-details-marker {
+  display: none;
+}
+
+.deeper-elapsed,
+.deeper-summary {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.deeper-progress {
+  position: relative;
+  height: 6px;
+  margin-top: var(--space-2);
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+
+.deeper-progress i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  border-radius: 3px;
+  background: var(--accent);
+  animation: deeper-progress 1.6s ease-in-out infinite;
+}
+
+@keyframes deeper-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(290%);
+  }
+}
+
+.deeper-children {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deeper-children li {
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.deeper-child-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.deeper-open {
+  margin-top: var(--space-1);
+}
+
+.deeper-quality {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.finding-list-deeper {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deeper-progress i {
+    width: 100%;
+    animation: none;
+    opacity: 0.6;
+  }
+}
