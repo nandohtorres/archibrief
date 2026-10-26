@@ -3909,3 +3909,39 @@ h4 {
   margin: var(--space-1) 0 var(--space-2);
   color: var(--text-muted);
 }
+
+/* "Did you know?" on the progress screen. */
+.loading-facts {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 8px;
+  background: var(--accent-tint);
+}
+
+.loading-facts-label {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.loading-facts p {
+  margin: var(--space-1) 0 0;
+  animation: loading-fact-in 0.4s ease-out;
+}
+
+@keyframes loading-fact-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-facts p {
+    animation: none;
+  }
+}
