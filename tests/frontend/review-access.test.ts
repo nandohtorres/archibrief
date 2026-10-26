@@ -5,6 +5,9 @@ import {
   saveActiveReview,
   loadActiveReview,
   clearActiveReview,
+  canOpenReview,
+  recentReviews,
+  rememberReview,
 } from "../../frontend/lib/review-access";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -68,4 +71,63 @@ test("reload recovery is tab-scoped, bound to its API and cannot renew the deadl
   clearActiveReview();
   expect(loadActiveReview("/api")).toBeNull();
   expect(reviewAccessHeaders("r1")).toHaveProperty("x-review-read-token");
+});
+
+function stubStores() {
+  const local = new Map<string, string>();
+  const session = new Map<string, string>();
+  const store = (data: Map<string, string>) => ({
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => data.set(key, value),
+    removeItem: (key: string) => data.delete(key),
+  });
+  vi.stubGlobal("window", {
+    localStorage: store(local),
+    sessionStorage: store(session),
+  });
+  return { local, session };
+}
+
+const access = (expiresAt: number) => ({
+  readToken: "r".repeat(43),
+  writeToken: "w".repeat(43),
+  expiresAt,
+});
+
+test("review access persists in localStorage so a later visit can reopen it", () => {
+  const { local, session } = stubStores();
+  storeReviewAccess("r1", access(Date.now() / 1000 + 100));
+  expect(local.has("archibrief.review.r1")).toBe(true);
+  expect(session.has("archibrief.review.r1")).toBe(false);
+  expect(canOpenReview("r1")).toBe(true);
+  expect(canOpenReview("unknown")).toBe(false);
+});
+
+test("recent reviews list newest first, at most five, and drop expired access", () => {
+  stubStores();
+  for (let i = 0; i < 7; i++) {
+    storeReviewAccess(`r${i}`, access(Date.now() / 1000 + 100));
+    rememberReview(`r${i}`, `Review ${i}`, 1000 + i);
+  }
+  expect(recentReviews().map((r) => r.reviewId)).toEqual([
+    "r6",
+    "r5",
+    "r4",
+    "r3",
+    "r2",
+  ]);
+  storeReviewAccess("r6", access(1)); // Expired.
+  expect(recentReviews().map((r) => r.reviewId)).toEqual([
+    "r5",
+    "r4",
+    "r3",
+    "r2",
+  ]);
+  rememberReview("r2", "Review 2 again", 5000);
+  expect(recentReviews()[0]).toEqual({
+    reviewId: "r2",
+    label: "Review 2 again",
+    submittedAt: 5000,
+  });
+  expect(JSON.stringify(recentReviews())).not.toContain("r".repeat(43)); // No tokens in the list.
 });

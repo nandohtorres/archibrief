@@ -1,6 +1,26 @@
-// Capabilities stay in this tab, out of URLs and persistent localStorage.
+// A review's capabilities stay in this browser (localStorage, falling back
+// to this tab's sessionStorage) until the review expires, and never go into
+// a URL. That is what lets a visitor reopen their recent reviews later.
 type Capabilities = { readToken: string; writeToken: string; expiresAt: number };
 const ACTIVE_REVIEW_KEY = "archibrief.active-review";
+const RECENT_REVIEWS_KEY = "archibrief.recent-reviews";
+const MAX_RECENT_REVIEWS = 5;
+const REVIEW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+export type RecentReview = { reviewId: string; label: string; submittedAt: number };
+
+function browserStores(): Storage[] {
+  const stores: Storage[] = [];
+  for (const name of ["localStorage", "sessionStorage"] as const) {
+    try {
+      const store = (window as unknown as Record<string, Storage | undefined>)[name];
+      if (store) stores.push(store);
+    } catch {
+      /* Storage access denied. */
+    }
+  }
+  return stores;
+}
 
 export function saveActiveReview(reviewId: string, apiBase: string, startedAt = Date.now()): void {
   try {
@@ -31,7 +51,7 @@ export function loadActiveReview(
       !value ||
       value.apiBase !== apiBase ||
       typeof value.reviewId !== "string" ||
-      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.reviewId) ||
+      !REVIEW_ID.test(value.reviewId) ||
       typeof value.startedAt !== "number" ||
       !Number.isFinite(value.startedAt) ||
       value.startedAt <= 0 ||
@@ -47,13 +67,32 @@ export function loadActiveReview(
 
 export function storeReviewAccess(reviewId: string, value: Capabilities): void {
   if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(`archibrief.review.${reviewId}`, JSON.stringify(value));
+  for (const store of browserStores()) {
+    try {
+      store.setItem(`archibrief.review.${reviewId}`, JSON.stringify(value));
+      return;
+    } catch {
+      /* Try the next store. */
+    }
+  }
+}
+
+function storedAccess(reviewId: string): string | null {
+  for (const store of browserStores()) {
+    try {
+      const raw = store.getItem(`archibrief.review.${reviewId}`);
+      if (raw) return raw;
+    } catch {
+      /* Try the next store. */
+    }
+  }
+  return null;
 }
 
 export function reviewAccessHeaders(reviewId: string, write = false): Record<string, string> {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.sessionStorage.getItem(`archibrief.review.${reviewId}`);
+    const raw = storedAccess(reviewId);
     if (!raw) return {};
     const value = JSON.parse(raw) as Capabilities;
     if (
@@ -68,6 +107,53 @@ export function reviewAccessHeaders(reviewId: string, write = false): Record<str
   } catch {
     return {};
   }
+}
+
+// Remembers a submitted review for the home page's "Your recent reviews".
+export function rememberReview(reviewId: string, label: string, submittedAt = Date.now()): void {
+  if (typeof window === "undefined" || !REVIEW_ID.test(reviewId)) return;
+  const entry: RecentReview = { reviewId, label: label.slice(0, 120), submittedAt };
+  const others = recentReviews().filter((saved) => saved.reviewId !== reviewId);
+  const next = [entry, ...others].slice(0, MAX_RECENT_REVIEWS);
+  for (const store of browserStores()) {
+    try {
+      store.setItem(RECENT_REVIEWS_KEY, JSON.stringify(next));
+      return;
+    } catch {
+      /* Try the next store. */
+    }
+  }
+}
+
+// This browser's reviews that can still be opened, newest first. Expired
+// ones drop out because their capability no longer authorizes a read.
+export function recentReviews(): RecentReview[] {
+  if (typeof window === "undefined") return [];
+  for (const store of browserStores()) {
+    try {
+      const value: unknown = JSON.parse(store.getItem(RECENT_REVIEWS_KEY) ?? "null");
+      if (!Array.isArray(value)) continue;
+      return value
+        .filter(
+          (entry): entry is RecentReview =>
+            typeof entry?.reviewId === "string" &&
+            REVIEW_ID.test(entry.reviewId) &&
+            typeof entry.label === "string" &&
+            typeof entry.submittedAt === "number" &&
+            Number.isFinite(entry.submittedAt),
+        )
+        .filter((entry) => Boolean(reviewAccessHeaders(entry.reviewId)["x-review-read-token"]))
+        .sort((a, b) => b.submittedAt - a.submittedAt)
+        .slice(0, MAX_RECENT_REVIEWS);
+    } catch {
+      /* Try the next store. */
+    }
+  }
+  return [];
+}
+
+export function canOpenReview(reviewId: string): boolean {
+  return REVIEW_ID.test(reviewId) && Boolean(reviewAccessHeaders(reviewId)["x-review-read-token"]);
 }
 
 export async function archiveDigest(file: File): Promise<string> {

@@ -3834,3 +3834,53 @@ h4 {
     opacity: 0.6;
   }
 }
+
+/* "Your recent reviews": this browser's reviews, above the submission form. */
+.recent-reviews {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.recent-reviews-heading h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.recent-reviews-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.recent-reviews ul {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-reviews li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--border);
+}
+
+.recent-review-name {
+  display: grid;
+  min-width: 0;
+}
+
+.recent-review-name strong {
+  overflow-wrap: anywhere;
+}
+
+.recent-review-name span {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}

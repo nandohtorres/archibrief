@@ -95,7 +95,7 @@ test("upload uses the server ID, exact S3 version and separate capabilities", as
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
 });
 
-test("reload lands home and reopens the same review without a new upload or dispatch", async ({
+test("recent reviews and review URLs reopen the same review without a new upload or dispatch", async ({
   page,
 }) => {
   await mockTurnstile(page);
@@ -109,13 +109,24 @@ test("reload lands home and reopens the same review without a new upload or disp
   await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
-  await page.getByRole("button", { name: "New review", exact: true }).click();
-  await page.getByRole("button", { name: "Open your last review" }).click();
+  await expect(page).toHaveURL(/[?&]review=/);
+  // A reload on the review's URL keeps the review.
+  await page.reload();
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  // Home lists it; a reload at home stays home.
+  await page.getByRole("button", { name: "New review", exact: true }).click();
+  await expect(page).not.toHaveURL(/review=/);
   await page.reload();
   await expect(page.getByRole("button", { name: "Start review" })).toBeVisible();
-  await page.getByRole("button", { name: "Open your last review" }).click();
+  await expect(page.getByRole("heading", { name: "Your recent reviews" })).toBeVisible();
+  await page
+    .getByRole("button", { name: /^Open / })
+    .first()
+    .click();
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  // Browser back returns home.
+  await page.goBack();
+  await expect(page.getByRole("button", { name: "Start review" })).toBeVisible();
   expect(uploads).toBe(1);
   expect(dispatches).toBe(1);
   expect(page.url()).not.toContain("token");
