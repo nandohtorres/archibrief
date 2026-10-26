@@ -95,7 +95,9 @@ test("upload uses the server ID, exact S3 version and separate capabilities", as
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
 });
 
-test("reload resumes the same review without a new upload or dispatch", async ({ page }) => {
+test("reload lands home and reopens the same review without a new upload or dispatch", async ({
+  page,
+}) => {
   await mockTurnstile(page);
   await reservation(page, PUBLIC_URL);
   let uploads = 0;
@@ -108,9 +110,11 @@ test("reload resumes the same review without a new upload or dispatch", async ({
   await page.getByRole("button", { name: "Start review" }).click();
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
   await page.getByRole("button", { name: "New review", exact: true }).click();
-  await page.getByRole("button", { name: "Resume last review in this tab" }).click();
+  await page.getByRole("button", { name: "Open your last review" }).click();
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
   await page.reload();
+  await expect(page.getByRole("button", { name: "Start review" })).toBeVisible();
+  await page.getByRole("button", { name: "Open your last review" }).click();
   await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
   expect(uploads).toBe(1);
   expect(dispatches).toBe(1);

@@ -48,12 +48,14 @@ resource "aws_budgets_budget" "monthly" {
     subscriber_sns_topic_arns = [aws_sns_topic.budget_alerts.arn]
   }
 
-  # The stop tier: emails, and turns the kill switch on (spend-stop.tf).
+  # The stop tier: turns the kill switch on (spend-stop.tf) and emails the
+  # owner directly. A notification takes at most one SNS topic.
   notification {
-    comparison_operator       = "GREATER_THAN"
-    threshold                 = var.stop_threshold_percent
-    threshold_type            = "PERCENTAGE"
-    notification_type         = "ACTUAL"
-    subscriber_sns_topic_arns = [aws_sns_topic.budget_alerts.arn, aws_sns_topic.spend_stop.arn]
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = var.stop_threshold_percent
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_sns_topic_arns  = [aws_sns_topic.spend_stop.arn]
+    subscriber_email_addresses = [var.alert_email]
   }
 }
