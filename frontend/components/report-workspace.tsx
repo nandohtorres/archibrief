@@ -21,6 +21,7 @@ import type {
 import { isReviewReport } from "@/lib/contracts";
 import { isArchitectureGraph, type ArchitectureGraph } from "@/lib/architecture";
 import { fetchReview, getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
+import { canChangeReview, shareLink } from "@/lib/review-access";
 import { reviewerNotesById, type DemoEntry } from "@/lib/demos";
 import { buildReportHtml, downloadFile } from "@/lib/chat";
 import { buildReportExport, reportSnapshotLabel, withEvidenceLabel } from "@/lib/report-review";
@@ -86,6 +87,11 @@ export function ReportWorkspace({
   } | null>(null);
   const [selectedId, setSelectedId] = useState(report.findings[0]?.record.finding_id ?? "");
   const [status, setStatus] = useState("");
+  // A shared link opens the report read-only: chat and Go deeper need the
+  // write key, which stays in the browser that ran the review.
+  const [canChange] = useState(
+    () => source !== "live" || !getApiBaseUrl() || canChangeReview(initialReport.review_id),
+  );
   // Keyed on the active jobs themselves, so a poll that only refreshes the
   // report keeps this loop running instead of tearing it down and restarting it.
   const activeJobsKey = (report.deeper_jobs ?? [])
@@ -353,6 +359,22 @@ export function ReportWorkspace({
     }
   }
 
+  async function copyLink() {
+    const link = shareLink(report.review_id, window.location.href);
+    if (!link) {
+      setStatus("This review's access has expired, so it can't be shared.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      setStatus(
+        "Link copied. Anyone with it can read this report until it expires; chat and Go deeper stay with you.",
+      );
+    } catch {
+      setStatus(`Copy this link to share the report read-only: ${link}`);
+    }
+  }
+
   function exportLedger() {
     // The raw data, plus the conversation in the same shape as
     // GET /reviews/{id}/questions (ADR-0050 §10).
@@ -412,11 +434,22 @@ export function ReportWorkspace({
             <button className="button secondary" type="button" onClick={exportLedger}>
               Export ledger
             </button>
+            {source === "live" && canChange && getApiBaseUrl() && (
+              <button className="button secondary" type="button" onClick={() => void copyLink()}>
+                Copy link
+              </button>
+            )}
             <button className="button quiet" type="button" onClick={onNewReview}>
               New review
             </button>
           </div>
         </header>
+        {!canChange && (
+          <p className="read-only-note" role="note">
+            Shared read-only link. Chat and Go deeper are available in the browser that ran this
+            review.
+          </p>
+        )}
         {demo && (
           <aside className="demo-provenance" aria-label="About this demo">
             <p>
@@ -669,7 +702,7 @@ export function ReportWorkspace({
                   reviewerNote={reviewerNotes.get(selected.record.finding_id) ?? null}
                   onAsk={askAboutFinding}
                   onShowArchitecture={architecture ? showOnArchitecture : undefined}
-                  onGoDeeper={goDeeper}
+                  onGoDeeper={canChange ? goDeeper : undefined}
                   deeper={deeperState(selected.record.finding_id)}
                   onOpenFinding={selectFinding}
                 />
@@ -744,6 +777,7 @@ export function ReportWorkspace({
           onOpenFinding={openTechnicalFinding}
           onTranscriptChange={setTranscript}
           onDownload={downloadReport}
+          readOnly={!canChange}
         />
         <div className="snapshot-bar">{reportSnapshotLabel(findings)}</div>
       </div>

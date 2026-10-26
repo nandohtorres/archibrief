@@ -5,8 +5,11 @@ import {
   saveActiveReview,
   loadActiveReview,
   clearActiveReview,
+  acceptSharedAccess,
+  canChangeReview,
   canOpenReview,
   recentReviews,
+  shareLink,
   rememberReview,
 } from "../../frontend/lib/review-access";
 
@@ -130,4 +133,33 @@ test("recent reviews list newest first, at most five, and drop expired access", 
     submittedAt: 5000,
   });
   expect(JSON.stringify(recentReviews())).not.toContain("r".repeat(43)); // No tokens in the list.
+});
+
+test("share links carry only the read key, in the fragment, and never downgrade the owner", () => {
+  const { local } = stubStores();
+  storeReviewAccess("r1", access(Date.now() / 1000 + 100));
+  const link = new URL(shareLink("r1", "https://archibrief.dev/?demo=x#old")!);
+  expect(link.searchParams.get("review")).toBe("r1");
+  expect(link.searchParams.has("demo")).toBe(false);
+  expect(link.hash).toContain("access=" + "r".repeat(43));
+  expect(link.href).not.toContain("w".repeat(43));
+  // The owner opening their own link keeps write access.
+  expect(acceptSharedAccess("r1", link.hash)).toBe(true);
+  expect(canChangeReview("r1")).toBe(true);
+
+  // Another browser gets read-only access.
+  local.clear();
+  expect(acceptSharedAccess("r1", link.hash)).toBe(true);
+  expect(canOpenReview("r1")).toBe(true);
+  expect(canChangeReview("r1")).toBe(false);
+  expect(reviewAccessHeaders("r1", true)).toEqual({});
+
+  local.clear();
+  expect(
+    acceptSharedAccess("r1", "#access=" + "r".repeat(43) + "&expires=1"),
+  ).toBe(false);
+  expect(acceptSharedAccess("r1", "#access=short&expires=9999999999")).toBe(
+    false,
+  );
+  expect(canOpenReview("r1")).toBe(false);
 });

@@ -36,6 +36,8 @@ interface ReportQuestionsProps {
   onOpenFinding: (findingId: string) => void;
   onTranscriptChange: (turns: ChatTurn[]) => void;
   onDownload: () => void;
+  // A shared, read-only link: earlier answers show, new questions don't.
+  readOnly?: boolean;
 }
 
 type Mode = "live" | "sample" | "fixture";
@@ -79,6 +81,7 @@ export function ReportQuestions({
   onOpenFinding,
   onTranscriptChange,
   onDownload,
+  readOnly = false,
 }: ReportQuestionsProps) {
   const mode = modeFor(source);
   const [input, setInput] = useState(questionSeed);
@@ -234,7 +237,7 @@ export function ReportQuestions({
   }
 
   const exhausted = mode === "live" && remaining !== null && remaining <= 0;
-  const canType = mode === "fixture" || (mode === "live" && loaded && !loadError);
+  const canType = mode === "fixture" || (mode === "live" && loaded && !loadError && !readOnly);
 
   return (
     <section
@@ -289,7 +292,7 @@ export function ReportQuestions({
         </aside>
       )}
 
-      {mode === "live" && suggested.length > 0 && (
+      {mode === "live" && !readOnly && suggested.length > 0 && (
         <div className="suggested-prompts" aria-label="Suggested questions">
           {suggested.map((s) => (
             <button
@@ -396,7 +399,9 @@ export function ReportQuestions({
             placeholder={
               canType
                 ? "Ask about a finding, tradeoff, source, or fix…"
-                : "Live questions open with public reviews"
+                : readOnly
+                  ? "Questions are available in the browser that ran this review"
+                  : "Live questions open with public reviews"
             }
           />
           <button

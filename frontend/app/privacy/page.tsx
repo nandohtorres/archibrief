@@ -54,12 +54,14 @@ export default function PrivacyPage() {
 
         <h2>Access to your review</h2>
         <p>
-          Your browser keeps the keys to your reviews in its local storage on your device, never in
-          a URL, so you can reopen them from &ldquo;Your recent reviews&rdquo; until they expire
-          after 7 days. A review link contains only its ID and opens only in the browser that
-          submitted it. Clearing site data or using a private window removes that access. Anyone you
-          give the read key to can read the review; follow-up actions also need your original
-          network. Your theme choice (light or dark) is kept in local storage too.
+          Your browser keeps the keys to your reviews in its local storage on your device, so you
+          can reopen them from &ldquo;Your recent reviews&rdquo; until they expire after 7 days. A
+          review&apos;s address contains only its ID, and clearing site data or using a private
+          window removes your access. &ldquo;Copy link&rdquo; makes a read-only link: its read key
+          sits after the &ldquo;#&rdquo;, the part of a link browsers never send to a server. Anyone
+          with that link can read the review until it expires, but only your browser and network can
+          ask questions or go deeper. Your theme choice (light or dark) is kept in local storage
+          too.
         </p>
 
         <h2>How long it&apos;s kept</h2>

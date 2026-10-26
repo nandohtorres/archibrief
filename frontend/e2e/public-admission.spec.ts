@@ -230,3 +230,39 @@ test("dispatch retry reuses the bound file without a second reservation", async 
   expect(uploads).toBe(1);
   expect(dispatches).toBe(2);
 });
+
+test("a copied link opens the report read-only in another browser", async ({ page, browser }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await mockTurnstile(page);
+  await reservation(page, PUBLIC_URL);
+  await fill(page);
+  await page.getByRole("button", { name: "Start review" }).click();
+  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Go deeper", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Copy link" }).click();
+  await expect(page.getByText(/Link copied/)).toBeVisible();
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  expect(link).toContain("#access=");
+  expect(link).not.toContain("w".repeat(43));
+
+  // A fresh browser profile: no saved access, no write key.
+  const other = await browser.newContext();
+  const visitor = await other.newPage();
+  await reservation(visitor, PUBLIC_URL);
+  let writes = 0;
+  visitor.on("request", (request) => {
+    if (request.headers()["x-review-write-token"]) writes++;
+  });
+  await visitor.goto(link);
+  await expect(visitor.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(visitor.getByRole("note")).toContainText("Shared read-only link");
+  await expect(visitor.getByRole("button", { name: "Go deeper", exact: true })).toHaveCount(0);
+  await expect(visitor.getByRole("button", { name: "Copy link" })).toHaveCount(0);
+  await expect(visitor.locator("#question-input")).toBeDisabled();
+  expect(new URL(visitor.url()).hash).toBe("");
+  // The read key outlives the stripped fragment: a reload still opens it.
+  await visitor.reload();
+  await expect(visitor.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  expect(writes).toBe(0);
+  await other.close();
+});
