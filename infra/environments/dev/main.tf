@@ -67,6 +67,7 @@ module "iam" {
   frontend_bucket_arn         = module.frontend_hosting.bucket_arn
   frontend_distribution_arn   = module.frontend_hosting.cloudfront_distribution_arn
   github_repo                 = var.github_repo
+  github_oidc_subject_prefix  = var.github_oidc_subject_prefix
   tags                        = var.tags
 }
 

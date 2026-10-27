@@ -17,6 +17,17 @@ variable "github_repo" {
   default     = "REPLACE_ME/archibrief"
 }
 
+variable "github_oidc_subject_prefix" {
+  type        = string
+  default     = null
+  description = "Verified GitHub sub_claim_prefix (including immutable IDs when enabled). Null uses the legacy repo:owner/repo prefix."
+
+  validation {
+    condition     = var.github_oidc_subject_prefix == null ? true : replace(var.github_oidc_subject_prefix, "/@[0-9]+/", "") == "repo:${var.github_repo}"
+    error_message = "The OIDC prefix must identify github_repo, optionally with GitHub's immutable owner and repository IDs."
+  }
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

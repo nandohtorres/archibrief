@@ -60,7 +60,16 @@ Do not queue a rollback while newer automatic releases are pending.
    create_github_oidc_provider = true
    github_oidc_provider_arn   = null
    github_repo                = "nandohtorres/archibrief"
+   # For immutable subjects, also set github_oidc_subject_prefix as below.
    ```
+
+   Check the repository's actual subject configuration with
+   `gh api repos/nandohtorres/archibrief/actions/oidc/customization/sub`.
+   For an immutable subject, copy its `sub_claim_prefix` into
+   `github_oidc_subject_prefix` in ignored tfvars. This repository has immutable
+   subjects enabled; its verified prefix was saved locally during setup.
+   Keep the IDs out of tracked examples. Null retains legacy name-only subjects
+   for older repositories. The module validates that the prefix names github_repo.
 
    From `infra/environments/dev`, using your authenticated deploy profile:
 
@@ -80,11 +89,13 @@ Do not queue a rollback while newer automatic releases are pending.
 3. **Create GitHub Environment `production`.** Under repository Settings →
    Environments, use **Selected branches and tags**, allow the branch `master`,
    and allow no tags. This is required: the exact OIDC subject is
-   `repo:nandohtorres/archibrief:environment:production`, which identifies the
-   environment rather than the branch. Environment branch rules plus workflow
+   `<verified sub_claim_prefix>:environment:production`, which identifies the
+   environment rather than the branch. This repo uses immutable owner/repository
+   IDs in that prefix, not the legacy name-only subject. Environment branch rules plus workflow
    checks enforce master. Keep required CI checks on master. Optional required
    reviewers add an approval gate if desired. The trust subject is built from
-   `github_repo`, with no literal account values in Terraform source.
+   `github_repo` plus the verified optional prefix, with no literal account
+   values in Terraform source.
 4. **Set GitHub repository Actions variables** (not secrets):
 
    | Variable | Value/source |
@@ -178,3 +189,17 @@ and the one read-only production run are recorded in
 
 References: [GitHub OIDC/AWS and environment restrictions](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws),
 [AWS provider OIDC resource](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_openid_connect_provider).
+
+
+## Guided setup progress
+
+During the follow-up setup, GitHub production was created with custom deployment
+rules allowing only the master branch and no tags. Six public repository
+variables were set and verified; AWS_DEPLOY_ROLE_ARN awaits the owner's Terraform
+apply. Ignored tfvars now opts in to provider creation and contains the verified
+immutable subject prefix. No AWS mutation or Terraform plan/apply was run.
+
+The existing deploy SSO session is valid, but that permission set cannot list
+IAM customer-managed policies. Use the owner's IAM administrator console to
+merge the additive statements into the existing IAM self-management policy,
+keeping all existing statements, and reprovision the permission set.

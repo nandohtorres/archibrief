@@ -15,8 +15,9 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
-  ci_deploy_enabled   = var.create_github_oidc_provider || var.github_oidc_provider_arn != null
-  github_provider_arn = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : var.github_oidc_provider_arn
+  ci_deploy_enabled     = var.create_github_oidc_provider || var.github_oidc_provider_arn != null
+  github_provider_arn   = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : var.github_oidc_provider_arn
+  github_subject_prefix = coalesce(var.github_oidc_subject_prefix, "repo:${var.github_repo}")
 }
 
 data "aws_iam_policy_document" "deploy_role_trust" {
@@ -40,7 +41,7 @@ data "aws_iam_policy_document" "deploy_role_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:environment:production"]
+      values   = ["${local.github_subject_prefix}:environment:production"]
     }
   }
 }

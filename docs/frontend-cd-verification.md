@@ -73,3 +73,20 @@ No production POST, upload, review, deeper-review or chat request was sent.
 - Both workflows always use read-only smoke; the daily run has no AWS
   credentials. The CD role only publishes frontend files and invalidates one
   distribution. Backend deploys and paid model evaluations remain separate.
+
+
+## Follow-up guided setup
+
+GitHub API inspection found immutable OIDC subjects enabled on this repository.
+The original name-only trust subject would not authenticate it. Terraform now
+accepts a verified optional github_oidc_subject_prefix, validates its repository
+name, and appends the fixed production environment suffix. Legacy repositories
+retain the original default. The real prefix is stored only in ignored tfvars.
+
+GitHub production and its master-only branch rule were created. Six public
+repository variables were copied from the existing deployment settings and
+verified. AWS_DEPLOY_ROLE_ARN remains pending the owner's apply. Local tfvars
+was prepared with provider opt-in true. No AWS write, plan/apply or push ran.
+The deploy SSO session is active; IAM ListPolicies was denied, so permission-set
+changes remain an owner-admin console task. Terraform 1.9.8 validation passed
+again after the subject correction, with the same deprecation warnings.

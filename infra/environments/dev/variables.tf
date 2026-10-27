@@ -36,6 +36,12 @@ variable "github_repo" {
   default = "REPLACE_ME/archibrief"
 }
 
+variable "github_oidc_subject_prefix" {
+  type        = string
+  default     = null
+  description = "GitHub OIDC sub_claim_prefix from the repository API; set in ignored tfvars for immutable-subject repositories."
+}
+
 variable "lambda_zip_paths" {
   type = object({
     ingest                    = string
