@@ -118,7 +118,7 @@ test("recent reviews and review URLs reopen the same review without a new upload
   await expect(page).not.toHaveURL(/review=/);
   await page.reload();
   await expect(page.getByRole("button", { name: "Start review" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Your recent reviews" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Previous Reviews" })).toBeVisible();
   await page
     .getByRole("button", { name: /^Open / })
     .first()

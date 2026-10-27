@@ -410,7 +410,7 @@ test("the progress screen appears at once and shows the diagram while the review
   await expect(page.getByRole("complementary", { name: "Did you know?" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Back to home" })).toHaveCount(0);
   releaseUpload();
-  await expect(page.getByRole("heading", { name: "Your architecture" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Architecture", exact: true })).toBeVisible();
   await expect(page.getByText("Reasoning over the architecture and evidence")).toBeVisible();
   await expect(page.getByText(/GET \/reviews/)).toHaveCount(0);
   finished = true;
