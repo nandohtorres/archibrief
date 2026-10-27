@@ -11,3 +11,11 @@ output "cloudfront_distribution_id" {
 output "bucket_id" {
   value = aws_s3_bucket.frontend.id
 }
+
+output "bucket_arn" {
+  value = aws_s3_bucket.frontend.arn
+}
+
+output "cloudfront_distribution_arn" {
+  value = aws_cloudfront_distribution.frontend.arn
+}

@@ -126,3 +126,9 @@ variable "chat_alarms_enabled" {
   default     = false
   description = "Chat metric filters and alarms. Needs the deploy-role statement in proposed-chat-iam.md first."
 }
+
+variable "create_github_oidc_provider" {
+  type        = bool
+  default     = false
+  description = "Opt in to managing GitHub's account-wide OIDC provider. Leave false when reusing an existing provider ARN."
+}

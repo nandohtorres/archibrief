@@ -1,0 +1,145 @@
+# Always deploy successful master CI runs, including docs-only changes.
+# No PR artifacts or PR revisions are trusted by this privileged workflow.
+name: deploy-frontend
+
+on:
+  workflow_run:
+    workflows: [ci]
+    branches: [master]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "master or a full commit SHA already merged into master (rollback)"
+        required: true
+        default: master
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-frontend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'master' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Keep the current workflow's tooling even when rolling back to a commit
+      # from before the smoke script or deploy-output support existed.
+      - name: Check out trusted automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: automation
+      - name: Resolve and constrain the release revision
+        id: revision
+        working-directory: automation
+        env:
+          REQUESTED_REF: ${{ inputs.ref || 'master' }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == workflow_run ]]; then
+            target="$TESTED_SHA"
+          elif [[ "$REQUESTED_REF" == master ]]; then
+            target=refs/remotes/origin/master
+          elif [[ "$REQUESTED_REF" =~ ^[a-f0-9]{40}$ ]]; then
+            target="$REQUESTED_REF"
+          else
+            echo 'Use master or a full lowercase commit SHA.' >&2
+            exit 1
+          fi
+          sha=$(git rev-parse --verify --end-of-options "${target}^{commit}")
+          git merge-base --is-ancestor "$sha" refs/remotes/origin/master
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Check out the release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.revision.outputs.sha }}
+          persist-credentials: false
+          path: release
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: release/frontend/package-lock.json
+      - run: npm ci
+        working-directory: release/frontend
+      - name: Write public build settings
+        working-directory: release/frontend
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+          NEXT_PUBLIC_PUBLIC_ACCESS_ENABLED: ${{ vars.NEXT_PUBLIC_PUBLIC_ACCESS_ENABLED }}
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          const keys = ['NEXT_PUBLIC_API_BASE_URL', 'NEXT_PUBLIC_PUBLIC_ACCESS_ENABLED', 'NEXT_PUBLIC_TURNSTILE_SITE_KEY'];
+          for (const key of keys) {
+            if (!process.env[key] || /[\r\n]/.test(process.env[key])) throw new Error(`Missing or invalid repository variable: ${key}`);
+          }
+          if (!['true', 'false'].includes(process.env.NEXT_PUBLIC_PUBLIC_ACCESS_ENABLED)) throw new Error('Public access flag must be true or false');
+          const api = new URL(process.env.NEXT_PUBLIC_API_BASE_URL);
+          if (api.protocol !== 'https:' || api.username || api.password) throw new Error('API URL must use HTTPS without credentials');
+          writeFileSync('.env.production.local', keys.map(key => `${key}=${JSON.stringify(process.env[key])}`).join('\n') + '\n');
+          NODE
+      - name: Assume frontend-only deploy role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: frontend-${{ github.run_id }}
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+      - name: Build and publish the tested revision
+        id: publish
+        env:
+          FRONTEND_DIR: ${{ github.workspace }}/release/frontend
+          FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
+          DISTRIBUTION_ID: ${{ vars.DISTRIBUTION_ID }}
+          ARCHIBRIEF_BUILD_REVISION: ${{ steps.revision.outputs.sha }}
+          GITHUB_SHA: ${{ steps.revision.outputs.sha }}
+        run: bash automation/scripts/deploy_frontend.sh
+      - name: Smoke test the live release
+        id: smoke
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.sha }}
+        run: |
+          node automation/scripts/smoke_live.mjs https://archibrief.dev https://api.archibrief.dev "$EXPECTED_REVISION" | tee "$RUNNER_TEMP/frontend-smoke.log"
+      - name: Deployment summary
+        if: always()
+        env:
+          DEPLOYED_SHA: ${{ steps.revision.outputs.sha }}
+          INVALIDATION_ID: ${{ steps.publish.outputs.invalidation_id }}
+          PUBLISH_RESULT: ${{ steps.publish.outcome }}
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+        run: |
+          {
+            echo '## Frontend deployment'
+            printf 'Revision: `%s`\n\n' "$DEPLOYED_SHA"
+            printf 'Publish: %s\n\n' "$PUBLISH_RESULT"
+            printf 'CloudFront invalidation: `%s`\n\n' "$INVALIDATION_ID"
+            printf 'Live smoke: %s\n\n' "$SMOKE_RESULT"
+            if [[ -f "$RUNNER_TEMP/frontend-smoke.log" ]]; then
+              echo '```text'
+              cat "$RUNNER_TEMP/frontend-smoke.log"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

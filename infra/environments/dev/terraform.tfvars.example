@@ -3,6 +3,7 @@
 # ADR-0015).
 
 aws_account_id           = "000000000000"
+create_github_oidc_provider = false
 github_oidc_provider_arn = null
 github_repo              = "REPLACE_ME/archibrief"
 

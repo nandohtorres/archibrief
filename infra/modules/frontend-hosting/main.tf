@@ -56,15 +56,14 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 # depends on this module's cloudfront_domain_name for CORS). It also
 # allows the S3 global endpoint (*.s3.amazonaws.com), because ADR-0045's
 # direct-upload flow has the browser POST the archive straight to a
-# presigned S3 URL. style-src/font-src allow Google Fonts
-# (app/globals.css's @import).
+# presigned S3 URL. Fonts ship with the static export; no external font origins are needed.
 resource "aws_cloudfront_response_headers_policy" "frontend_security" {
   name = "${var.name_prefix}-frontend-security-headers"
 
   security_headers_config {
     content_security_policy {
       override                = true
-      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com ${var.api_origin_pattern} https://*.s3.amazonaws.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com ${var.api_origin_pattern} https://*.s3.amazonaws.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     }
     frame_options {
       override     = true

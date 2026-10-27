@@ -28,3 +28,16 @@ output "api_dns_target" {
   description = "CNAME target for api.archibrief.dev. null until certificate_arn is set on the api_gateway module (after the cert is validated and the second apply has run)."
   value       = module.api_gateway.regional_domain_target
 }
+
+output "ci_deploy_role_arn" {
+  description = "Set GitHub repository variable AWS_DEPLOY_ROLE_ARN after opting in to OIDC."
+  value       = module.iam.ci_deploy_role_arn
+}
+
+output "frontend_bucket_name" {
+  value = module.frontend_hosting.bucket_id
+}
+
+output "frontend_distribution_id" {
+  value = module.frontend_hosting.cloudfront_distribution_id
+}

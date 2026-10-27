@@ -21,3 +21,19 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "create_github_oidc_provider" {
+  type        = bool
+  default     = false
+  description = "Opt in to managing GitHub's account-wide OIDC provider. Leave false when reusing an existing provider ARN."
+}
+
+variable "frontend_bucket_arn" {
+  type        = string
+  description = "Only bucket the GitHub frontend deploy role may publish."
+}
+
+variable "frontend_distribution_arn" {
+  type        = string
+  description = "Only CloudFront distribution the GitHub deploy role may invalidate."
+}

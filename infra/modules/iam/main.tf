@@ -4,11 +4,23 @@
 # Per-Lambda execution roles do not belong here; each one is defined in
 # the same module as its Lambda (ADR-0021), never a shared role.
 #
-# The deploy role is created only once github_oidc_provider_arn is set
-# (the GitHub Actions OIDC provider is registered in the account).
+# Frontend delivery only; infrastructure remains an owner-operated deploy.
+# The production environment must restrict deployment branches to master.
+resource "aws_iam_openid_connect_provider" "github" {
+  count          = var.create_github_oidc_provider ? 1 : 0
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+  # IAM verifies GitHub through its trusted CA library; no pinned thumbprint.
+  tags = var.tags
+}
+
+locals {
+  ci_deploy_enabled   = var.create_github_oidc_provider || var.github_oidc_provider_arn != null
+  github_provider_arn = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : var.github_oidc_provider_arn
+}
 
 data "aws_iam_policy_document" "deploy_role_trust" {
-  count = var.github_oidc_provider_arn == null ? 0 : 1
+  count = local.ci_deploy_enabled ? 1 : 0
 
   statement {
     effect  = "Allow"
@@ -16,7 +28,7 @@ data "aws_iam_policy_document" "deploy_role_trust" {
 
     principals {
       type        = "Federated"
-      identifiers = [var.github_oidc_provider_arn]
+      identifiers = [local.github_provider_arn]
     }
 
     condition {
@@ -26,18 +38,45 @@ data "aws_iam_policy_document" "deploy_role_trust" {
     }
 
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:*"]
+      values   = ["repo:${var.github_repo}:environment:production"]
     }
   }
 }
 
 resource "aws_iam_role" "ci_deploy" {
-  count              = var.github_oidc_provider_arn == null ? 0 : 1
+  count              = local.ci_deploy_enabled ? 1 : 0
   name               = "${var.name_prefix}-ci-deploy"
   assume_role_policy = data.aws_iam_policy_document.deploy_role_trust[0].json
   tags               = var.tags
+}
+
+data "aws_iam_policy_document" "frontend_deploy" {
+  count = local.ci_deploy_enabled ? 1 : 0
+
+  statement {
+    sid       = "ListFrontendBucket"
+    actions   = ["s3:ListBucket"]
+    resources = [var.frontend_bucket_arn]
+  }
+  statement {
+    sid       = "PublishFrontendObjects"
+    actions   = ["s3:PutObject", "s3:DeleteObject"]
+    resources = ["${var.frontend_bucket_arn}/*"]
+  }
+  statement {
+    sid       = "InvalidateFrontendDistribution"
+    actions   = ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"]
+    resources = [var.frontend_distribution_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "frontend_deploy" {
+  count  = local.ci_deploy_enabled ? 1 : 0
+  name   = "frontend-deploy"
+  role   = aws_iam_role.ci_deploy[0].id
+  policy = data.aws_iam_policy_document.frontend_deploy[0].json
 }
 
 # The admin app-role (ADR-0037) is granted out-of-band via a break-glass
@@ -59,8 +98,8 @@ resource "aws_iam_group" "admin_break_glass" {
 # boundary, so even an over-broad policy attached to one of these roles
 # can't grant more than what is listed here. Not applied to ci_deploy
 # above: that role is assumed directly through GitHub Actions OIDC, not
-# passed to a service principal, and needs broad infrastructure
-# permissions.
+# passed to a service principal. It only publishes the frontend bucket
+# and invalidates its distribution.
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "runtime_permissions_boundary" {

@@ -65,6 +65,16 @@ Without `NEXT_PUBLIC_API_BASE_URL`, the UI uses the local fixture path. Leave th
 
 Direct demo links: [breach pattern](https://archibrief.dev/?demo=breach-pattern), [Medicare platform](https://archibrief.dev/?demo=medicare-platform), [FEC databases](https://archibrief.dev/?demo=fec-database).
 
+## Frontend deployment
+
+Frontend CD is defined in `.github/workflows/deploy-frontend.yml`: after successful
+master CI it publishes that exact revision through the existing deployment
+script, then verifies the live build and read-only API health. A daily smoke
+workflow needs no AWS credentials or paid review calls. Owner setup (Terraform,
+OIDC, production environment and repository variables), rollback and the manual
+SSO fallback are in [frontend deployment](docs/frontend-deployment.md).
+The workflows take effect only after the owner completes setup and merges them.
+
 ## Screenshots
 
 Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo reviews without an account.
