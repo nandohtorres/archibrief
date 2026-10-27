@@ -20,8 +20,9 @@
     "build:e2e": "next build",
     "postbuild:e2e": "node ../scripts/write_frontend_build_info.mjs",
     "test:e2e": "playwright test",
-    "test:tooling": "node --test ../tests/tooling/e2e-build-log.test.mjs",
-    "lighthouse": "node e2e/dev-server.mjs live --build-only && npx --yes @lhci/cli@0.15.1 autorun"
+    "test:tooling": "node --test ../tests/tooling/*.test.mjs",
+    "lighthouse": "node e2e/dev-server.mjs live --build-only && npx --yes @lhci/cli@0.15.1 autorun",
+    "smoke:live": "node ../scripts/smoke_live.mjs"
   },
   "dependencies": {
     "@marsidev/react-turnstile": "1.6.2",
