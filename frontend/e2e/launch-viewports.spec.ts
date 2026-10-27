@@ -24,8 +24,8 @@ for (const viewport of [
     await page.getByRole("button", { name: "See a real review" }).first().click();
     await expect(page.locator("#report-heading")).toBeVisible();
     await assertFits();
-    await page.getByRole("button", { name: "Export ledger", exact: true }).scrollIntoViewIfNeeded();
-    await expect(page.getByRole("button", { name: "Export ledger", exact: true })).toBeInViewport();
+    await page.getByRole("button", { name: "Export JSON", exact: true }).scrollIntoViewIfNeeded();
+    await expect(page.getByRole("button", { name: "Export JSON", exact: true })).toBeInViewport();
     await page.getByRole("tab", { name: /Guided Report/ }).click();
     await expect(page.locator("#stakeholder-panel")).toBeVisible();
     await assertFits();

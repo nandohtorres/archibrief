@@ -92,7 +92,7 @@ test("upload uses the server ID, exact S3 version and separate capabilities", as
   await reservation(page, PUBLIC_URL);
   await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
-  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
 });
 
 test("recent reviews and review URLs reopen the same review without a new upload or dispatch", async ({
@@ -108,11 +108,11 @@ test("recent reviews and review URLs reopen the same review without a new upload
   });
   await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
-  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
   await expect(page).toHaveURL(/[?&]review=/);
   // A reload on the review's URL keeps the review.
   await page.reload();
-  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
   // Home lists it; a reload at home stays home.
   await page.getByRole("button", { name: "New review", exact: true }).click();
   await expect(page).not.toHaveURL(/review=/);
@@ -123,7 +123,7 @@ test("recent reviews and review URLs reopen the same review without a new upload
     .getByRole("button", { name: /^Open / })
     .first()
     .click();
-  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
   // Browser back returns home.
   await page.goBack();
   await expect(page.getByRole("button", { name: "Start review" })).toBeVisible();
@@ -148,7 +148,7 @@ test("a transient status failure retries the same accepted review", async ({ pag
   });
   await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
-  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
   expect(reads).toBe(2);
 });
 
@@ -157,7 +157,7 @@ test("verification completes before bound upload admission", async ({ page }) =>
   await reservation(page, PUBLIC_URL);
   await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
-  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
 });
 
 test("challenge failure keeps anonymous submission disabled", async ({ page }) => {
@@ -225,7 +225,7 @@ test("dispatch retry reuses the bound file without a second reservation", async 
   await expect(page.getByRole("button", { name: "Edit submission" })).toBeVisible();
   await page.getByRole("button", { name: "Edit submission" }).click();
   await page.getByRole("button", { name: "Start review" }).click();
-  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
   expect(reservations).toBe(1);
   expect(uploads).toBe(1);
   expect(dispatches).toBe(2);
@@ -237,9 +237,9 @@ test("a copied link opens the report read-only in another browser", async ({ pag
   await reservation(page, PUBLIC_URL);
   await fill(page);
   await page.getByRole("button", { name: "Start review" }).click();
-  await expect(page.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Go deeper", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Copy link" }).click();
+  await page.getByRole("button", { name: "Share link" }).click();
   await expect(page.getByText(/Link copied/)).toBeVisible();
   const link = await page.evaluate(() => navigator.clipboard.readText());
   expect(link).toContain("#access=");
@@ -254,15 +254,15 @@ test("a copied link opens the report read-only in another browser", async ({ pag
     if (request.headers()["x-review-write-token"]) writes++;
   });
   await visitor.goto(link);
-  await expect(visitor.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(visitor.getByRole("button", { name: "Export JSON" })).toBeVisible();
   await expect(visitor.getByRole("note")).toContainText("Shared read-only link");
   await expect(visitor.getByRole("button", { name: "Go deeper", exact: true })).toHaveCount(0);
-  await expect(visitor.getByRole("button", { name: "Copy link" })).toHaveCount(0);
+  await expect(visitor.getByRole("button", { name: "Share link" })).toHaveCount(0);
   await expect(visitor.locator("#question-input")).toBeDisabled();
   expect(new URL(visitor.url()).hash).toBe("");
   // The read key outlives the stripped fragment: a reload still opens it.
   await visitor.reload();
-  await expect(visitor.getByRole("button", { name: "Export ledger" })).toBeVisible();
+  await expect(visitor.getByRole("button", { name: "Export JSON" })).toBeVisible();
   expect(writes).toBe(0);
   await other.close();
 });

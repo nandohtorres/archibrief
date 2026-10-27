@@ -432,14 +432,14 @@ export function ReportWorkspace({
               Download report
             </button>
             <button className="button secondary" type="button" onClick={exportLedger}>
-              Export ledger
+              Export JSON
             </button>
             {source === "live" && canChange && getApiBaseUrl() && (
               <button className="button secondary" type="button" onClick={() => void copyLink()}>
-                Copy link
+                Share link
               </button>
             )}
-            <button className="button quiet" type="button" onClick={onNewReview}>
+            <button className="button secondary" type="button" onClick={onNewReview}>
               New review
             </button>
           </div>
@@ -610,7 +610,7 @@ export function ReportWorkspace({
                 </button>
               ))}
             </div>
-            <p className="field-help">
+            <p className="assessment-note">
               Risk and action assessments are separate from evidence type and confidence. Each
               assessment names its source; unassessed findings are not safety confirmations.
             </p>

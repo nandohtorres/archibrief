@@ -88,7 +88,7 @@ test("long finding text and many findings remain searchable and exportable at 32
   await page.locator(".finding-list button").click();
   await expect(page.locator("#finding-detail")).toContainText("finding 79");
   const downloadEvent = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export ledger", exact: true }).click();
+  await page.getByRole("button", { name: "Export JSON", exact: true }).click();
   const download = await downloadEvent;
   expect(await download.failure()).toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.json$/);

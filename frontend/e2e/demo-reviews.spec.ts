@@ -45,7 +45,7 @@ test.describe("demo reviews from saved files", () => {
     expect(html).toContain("Reviewer note");
     expect(html).toContain("SSE-S3");
     const jsonWait = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Export ledger", exact: true }).click();
+    await page.getByRole("button", { name: "Export JSON", exact: true }).click();
     const jsonDownload = await jsonWait;
     const data = JSON.parse(await readFile((await jsonDownload.path())!, "utf8"));
     expect(data.demo_review.reviewer_notes).toHaveLength(5);

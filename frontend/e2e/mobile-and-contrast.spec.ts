@@ -90,7 +90,7 @@ test.describe("phone layout at 390px", () => {
     const sample = page.getByRole("button", { name: "See a real review" }).first();
     expect((await sample.boundingBox())!.height).toBeGreaterThanOrEqual(24);
     await openReport(page);
-    for (const name of ["Export ledger", "New review"]) {
+    for (const name of ["Export JSON", "New review"]) {
       const box = await page.getByRole("button", { name }).boundingBox();
       expect(box!.height, name).toBeGreaterThanOrEqual(24);
       expect(box!.width, name).toBeGreaterThanOrEqual(24);
