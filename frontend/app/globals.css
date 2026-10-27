@@ -196,10 +196,25 @@ h4 {
 }
 
 .app-shell {
+  display: flex;
+  flex-direction: column;
   width: min(100% - 2rem, 1240px);
   min-height: 100vh;
   margin: 0 auto;
   padding: 0 0 var(--space-6);
+}
+
+/* Fills the space between the header and footer. */
+#main-content {
+  flex: 1;
+}
+
+/* Progress screens sit in the middle of that space. */
+#main-content.main-centered {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-block: var(--space-4);
 }
 
 .site-header {
@@ -3944,4 +3959,36 @@ h4 {
   .loading-facts p {
     animation: none;
   }
+}
+
+.regulatory-field legend {
+  margin-bottom: 0.5rem;
+  padding: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.regulatory-frameworks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.regulatory-frameworks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+/* Undo the form's text-input sizing for these checkboxes. */
+.submission-form .regulatory-frameworks input {
+  flex: none;
+  width: auto;
+  min-height: 0;
+  height: auto;
+  margin: 0;
+  padding: 0;
 }

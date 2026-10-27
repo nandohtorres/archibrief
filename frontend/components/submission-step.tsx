@@ -21,6 +21,20 @@ export interface SubmissionValues {
   // turned into this archive on submit.
   archiveFile: File | null;
   turnstileToken?: string;
+  // Asked up front so a review never has to stop and ask (preflight.py).
+  regulatory?: RegulatoryAnswer;
+}
+
+export type RegulatoryAnswer = { choice: "no" | "yes" | null; frameworks: string[] };
+
+export const REGULATORY_FRAMEWORKS = ["GDPR", "HIPAA", "PCI-DSS", "CCPA", "Other"] as const;
+
+// The baseline answer the review reads for regulatory_data_residency.
+export function regulatoryAnswerText(answer?: RegulatoryAnswer): string | null {
+  if (answer?.choice === "no") return "No specific regulatory or data residency requirement.";
+  if (answer?.choice === "yes" && answer.frameworks.length > 0)
+    return `Yes. Applicable: ${answer.frameworks.join(", ")}.`;
+  return null;
 }
 
 type Source = "upload" | "paste";
@@ -121,6 +135,12 @@ export function SubmissionStep({
 
   const pastedBytes = new TextEncoder().encode(pasted).length;
   const briefError = attempted && values.workloadBrief.trim().length < 40;
+  const regulatory = values.regulatory ?? { choice: null, frameworks: [] };
+  const regulatoryError = attempted && apiConfigured && !regulatoryAnswerText(regulatory);
+
+  function setRegulatory(next: RegulatoryAnswer) {
+    setValues((current) => ({ ...current, regulatory: next }));
+  }
   const archiveError = attempted && apiConfigured && source === "upload" && !values.archiveFile;
   const pasteError =
     attempted &&
@@ -149,6 +169,7 @@ export function SubmissionStep({
     event.preventDefault();
     setAttempted(true);
     if (values.workloadBrief.trim().length < 40) return;
+    if (apiConfigured && !regulatoryAnswerText(values.regulatory)) return;
     const named = (archiveFile: File | null): SubmissionValues => ({
       ...values,
       archiveFile,
@@ -328,6 +349,69 @@ export function SubmissionStep({
             </div>
           )}
         </div>
+
+        {apiConfigured && (
+          <fieldset
+            className="form-field regulatory-field"
+            aria-describedby={regulatoryError ? "regulatory-error" : "regulatory-help"}
+          >
+            <legend>Regulatory or data residency requirements</legend>
+            <div className="source-switch" role="radiogroup" aria-label="Regulatory requirements">
+              {(
+                [
+                  ["yes", "Yes"],
+                  ["no", "No"],
+                ] as const
+              ).map(([choice, label]) => (
+                <label
+                  key={choice}
+                  className={regulatory.choice === choice ? "selected" : undefined}
+                >
+                  <input
+                    type="radio"
+                    name="regulatory"
+                    value={choice}
+                    checked={regulatory.choice === choice}
+                    onChange={() => setRegulatory({ ...regulatory, choice })}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            {regulatory.choice === "yes" && (
+              <div className="regulatory-frameworks" role="group" aria-label="Which apply">
+                {REGULATORY_FRAMEWORKS.map((framework) => (
+                  <label key={framework}>
+                    <input
+                      type="checkbox"
+                      checked={regulatory.frameworks.includes(framework)}
+                      onChange={(event) =>
+                        setRegulatory({
+                          ...regulatory,
+                          frameworks: event.target.checked
+                            ? [...regulatory.frameworks, framework]
+                            : regulatory.frameworks.filter((item) => item !== framework),
+                        })
+                      }
+                    />
+                    {framework}
+                  </label>
+                ))}
+              </div>
+            )}
+            <div id="regulatory-help" className="field-help">
+              Required. The review runs start to finish without stopping to ask, so this is the one
+              question it needs up front.
+            </div>
+            {regulatoryError && (
+              <div id="regulatory-error" className="field-error" role="alert">
+                {regulatory.choice === "yes"
+                  ? "Choose at least one that applies."
+                  : "Choose Yes or No to start the review."}
+              </div>
+            )}
+          </fieldset>
+        )}
 
         {challengeRequired && (
           <div>

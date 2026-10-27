@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { PUBLIC_URL } from "../playwright.config";
 import { fixtureReport } from "../lib/fixtures";
-import { fillSubmission } from "./support/submission";
+import { fillSubmission, SAMPLE_ARCHIVE } from "./support/submission";
 import { mockTurnstile } from "./support/turnstile";
 
 const REVIEW_ID = "12345678-1234-4234-8234-123456789abc";
@@ -265,4 +265,33 @@ test("a copied link opens the report read-only in another browser", async ({ pag
   await expect(visitor.getByRole("button", { name: "Export ledger" })).toBeVisible();
   expect(writes).toBe(0);
   await other.close();
+});
+
+test("a review can't start until the regulatory question is answered", async ({ page }) => {
+  await mockTurnstile(page);
+  await reservation(page, PUBLIC_URL);
+  let submitted = false;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/mock-api/reviews") && request.method() === "POST")
+      submitted = true;
+  });
+  await page.goto(PUBLIC_URL);
+  await page.locator("#terraform-archive").setInputFiles(SAMPLE_ARCHIVE);
+  await page
+    .getByLabel("Workload brief")
+    .fill("A payments API handling about 40 requests a second with a 99.9% availability target.");
+  await page.getByRole("button", { name: "Start review" }).click();
+  await expect(page.getByText("Choose Yes or No to start the review.")).toBeVisible();
+  await page.getByRole("radio", { name: "Yes", exact: true }).check();
+  await page.getByRole("button", { name: "Start review" }).click();
+  await expect(page.getByText("Choose at least one that applies.")).toBeVisible();
+  expect(submitted).toBe(false);
+  await page.getByRole("checkbox", { name: "PCI-DSS" }).check();
+  const request = page.waitForRequest(
+    (r) => r.url().endsWith("/mock-api/reviews") && r.method() === "POST",
+  );
+  await page.getByRole("button", { name: "Start review" }).click();
+  expect((await request).postDataJSON().baseline_answers).toEqual({
+    regulatory_data_residency: "Yes. Applicable: PCI-DSS.",
+  });
 });

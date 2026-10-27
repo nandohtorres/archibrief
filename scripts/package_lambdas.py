@@ -70,6 +70,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "submit_review": {
         "sources": [
+            "backend/shared/baseline.py",
             "backend/shared/http.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",

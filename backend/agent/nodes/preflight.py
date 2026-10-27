@@ -36,8 +36,11 @@ class FieldOutcome(str, Enum):
 
 
 # Per-field policy assignment. Revisit as scenarios are added.
+# No field pauses a review any more: submit_review requires the regulatory
+# answer up front, so a review runs start to finish. CANNOT_INFER is the
+# fallback for a review that somehow arrives without it.
 BASELINE_FIELD_POLICIES: dict[str, FieldPolicy] = {
-    "regulatory_data_residency": FieldPolicy.REQUIRED_FOR_REVIEW,
+    "regulatory_data_residency": FieldPolicy.CANNOT_INFER,
     "expected_traffic_scale": FieldPolicy.CAN_MODEL_CONSERVATIVELY,
     "availability_criticality": FieldPolicy.CAN_MODEL_CONSERVATIVELY,
 }

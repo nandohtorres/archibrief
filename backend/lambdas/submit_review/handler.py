@@ -18,6 +18,7 @@ from backend.shared.admission import (
     request_digest,
     reserve_operation,
 )
+from backend.shared.baseline import SUBMISSION_REQUIRED_FIELDS
 from backend.shared.clients import DynamoDBClient
 from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
@@ -61,6 +62,13 @@ def handler(event: dict, _context: object) -> dict:
         if not isinstance(brief, str) or not 1 <= len(brief.strip()) <= 4000:
             raise ValueError
         if not isinstance(label, str) or len(label) > 256:
+            raise ValueError
+        # The regulatory question is answered up front so the review never
+        # has to stop and ask (agent/nodes/preflight.py).
+        if not isinstance(answers, dict) or any(
+            not isinstance(answers.get(name), str) or not answers[name].strip()
+            for name in SUBMISSION_REQUIRED_FIELDS
+        ):
             raise ValueError
         if (
             not isinstance(answers, dict)
