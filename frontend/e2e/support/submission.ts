@@ -13,4 +13,5 @@ export async function fillSubmission(page: Page): Promise<void> {
     .fill(
       "Customer payments platform processing roughly 500 requests/second at peak. Must meet PCI-DSS; requires 99.95% availability.",
     );
+  await page.getByRole("radio", { name: "No", exact: true }).check();
 }

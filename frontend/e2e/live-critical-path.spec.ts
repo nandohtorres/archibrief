@@ -169,6 +169,7 @@ test.describe("live critical path (mocked network)", () => {
     await page
       .getByLabel(/^Workload brief/)
       .fill("An internal log bucket for a small team. No regulatory requirements known.");
+    await page.getByRole("radio", { name: "No", exact: true }).check();
     await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
     await page.getByRole("button", { name: "Start review" }).click();
 

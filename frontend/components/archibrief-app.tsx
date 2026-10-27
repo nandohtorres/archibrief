@@ -10,7 +10,7 @@ import { LiveProgressStep } from "./live-progress-step";
 import { PreflightStep } from "./preflight-step";
 import { ProgressStep } from "./progress-step";
 import { ReportWorkspace } from "./report-workspace";
-import { SubmissionStep, type SubmissionValues } from "./submission-step";
+import { regulatoryAnswerText, SubmissionStep, type SubmissionValues } from "./submission-step";
 import {
   ApiRequestError,
   fetchDemoReport,
@@ -258,7 +258,13 @@ export function ArchiBriefApp() {
     setScreen("progress");
     try {
       const digest = await archiveDigest(values.archiveFile);
-      const fingerprint = JSON.stringify([digest, values.terraformRepoRef, values.workloadBrief]);
+      const regulatory = regulatoryAnswerText(values.regulatory);
+      const fingerprint = JSON.stringify([
+        digest,
+        values.terraformRepoRef,
+        values.workloadBrief,
+        regulatory,
+      ]);
       if (pendingSubmission.current?.fingerprint !== fingerprint) {
         pendingSubmission.current = { fingerprint, nonce: makeIdempotencyKey() };
       }
@@ -278,7 +284,7 @@ export function ArchiBriefApp() {
           terraform_repo_ref: values.terraformRepoRef,
           workload_brief: values.workloadBrief,
           retrieval_query: values.workloadBrief,
-          baseline_answers: {},
+          baseline_answers: regulatory ? { regulatory_data_residency: regulatory } : {},
         };
       }
       const response = await submitReview(pending.request);
@@ -550,7 +556,7 @@ export function ArchiBriefApp() {
         onHome={goHome}
         onSection={goToSection}
       />
-      <main id="main-content">
+      <main id="main-content" className={screen === "progress" ? "main-centered" : undefined}>
         {screen === "submission" && (
           <>
             <LandingIntro

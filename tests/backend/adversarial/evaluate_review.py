@@ -14,7 +14,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from backend.agent.nodes.preflight import FieldOutcome, evaluate_all_fields
+from backend.shared.baseline import SUBMISSION_REQUIRED_FIELDS
 from backend.corpus.lexical_index import build_lexical_corpus_index_from_disk
 from backend.shared.clients import (
     BedrockEmbeddingClient,
@@ -173,11 +173,12 @@ def main() -> int:
         {**case, "evaluation_baseline_answers": answers.get(case["id"], {})}
         for case in cases
     ]
+    # The same answers the live submission form requires (submit_review).
     missing = {
         case["id"]: [
             name
-            for name, field in evaluate_all_fields(answers.get(case["id"], {})).items()
-            if field.outcome == FieldOutcome.PAUSED
+            for name in SUBMISSION_REQUIRED_FIELDS
+            if not answers.get(case["id"], {}).get(name)
         ]
         for case in cases
     }
@@ -225,7 +226,7 @@ def main() -> int:
         )
     if missing:
         parser.error(
-            "required baseline answers are missing; inspect --plan and use free replay for clarification-pause tests"
+            "required baseline answers are missing; inspect --plan for the fields each case needs"
         )
     if args.out is None or args.out.exists():
         parser.error("paid execution requires a fresh private --out path")

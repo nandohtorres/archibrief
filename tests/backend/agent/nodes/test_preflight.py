@@ -11,9 +11,10 @@ def test_answered_field_returns_answered():
     assert result["regulatory_data_residency"].value == "EU-only"
 
 
-def test_unanswered_required_field_pauses():
+def test_no_field_pauses_a_review():
     result = evaluate_all_fields({})
-    assert result["regulatory_data_residency"].outcome == FieldOutcome.PAUSED
+    assert result["regulatory_data_residency"].outcome == FieldOutcome.UNKNOWN
+    assert all(field.outcome != FieldOutcome.PAUSED for field in result.values())
 
 
 def test_unanswered_conservative_field_gets_assumption():
@@ -24,11 +25,14 @@ def test_unanswered_conservative_field_gets_assumption():
     assert field.value is not None
 
 
-def test_preflight_node_flags_needs_clarification():
-    state = {"baseline_answers": {}}
-    result = preflight_node(state)
-    assert result["status"] == "needs_clarification"
-    assert "regulatory_data_residency" in result["needs_clarification"]
+def test_preflight_node_runs_on_without_the_regulatory_answer():
+    # submit_review requires it; a review that somehow lacks it still runs.
+    result = preflight_node({"baseline_answers": {}})
+    assert result["status"] == "ready"
+    assert result["needs_clarification"] == []
+    assert (
+        result["preflight_fields"]["regulatory_data_residency"]["outcome"] == "unknown"
+    )
 
 
 def test_preflight_node_ready_when_required_field_answered():

@@ -85,6 +85,9 @@ def env(monkeypatch):
             "archive_version_id": version,
             "terraform_repo_ref": "example",
             "workload_brief": "A payments API",
+            "baseline_answers": {
+                "regulatory_data_residency": "No specific regulatory or data residency requirement."
+            },
         }
         yield upload, body, s3, sfn, arn
 
@@ -141,4 +144,15 @@ def test_wrong_size_checksum_or_key_prevents_dispatch(env):
         _submit({**body, "archive_s3_key": "uploads/another/archive.tar"})["statusCode"]
         == 400
     )
+    assert sfn.list_executions(stateMachineArn=arn)["executions"] == []
+
+
+@pytest.mark.parametrize("answers", [None, {}, {"regulatory_data_residency": "  "}])
+def test_a_submission_without_the_regulatory_answer_is_refused(env, answers):
+    _upload, body, _s3, sfn, arn = env
+    if answers is None:
+        body = {k: v for k, v in body.items() if k != "baseline_answers"}
+    else:
+        body = {**body, "baseline_answers": answers}
+    assert _submit(body)["statusCode"] == 400
     assert sfn.list_executions(stateMachineArn=arn)["executions"] == []

@@ -66,14 +66,13 @@ def test_replay_uses_real_graph_merging_schema_quality_and_report(
     assert result["report"]["baseline_answers"]
 
 
-def test_preflight_pause_performs_no_recorded_service_calls(case, transcript, tmp_path):
+def test_missing_regulatory_answer_no_longer_pauses_the_review(
+    case, transcript, tmp_path
+):
     transcript["baseline_answers"] = {}
     result = replay_case(case, transcript, tmp_path)
-    assert result["attempt_outcome"] == "needs_clarification"
-    assert result["needs_clarification"] == ["regulatory_data_residency"]
-    assert result["replayed_operations"] == []
-    assert result["raw_model_response"] is None
-    assert result["contract_passed"] is False
+    assert result["attempt_outcome"] != "needs_clarification"
+    assert "model" in result["replayed_operations"]
 
 
 def test_guardrail_block_prevents_model_dispatch(case, transcript, tmp_path):
