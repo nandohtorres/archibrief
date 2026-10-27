@@ -9,7 +9,7 @@ python-hcl2
 beautifulsoup4
 pypdf
 reportlab
-ruff==0.16.6
+ruff==0.17.2
 pytest==9.1.1
 pytest-cov==7.1.0
-moto[dynamodb,s3]==5.2.3
+moto[dynamodb,s3]==5.2.4
