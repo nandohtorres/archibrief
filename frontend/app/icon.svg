@@ -1,4 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#235f7a" />
-  <text x="32" y="43" font-family="ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace" font-size="30" font-weight="700" fill="#ffffff" text-anchor="middle">A</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <style>
+    g { color: #235f7a; }
+    @media (prefers-color-scheme: dark) { g { color: #8fcfd5; } }
+  </style>
+  <g>
+    <path d="M16 3 29 10 16 17 3 10Z" fill="currentColor" />
+    <path d="M3 15.5 16 22.5 29 15.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" opacity="0.65" />
+    <path d="M3 21 16 28 29 21" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" opacity="0.35" />
+  </g>
 </svg>
