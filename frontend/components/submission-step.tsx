@@ -53,6 +53,8 @@ interface SubmissionStepProps {
   onSubmit: (values: SubmissionValues) => Promise<void>;
   // Finished demo reviews, shown above the form.
   demos?: ReactNode;
+  // This browser's previous reviews, shown under the submit button.
+  previousReviews?: ReactNode;
 }
 
 const fixtureValues: SubmissionValues = {
@@ -113,6 +115,7 @@ export function SubmissionStep({
   notice = null,
   onSubmit,
   demos = null,
+  previousReviews = null,
 }: SubmissionStepProps) {
   const [values, setValues] = useState(initialValues);
   const challenge = useRef<TurnstileInstance>(null);
@@ -355,8 +358,18 @@ export function SubmissionStep({
             className="form-field regulatory-field"
             aria-describedby={regulatoryError ? "regulatory-error" : "regulatory-help"}
           >
-            <legend>Regulatory or data residency requirements</legend>
-            <div className="source-switch" role="radiogroup" aria-label="Regulatory requirements">
+            <legend>
+              Regulatory or data residency requirements{" "}
+              <span className="required-mark" aria-hidden="true">
+                *
+              </span>
+            </legend>
+            <div
+              className="source-switch"
+              role="radiogroup"
+              aria-label="Regulatory requirements"
+              aria-required="true"
+            >
               {(
                 [
                   ["yes", "Yes"],
@@ -400,8 +413,7 @@ export function SubmissionStep({
               </div>
             )}
             <div id="regulatory-help" className="field-help">
-              Required. The review runs start to finish without stopping to ask, so this is the one
-              question it needs up front.
+              The review runs start to finish without stopping to ask, so it needs this up front.
             </div>
             {regulatoryError && (
               <div id="regulatory-error" className="field-error" role="alert">
@@ -415,10 +427,7 @@ export function SubmissionStep({
 
         {challengeRequired && (
           <div>
-            <p>
-              Complete verification to start a review. Keep this tab open to retain access to your
-              report.
-            </p>
+            <p>Complete verification to start a review.</p>
             <Turnstile
               ref={challenge}
               siteKey={turnstileSiteKey}
@@ -465,6 +474,7 @@ export function SubmissionStep({
           </p>
         )}
       </form>
+      {previousReviews}
     </section>
   );
 }

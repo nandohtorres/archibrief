@@ -62,7 +62,10 @@ export function LiveProgressStep({
           <button className="button secondary" type="button" onClick={onCancel}>
             Back to home
           </button>
-          <p>The review keeps running. Reopen it from &ldquo;Your recent reviews&rdquo;.</p>
+          <p>
+            The review keeps running. Reopen it from &ldquo;Previous Reviews&rdquo; on the home
+            page.
+          </p>
         </div>
       )}
     </section>

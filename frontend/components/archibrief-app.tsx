@@ -564,11 +564,6 @@ export function ArchiBriefApp() {
               onOpenSample={openSample}
               demos={<DemoCards variant="landing" openingId={openingDemoId} onOpen={openDemo} />}
             />
-            {apiConfigured && recent.length > 0 && (
-              <div className="landing-submit">
-                <RecentReviews reviews={recent} onOpen={(reviewId) => openReview(reviewId)} />
-              </div>
-            )}
             <div id="submit" className="landing-submit">
               <SubmissionStep
                 apiConfigured={apiConfigured}
@@ -577,6 +572,11 @@ export function ArchiBriefApp() {
                 notice={submitNotice}
                 onSubmit={handleSubmission}
                 demos={<DemoCards openingId={openingDemoId} onOpen={openDemo} />}
+                previousReviews={
+                  apiConfigured && recent.length > 0 ? (
+                    <RecentReviews reviews={recent} onOpen={(reviewId) => openReview(reviewId)} />
+                  ) : null
+                }
               />
             </div>
             <LandingClosing />

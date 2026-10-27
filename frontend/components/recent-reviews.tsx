@@ -21,8 +21,8 @@ export function RecentReviews({ reviews, onOpen }: RecentReviewsProps) {
   return (
     <section className="recent-reviews" aria-labelledby="recent-reviews-heading">
       <div className="recent-reviews-heading">
-        <h2 id="recent-reviews-heading">Your recent reviews</h2>
-        <p>Saved in this browser for 7 days after each review starts.</p>
+        <h3 id="recent-reviews-heading">Previous Reviews</h3>
+        <p>Saved in this browser for 7 days.</p>
       </div>
       <ul>
         {reviews.map((review) => (

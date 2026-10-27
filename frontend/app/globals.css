@@ -3850,29 +3850,37 @@ h4 {
   }
 }
 
-/* "Your recent reviews": this browser's reviews, above the submission form. */
+/* "Previous Reviews": this browser's reviews, under the submit button. */
 .recent-reviews {
-  padding: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--surface-2);
 }
 
-.recent-reviews-heading h2 {
+.recent-reviews-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+}
+
+.recent-reviews-heading h3 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 0.95rem;
 }
 
 .recent-reviews-heading p {
-  margin: var(--space-1) 0 0;
+  margin: 0;
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .recent-reviews ul {
   display: grid;
-  gap: var(--space-1);
-  margin: var(--space-2) 0 0;
+  gap: 0;
+  margin: var(--space-1) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -3882,8 +3890,15 @@ h4 {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-1) 0;
+  padding: 0.35rem 0;
   border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.recent-reviews li .button {
+  min-height: 0;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .recent-review-name {
@@ -3897,7 +3912,7 @@ h4 {
 
 .recent-review-name span {
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .read-only-note {
@@ -3991,4 +4006,8 @@ h4 {
   height: auto;
   margin: 0;
   padding: 0;
+}
+
+.required-mark {
+  color: var(--critical);
 }
