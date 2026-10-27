@@ -1,0 +1,72 @@
+[
+  {
+    "file": "IBMPlexSans-Regular.woff2",
+    "sha256": "ba711a3085ff9f27440b6b9c4550cfc47c97bf36591d5da958b975bb3add8c1a",
+    "archive_path": "ibm-plex-sans/fonts/complete/woff2/IBMPlexSans-Regular.woff2"
+  },
+  {
+    "file": "IBMPlexSans-Medium.woff2",
+    "sha256": "5660f8a658f8bb50dbc005232f885eadffd2bc1c235c4f6fbb63469d1f9cde6d",
+    "archive_path": "ibm-plex-sans/fonts/complete/woff2/IBMPlexSans-Medium.woff2"
+  },
+  {
+    "file": "IBMPlexSans-SemiBold.woff2",
+    "sha256": "f78048030eab62e860efa39a0df79e2e5581bf122eb95b9bc42c0b8a4988d205",
+    "archive_path": "ibm-plex-sans/fonts/complete/woff2/IBMPlexSans-SemiBold.woff2"
+  },
+  {
+    "file": "IBMPlexSans-Bold.woff2",
+    "sha256": "fa7130d854a660b39a7fc9e6e0f2dc23dba5f1346e2adea3e1fe37b6d884133d",
+    "archive_path": "ibm-plex-sans/fonts/complete/woff2/IBMPlexSans-Bold.woff2"
+  },
+  {
+    "file": "IBMPlexSans-Italic.woff2",
+    "sha256": "13284fab1821ba6e3652c1580fcf2bbfd8c9309520c69b3d1224dab40b37c597",
+    "archive_path": "ibm-plex-sans/fonts/complete/woff2/IBMPlexSans-Italic.woff2"
+  },
+  {
+    "file": "IBMPlexSans-MediumItalic.woff2",
+    "sha256": "16f11ab3543e3d1e2704407378aafa4ddb570ad11f6a476eeaa4ec6e67fc30e8",
+    "archive_path": "ibm-plex-sans/fonts/complete/woff2/IBMPlexSans-MediumItalic.woff2"
+  },
+  {
+    "file": "IBMPlexSans-SemiBoldItalic.woff2",
+    "sha256": "d875a0705b4596532250beeb66d9a2b8866a25f78b5b249b3d3293b5f922e50e",
+    "archive_path": "ibm-plex-sans/fonts/complete/woff2/IBMPlexSans-SemiBoldItalic.woff2"
+  },
+  {
+    "file": "IBMPlexSans-BoldItalic.woff2",
+    "sha256": "73d57000ee0fa7d6e1dd3a9fe5901c2d7c71904af9a935dbbc1d44abc9574c1f",
+    "archive_path": "ibm-plex-sans/fonts/complete/woff2/IBMPlexSans-BoldItalic.woff2"
+  },
+  {
+    "file": "IBMPlexMono-Regular.woff2",
+    "sha256": "ba204497f16b6d334cee9d1e963a831b73e3a56e1d6300a8489d18df7214b350",
+    "archive_path": "ibm-plex-mono/fonts/complete/woff2/IBMPlexMono-Regular.woff2"
+  },
+  {
+    "file": "IBMPlexMono-Medium.woff2",
+    "sha256": "33faf307fa6031fb4062276d7320a6d632de890cbb347576fd80cfa01077bc25",
+    "archive_path": "ibm-plex-mono/fonts/complete/woff2/IBMPlexMono-Medium.woff2"
+  },
+  {
+    "file": "IBMPlexMono-SemiBold.woff2",
+    "sha256": "6a825b4824c01cbb401e829e5a066a1818411bcb3538b5a5792c5ca9b82343c3",
+    "archive_path": "ibm-plex-mono/fonts/complete/woff2/IBMPlexMono-SemiBold.woff2"
+  },
+  {
+    "file": "IBMPlexMono-Bold.woff2",
+    "sha256": "ea576f38d05cc44cca48c45314984beb8cc1d2b886f58e1dce99f15dc344eb1d",
+    "archive_path": "ibm-plex-mono/fonts/complete/woff2/IBMPlexMono-Bold.woff2"
+  },
+  {
+    "file": "SourceSerif4Variable-Roman.ttf.woff2",
+    "sha256": "940a76eda1388de39d38c8e7a79bf6ea058a387faee0a9f33c8d25c6ba05e1be",
+    "archive_path": "source-serif-4.005_WOFF2/VAR/SourceSerif4Variable-Roman.ttf.woff2"
+  },
+  {
+    "file": "SourceSerif4Variable-Italic.ttf.woff2",
+    "sha256": "9d28b5749a1ad096a295cb607c521bd1af4cd9979b6f37332daf70143149fb44",
+    "archive_path": "source-serif-4.005_WOFF2/VAR/SourceSerif4Variable-Italic.ttf.woff2"
+  }
+]

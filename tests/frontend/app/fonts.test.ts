@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 // A Google Fonts @import with "&amp;" between families (HTML escaping,
@@ -10,10 +11,9 @@ const css = readFileSync(join(frontend, "globals.css"), "utf8");
 const layout = readFileSync(join(frontend, "layout.tsx"), "utf8");
 
 describe("site fonts", () => {
-  it("loads all three families through next/font", () => {
-    expect(layout).toMatch(
-      /import \{ IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 \} from "next\/font\/google"/,
-    );
+  it("loads all three families locally without a Google build dependency", () => {
+    expect(layout).toContain('import localFont from "next/font/local"');
+    expect(layout).not.toContain("next/font/google");
     for (const variable of [
       "--font-plex-sans",
       "--font-plex-mono",
@@ -26,5 +26,24 @@ describe("site fonts", () => {
 
   it("has no external font import left in the CSS", () => {
     expect(css).not.toMatch(/@import\s+url\(/);
+  });
+
+  it("ships the unchanged upstream WOFF2 assets and licenses", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(frontend, "fonts/manifest.json"), "utf8"),
+    );
+    for (const entry of manifest) {
+      const bytes = readFileSync(join(frontend, "fonts", entry.file));
+      expect(bytes.subarray(0, 4).toString()).toBe("wOF2");
+      expect(createHash("sha256").update(bytes).digest("hex")).toBe(
+        entry.sha256,
+      );
+      expect(layout).toContain(`./fonts/${entry.file}`);
+    }
+    for (const family of ["ibm-plex-sans", "ibm-plex-mono", "source-serif"]) {
+      expect(
+        readFileSync(join(frontend, "fonts", `${family}-OFL.txt`), "utf8"),
+      ).toMatch(/SIL OPEN FONT LICENSE/i);
+    }
   });
 });
