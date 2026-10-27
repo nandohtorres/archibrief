@@ -30,6 +30,7 @@ export function LiveProgressStep({
         Step {progress.stageIndex} of {progress.totalStages}
       </div>
       <h1 id="live-progress-heading">{progress.macroLabel}</h1>
+      <LoadingFacts />
       <div
         className="progress-bar-track"
         role="progressbar"
@@ -44,10 +45,9 @@ export function LiveProgressStep({
         {progress.microLabel}
         {started && ` · ${elapsedSeconds}s`}
       </p>
-      <LoadingFacts />
       {architecture && (
-        <div className="progress-architecture" aria-label="Your architecture">
-          <h2>Your architecture</h2>
+        <div className="progress-architecture" aria-label="Architecture">
+          <h2>Architecture</h2>
           <p>Mapped from your code. Findings appear on it when the review finishes.</p>
           <ArchitectureView
             graph={architecture}
