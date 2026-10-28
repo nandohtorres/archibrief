@@ -111,8 +111,7 @@ export function workloadName(terraformRepoRef: string): string {
 }
 
 export function reportTitle(terraformRepoRef: string): string {
-  const name = workloadName(terraformRepoRef);
-  return name ? `${name} architecture review` : "Architecture review";
+  return workloadName(terraformRepoRef) || "Architecture review";
 }
 
 // The report name is optional on the form: left blank, the report is

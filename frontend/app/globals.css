@@ -1281,8 +1281,16 @@ h4 {
   /* Top: the search column carries a count line under its box, so bottom
      alignment pushed the Sort box below it. */
   align-items: start;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3) var(--space-2);
   border-bottom: 1px solid var(--border);
+}
+
+.assessment-note {
+  margin: 0;
+  padding: var(--space-1) var(--space-3) 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
 }
 
 .finding-toolbar input,
@@ -1293,7 +1301,7 @@ h4 {
 .finding-filters {
   display: flex;
   gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   overflow-x: auto;
   border-bottom: 1px solid var(--border);
 }
@@ -1334,8 +1342,16 @@ h4 {
     minmax(0, var(--finding-detail-width, 75fr));
 }
 
+/* The list takes the height of its row, which the detail pane sets
+   (height 0 + min-height 100% keeps the list out of the row's sizing), so
+   it scrolls within that height instead of leaving a gap below it. */
+.evidence-workspace {
+  grid-template-rows: minmax(36rem, auto);
+}
+
 .finding-list {
-  max-height: 820px;
+  height: 0;
+  min-height: 100%;
   margin: 0;
   padding: 0;
   overflow-y: auto;
@@ -3506,7 +3522,13 @@ h4 {
     display: none;
   }
 
+  .evidence-workspace {
+    grid-template-rows: auto;
+  }
+
   .finding-list {
+    height: auto;
+    min-height: 0;
     max-height: 440px;
     border-right: 0;
     border-bottom: 1px solid var(--border);

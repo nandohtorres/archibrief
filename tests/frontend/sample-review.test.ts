@@ -18,10 +18,10 @@ describe("sample review (GET /demo)", () => {
 
   it("titles the report from the repo reference instead of a fixed name", () => {
     expect(reportTitle("github.com/example/payments-api@a91f3c2")).toBe(
-      "payments-api architecture review",
+      "payments-api",
     );
     expect(reportTitle("github.com/example/streaming-platform")).toBe(
-      "streaming-platform architecture review",
+      "streaming-platform",
     );
     expect(reportTitle("")).toBe("Architecture review");
   });

@@ -30,9 +30,7 @@ test.describe("fallback sample review from GET /demo (mocked network)", () => {
     await page.goto(LIVE_URL);
     await page.getByRole("button", { name: "See a real review" }).first().click();
 
-    await expect(page.locator("#report-heading")).toHaveText(
-      "streaming-platform architecture review",
-    );
+    await expect(page.locator("#report-heading")).toHaveText("streaming-platform");
     await expect(page.getByText("Sample review · hypothetical workload")).toBeVisible();
     // UI copy never calls the sample a fixture. (The sample's own citation
     // text is data and is replaced when the real samples are generated.)
