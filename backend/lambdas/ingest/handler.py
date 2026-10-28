@@ -143,6 +143,13 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
                 if key in parsed.providers:
                     region = "${unresolved.duplicate_provider}"
                 parsed.providers[key] = {"region": region, MODULE_FIELD: module}
+                # Kept for the environment and data-classification labels
+                # the rule engine reads from them (declared_context).
+                default_tags = _first_block(body.get("default_tags"))
+                if isinstance(default_tags, dict) and isinstance(
+                    _first_block(default_tags.get("tags")), dict
+                ):
+                    parsed.providers[key]["default_tags"] = _first_block(default_tags["tags"])
         for block in document.get("module", []):
             module_calls.setdefault(module, {}).update(block)
 
@@ -169,6 +176,11 @@ def parse_terraform_files(file_paths: list[str]) -> ParsedTerraform:
             if name in parsed.variables:
                 parsed.variables[name]["value"] = value
     return _evaluate_modules(parsed, module_calls, config_directories, root)
+
+
+def _first_block(value: object) -> object:
+    """python-hcl2 gives a nested block as a one-item list."""
+    return value[0] if isinstance(value, list) and value else value
 
 
 def _evaluate_modules(

@@ -74,17 +74,35 @@ _GUARDRAILS_CLIENT = GuardrailsClient(
     region_name=_REGION,
     no_retries=True,
 )
-# Set explicitly: botocore's 60 s default cut off long reviews once retries
-# were turned off (2026-10-26). It must stay below the 300 s the review and
-# deeper workers wait for this runtime, so a slow call ends here first.
+# The reasoning call streams. The read timeout is the longest wait for the
+# next chunk: a stalled call fails after it, while a long review that keeps
+# writing does not (a 240 s wait for the whole response timed out on a
+# large review, 2026-10-28). The deadline bounds the whole call; with
+# retrieval and one last idle wait it stays below the 600 s the review
+# worker waits for this runtime, so a slow call ends here first.
 _REASONING_READ_TIMEOUT_SECONDS = float(
-    os.environ.get("ARCHIBRIEF_REASONING_READ_TIMEOUT_SECONDS", "240")
+    os.environ.get("ARCHIBRIEF_REASONING_READ_TIMEOUT_SECONDS", "90")
 )
+_REASONING_DEADLINE_SECONDS = float(os.environ.get("ARCHIBRIEF_REASONING_DEADLINE_SECONDS", "420"))
 _REASONING_CLIENT = BedrockReasoningClient(
     model_id=_MODEL_ID,
     region_name=_REGION,
     no_retries=True,
     read_timeout_seconds=_REASONING_READ_TIMEOUT_SECONDS,
+    stream_deadline_seconds=_REASONING_DEADLINE_SECONDS,
+)
+# "Go deeper" re-reviews one finding, so its output is short, and its
+# worker waits only 300 s for this runtime: a tighter deadline keeps the
+# whole call (plus one last idle wait) inside that.
+_DEEPER_REASONING_DEADLINE_SECONDS = float(
+    os.environ.get("ARCHIBRIEF_DEEPER_REASONING_DEADLINE_SECONDS", "180")
+)
+_DEEPER_REASONING_CLIENT = BedrockReasoningClient(
+    model_id=_MODEL_ID,
+    region_name=_REGION,
+    no_retries=True,
+    read_timeout_seconds=_REASONING_READ_TIMEOUT_SECONDS,
+    stream_deadline_seconds=_DEEPER_REASONING_DEADLINE_SECONDS,
 )
 
 
@@ -106,7 +124,7 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
         "vectors_client": _VECTORS_CLIENT,
         "lexical_corpus_index": _LEXICAL_CORPUS_INDEX,
         "guardrails_client": _GUARDRAILS_CLIENT,
-        "reasoning_client": _REASONING_CLIENT,
+        "reasoning_client": _DEEPER_REASONING_CLIENT,
         "max_tokens": payload.get("max_tokens", _MAX_TOKENS),
         "corpus_version": payload.get("corpus_version", "unknown"),
         "deterministic_rule_version": payload.get("deterministic_rule_version"),
@@ -138,7 +156,8 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     retrieval_query, rule_findings) JSON-serialized via States.JsonToString.
 
     Real failures (GuardrailBlocked from reason_node, FindingValidationError/
-    ModelOutputTruncated/UnexpectedStopReason/ToolCallMissing from
+    ModelOutputTruncated/UnexpectedStopReason/ToolCallMissing/
+    ReasoningDeadlineExceeded from
     reason.py/clients) are deliberately left to propagate as real exceptions
     rather than caught and returned as an {"error": ...} dict. AgentCore
     surfaces an uncaught exception as a real runtime invocation error Step

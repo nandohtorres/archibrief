@@ -25,6 +25,9 @@ export function qualityMessage(quality?: AnalysisQuality): string {
     unknown:
       "Analysis-quality counts were not recorded for this report. Its completeness cannot be established.",
   };
+  if (quality?.reason_codes?.includes("model_unavailable")) {
+    return "The AI analysis did not finish, so this report holds only the deterministic rule and scanner findings. Issues those checks cannot see are not covered.";
+  }
   const message = descriptions[quality?.outcome ?? "unknown"] ?? descriptions.unknown;
   const model = quality?.model_verification;
   const schema = quality?.schema_validation;

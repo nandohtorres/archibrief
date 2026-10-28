@@ -22,7 +22,10 @@ So the summary carries facts but leaves no room to write instructions in:
   the default is false), so it's told the default, never asked to
   recall it.
 - Names go through display_name(), the same cleaning as finding text.
-- Comments, descriptions and tags never appear. Policy documents,
+- Comments, descriptions and tags never appear, except environment and
+  data-classification labels from a fixed vocabulary (declared_context),
+  which let the model check a brief's "sandbox, synthetic data" against
+  what the code says. Policy documents,
   security group rules, container definitions and similar nested
   configuration appear only as the fixed-vocabulary facts
   resource_details.py derives from them, never verbatim.
@@ -61,6 +64,11 @@ COVERAGE_NOTE = (
     "environment variables (counts only; names and values are never shown), queue "
     "dead-letter links and security-relevant database parameters. default_placement "
     "gives the region and account for every resource without its own observations."
+    " declared_context lists environment and data-classification labels the code "
+    "declares in tags or variables, from a fixed vocabulary: what the code says about "
+    "itself, which a brief's description of the workload does not override. "
+    'A Lambda reserved_concurrent_executions of 0 means "never runs": every invocation '
+    "is throttled."
 )
 # A count above this is reported as unknown rather than trusted.
 MAX_COPIES = 1000
@@ -502,6 +510,104 @@ def _placement_only(bundle: dict, default_region: object) -> bool:
     )
 
 
+# Tag keys and variable names compared lowercase with separators removed,
+# so Environment, env and DATA_CLASS all match.
+_ENVIRONMENT_KEYS = frozenset({"environment", "env", "stage", "environmentname", "envname"})
+_DATA_CLASS_KEYS = frozenset(
+    {
+        "dataclass",
+        "dataclassification",
+        "classification",
+        "datasensitivity",
+        "sensitivity",
+        "confidentiality",
+        "compliance",
+        "datatype",
+    }
+)
+# Value -> the label shown. Anything else is left out, so no word of the
+# submitter's choosing reaches the model through a tag.
+_ENVIRONMENT_VALUES = {
+    **dict.fromkeys(("prod", "production", "prd", "live"), "prod"),
+    **dict.fromkeys(("staging", "stage", "stg", "preprod", "uat"), "staging"),
+    **dict.fromkeys(("dev", "development", "develop"), "dev"),
+    **dict.fromkeys(("test", "testing", "qa"), "test"),
+    **dict.fromkeys(("sandbox", "sbx"), "sandbox"),
+    "demo": "demo",
+}
+_DATA_CLASS_VALUES = {
+    value: value
+    for value in (
+        "phi",
+        "pii",
+        "pci",
+        "hipaa",
+        "cardholder",
+        "health",
+        "financial",
+        "confidential",
+        "restricted",
+        "sensitive",
+        "secret",
+        "internal",
+        "public",
+    )
+}
+
+
+def _label_key(key: object) -> str:
+    return re.sub(r"[^a-z]", "", key.lower()) if isinstance(key, str) else ""
+
+
+def _labels_from(values: dict, parsed: dict, module: str, found: dict[str, set[str]]) -> bool:
+    """Adds known labels from a tags-like map to `found`; True if any."""
+    added = False
+    for key, raw in values.items():
+        normalized = _label_key(key)
+        if normalized in _ENVIRONMENT_KEYS:
+            kind, vocabulary = "environment", _ENVIRONMENT_VALUES
+        elif normalized in _DATA_CLASS_KEYS:
+            kind, vocabulary = "data_classification", _DATA_CLASS_VALUES
+        else:
+            continue
+        value = resolve(_first(raw), parsed, module)
+        label = vocabulary.get(value.strip().lower()) if isinstance(value, str) else None
+        if label:
+            found[kind].add(label)
+            added = True
+    return added
+
+
+def declared_context(parsed: dict) -> dict | None:
+    """Environment and data-classification labels the code declares about
+    itself: provider default_tags, resource tags, and environment-named
+    variables. Only values from a fixed vocabulary are reported."""
+    found: dict[str, set[str]] = {"environment": set(), "data_classification": set()}
+    sources: set[str] = set()
+    for provider in (parsed.get("providers") or {}).values():
+        tags = provider.get("default_tags") if isinstance(provider, dict) else None
+        if isinstance(tags, dict) and _labels_from(tags, parsed, module_of(provider), found):
+            sources.add("provider default_tags")
+    for bodies in (parsed.get("resources") or {}).values():
+        for body in (bodies or {}).values() if isinstance(bodies, dict) else ():
+            tags = _first(body.get("tags")) if isinstance(body, dict) else None
+            if isinstance(tags, dict) and _labels_from(tags, parsed, module_of(body), found):
+                sources.add("resource tags")
+    for key, body in (parsed.get("variables") or {}).items():
+        if "/" in key or not isinstance(body, dict):
+            continue
+        value = body.get("value", body.get("default"))
+        if _labels_from({key: value}, parsed, "", found):
+            sources.add("variable value")
+    if not sources:
+        return None
+    return {
+        "environment": sorted(found["environment"]),
+        "data_classification": sorted(found["data_classification"]),
+        "found_in": sorted(sources),
+    }
+
+
 def build_resource_summary(parsed: dict) -> dict:
     """{"resources": [{"type", "name", "settings"}...], "truncated": bool,
     "note": str}."""
@@ -533,6 +639,14 @@ def build_resource_summary(parsed: dict) -> dict:
                 and settings.get("retention_in_days") == 0
             ):
                 settings["retention_in_days"] = "never expires (configured: 0)"
+            if (
+                resource_type == "aws_lambda_function"
+                and settings.get("reserved_concurrent_executions") == 0
+            ):
+                # Read as "unreserved" in a live review (2026-10-28).
+                settings["reserved_concurrent_executions"] = (
+                    "0: never runs (every invocation is throttled)"
+                )
             entry = {"type": resource_type, "name": display_name(key), "settings": settings}
             copies = copies_of(body, parsed, module) if isinstance(body, dict) else None
             if copies is not None:
@@ -579,4 +693,6 @@ def build_resource_summary(parsed: dict) -> dict:
     )
     if parsed.get("not_observable"):
         result["not_observable"] = parsed["not_observable"]
+    if context := declared_context(parsed):
+        result["declared_context"] = context
     return result

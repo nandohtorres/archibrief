@@ -237,10 +237,59 @@ TOPIC_QUERIES: tuple[tuple[tuple[str, ...], str], ...] = (
     ),
 )
 MAX_TOPICS = 8
+# Cost guidance, searched on top of the risk topics so they never crowd it
+# out. Without it every cost finding in a review cited the one general
+# budgeting chunk the brief happened to match (2026-10-28).
+COST_TOPIC_QUERIES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        (
+            "aws_instance",
+            "aws_db_instance",
+            "aws_rds_cluster_instance",
+            "aws_opensearch_domain",
+            "aws_elasticsearch_domain",
+            "aws_elasticache_replication_group",
+            "aws_elasticache_cluster",
+            "aws_lambda_function",
+            "aws_ecs_service",
+            "aws_eks_node_group",
+            "aws_launch_template",
+        ),
+        (
+            "Select resource type, size, and number based on data: right-size "
+            "compute, database and search instances to measured demand"
+        ),
+    ),
+    (
+        (
+            "aws_dynamodb_table",
+            "aws_db_instance",
+            "aws_rds_cluster",
+            "aws_instance",
+            "aws_nat_gateway",
+            "aws_kinesis_stream",
+        ),
+        (
+            "Pricing model analysis: on-demand versus provisioned capacity, "
+            "Savings Plans and Reserved Instances"
+        ),
+    ),
+    (
+        ("aws_s3_bucket", "aws_cloudwatch_log_group", "aws_efs_file_system"),
+        "Enforce data retention policies and decommission unused resources and storage",
+    ),
+)
+MAX_COST_TOPICS = 2
 TOPIC_TOP_K = 3
 # Embedding plus vector query for the brief and each topic: the most
 # service calls one retrieval makes, for evaluation call budgets.
-MAX_RETRIEVAL_CALLS = 2 * (1 + MAX_TOPICS)
+MAX_RETRIEVAL_CALLS = 2 * (1 + MAX_TOPICS + MAX_COST_TOPICS)
+
+
+def _matching(
+    table: tuple[tuple[tuple[str, ...], str], ...], declared: set, limit: int
+) -> list[str]:
+    return [query for types, query in table if any(t in declared for t in types)][:limit]
 
 
 def topic_queries(terraform_resources: object) -> list[str]:
@@ -249,8 +298,9 @@ def topic_queries(terraform_resources: object) -> list[str]:
         terraform_resources.get("resources") if isinstance(terraform_resources, dict) else None
     )
     declared = {r.get("type") for r in resources or [] if isinstance(r, dict)}
-    queries = [query for types, query in TOPIC_QUERIES if any(t in declared for t in types)]
-    return queries[:MAX_TOPICS]
+    return _matching(TOPIC_QUERIES, declared, MAX_TOPICS) + _matching(
+        COST_TOPIC_QUERIES, declared, MAX_COST_TOPICS
+    )
 
 
 def retrieve_node(state: dict) -> dict:

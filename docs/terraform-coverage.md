@@ -61,6 +61,22 @@ filled the byte budget before security groups or queues were reached. The
 summary states them once as `default_placement`, and
 `analysis_coverage.placement_only_resources` counts them.
 
+### What the code says about itself (2026-10-29)
+
+A second hard test (a telehealth platform submitted with a brief calling it
+a "throwaway sandbox with synthetic data") showed the model taking the brief's
+word, though the code tags everything `Environment = prod` and
+`DataClass = phi`. The summary now carries `declared_context`: environment
+and data-classification labels from provider `default_tags`, resource `tags`
+and environment-named root variables. Keys and values both come from fixed
+lists (`prod`, `staging`, `dev`, `sandbox`, ... and `phi`, `pii`, `pci`,
+`confidential`, ...); any other value is dropped, so no free text reaches the
+model through a tag. The prompt treats the brief's unverifiable claims as
+unverified and asks the model to name contradictions with `declared_context`.
+
+A Lambda `reserved_concurrent_executions` of 0 is shown as "never runs
+(every invocation is throttled)", after the model read it as "unreserved".
+
 ## Bounds and publication
 
 The existing 80-resource cap remains. Observations additionally enforce 48,000
