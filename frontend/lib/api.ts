@@ -2,11 +2,9 @@ import {
   isChatTurn,
   isQuestionsTranscript,
   isReviewReport,
-  isSubmitReviewResponse,
   type AskQuestionRequest,
   type AnalysisQuality,
   type AskQuestionResponse,
-  type ClarificationRequest,
   type QuestionsTranscript,
   type CreateUploadRequest,
   type CreateUploadResponse,
@@ -183,28 +181,6 @@ export async function fetchDemoReport(): Promise<ReviewReport> {
   if (!isReviewReport(value)) {
     throw new ApiRequestError(
       "The sample review came back in an unexpected format.",
-      response.status,
-    );
-  }
-  return value;
-}
-
-export async function submitClarification(
-  reviewId: string,
-  request: ClarificationRequest,
-): Promise<SubmitReviewResponse> {
-  const response = await fetch(
-    `${requireApiBaseUrl()}/reviews/${encodeURIComponent(reviewId)}/clarify`,
-    {
-      method: "POST",
-      headers: requestHeaders(reviewId, true),
-      body: JSON.stringify(request),
-    },
-  );
-  const value = await readJson(response);
-  if (!isSubmitReviewResponse(value)) {
-    throw new ApiRequestError(
-      "ArchiBrief API returned an unexpected clarification response.",
       response.status,
     );
   }

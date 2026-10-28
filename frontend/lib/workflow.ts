@@ -1,7 +1,7 @@
 import type { BudgetSummary, FindingType, ReportFinding, ReviewReport } from "./contracts";
 import { assessmentFor, compareAssessments } from "./assessment";
 
-export type AppScreen = "submission" | "preflight" | "progress" | "clarify" | "report" | "failure";
+export type AppScreen = "submission" | "preflight" | "progress" | "report" | "failure";
 // Where the report on screen came from: the public sample (GET /demo),
 // a real review the admin ran, or the bundled fixture in a build with no
 // API configured. Drives labels and whether paid actions are offered.
@@ -89,6 +89,8 @@ const FAILURE_MESSAGES: Record<string, string> = {
   timed_out: "The review took too long to finish. Please try again in a few minutes.",
   clarification_expired:
     "This review expired while waiting for your answers. Please start a new review.",
+  clarification_retired:
+    "This review was waiting on a question ArchiBrief no longer asks after submission. Please start a new review.",
   clarification_limit:
     "We still couldn't settle the review's requirements after several rounds of questions. Please start a new review with a more detailed workload brief.",
   cancelled: "This review was cancelled. Please start a new review.",
