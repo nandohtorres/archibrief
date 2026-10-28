@@ -36,6 +36,12 @@ variable "github_repo" {
   default = "REPLACE_ME/archibrief"
 }
 
+variable "github_oidc_subject_prefix" {
+  type        = string
+  default     = null
+  description = "GitHub OIDC sub_claim_prefix from the repository API; set in ignored tfvars for immutable-subject repositories."
+}
+
 variable "lambda_zip_paths" {
   type = object({
     ingest                    = string
@@ -125,4 +131,10 @@ variable "chat_alarms_enabled" {
   type        = bool
   default     = false
   description = "Chat metric filters and alarms. Needs the deploy-role statement in proposed-chat-iam.md first."
+}
+
+variable "create_github_oidc_provider" {
+  type        = bool
+  default     = false
+  description = "Opt in to managing GitHub's account-wide OIDC provider. Leave false when reusing an existing provider ARN."
 }

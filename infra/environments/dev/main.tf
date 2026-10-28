@@ -60,11 +60,15 @@ module "dynamodb" {
 }
 
 module "iam" {
-  source                   = "../../modules/iam"
-  name_prefix              = "${var.name_prefix}-${var.environment}"
-  github_oidc_provider_arn = var.github_oidc_provider_arn
-  github_repo              = var.github_repo
-  tags                     = var.tags
+  source                      = "../../modules/iam"
+  name_prefix                 = "${var.name_prefix}-${var.environment}"
+  github_oidc_provider_arn    = var.github_oidc_provider_arn
+  create_github_oidc_provider = var.create_github_oidc_provider
+  frontend_bucket_arn         = module.frontend_hosting.bucket_arn
+  frontend_distribution_arn   = module.frontend_hosting.cloudfront_distribution_arn
+  github_repo                 = var.github_repo
+  github_oidc_subject_prefix  = var.github_oidc_subject_prefix
+  tags                        = var.tags
 }
 
 module "guardrails" {

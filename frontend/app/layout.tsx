@@ -1,27 +1,39 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 import "./globals.css";
 
-// Self-hosted at build time with size-matched fallbacks, so text doesn't
-// jump when the fonts arrive and no request goes to Google at runtime.
-// globals.css reads these through --font-body/--font-mono/--font-serif.
-const plexSans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  style: ["normal", "italic"],
+// Bundled from upstream releases: builds and browsers need no font service.
+// globals.css keeps the same --font-body/--font-mono/--font-serif mapping.
+const plexSans = localFont({
+  src: [
+    { path: "./fonts/IBMPlexSans-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/IBMPlexSans-Medium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/IBMPlexSans-SemiBold.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/IBMPlexSans-Bold.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/IBMPlexSans-Italic.woff2", weight: "400", style: "italic" },
+    { path: "./fonts/IBMPlexSans-MediumItalic.woff2", weight: "500", style: "italic" },
+    { path: "./fonts/IBMPlexSans-SemiBoldItalic.woff2", weight: "600", style: "italic" },
+    { path: "./fonts/IBMPlexSans-BoldItalic.woff2", weight: "700", style: "italic" },
+  ],
   variable: "--font-plex-sans",
   display: "swap",
 });
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const plexMono = localFont({
+  src: [
+    { path: "./fonts/IBMPlexMono-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/IBMPlexMono-Medium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/IBMPlexMono-SemiBold.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/IBMPlexMono-Bold.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-plex-mono",
   display: "swap",
 });
-const sourceSerif = Source_Serif_4({
-  subsets: ["latin"],
-  style: ["normal", "italic"],
+const sourceSerif = localFont({
+  src: [
+    { path: "./fonts/SourceSerif4Variable-Roman.ttf.woff2", weight: "200 900", style: "normal" },
+    { path: "./fonts/SourceSerif4Variable-Italic.ttf.woff2", weight: "200 900", style: "italic" },
+  ],
   variable: "--font-source-serif",
   display: "swap",
 });

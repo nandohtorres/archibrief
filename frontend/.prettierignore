@@ -18,3 +18,6 @@ public/demos/architecture
 # Demo stakeholder views: written by scripts/build_demo_stakeholder.py,
 # whose --check compares them byte for byte.
 public/demos/stakeholder
+
+# Next.js generates this file using platform-specific line endings.
+next-env.d.ts

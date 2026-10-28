@@ -18,8 +18,14 @@ set -euo pipefail
 : "${FRONTEND_BUCKET:?set FRONTEND_BUCKET}"
 : "${DISTRIBUTION_ID:?set DISTRIBUTION_ID}"
 
-cd "$(dirname "$0")/../frontend"
+# CD keeps trusted deploy tooling separate from the revision being released.
+# Local/manual callers continue to build this checkout's frontend by default.
+script_dir=$(cd "$(dirname "$0")" && pwd)
+cd "${FRONTEND_DIR:-${script_dir}/../frontend}"
 npm run build
+# Refresh metadata with current tooling even for a rollback whose old
+# package.json predates the postbuild hook. Never publish an unmarked release.
+node "${script_dir}/write_frontend_build_info.mjs" "$PWD"
 
 aws s3 sync out/_next/static "s3://${FRONTEND_BUCKET}/_next/static" \
   --cache-control "public, max-age=31536000, immutable" --only-show-errors
@@ -27,6 +33,10 @@ aws s3 sync out/ "s3://${FRONTEND_BUCKET}/" \
   --delete --exclude "_next/static/*" --only-show-errors
 
 # Without this, Git Bash rewrites "/*" into a Windows path.
-MSYS_NO_PATHCONV=1 aws cloudfront create-invalidation \
+invalidation_id=$(MSYS_NO_PATHCONV=1 aws cloudfront create-invalidation \
   --distribution-id "${DISTRIBUTION_ID}" --paths "/*" \
-  --query "Invalidation.Id" --output text
+  --query "Invalidation.Id" --output text)
+printf '%s\n' "$invalidation_id"
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  printf 'invalidation_id=%s\n' "$invalidation_id" >> "$GITHUB_OUTPUT"
+fi

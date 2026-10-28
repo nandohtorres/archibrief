@@ -53,5 +53,7 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  writeBuildInfo(fileURLToPath(new URL("../frontend/", import.meta.url)));
+  writeBuildInfo(
+    process.argv[2] ?? fileURLToPath(new URL("../frontend/", import.meta.url)),
+  );
 }

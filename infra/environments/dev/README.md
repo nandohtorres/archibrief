@@ -83,3 +83,11 @@ Both should return HTTP responses (not a DNS/connection error). Then load
 `https://archibrief.dev` in a browser and confirm a review works end to
 end, since the CORS (`additional_cors_origins`) and CSP (`connect-src`)
 settings for the custom domain can only be tested once it resolves.
+
+
+## Frontend CD setup
+
+The optional GitHub OIDC provider and frontend-only deploy role are documented
+in [frontend deployment](../../../docs/frontend-deployment.md). The provider flag
+defaults to false. Fernando applies infrastructure and IAM permission-set changes
+manually; the Actions workflows only publish static files and run read-only smoke.

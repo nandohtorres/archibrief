@@ -7,16 +7,11 @@ live in `infra/environments/dev/`, because they are shared with the
 api-gateway module's custom domain. See that environment's README for the
 apply sequence.
 
-This module only provisions infrastructure. After `terraform apply`,
-upload the static export manually:
+This module only provisions infrastructure. Frontend delivery uses the shared
+`scripts/deploy_frontend.sh` script, either from GitHub Actions after successful
+master CI or manually through the existing SSO deploy profile. It preserves old
+hashed chunks, sets immutable caching on `_next/static`, syncs other files and
+invalidates CloudFront. Do not replace it with a single blanket `sync --delete`.
 
-```
-cd frontend
-npm run build
-aws s3 sync out/ s3://<bucket_id output>/ --delete
-aws cloudfront create-invalidation --distribution-id <cloudfront_distribution_id output> --paths "/*"
-```
-
-Invalidate on every deploy, even though `index.html`/`404.html`/`index.txt`
-use the `CachingDisabled` cache policy: browsers and intermediate caches
-may still hold a stale copy, and invalidation is cheap.
+See [frontend deployment](../../../docs/frontend-deployment.md) for the owner
+setup checklist, GitHub variables, read-only smoke, rollback and manual fallback.
