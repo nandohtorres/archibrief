@@ -202,8 +202,10 @@ requires a fresh private output file, completed baseline answers and the same
 call/generation admission as the other runners. A baseline file maps frozen case
 IDs to answer objects; no required answers are fabricated. `--case` is repeatable
 for distinct cases, and `--limit` marks the run partial. Duplicate/unknown IDs
-are rejected. The upper bound is five service calls per case: two input screens,
-embedding, vector retrieval and one generation.
+are rejected. The upper bound is 21 service calls per case: two input screens,
+one generation, and an embedding plus a vector query for the brief and for up
+to eight topic searches chosen from the declared resource types
+(`MAX_RETRIEVAL_CALLS` in `backend/agent/nodes/retrieve.py`).
 
 After separate authorization, this mode can call real SDK clients through the
 same graph/report assembly used by free replay. It reuses archive/parse, local

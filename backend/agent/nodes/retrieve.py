@@ -140,6 +140,119 @@ def merge_results(
     return merged
 
 
+# Searching with the workload brief alone returns whatever is closest to
+# the brief. A vague or junk brief ("testyy") brought back only general
+# Security Pillar design principles, and every finding cited them. These
+# fixed searches, picked by which resource types the code declares, reach
+# the service-specific guidance (Reliability pillar, Foundational
+# Security Best Practices, IAM best practices) that findings are about.
+# The text is ArchiBrief's own, never the submitter's. Ordered by risk:
+# when more types match than MAX_TOPICS, the earlier ones are searched.
+TOPIC_QUERIES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        ("aws_iam_role", "aws_iam_openid_connect_provider"),
+        (
+            "IAM role trust policies: cross-account access with an external ID, "
+            "OIDC federation subject conditions, least privilege for roles"
+        ),
+    ),
+    (
+        ("aws_iam_policy", "aws_iam_role_policy", "aws_iam_group_policy", "aws_iam_user_policy"),
+        (
+            "IAM least privilege permissions and privilege escalation through "
+            "iam:PassRole and broad wildcard actions"
+        ),
+    ),
+    (
+        ("aws_ecs_task_definition",),
+        (
+            "ECS task definitions should not pass secrets as plaintext environment "
+            "variables; use Secrets Manager or Parameter Store"
+        ),
+    ),
+    (
+        ("aws_cloudfront_distribution",),
+        (
+            "CloudFront should encrypt traffic to custom origins with HTTPS and "
+            "restrict direct access to the origin"
+        ),
+    ),
+    (
+        ("aws_lb_listener", "aws_lb", "aws_alb"),
+        (
+            "Load balancer listeners should use HTTPS with a current TLS security "
+            "policy and redirect HTTP to HTTPS"
+        ),
+    ),
+    (
+        ("aws_rds_cluster", "aws_db_instance"),
+        (
+            "Database high availability across Availability Zones, automated "
+            "backups, deletion protection and encryption in transit"
+        ),
+    ),
+    (
+        ("aws_elasticache_replication_group", "aws_elasticache_cluster"),
+        (
+            "ElastiCache encryption in transit, authentication and automatic "
+            "failover across Availability Zones"
+        ),
+    ),
+    (
+        ("aws_sqs_queue",),
+        (
+            "SQS dead-letter queues, message retention, monitoring failed "
+            "messages and encryption at rest"
+        ),
+    ),
+    (
+        ("aws_nat_gateway", "aws_subnet"),
+        (
+            "Avoid single points of failure: deploy across multiple Availability "
+            "Zones, including one NAT gateway per zone"
+        ),
+    ),
+    (
+        ("aws_security_group", "aws_security_group_rule", "aws_vpc_security_group_ingress_rule"),
+        (
+            "Security groups should not allow unrestricted ingress from the "
+            "internet to databases or administrative ports"
+        ),
+    ),
+    (
+        ("aws_cloudtrail",),
+        "CloudTrail multi-Region trails, log file validation and encryption",
+    ),
+    (
+        ("aws_secretsmanager_secret", "aws_kms_key"),
+        "Rotate secrets and encryption keys automatically",
+    ),
+    (
+        ("aws_ecr_repository",),
+        "Container image scanning and immutable image tags",
+    ),
+    (
+        ("aws_cloudwatch_metric_alarm", "aws_cloudwatch_log_group"),
+        "Monitor workload health with alarms and set log retention",
+    ),
+)
+MAX_TOPICS = 8
+TOPIC_TOP_K = 3
+# Embedding plus vector query for the brief and each topic: the most
+# service calls one retrieval makes, for evaluation call budgets.
+MAX_RETRIEVAL_CALLS = 2 * (1 + MAX_TOPICS)
+
+
+def topic_queries(terraform_resources: object) -> list[str]:
+    """Fixed search texts for the resource types the submitted code declares."""
+    resources = (
+        terraform_resources.get("resources") if isinstance(terraform_resources, dict) else None
+    )
+    declared = {r.get("type") for r in resources or [] if isinstance(r, dict)}
+    queries = [query for types, query in TOPIC_QUERIES if any(t in declared for t in types)]
+    return queries[:MAX_TOPICS]
+
+
 def retrieve_node(state: dict) -> dict:
     query_text = state["retrieval_query"]
     embedding_client: BedrockEmbeddingClient = state["embedding_client"]
@@ -149,6 +262,12 @@ def retrieve_node(state: dict) -> dict:
     lexical_terms = extract_lexical_terms(query_text)
     lexical_results = lexical_companion_lookup(lexical_terms, corpus_index)
     vector_results = vector_search(query_text, embedding_client, vectors_client)
+    # "Go deeper" already searches with a finding-specific query.
+    if not state.get("deep_mode"):
+        for topic in topic_queries(state.get("terraform_resources")):
+            vector_results += vector_search(
+                topic, embedding_client, vectors_client, top_k=TOPIC_TOP_K
+            )
     merged = merge_results(vector_results, lexical_results)
 
     return {

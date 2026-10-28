@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from backend.agent.nodes.retrieve import topic_queries
 from tests.backend.adversarial.harness import load_answer_key
 from tests.backend.adversarial.replay_review import replay_case
 from tests.backend.agent.nodes.test_reason import _chunk, _valid_finding_item
@@ -36,12 +37,10 @@ def test_replay_uses_real_graph_merging_schema_quality_and_report(
 ):
     result = replay_case(case, transcript, tmp_path)
     assert result["contract_passed"] is True, result.get("error_kind")
-    assert result["replayed_operations"] == [
-        "embedding",
-        "vectors",
-        "guardrail",
-        "model",
-    ]
+    operations = result["replayed_operations"]
+    topics = topic_queries(result["model_input"]["terraform_resources"])
+    assert topics, "the fixture declares resources with topic searches"
+    assert operations == ["embedding", "vectors"] * (1 + len(topics)) + ["guardrail", "model"]
     assert result["paid_calls"] == 0
     assert result["deployment_validated"] is False
     assert result["semantic_verdict"] == "not_scored"

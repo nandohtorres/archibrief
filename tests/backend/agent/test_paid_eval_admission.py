@@ -4,6 +4,7 @@ import pytest
 
 from backend.agent import validate_reason_node as component
 from backend.agent import validate_reasoning_eval as reasoning
+from backend.agent.nodes.retrieve import MAX_RETRIEVAL_CALLS
 from backend.chat import chat_eval as chat
 from backend.corpus import validate_retrieval as retrieval
 from backend.corpus import validate_retrieve_node as merged
@@ -168,7 +169,7 @@ def test_reasoning_failure_does_not_erase_later_scheduled_cases(monkeypatch, tmp
             "eval",
             "--confirm-paid",
             "--max-paid-calls",
-            "100",
+            str(6 * (MAX_RETRIEVAL_CALLS + 2)),
             "--run-log",
             str(tmp_path / "calls.json"),
             "--out",
@@ -208,7 +209,7 @@ def test_reasoning_trap_failure_returns_nonzero_without_hiding_the_score(
             "--limit",
             "1",
             "--max-paid-calls",
-            "4",
+            str(MAX_RETRIEVAL_CALLS + 2),
             "--run-log",
             str(tmp_path / "calls.json"),
             "--out",

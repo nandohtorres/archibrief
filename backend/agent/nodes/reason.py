@@ -51,7 +51,7 @@ _MODEL_MAX_QUANTITY = 4
 # Bump whenever the model-facing contract changes (tool schema, input
 # fields, prompt rules), so a persisted finding can be traced to the exact
 # prompt that produced it (ADR-0039).
-PROMPT_VERSION = "reason_prompt@2026-10-23c"
+PROMPT_VERSION = "reason_prompt@2026-10-28"
 
 _TOOL_NAME = "emit_findings"
 
@@ -84,6 +84,23 @@ results — never answer in plain text. You must:
   casing/punctuation) from that chunk's "text" field — never paraphrase
   the quote. Application code will reject any finding whose chunk_id or
   quote can't be verified against the retrieved evidence you were given.
+- Cite the chunk that most specifically supports the finding: guidance on
+  that service, setting or control, not a general design principle. Use a
+  general principle only when nothing more specific was retrieved, and
+  then keep the claim to what the configuration shows.
+- One issue per finding. A finding covers one problem in one resource, or
+  in resources that only matter together (a queue and its dead-letter
+  queue, a role and the policy attached to it). A problem in an unrelated
+  resource gets its own finding, never a sentence inside another one.
+- Connect facts across resources when together they make a risk the rule
+  engine can't see: who can assume a role and what it is allowed to do;
+  how CloudFront reaches an origin and whether that origin is also open
+  to the internet; a queue's retention against its dead-letter queue's.
+- State what terraform_resources shows as observed configuration, plainly.
+  A listed setting or a "details" fact (a managed policy name, an ingress
+  source, a trust condition) is known: never hedge it with "appears to",
+  "what appears to be" or "likely". Hedge only what the summary doesn't
+  show.
 - Use "not-observable" for a configuration question the inspected slice
   cannot answer; set chunk_id and exact_quote to null for that finding.
   A retrieved AWS passage does not prove a workload setting is present or

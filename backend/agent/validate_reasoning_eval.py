@@ -28,7 +28,7 @@ from backend.agent.nodes.reason import (
     call_reasoning_model,
     verify_model_findings,
 )
-from backend.agent.nodes.retrieve import retrieve_node
+from backend.agent.nodes.retrieve import MAX_RETRIEVAL_CALLS, retrieve_node
 from backend.agent.reasoning_eval import (
     EVAL_BRIEFS,
     HOLDOUT_BRIEFS,
@@ -80,6 +80,8 @@ def _run_brief(
     retrieve_result = retrieve_node(
         {
             "retrieval_query": brief.retrieval_query,
+            # Production retrieval adds topic searches from these.
+            "terraform_resources": brief.terraform_resources,
             "embedding_client": embedding_client,
             "vectors_client": vectors_client,
             "lexical_corpus_index": lexical_corpus_index,
@@ -223,7 +225,8 @@ def main() -> int:
         {"traps": TRAP_BRIEFS} if args.traps else {"dev": EVAL_BRIEFS, "holdout": HOLDOUT_BRIEFS}
     )
     selected = {name: briefs[: args.limit] for name, briefs in selected.items()}
-    planned_calls = 4 * sum(len(briefs) for briefs in selected.values())
+    # Retrieval, one Guardrails check and one model call per brief.
+    planned_calls = (MAX_RETRIEVAL_CALLS + 2) * sum(len(briefs) for briefs in selected.values())
     attach_manifest(
         args,
         {
