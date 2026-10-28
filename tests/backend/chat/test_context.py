@@ -141,3 +141,22 @@ def test_observation_detail_is_bounded_and_omission_is_disclosed(ledger):
     assert ctx.resource_addresses == {
         f"{e['type']}.{e['name']}" for e in summary["resources"]
     }
+
+
+def test_nested_details_are_trimmed_before_any_finding(ledger):
+    ledger["terraform_resources"]["resources"] = [
+        {
+            "type": "aws_security_group",
+            "name": f"group{i}",
+            "settings": {},
+            "details": {"ingress": [{"ports": "443", "source": "x" * 400}] * 10},
+        }
+        for i in range(12)
+    ]
+    findings_before = len(ledger["findings"])
+    ctx = build_review_context(ledger)
+    summary = ctx.review_data["terraform_resources"]
+    assert len(json.dumps(ctx.review_data, ensure_ascii=False)) <= REVIEW_BLOCK_CHARS
+    assert summary["context_omitted_observation_resources"] > 0
+    assert len(ctx.review_data["findings"]) == findings_before
+    assert "omitted_findings" not in ctx.review_data
