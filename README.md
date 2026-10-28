@@ -5,11 +5,15 @@
 
 **Context-aware architecture review with receipts.** Live at [archibrief.dev](https://archibrief.dev).
 
+**Deterministic trap suite: 60/60 tests pass.** All 17 dangerous fixtures are flagged and all 6 safe look-alikes stay clean (no false positives), both with ArchiBrief's rules alone and with Trivy added; 2 prompt-injection fixtures neither suppress a real finding nor reach the parsed output. These are fixed fixtures, not a recall measurement on arbitrary Terraform ([evaluation](docs/evaluation.md#deterministic-traps)).
+
 ArchiBrief combines static Terraform checks with a workload brief and retrieved AWS guidance. A public bucket means something different for public records than for cardholder data; availability advice needs a traffic profile and a target. The report puts the observed configuration, risk, recommendation, alternatives, and confidence alongside its evidence so a reviewer can challenge the result.
 
 ## Status
 
 **Live and open to the public.** Anyone can submit Terraform for a review, within a few free reviews a day (each one calls a paid model), and there are three finished demo reviews to open first. The demos cover real public Terraform: a security firm's breach lab, a Medicare data platform, and FEC databases. They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
+
+**Reviews are shareable.** Each review has its own URL. The last five reviews from a browser are listed under "Previous Reviews" until they expire after seven days, and "Share link" makes a read-only link whose key stays in the URL fragment, so it never reaches the server logs. While a review runs, the progress screen shows the architecture diagram as soon as the rules have mapped it, before the model finishes.
 
 **Report chat is live.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, a five-question limit per review and a daily estimated-cost allowance. On the demos, the suggested questions' answers were generated once and are served free.
 
@@ -19,11 +23,11 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 1. Upload a bounded Terraform archive and describe the workload. Ingestion validates the archive and parses HCL statically; it does not run Terraform, providers, or provisioners.
 2. Trivy supplies selected trusted checks, augmented by ArchiBrief's deterministic rules. If scanning is unavailable, rules still run and scanner status is recorded.
-3. Preflight requests missing context or records explicit defaults. Step Functions owns the review lifecycle and clarification pause/resume.
+3. The form asks the one question a review can't infer (regulatory or data-residency requirements) up front, so a review never stops to ask. Preflight records explicit, labeled defaults for traffic and availability. Step Functions owns the review lifecycle.
 4. A LangGraph subworkflow on Bedrock AgentCore retrieves AWS guidance and reasons over the brief, rule findings, and a sanitized resource summary. The reasoning model does not receive raw Terraform.
 5. Server-side validation checks typed findings and citation provenance before audit/finalization. A model finding's quote must match a retrieved chunk. Deterministic findings use configuration evidence rather than model citations.
 
-The frontend exposes progress, clarification, findings, a stakeholder view of the same evidence, per-finding “go deeper,” report chat, and an HTML report download that includes the conversation. See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [evaluation](docs/evaluation.md), and [Trivy comparison](docs/comparison.md).
+The frontend exposes progress with an early architecture diagram, findings, a stakeholder view of the same evidence, per-finding “go deeper,” report chat, and an HTML report download that includes the conversation. See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [evaluation](docs/evaluation.md), and [Trivy comparison](docs/comparison.md).
 
 The [engineering case study](docs/case-study.md) explains the tradeoffs and a reporting failure found during review.
 
@@ -73,7 +77,8 @@ script, then verifies the live build and read-only API health. A daily smoke
 workflow needs no AWS credentials or paid review calls. Owner setup (Terraform,
 OIDC, production environment and repository variables), rollback and the manual
 SSO fallback are in [frontend deployment](docs/frontend-deployment.md).
-The workflows take effect only after the owner completes setup and merges them.
+The deploy role can only write the site bucket and invalidate its CloudFront
+distribution, and only a `production`-environment run from `master` can assume it.
 
 ## Screenshots
 
