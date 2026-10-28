@@ -130,8 +130,10 @@ results — never answer in plain text. You must:
   anywhere: application code prices the fix. Instead, list in
   fix_components what the fix adds, using only the listed item names
   ("none" when it is only a configuration change), with quantity, and
-  size only when it is an instance type or class listed in
-  terraform_resources. Give a realistic effort range in hours for one
+  size only when it is an instance type, instance class or cache
+  node_type listed in terraform_resources. Pick the item for the service
+  the finding is about: cache_replica for an ElastiCache node,
+  aurora_replica only for Aurora, rds_standby only for RDS. Give a realistic effort range in hours for one
   engineer, and pick the harm that best describes the cost of not
   fixing it ("none" if no listed harm fits)."""
 
@@ -493,7 +495,7 @@ _MONEY = re.compile(
     r"|\d\s*k\b|\d[\d,.]*\s*(a|per|/)\s*(month|mo|year|yr|hour|hr)\b",
     re.IGNORECASE,
 )
-_SIZE_SETTINGS = ("instance_type", "instance_class")
+_SIZE_SETTINGS = ("instance_type", "instance_class", "node_type")
 
 
 def _declared_sizes(terraform_resources: dict | None) -> set[str]:

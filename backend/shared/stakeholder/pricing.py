@@ -70,7 +70,23 @@ AURORA_HOURLY: dict[str, float] = {
     "db.r6g.large": 0.26,
 }
 
-_SIZE = re.compile(r"^(db\.)?[a-z][a-z0-9-]*\.[a-z0-9]+$")
+# ElastiCache for Redis OSS on-demand node rates (standard support, not
+# extended support), from the AWS Price List API offer published
+# 2026-10-14.
+ELASTICACHE_HOURLY: dict[str, float] = {
+    "cache.t3.micro": 0.017,
+    "cache.t3.small": 0.034,
+    "cache.t3.medium": 0.068,
+    "cache.t4g.micro": 0.016,
+    "cache.t4g.small": 0.032,
+    "cache.t4g.medium": 0.065,
+    "cache.m6g.large": 0.149,
+    "cache.m7g.large": 0.158,
+    "cache.r6g.large": 0.206,
+    "cache.r7g.large": 0.219,
+}
+
+_SIZE = re.compile(r"^(db\.|cache\.)?[a-z][a-z0-9-]*\.[a-z0-9]+$")
 
 
 @dataclass(frozen=True)
@@ -98,6 +114,12 @@ PRICE_ITEMS: dict[str, PriceItem] = {
     ),
     "aurora_replica": PriceItem(
         "Aurora replica in another zone", None, _AURORA_URL, sized_by=AURORA_HOURLY
+    ),
+    "cache_replica": PriceItem(
+        "ElastiCache replica node",
+        None,
+        "https://aws.amazon.com/elasticache/pricing/",
+        sized_by=ELASTICACHE_HOURLY,
     ),
     "nat_gateway": PriceItem(
         "NAT gateway",

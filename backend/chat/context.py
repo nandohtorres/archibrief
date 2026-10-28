@@ -125,7 +125,9 @@ def _trim(review_data: dict[str, Any]) -> dict[str, Any]:
     for resource in reversed(summary.get("resources", [])):
         if size() <= REVIEW_BLOCK_CHARS:
             break
-        if resource.pop("observations", None) is not None:
+        observations = resource.pop("observations", None)
+        details = resource.pop("details", None)
+        if observations is not None or details is not None:
             resource["observation_details_omitted"] = True
             omitted_observations += 1
     if omitted_observations:

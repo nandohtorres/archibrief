@@ -22,7 +22,10 @@ So the summary carries facts but leaves no room to write instructions in:
   the default is false), so it's told the default, never asked to
   recall it.
 - Names go through display_name(), the same cleaning as finding text.
-- Comments, descriptions, tags and policy documents never appear.
+- Comments, descriptions and tags never appear. Policy documents,
+  security group rules, container definitions and similar nested
+  configuration appear only as the fixed-vocabulary facts
+  resource_details.py derives from them, never verbatim.
 - Resources with count = 0 are left out; the list is capped.
 """
 
@@ -31,6 +34,7 @@ from __future__ import annotations
 import re
 
 from backend.lambdas.rule_engine.hcl_eval import is_created, resolve
+from backend.lambdas.rule_engine.resource_details import resource_details
 from backend.shared.configuration_checks import enrich_observations
 from backend.shared.terraform_observations import ObservationBudget, ResourceObservations
 from backend.shared.terraform_scope import display_name, module_of
@@ -48,6 +52,15 @@ COVERAGE_NOTE = (
     "recovery points are kept, and whether they are copied to another vault."
     " rules_total and rules_truncated disclose omitted backup rules; when truncated, "
     "copy rules and short retention are prioritized and source_index is one-based."
+    ' A setting named "has X" says only whether X is set, never its value. "details" '
+    "holds facts from nested configuration: security group ingress (ports, protocol, "
+    "source), role trust (who is trusted and which condition keys guard it, and for "
+    "GitHub OIDC what the subject condition admits), policy statements (sensitive "
+    "actions by name, others counted, and the resource scope), managed policy "
+    "attachments, CloudFront origins and viewer settings, container and function "
+    "environment variables (counts only; names and values are never shown), queue "
+    "dead-letter links and security-relevant database parameters. default_placement "
+    "gives the region and account for every resource without its own observations."
 )
 # A count above this is reported as unknown rather than trusted.
 MAX_COPIES = 1000
@@ -56,6 +69,11 @@ MAX_RESOURCES = 80
 # Provider resource types are lowercase snake case and some real ones are
 # long (aws_s3_bucket_server_side_encryption_configuration is 50).
 _RESOURCE_TYPE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+
+# A setting prefixed with this is reported only as whether it is set
+# (true/false), never its value: a key ARN or an auth token is a
+# reference or a secret, and only its presence matters to a reviewer.
+HAS = "has "
 
 # Settings that change what a reviewer would conclude. A dotted path reads
 # into a nested block (its first occurrence).
@@ -114,21 +132,37 @@ SETTINGS: dict[str, tuple[str, ...]] = {
     "aws_ebs_volume": ("encrypted", "type", "size"),
     "aws_autoscaling_group": ("min_size", "max_size", "desired_capacity"),
     "aws_lb": ("internal", "load_balancer_type", "drop_invalid_header_fields"),
+    "aws_lb_listener": ("port", "protocol", "ssl_policy", "default_action.type"),
+    "aws_rds_cluster_instance": ("instance_class", "publicly_accessible"),
     "aws_elasticache_replication_group": (
+        "node_type",
         "automatic_failover_enabled",
         "multi_az_enabled",
         "num_cache_clusters",
         "at_rest_encryption_enabled",
         "transit_encryption_enabled",
+        f"{HAS}auth_token",
     ),
     "aws_cloudtrail": (
         "is_multi_region_trail",
         "enable_log_file_validation",
         "include_global_service_events",
+        f"{HAS}kms_key_id",
     ),
     "aws_cloudwatch_log_group": ("retention_in_days",),
+    "aws_cloudwatch_metric_alarm": ("namespace",),
     "aws_kms_key": ("enable_key_rotation", "deletion_window_in_days"),
-    "aws_sqs_queue": ("sqs_managed_sse_enabled", "message_retention_seconds"),
+    "aws_sqs_queue": (
+        "sqs_managed_sse_enabled",
+        f"{HAS}kms_master_key_id",
+        "message_retention_seconds",
+        "visibility_timeout_seconds",
+    ),
+    "aws_sns_topic": (f"{HAS}kms_master_key_id",),
+    "aws_secretsmanager_secret": ("recovery_window_in_days",),
+    "aws_ecr_repository": ("image_tag_mutability", "image_scanning_configuration.scan_on_push"),
+    "aws_ecs_service": ("launch_type", "desired_count", "network_configuration.assign_public_ip"),
+    "aws_wafv2_web_acl": ("scope",),
     "aws_subnet": ("map_public_ip_on_launch",),
     "aws_api_gateway_stage": ("xray_tracing_enabled",),
     "aws_apigatewayv2_stage": ("default_route_settings.throttling_rate_limit",),
@@ -193,7 +227,14 @@ DEFAULTS: dict[str, dict[str, object]] = {
     },
     "aws_cloudwatch_log_group": {"retention_in_days": "never expires"},
     "aws_kms_key": {"enable_key_rotation": False, "deletion_window_in_days": 30},
-    "aws_sqs_queue": {"message_retention_seconds": 345600},
+    "aws_sqs_queue": {"message_retention_seconds": 345600, "visibility_timeout_seconds": 30},
+    "aws_rds_cluster_instance": {"publicly_accessible": False},
+    "aws_secretsmanager_secret": {"recovery_window_in_days": 30},
+    "aws_ecr_repository": {
+        "image_tag_mutability": "MUTABLE",
+        "image_scanning_configuration.scan_on_push": False,
+    },
+    "aws_ecs_service": {"network_configuration.assign_public_ip": False},
     "aws_subnet": {"map_public_ip_on_launch": False},
     "aws_api_gateway_stage": {"xray_tracing_enabled": False},
 }
@@ -215,6 +256,14 @@ def _first(value: object) -> object:
 
 
 def _read(body: dict, resource_type: str, path: str, parsed: dict, module: str) -> object:
+    if path.startswith(HAS):
+        value = body
+        for part in path.removeprefix(HAS).split("."):
+            value = _first(value)
+            if not isinstance(value, dict) or value.get(part) in (None, "", [], {}):
+                return False
+            value = value[part]
+        return True
     value: object = body
     for part in path.split("."):
         value = _first(value)
@@ -255,6 +304,49 @@ STRING_FORMATS: dict[str, re.Pattern[str] | frozenset[str]] = {
     "versioning_configuration.status": frozenset({"Enabled", "Suspended", "Disabled"}),
     "load_balancer_type": frozenset({"application", "network", "gateway"}),
     "type": frozenset({"standard", "gp2", "gp3", "io1", "io2", "sc1", "st1"}),
+    "node_type": re.compile(rf"^cache\.{_INSTANCE_SIZE}$"),
+    "protocol": frozenset({"HTTP", "HTTPS", "TCP", "TLS", "UDP", "TCP_UDP", "GENEVE"}),
+    # AWS's predefined policy names are built from these tokens only, so
+    # no word of the submitter's choosing fits.
+    "ssl_policy": re.compile(
+        r"^ELBSecurityPolicy(?:-(?:TLS13|TLS|FS|Res|Ext\d?|FIPS|PQ|\d{1,4}))+$"
+    ),
+    "default_action.type": frozenset(
+        {"forward", "redirect", "fixed-response", "authenticate-cognito", "authenticate-oidc"}
+    ),
+    "namespace": frozenset(
+        {
+            "AWS/SQS",
+            "AWS/Lambda",
+            "AWS/RDS",
+            "AWS/ApplicationELB",
+            "AWS/NetworkELB",
+            "AWS/ELB",
+            "AWS/EC2",
+            "AWS/ECS",
+            "ECS/ContainerInsights",
+            "AWS/DynamoDB",
+            "AWS/ApiGateway",
+            "AWS/CloudFront",
+            "AWS/ElastiCache",
+            "AWS/SNS",
+            "AWS/S3",
+            "AWS/States",
+            "AWS/Billing",
+            "AWS/WAFV2",
+            "AWS/Kinesis",
+            "AWS/Events",
+            "AWS/NATGateway",
+            "AWS/EFS",
+            "AWS/EKS",
+            "AWS/Bedrock",
+        }
+    ),
+    "image_tag_mutability": frozenset(
+        {"MUTABLE", "IMMUTABLE", "IMMUTABLE_WITH_EXCLUSION", "MUTABLE_WITH_EXCLUSION"}
+    ),
+    "launch_type": frozenset({"FARGATE", "EC2", "EXTERNAL"}),
+    "scope": frozenset({"REGIONAL", "CLOUDFRONT"}),
 }
 
 
@@ -371,6 +463,45 @@ def _schedule(rule: dict, parsed: dict, module: str) -> str:
     return UNKNOWN
 
 
+_PLACEMENT_SETTINGS = frozenset({"provider.region", "provider.account", "resource.region"})
+
+
+def _region_of(bundle: dict) -> object:
+    for fact in bundle.get("facts", []):
+        if fact.get("setting") == "provider.region":
+            return fact.get("value")
+    return None
+
+
+def _common_placement_region(entries: list[dict]) -> object:
+    regions = [
+        _region_of(entry["observations"])
+        for entry in entries
+        if isinstance(entry.get("observations"), dict)
+    ]
+    known = [r for r in regions if isinstance(r, str)]
+    return max(set(known), key=known.count) if known else None
+
+
+def _placement_only(bundle: dict, default_region: object) -> bool:
+    """True for a bundle that says nothing beyond the default placement."""
+    facts = bundle.get("facts", [])
+    return (
+        default_region is not None
+        and not bundle.get("relations")
+        and not bundle.get("omitted_items")
+        and not bundle.get("incomplete")
+        and bundle.get("creation") == "declared"
+        and all(f.get("setting") in _PLACEMENT_SETTINGS for f in facts)
+        and _region_of(bundle) == default_region
+        and all(
+            f.get("state") == "unknown"
+            for f in facts
+            if f.get("setting") in ("provider.account", "resource.region")
+        )
+    )
+
+
 def build_resource_summary(parsed: dict) -> dict:
     """{"resources": [{"type", "name", "settings"}...], "truncated": bool,
     "note": str}."""
@@ -409,6 +540,9 @@ def build_resource_summary(parsed: dict) -> dict:
             if isinstance(body, dict):
                 bundle = ResourceObservations(resource_type, key, body, parsed, copies).build()
                 entry["observations"] = bundle
+                details = resource_details(resource_type, body, parsed, module)
+                if details:
+                    entry["details"] = details
             if resource_type == "aws_backup_plan" and isinstance(body, dict):
                 entry["rules"] = _backup_rules(body, parsed, module)
                 raw_rules = body.get("rule", [])
@@ -417,13 +551,27 @@ def build_resource_summary(parsed: dict) -> dict:
                 entry["rules_truncated"] = entry["rules_total"] > len(entry["rules"])
             entries.append(entry)
     enrich_observations(entries)
+    default_region = _common_placement_region(entries)
+    placement_only = 0
     for entry in entries:
-        if (bundle := entry.pop("observations", None)) and (
-            observed := observation_budget.admit(bundle)
-        ):
+        bundle = entry.pop("observations", None)
+        if bundle and _placement_only(bundle, default_region):
+            # The same three placement facts on every resource used up
+            # the byte budget before security groups or queues were
+            # reached. They're stated once in default_placement instead.
+            placement_only += 1
+            continue
+        if bundle and (observed := observation_budget.admit(bundle)):
             entry["observations"] = observed
     result = {"resources": entries, "truncated": total > len(entries), "note": COVERAGE_NOTE}
+    if placement_only:
+        result["default_placement"] = {
+            "provider.region": default_region,
+            "provider.account": "unknown (not observable from code)",
+            "applies_to": "every resource without its own observations entry",
+        }
     result["analysis_coverage"] = observation_budget.manifest()
+    result["analysis_coverage"]["placement_only_resources"] = placement_only
     result["analysis_coverage"]["omitted_resources"] += total - len(entries)
     result["analysis_coverage"]["truncated"] = bool(
         result["analysis_coverage"]["omitted_resources"]
