@@ -342,16 +342,6 @@ export interface SubmitReviewResponse {
   status: Exclude<ReviewStatus, "failed">;
 }
 
-export interface ClarificationRequest {
-  answers: Record<string, string>;
-  // A free-text "anything else" note shown alongside
-  // the structured per-field answers (clarify-step.tsx). The backend
-  // (clarify_review.handler) appends this onto workload_brief for the
-  // re-invoke rather than merging it into `answers`, since that's the
-  // only field the model's reasoning prompt actually reads.
-  additional_notes?: string;
-}
-
 export interface PreflightField {
   id: string;
   label: string;

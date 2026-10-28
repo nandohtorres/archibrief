@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppHeader, BrandEmblem } from "./app-header";
 import { DemoCards } from "./demo-cards";
 import { FailurePanel } from "./state-panel";
-import { ClarifyStep } from "./clarify-step";
 import { LandingClosing, LandingIntro } from "./landing-intro";
 import { LiveProgressStep } from "./live-progress-step";
 import { PreflightStep } from "./preflight-step";
@@ -17,7 +16,6 @@ import {
   fetchReview,
   getApiBaseUrl,
   requestUpload,
-  submitClarification,
   submitReview,
   uploadArchiveToS3,
 } from "@/lib/api";
@@ -85,9 +83,6 @@ export function ArchiBriefApp() {
   const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
   // The diagram the backend saved before the model ran, shown while waiting.
   const [liveArchitecture, setLiveArchitecture] = useState<ArchitectureGraph | null>(null);
-  const [clarifyFields, setClarifyFields] = useState<string[]>([]);
-  const [clarifySubmitting, setClarifySubmitting] = useState(false);
-  const [clarifyError, setClarifyError] = useState<string | null>(null);
   const [report, setReport] = useState<ReviewReport>(fixtureReport);
   const [reportSource, setReportSource] = useState<ReportSource>("fixture");
   const [sampleLoading, setSampleLoading] = useState(false);
@@ -162,15 +157,12 @@ export function ArchiBriefApp() {
           setScreen("report");
           return;
         }
-        // A review paused for the user (Step Functions can wait up to 7
-        // days at StoreClarificationToken) is not "still pending": treating
-        // it that way would run into the poll timeout and look like a dead
-        // review. Exit the poll loop immediately and show the question(s).
+        // Left by a review that paused for questions before the form asked
+        // the regulatory question up front. It can't be resumed any more.
         if (result.status === "needs_clarification") {
-          const pointer = result as ReviewStatusPointer;
-          setClarifyFields(pointer.needsClarification ?? []);
-          setClarifyError(null);
-          setScreen("clarify");
+          clearActiveReview();
+          setFailureMessage(failureMessageFor("clarification_retired"));
+          setScreen("failure");
           return;
         }
         if (result.status === "failed") {
@@ -491,29 +483,6 @@ export function ArchiBriefApp() {
     }
   }
 
-  async function handleClarifySubmit(answers: Record<string, string>, additionalNotes: string) {
-    if (!liveReviewId) return;
-    setClarifySubmitting(true);
-    setClarifyError(null);
-    try {
-      await submitClarification(liveReviewId, {
-        answers,
-        additional_notes: additionalNotes || undefined,
-      });
-      saveActiveReview(liveReviewId, getApiBaseUrl()!);
-      // Resuming via SendTaskSuccess happens server-side (clarify_review
-      // Lambda); re-entering "progress" restarts the same live-polling
-      // effect from a fresh attempt count, same as the original submission.
-      setScreen("progress");
-    } catch (error) {
-      setClarifyError(
-        error instanceof Error ? error.message : "Could not submit the clarification answer.",
-      );
-    } finally {
-      setClarifySubmitting(false);
-    }
-  }
-
   function handlePreflightComplete(fields: PreflightField[]) {
     const traffic = fields.find((field) => field.id === "expected_traffic_scale")?.value;
     setReportSource("fixture");
@@ -603,16 +572,6 @@ export function ArchiBriefApp() {
             activeIndex={Math.min(progressIndex, fixtureProgressStages.length - 1)}
             stages={fixtureProgressStages}
             onSkip={() => setScreen("report")}
-          />
-        )}
-        {screen === "clarify" && liveReviewId && (
-          <ClarifyStep
-            reviewId={liveReviewId}
-            fields={clarifyFields}
-            submitting={clarifySubmitting}
-            error={clarifyError}
-            onSubmit={handleClarifySubmit}
-            onCancel={() => setScreen("submission")}
           />
         )}
         {screen === "report" && (

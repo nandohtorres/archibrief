@@ -30,9 +30,9 @@ export default function PrivacyPage() {
         <h2>What you send</h2>
         <p>
           When you submit a review, ArchiBrief receives your Terraform archive, the workload brief,
-          any clarification answers and any questions you ask about the report. It uses them only to
-          produce that review. They are processed by Amazon Web Services in the us-east-1 region,
-          including Amazon Bedrock, which runs the AI model.
+          your answer to the regulatory question and any questions you ask about the report. It uses
+          them only to produce that review. They are processed by Amazon Web Services in the
+          us-east-1 region, including Amazon Bedrock, which runs the AI model.
         </p>
         <p>
           <strong>

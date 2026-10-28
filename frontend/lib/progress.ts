@@ -47,11 +47,6 @@ const STAGE_MAP: Record<string, StageInfo> = {
     macroLabel: "Analyzing",
     microLabel: "Reasoning over the architecture and evidence",
   },
-  needs_clarification: {
-    index: 3,
-    macroLabel: "Analyzing",
-    microLabel: "Waiting on your answer to continue",
-  },
   validate: {
     index: 4,
     macroLabel: "Verifying",
