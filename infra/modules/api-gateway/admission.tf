@@ -63,7 +63,6 @@ variable "paid_limits" {
     review_budget           = number
     review_requests         = number
     initial_reserve         = number
-    clarify_reserve         = number
     deeper_reserve          = number
   })
   default = {
@@ -76,7 +75,6 @@ variable "paid_limits" {
     review_budget           = 1000000
     review_requests         = 20
     initial_reserve         = 400000
-    clarify_reserve         = 200000
     deeper_reserve          = 200000
   }
 }
@@ -114,7 +112,6 @@ locals {
     PAID_REVIEW_BUDGET_MICRO_USD    = tostring(var.paid_limits.review_budget)
     PAID_REVIEW_MAX_REQUESTS        = tostring(var.paid_limits.review_requests)
     INITIAL_RESERVE_MICRO_USD       = tostring(var.paid_limits.initial_reserve)
-    CLARIFY_RESERVE_MICRO_USD       = tostring(var.paid_limits.clarify_reserve)
     DEEPER_RESERVE_MICRO_USD        = tostring(var.paid_limits.deeper_reserve)
   }
 }
@@ -176,10 +173,9 @@ resource "aws_lambda_function" "submit_review" {
 
 resource "aws_iam_role_policy" "shared_paid_counters" {
   for_each = {
-    upload  = aws_iam_role.create_upload.name
-    submit  = aws_iam_role.submit_review.name
-    deeper  = aws_iam_role.deeper_review.name
-    clarify = aws_iam_role.clarify_review.name
+    upload = aws_iam_role.create_upload.name
+    submit = aws_iam_role.submit_review.name
+    deeper = aws_iam_role.deeper_review.name
   }
   role = each.value
   policy = jsonencode({
@@ -213,18 +209,6 @@ resource "aws_iam_role_policy" "turnstile_secret" {
       Effect   = "Allow"
       Action   = ["ssm:GetParameter"]
       Resource = var.turnstile_secret_parameter_arn
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "clarification_objects" {
-  role = aws_iam_role.clarify_review.name
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:PutObject"]
-      Resource = "${var.reports_bucket_arn}/jobs/*"
     }]
   })
 }

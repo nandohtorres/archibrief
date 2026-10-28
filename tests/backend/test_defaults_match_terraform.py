@@ -76,15 +76,7 @@ def test_paid_limit_fallbacks_match_terraform_defaults():
         limits["review_budget"],
         limits["review_requests"],
     )
-    assert (
-        limits["initial_reserve"],
-        limits["clarify_reserve"],
-        limits["deeper_reserve"],
-    ) == (
-        400_000,
-        200_000,
-        200_000,
-    )
+    assert (limits["initial_reserve"], limits["deeper_reserve"]) == (400_000, 200_000)
 
 
 def test_upload_limit_fallbacks_match_terraform_defaults():

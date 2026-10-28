@@ -44,23 +44,17 @@ variable "github_oidc_subject_prefix" {
 
 variable "lambda_zip_paths" {
   type = object({
-    ingest                    = string
-    rule_engine               = string
-    validate                  = string
-    audit                     = string
-    finalize                  = string
-    store_clarification_token = string
+    ingest      = string
+    rule_engine = string
+    validate    = string
+    audit       = string
+    finalize    = string
   })
 }
 
 variable "get_review_zip_path" {
   type        = string
   description = "Deployment package for GET /reviews/{reviewId}'s Lambda (backend/lambdas/get_review)."
-}
-
-variable "clarify_review_zip_path" {
-  type        = string
-  description = "Deployment package for POST /reviews/{reviewId}/clarify's Lambda (backend/lambdas/clarify_review)."
 }
 
 variable "deeper_review_zip_path" {

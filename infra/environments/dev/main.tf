@@ -156,7 +156,6 @@ module "api_gateway" {
     review_budget           = 1000000
     review_requests         = 10
     initial_reserve         = 400000
-    clarify_reserve         = 200000
     deeper_reserve          = 200000
   }
   upload_limits = {
@@ -173,7 +172,6 @@ module "api_gateway" {
   frontend_origin             = "https://${module.frontend_hosting.cloudfront_domain_name}"
   additional_cors_origins     = ["https://${var.domain}", "https://www.${var.domain}"]
   get_review_zip_path         = var.get_review_zip_path
-  clarify_review_zip_path     = var.clarify_review_zip_path
   deeper_review_zip_path      = var.deeper_review_zip_path
   get_demo_zip_path           = var.get_demo_zip_path
   create_upload_zip_path      = var.create_upload_zip_path

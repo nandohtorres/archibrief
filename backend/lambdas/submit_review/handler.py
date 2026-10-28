@@ -109,8 +109,7 @@ def handler(event: dict, _context: object) -> dict:
     if review.get("inputDigest") and review["inputDigest"] != digest:
         return response(409, {"error": "operation_conflict"})
     if review.get("inputDigest") == digest and (
-        review.get("pipelineStarted")
-        or review.get("status") in {"complete", "failed", "needs_clarification"}
+        review.get("pipelineStarted") or review.get("status") in {"complete", "failed"}
     ):
         return response(202, {"reviewId": review_id, "status": "pending"})
     bucket = os.environ["REPORTS_BUCKET_NAME"]

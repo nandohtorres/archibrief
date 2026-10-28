@@ -8,7 +8,6 @@ resource "aws_iam_role_policy" "admission_storage_key" {
   for_each = {
     upload        = aws_iam_role.create_upload.name
     submit        = aws_iam_role.submit_review.name
-    clarify       = aws_iam_role.clarify_review.name
     deeper        = aws_iam_role.deeper_review.name
     deeper_worker = aws_iam_role.deeper_worker.name
   }

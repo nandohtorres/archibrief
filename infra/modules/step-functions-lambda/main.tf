@@ -34,26 +34,14 @@ locals {
   # calls Guardrails and parses HCL; RuleEngine also parses HCL (hcl_eval
   # resolves jsonencode() policies with hcl2.loads), and the first call in
   # a process builds lark's parser, which takes over a second. Validate is
-  # pure in-memory compute; Audit, Finalize and StoreClarificationToken
-  # each make one or two DynamoDB/S3 calls.
+  # pure in-memory compute; Audit and Finalize each make one or two
+  # DynamoDB/S3 calls.
   lambda_specs = {
     ingest      = { handler = "backend.lambdas.ingest.handler.handler", zip = var.lambda_zip_paths.ingest, timeout = 30, memory_size = 1024 }
     rule_engine = { handler = "backend.lambdas.rule_engine.handler.handler", zip = var.lambda_zip_paths.rule_engine, timeout = 30, memory_size = 1024 }
     validate    = { handler = "backend.lambdas.validate.handler.handler", zip = var.lambda_zip_paths.validate, timeout = 10, memory_size = 256 }
     audit       = { handler = "backend.lambdas.audit.handler.handler", zip = var.lambda_zip_paths.audit, timeout = 10, memory_size = 256 }
     finalize    = { handler = "backend.lambdas.finalize.handler.handler", zip = var.lambda_zip_paths.finalize, timeout = 15, memory_size = 256 }
-    # Invoked via the waitForTaskToken service integration pattern
-    # (StoreClarificationToken state below) — its own return value is
-    # discarded by Step Functions; only the later out-of-band
-    # SendTaskSuccess (clarify_review Lambda, behind POST /reviews/{reviewId}/clarify)
-    # actually completes this state. See backend/lambdas/
-    # store_clarification_token/handler.py's module docstring.
-    store_clarification_token = {
-      handler     = "backend.lambdas.store_clarification_token.handler.handler"
-      zip         = var.lambda_zip_paths.store_clarification_token
-      timeout     = 10
-      memory_size = 256
-    }
     # Runs Trivy on the submitted Terraform (ADR-0048). Its own Lambda so
     # the third-party binary runs with read access to uploads/ and nothing
     # else. Trivy's own timeout is 60s; memory buys CPU for its HCL
@@ -146,23 +134,6 @@ moved {
 moved {
   from = aws_iam_role_policy.audit_finalize_data_access["finalize"]
   to   = aws_iam_role_policy.finalize_data_access
-}
-
-# store_clarification_token only ever reads/writes the one review item it
-# was invoked for (GetItem to merge, PutItem to persist the pending
-# token) — no audit-table or S3 access, unlike audit/finalize above.
-data "aws_iam_policy_document" "store_clarification_token_data_access" {
-  statement {
-    effect    = "Allow"
-    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
-    resources = [var.reviews_table_arn]
-  }
-}
-
-resource "aws_iam_role_policy" "store_clarification_token_data_access" {
-  name   = "${var.name_prefix}-store-clarification-token-data-access"
-  role   = aws_iam_role.lambda["store_clarification_token"].id
-  policy = data.aws_iam_policy_document.store_clarification_token_data_access.json
 }
 
 # Ingest calls Guardrails inline (ADR-0033) using the GUARDRAIL_ID and
@@ -476,23 +447,10 @@ resource "aws_sfn_state_machine" "review" {
         ResultPath = "$.result"
         Next       = "Outcome"
       }
-      RunResume = {
-        Type           = "Task"
-        Resource       = aws_lambda_function.review_worker.arn
-        TimeoutSeconds = 910
-        Parameters = {
-          "review_id.$"  = "$.review_id"
-          "resume_key.$" = "$.resume.resume_key"
-          phase          = "resume"
-        }
-        ResultPath = "$.result"
-        Next       = "Outcome"
-      }
       Outcome = {
         Type = "Choice"
         Choices = [
           { Variable = "$.result.status", StringEquals = "complete", Next = "Complete" },
-          { Variable = "$.result.status", StringEquals = "needs_clarification", Next = "StoreClarificationToken" },
           { Variable = "$.result.status", StringEquals = "in_progress", Next = "WaitForStatus" }
         ]
         Default = "ReviewFailed"
@@ -511,21 +469,6 @@ resource "aws_sfn_state_machine" "review" {
         }
         ResultPath = "$.result"
         Next       = "Outcome"
-      }
-      StoreClarificationToken = {
-        Type           = "Task"
-        Resource       = "arn:aws:states:::lambda:invoke.waitForTaskToken"
-        TimeoutSeconds = 604800
-        Parameters = {
-          FunctionName = aws_lambda_function.this["store_clarification_token"].arn
-          Payload = {
-            "review_id.$"      = "$.review_id"
-            "taskToken.$"      = "$$.Task.Token"
-            reviews_table_name = var.reviews_table_name
-          }
-        }
-        ResultPath = "$.resume"
-        Next       = "RunResume"
       }
       Complete = { Type = "Succeed" }
       ReviewFailed = {

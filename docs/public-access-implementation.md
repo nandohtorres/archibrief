@@ -45,7 +45,7 @@ needs a migration.
 
 ## Spending limits
 
-Every public paid path (initial review, clarification, deeper review, chat)
+Every public paid path (initial review, deeper review, chat)
 reserves estimated cost against a global monthly ceiling and global daily,
 visitor daily and review lifetime allowances in the same transaction as its
 operation claim. There is
@@ -56,12 +56,12 @@ The module defaults are in `paid_limits` (`infra/modules/api-gateway/admission.t
 the live values are set in `infra/environments/dev/main.tf`: $75 a UTC
 month, global $8 and 150 requests a day (about 20 initial reviews), visitor
 $2 and 30, review $1.00 and 10. Uploads: 40 a day, 6 per visitor. Initial
-reviews reserve $0.40; clarification and deeper review reserve $0.20. A
+reviews reserve $0.40; deeper review reserves $0.20. A
 `tests/backend/test_defaults_match_terraform.py` check fails if the handler
 fallbacks drift from these defaults.
 
 A review that fails before any billed call (paused, input rejected before
-Guardrails, clarification limit) gives its reservation back once; the claim
+Guardrails) gives its reservation back once; the claim
 stays, so the operation can't be dispatched again. Other failures and
 successes keep the conservative estimate. Chat additionally settles its own
 estimates in a chat-specific ledger. These are estimates, not an AWS billing
@@ -93,7 +93,7 @@ browser can read them. `api.archibrief.dev` maps to this stage.
 
 Step Functions inputs and results carry identifiers and status only, so
 briefs, answers and findings never enter execution history. A worker Lambda
-reads the submission, context and clarification objects under `jobs/` in S3
+reads the submission object under `jobs/` in S3
 and runs the content-bearing stages. Stages that don't call the model retry
 transient Lambda errors; the AgentCore call runs once, because a timed-out
 model call may already be billed. The Step Functions task timeout (910 s)

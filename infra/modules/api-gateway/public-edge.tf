@@ -30,7 +30,7 @@ resource "aws_api_gateway_resource" "public_review" {
 }
 
 resource "aws_api_gateway_resource" "public_children" {
-  for_each    = var.public_edge_enabled ? toset(["clarify", "questions", "findings"]) : toset([])
+  for_each    = var.public_edge_enabled ? toset(["questions", "findings"]) : toset([])
   rest_api_id = aws_api_gateway_rest_api.public[0].id
   parent_id   = aws_api_gateway_resource.public_review[0].id
   path_part   = each.key
@@ -55,7 +55,6 @@ locals {
     upload  = { method = "POST", resource = aws_api_gateway_resource.public_root["uploads"].id, function = { invoke_arn = aws_lambda_function.create_upload.invoke_arn, function_name = aws_lambda_function.create_upload.function_name } }
     submit  = { method = "POST", resource = aws_api_gateway_resource.public_root["reviews"].id, function = { invoke_arn = aws_lambda_function.submit_review.invoke_arn, function_name = aws_lambda_function.submit_review.function_name } }
     read    = { method = "GET", resource = aws_api_gateway_resource.public_review[0].id, function = { invoke_arn = aws_lambda_function.get_review.invoke_arn, function_name = aws_lambda_function.get_review.function_name } }
-    clarify = { method = "POST", resource = aws_api_gateway_resource.public_children["clarify"].id, function = { invoke_arn = aws_lambda_function.clarify_review.invoke_arn, function_name = aws_lambda_function.clarify_review.function_name } }
     deeper  = { method = "POST", resource = aws_api_gateway_resource.public_deeper[0].id, function = { invoke_arn = aws_lambda_function.deeper_review.invoke_arn, function_name = aws_lambda_function.deeper_review.function_name } }
     ask     = { method = "POST", resource = aws_api_gateway_resource.public_children["questions"].id, function = { invoke_arn = aws_lambda_function.chat["ask_question"].invoke_arn, function_name = aws_lambda_function.chat["ask_question"].function_name } }
     history = { method = "GET", resource = aws_api_gateway_resource.public_children["questions"].id, function = { invoke_arn = aws_lambda_function.chat["list_questions"].invoke_arn, function_name = aws_lambda_function.chat["list_questions"].function_name } }

@@ -1,7 +1,7 @@
 """ADR-0030 kill switch for paid entry points outside the review state machine.
 
 The state machine checks the SSM parameter itself (CheckKillSwitch), but
-"go deeper" and clarification-resume start paid work through API Lambdas
+"go deeper" and chat start paid work through API Lambdas
 that never pass that state. Both call this first.
 
 Fails closed: an unset parameter name or an unreadable parameter counts as
