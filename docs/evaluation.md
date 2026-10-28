@@ -30,7 +30,7 @@ does not mean the intentionally excluded coverage-gap cases passed.
 | Adversarial suite | 217 passed, 18 failed: the 18 are documented coverage gaps, kept failing on purpose ([FIX_REPORT](../tests/backend/adversarial/FIX_REPORT.md)) | `python -m pytest tests/backend/adversarial -q -p no:cacheprovider` |
 | Frontend unit | 73 passed in 12 files | `cd frontend; npm test` (tests in `tests/frontend/`) |
 | Playwright | 68 passed, including accessibility, keyboard, viewport, contrast and resilience specs | `cd frontend; npx playwright test` |
-| Deterministic traps | 60, included in the backend run | `python -m pytest tests/backend/traps -q -p no:cacheprovider` |
+| Deterministic traps | 60 passed (rerun 2026-10-28; see [below](#deterministic-traps)), included in the backend run | `python -m pytest tests/backend/traps -q -p no:cacheprovider` |
 | Stubbed chat trap checks | 26, included in the backend run | `python -m pytest tests/backend/chat/test_traps_stubbed.py -q` |
 | Lint and types | Ruff, ESLint, TypeScript and Prettier pass | `ruff check backend scripts`; `npm run lint`; `npm run typecheck` |
 
@@ -57,6 +57,18 @@ scenarios, and 2 `c*` injection scenarios (source: directory names under
 through JSON/HCL/data sources, variable defaults, alternate security-group
 resources, IPv6, module name collisions, IMDS plus broad compute roles, and
 counted Aurora instances. It does not establish recall on arbitrary Terraform.
+
+Current result (2026-10-28, local run with Trivy installed, 60 passed in 14 s):
+
+| Scenario | Rules alone | Trivy plus rules |
+|---|---|---|
+| Dangerous fixtures flagged (`t*`, 20 expected findings) | 17/17 | 17/17 |
+| Safe look-alikes left clean (6 `f*` fixtures plus `t14`'s hardened sibling bucket) | 7/7, no false positives | 7/7, no false positives |
+| Comment injection doesn't suppress the real finding (`c01`) | pass | pass |
+| Resource-name injection truncated (`c02`) | pass | pass |
+
+Two more checks run once, outside the two modes: comment text never reaches
+parsed output, and the IMDS finding names the broad role it exposes.
 
 [ADR-0048](adr/0048-trivy-scanner-in-the-review-pipeline.md)
 records the initial 14/14 dangerous misses and 3/4 safe false positives, followed
