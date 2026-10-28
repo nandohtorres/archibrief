@@ -30,6 +30,37 @@ conditional controls prevent unsupported findings. Routing and selection facts
 support contextual review without calling every intentional public subnet or
 excluded development database a defect.
 
+### Nested configuration details (2026-10-28)
+
+A hard test review (a 74-resource payments platform) showed the model never
+saw several high-risk configurations, so `resource_details.py` adds a
+`details` object for these types, in fixed vocabulary only:
+
+| Type | What the model now sees |
+|---|---|
+| `aws_security_group` | Each ingress rule's ports, protocol and source class (internet, address range, another group). Dynamic `ingress` blocks are included when their `for_each` resolves, and marked conditional when it doesn't. |
+| `aws_iam_role` | Who is trusted (service, whole account, GitHub OIDC, SAML), which guarding condition keys are present, and for GitHub what the `sub` condition admits (organization wildcard, any ref, one branch, one environment). |
+| IAM policies | Per statement: allowlisted sensitive actions by name (`iam:PassRole`, `lambda:CreateFunction`, ...), other actions counted, NotAction, resource scope. |
+| Policy attachments | The AWS managed policy's name when it's on an allowlist, otherwise a generic label. |
+| `aws_cloudfront_distribution` | Each origin's target kind and origin protocol policy or S3 access control, viewer protocol policies, WAF attachment, certificate and minimum TLS. |
+| `aws_ecs_task_definition`, `aws_lambda_function` | Image tag kind; environment variable counts, including secret-looking names with literal values. Names and values are never copied. |
+| `aws_sqs_queue` | The dead-letter queue it redrives to and its receive count. |
+| DB parameter groups | Allowlisted security and logging parameters (`rds.force_ssl`, `require_secure_transport`, ...). |
+
+New allowlisted scalar settings cover listeners (port, protocol, SSL policy,
+action), Aurora instances, ElastiCache node type and auth token presence, SQS
+visibility timeout and KMS key presence, ECR, ECS services, Secrets Manager
+recovery window, WAF scope and alarm namespaces. A setting written as
+`has X` reports only whether X is set. Conditionals may now choose between
+short list literals (`var.enabled ? [1] : []`), which also lets the security
+group rule see enabled dynamic ingress blocks.
+
+Placement-only observation bundles (the default region and an unknown
+account, nothing else) are no longer emitted per resource: on that test they
+filled the byte budget before security groups or queues were reached. The
+summary states them once as `default_placement`, and
+`analysis_coverage.placement_only_resources` counts them.
+
 ## Bounds and publication
 
 The existing 80-resource cap remains. Observations additionally enforce 48,000

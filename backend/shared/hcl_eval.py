@@ -27,7 +27,14 @@ _VAR = re.compile(r"^var\.([A-Za-z0-9_-]+)$")
 _LOCAL = re.compile(r"^local\.([A-Za-z0-9_-]+)$")
 _POLICY_DOC = re.compile(r"^data\.aws_iam_policy_document\.([A-Za-z0-9_-]+)\.json$")
 _JSONENCODE = re.compile(r"^jsonencode\((.*)\)$", re.DOTALL)
-_ATOM = r'(?:var\.[A-Za-z0-9_-]+|local\.[A-Za-z0-9_-]+|true|false|\d+|"(?:[^"\\]|\\.)*")'
+# A short list of plain values ([] or [1]) is an atom too: the
+# `var.enabled ? [1] : []` idiom switches dynamic blocks on and off.
+_SCALAR = r'(?:\d+|true|false|"[^"\\]*")'
+_LIST_LITERAL = rf"\[\s*(?:{_SCALAR}\s*(?:,\s*{_SCALAR}\s*)*)?\]"
+_ATOM = (
+    r'(?:var\.[A-Za-z0-9_-]+|local\.[A-Za-z0-9_-]+|true|false|\d+|"(?:[^"\\]|\\.)*"'
+    rf"|{_LIST_LITERAL})"
+)
 _CONDITIONAL = re.compile(rf"^({_ATOM})\s*\?\s*({_ATOM})\s*:\s*({_ATOM})$")
 # python-hcl2 keeps heredoc markers: "<<POLICY\n{...}\nPOLICY".
 _HEREDOC = re.compile(r"^<<-?([A-Za-z_][A-Za-z0-9_]*)\n(.*)\n\s*\1\s*$", re.DOTALL)
@@ -83,6 +90,11 @@ def resolve(
                 return text == "true"
             if text.isdigit():
                 return int(text)
+            if text.startswith("["):
+                try:
+                    return json.loads(text)
+                except ValueError:
+                    return value
             if text.startswith('"'):
                 try:
                     return json.loads(text)

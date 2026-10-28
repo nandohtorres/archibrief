@@ -37,6 +37,7 @@ from backend.lambdas.rule_engine.hcl_eval import (
     resolve,
     truthy,
 )
+from backend.lambdas.rule_engine.resource_details import inline_ingress_rules
 from backend.lambdas.rule_engine.resource_summary import build_resource_summary, copies_of
 from backend.shared.clients import S3Client
 from backend.shared.models.finding import (
@@ -395,7 +396,7 @@ def _open_ingress_rules(parsed: dict) -> Iterable[tuple[str, str, set[str], rang
     """
     for key, body in _resources(parsed, "aws_security_group"):
         module = module_of(body)
-        for rule in _as_list(body.get("ingress")):
+        for rule in inline_ingress_rules(body, parsed, module):
             if not isinstance(rule, dict):
                 continue
             cidrs = {
