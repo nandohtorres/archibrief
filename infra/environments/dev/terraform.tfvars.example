@@ -14,13 +14,11 @@ lambda_zip_paths = {
   validate                   = "../../../backend/lambdas/validate/build/validate.zip"
   audit                      = "../../../backend/lambdas/audit/build/audit.zip"
   finalize                   = "../../../backend/lambdas/finalize/build/finalize.zip"
-  store_clarification_token  = "../../../backend/lambdas/store_clarification_token/build/store_clarification_token.zip"
 }
 
-# GET /reviews/{reviewId}, POST .../clarify, POST .../deeper and
+# GET /reviews/{reviewId}, POST .../deeper and
 # GET /demo Lambdas.
 get_review_zip_path     = "../../../backend/lambdas/get_review/build/get_review.zip"
-clarify_review_zip_path = "../../../backend/lambdas/clarify_review/build/clarify_review.zip"
 deeper_review_zip_path  = "../../../backend/lambdas/deeper_review/build/deeper_review.zip"
 get_demo_zip_path       = "../../../backend/lambdas/get_demo/build/get_demo.zip"
 

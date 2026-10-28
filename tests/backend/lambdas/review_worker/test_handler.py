@@ -5,10 +5,8 @@ from types import SimpleNamespace
 import boto3
 import pytest
 
-from backend.lambdas.clarify_review import handler as clarify
 from backend.lambdas.finalize.handler import handler as finalize
 from backend.lambdas.review_worker import handler as worker
-from backend.lambdas.store_clarification_token.handler import handler as store_token
 from tests.backend import visitor
 from tests.backend.lambdas.submit_review.test_handler import (  # noqa: F401 - shared moto fixture
     _submit,
@@ -21,7 +19,6 @@ def prepared(env, monkeypatch):  # noqa: F811 - pytest consumes the imported fix
     upload, body, s3, _sfn, _arn = env
     assert _submit(body)["statusCode"] == 202
     monkeypatch.setattr(worker, "paid_work_allowed", lambda: True)
-    monkeypatch.setattr(clarify, "paid_work_allowed", lambda: True)
     monkeypatch.setenv("AGENTCORE_RUNTIME_ARN", "test-runtime")
     calls = []
     replies = [{"status": "complete", "findings": [], "preflight_fields": {}}]
@@ -104,8 +101,10 @@ def test_rejected_output_remains_visible_after_worker_finalize_and_report_read(
     assert "REJECTED-CONTENT-CANARY" not in json.dumps(report)
 
 
-def test_clarification_history_contains_only_an_opaque_reference(prepared, monkeypatch):
-    review_id, s3, _calls, replies, agent_calls = prepared
+def test_a_preflight_pause_fails_instead_of_waiting(prepared):
+    # No field pauses any more; if preflight ever asks, the review fails
+    # rather than waiting on a question nobody can answer.
+    review_id, _s3, _calls, replies, _agent_calls = prepared
     replies.insert(
         0,
         {
@@ -114,54 +113,11 @@ def test_clarification_history_contains_only_an_opaque_reference(prepared, monke
             "preflight_fields": {"budget_ceiling": {"outcome": "paused"}},
         },
     )
-    assert worker.handler({"review_id": review_id}, None) == {
-        "status": "needs_clarification"
-    }
-    store_token(
-        {
-            "review_id": review_id,
-            "taskToken": "server-token",
-            "reviews_table_name": "reviews",
-        },
-        None,
-    )
-    original_client = boto3.client
-    callbacks = []
-    monkeypatch.setattr(
-        boto3,
-        "client",
-        lambda service, *a, **kw: (
-            SimpleNamespace(
-                send_task_success=lambda **payload: callbacks.append(payload)
-            )
-            if service == "stepfunctions"
-            else original_client(service, *a, **kw)
-        ),
-    )
-    event = {
-        "pathParameters": {"reviewId": review_id},
-        "headers": dict(visitor.HEADERS),
-        "requestContext": visitor.REQUEST_CONTEXT,
-        "body": json.dumps(
-            {
-                "answers": {"budget_ceiling": "50000"},
-                "additional_notes": "Private customer workload",
-            }
-        ),
-    }
-    assert clarify.handler(event, None)["statusCode"] == 200
-    callback = json.loads(callbacks[0]["output"])
-    assert set(callback) == {"resume_key"}
-    assert "Private customer" not in callbacks[0]["output"]
-    stored = json.loads(
-        s3.get_object(Bucket="reports", Key=callback["resume_key"])["Body"].read()
-    )
-    assert stored["answers"] == {"budget_ceiling": "50000"}
-    assert worker.handler(
-        {"review_id": review_id, "phase": "resume", **callback}, None
-    ) == {"status": "complete"}
-    assert len(agent_calls) == 2
-    assert "Private customer workload" in agent_calls[-1]["payload"]["workload_brief"]
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    review = boto3.resource("dynamodb").Table("reviews").get_item(
+        Key={"reviewId": review_id}
+    )["Item"]
+    assert review["failureCode"] == "internal_error"
 
 
 def test_payload_bearing_envelope_is_rejected_before_work(prepared):
@@ -223,12 +179,15 @@ def test_blocked_input_keeps_the_reservation(prepared, monkeypatch):
     assert not any(row.get("released") for row in counters)
 
 
-def test_malformed_resume_key_fails_without_releasing_anything(prepared):
-    review_id, *_ = prepared
-    event = {"review_id": review_id, "phase": "resume", "resume_key": "jobs/other.json"}
-    assert worker.handler(event, None) == {"status": "failed"}
-    counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
-    assert not any(row.get("released") for row in counters)
+def test_resume_phase_is_rejected(prepared):
+    review_id, _s3, calls, _replies, _agent_calls = prepared
+    with pytest.raises(ValueError, match="workflow phase"):
+        worker.handler({"review_id": review_id, "phase": "resume"}, None)
+    with pytest.raises(ValueError, match="workflow envelope"):
+        worker.handler(
+            {"review_id": review_id, "phase": "resume", "resume_key": "jobs/x.json"}, None
+        )
+    assert calls == []
 
 
 def test_agent_service_error_logs_stage_and_code_without_content(

@@ -1,7 +1,6 @@
 """Orchestrate content-bearing calls outside durable Step Functions history.
 
-Only review IDs, a server-issued resume reference and a status leave this
-handler. Submission/context objects live under jobs/<review ID>/ in S3. No
+Only review IDs and a status leave this handler. Submission/context objects live under jobs/<review ID>/ in S3. No
 workflow retry is configured for ambiguous paid calls; claims prevent repeats.
 """
 
@@ -9,7 +8,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import uuid
 
 import boto3
@@ -113,11 +111,11 @@ def _fail_unpaid(table: DynamoDBClient, review_id: str, code: str, operation: st
 
 def handler(event: dict, _context: object) -> dict:
     # API admission always constructs this envelope, never forwards the body.
-    if set(event) - {"review_id", "phase", "resume_key"}:
+    if set(event) - {"review_id", "phase"}:
         raise ValueError("invalid workflow envelope")
     review_id = str(uuid.UUID(event["review_id"]))
     phase = event.get("phase", "initial")
-    if phase not in {"initial", "resume", "poll"}:
+    if phase not in {"initial", "poll"}:
         raise ValueError("invalid workflow phase")
     table = DynamoDBClient(table_name=os.environ["REVIEWS_TABLE_NAME"])
     review = table.get_item({"reviewId": review_id}, consistent=True)
@@ -128,97 +126,69 @@ def handler(event: dict, _context: object) -> dict:
     if phase == "poll":
         return {
             "status": review["status"]
-            if review.get("status") in {"complete", "failed", "needs_clarification"}
+            if review.get("status") in {"complete", "failed"}
             else "in_progress"
         }
     bucket = os.environ["REPORTS_BUCKET_NAME"]
     s3 = S3Client(bucket=bucket)
-    context_key = f"jobs/{review_id}/context.json"
-    resume_key = event.get("resume_key", "")
-    match = re.fullmatch(
-        rf"jobs/{re.escape(review_id)}/clarification-([a-f0-9]{{64}})\.json", resume_key
-    )
-    # The claim submit_review or clarify_review reserved for this run.
-    operation = "initial" if phase == "initial" else f"clarify:{match.group(1) if match else ''}"
+    # The claim submit_review reserved for this run.
+    operation = "initial"
     stage = "admission"
     try:
         if not paid_work_allowed():
             return _fail_unpaid(table, review_id, "paused", operation)
-        if phase == "initial":
-            if review.get("inputKey") != f"jobs/{review_id}/submission.json":
-                return _fail_unpaid(table, review_id, "invalid_submission", operation)
-            table.update_item(
-                Key={"reviewId": review_id},
-                UpdateExpression="SET pipelineStarted = :yes",
-                ConditionExpression="attribute_not_exists(pipelineStarted) AND inputDigest = :digest AND #s = :pending",
-                ExpressionAttributeNames={"#s": "status"},
-                ExpressionAttributeValues={
-                    ":yes": True,
-                    ":digest": review["inputDigest"],
-                    ":pending": "pending",
-                },
-            )
-            submission = _read_json(s3, review["inputKey"])
-            if request_digest(submission) != review["inputDigest"]:
-                return _fail_unpaid(table, review_id, "invalid_submission", operation)
-            stage = _progress(table, review_id, "ingest")
-            ingest = _invoke("ingest", {**submission, "report_bucket": bucket})
-            if ingest.get("status") == "rejected":
-                return _fail_unpaid(table, review_id, "invalid_archive", operation)
-            if ingest.get("status") == "blocked":
-                # Guardrails, which is billed, has already run.
-                return _fail(table, review_id, "input_blocked")
-            if ingest.get("status") != "parsed":
-                return _fail(table, review_id, "internal_error")
-            scanner = _invoke(
-                "scan",
-                {
-                    "review_id": review_id,
-                    "archive_s3_key": submission["archive_s3_key"],
-                    "archive_s3_version": submission["archive_s3_version"],
-                    "report_bucket": bucket,
-                },
-            )
-            stage = _progress(table, review_id, "rule_engine")
-            rules = _invoke(
-                "rule_engine",
-                {
-                    "review_id": review_id,
-                    "parsed_s3_key": ingest["parsed_s3_key"],
-                    "report_bucket": bucket,
-                    "scanner": scanner,
-                },
-            )
-            _save_preview_diagram(s3, table, review_id, rules.get("architecture"))
-            state = {
-                "submission": submission,
-                "ingest": ingest,
-                "rules": rules,
-                "rounds": 0,
-                "workload_brief": submission["workload_brief"],
-                "baseline_answers": submission["baseline_answers"],
-            }
-        else:
-            if not match:
-                return _fail(table, review_id, "invalid_submission")
-            table.update_item(
-                Key={"reviewId": review_id},
-                UpdateExpression="SET pipelineResume = :key",
-                ConditionExpression="(attribute_not_exists(pipelineResume) OR pipelineResume <> :key) AND #s = :pending",
-                ExpressionAttributeNames={"#s": "status"},
-                ExpressionAttributeValues={":key": resume_key, ":pending": "pending"},
-            )
-            state = _read_json(s3, context_key)
-            answer = _read_json(s3, resume_key)
-            if answer.get("review_id") != review_id or answer.get("input_digest") != review.get(
-                "inputDigest"
-            ):
-                return _fail(table, review_id, "invalid_submission")
-            state["rounds"] += 1
-            if state["rounds"] > int(os.environ.get("MAX_CLARIFICATION_ROUNDS", "3")):
-                return _fail_unpaid(table, review_id, "clarification_limit", operation)
-            state["baseline_answers"].update(answer["answers"])
-            state["workload_brief"] += answer["note"]
+        if review.get("inputKey") != f"jobs/{review_id}/submission.json":
+            return _fail_unpaid(table, review_id, "invalid_submission", operation)
+        table.update_item(
+            Key={"reviewId": review_id},
+            UpdateExpression="SET pipelineStarted = :yes",
+            ConditionExpression="attribute_not_exists(pipelineStarted) AND inputDigest = :digest AND #s = :pending",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={
+                ":yes": True,
+                ":digest": review["inputDigest"],
+                ":pending": "pending",
+            },
+        )
+        submission = _read_json(s3, review["inputKey"])
+        if request_digest(submission) != review["inputDigest"]:
+            return _fail_unpaid(table, review_id, "invalid_submission", operation)
+        stage = _progress(table, review_id, "ingest")
+        ingest = _invoke("ingest", {**submission, "report_bucket": bucket})
+        if ingest.get("status") == "rejected":
+            return _fail_unpaid(table, review_id, "invalid_archive", operation)
+        if ingest.get("status") == "blocked":
+            # Guardrails, which is billed, has already run.
+            return _fail(table, review_id, "input_blocked")
+        if ingest.get("status") != "parsed":
+            return _fail(table, review_id, "internal_error")
+        scanner = _invoke(
+            "scan",
+            {
+                "review_id": review_id,
+                "archive_s3_key": submission["archive_s3_key"],
+                "archive_s3_version": submission["archive_s3_version"],
+                "report_bucket": bucket,
+            },
+        )
+        stage = _progress(table, review_id, "rule_engine")
+        rules = _invoke(
+            "rule_engine",
+            {
+                "review_id": review_id,
+                "parsed_s3_key": ingest["parsed_s3_key"],
+                "report_bucket": bucket,
+                "scanner": scanner,
+            },
+        )
+        _save_preview_diagram(s3, table, review_id, rules.get("architecture"))
+        state = {
+            "submission": submission,
+            "ingest": ingest,
+            "rules": rules,
+            "workload_brief": submission["workload_brief"],
+            "baseline_answers": submission["baseline_answers"],
+        }
         if not review_is_live(table.get_item({"reviewId": review_id}, consistent=True) or {}):
             return {"status": "failed"}
         stage = _progress(table, review_id, "reasoning")
@@ -235,22 +205,12 @@ def handler(event: dict, _context: object) -> dict:
                 "deterministic_rule_version": rules["rule_version"],
                 "terraform_resources": rules.get("resource_summary", {}),
             },
-            runtime_session_id=f"archibrief-review-session-{review_id}-{state['rounds']}",
+            runtime_session_id=f"archibrief-review-session-{review_id}-0",
         )
         if agent.get("status") == "needs_clarification":
-            _write_json(s3, context_key, state)
-            table.update_item(
-                Key={"reviewId": review_id},
-                UpdateExpression="SET needsClarification = :needs, preflightFields = :fields, #s = :waiting",
-                ConditionExpression="attribute_exists(reviewId)",
-                ExpressionAttributeNames={"#s": "status"},
-                ExpressionAttributeValues={
-                    ":needs": agent.get("needs_clarification", []),
-                    ":fields": agent.get("preflight_fields", {}),
-                    ":waiting": "needs_clarification",
-                },
-            )
-            return {"status": "needs_clarification"}
+            # No field pauses any more (submit_review requires the
+            # regulatory answer), so this would be a preflight policy bug.
+            return _fail(table, review_id, "internal_error")
         stage = _progress(table, review_id, "validate")
         validated = _invoke("validate", {"findings": agent["findings"]})
         quality = build_analysis_quality(

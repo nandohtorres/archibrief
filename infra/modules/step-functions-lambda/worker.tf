@@ -20,7 +20,7 @@ resource "aws_iam_role_policy_attachment" "review_worker_logs" {
 data "aws_iam_policy_document" "review_worker" {
   statement {
     actions   = ["lambda:InvokeFunction"]
-    resources = [for name, fn in aws_lambda_function.this : fn.arn if name != "store_clarification_token"]
+    resources = [for fn in aws_lambda_function.this : fn.arn]
   }
   statement {
     actions   = ["s3:GetObject", "s3:PutObject"]
@@ -69,7 +69,6 @@ resource "aws_lambda_function" "review_worker" {
       REPORTS_BUCKET_NAME        = var.reports_bucket_name
       USAGE_COUNTERS_TABLE_NAME  = var.usage_counters_table_name
       KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
-      MAX_CLARIFICATION_ROUNDS   = tostring(var.max_clarification_rounds)
       AGENTCORE_RUNTIME_ARN      = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
     }, { for name, fn in aws_lambda_function.this : "${upper(name)}_FUNCTION_NAME" => fn.function_name })
   }

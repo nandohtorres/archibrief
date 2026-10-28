@@ -71,19 +71,14 @@ variable "get_review_zip_path" {
   description = "Deployment package for GET /reviews/{reviewId}'s Lambda (backend/lambdas/get_review)."
 }
 
-variable "clarify_review_zip_path" {
-  type        = string
-  description = "Deployment package for POST /reviews/{reviewId}/clarify's Lambda (backend/lambdas/clarify_review)."
-}
-
 variable "reviews_table_name" {
   type        = string
-  description = "DynamoDB table name (not ARN); get_review/clarify_review read it from REVIEWS_TABLE_NAME."
+  description = "DynamoDB table name (not ARN); get_review reads it from REVIEWS_TABLE_NAME."
 }
 
 variable "reviews_table_arn" {
   type        = string
-  description = "DynamoDB table ARN, paired with reviews_table_name; scopes get_review's/clarify_review's IAM policies."
+  description = "DynamoDB table ARN, paired with reviews_table_name; scopes get_review's IAM policy."
 }
 
 variable "deeper_review_zip_path" {
@@ -129,7 +124,7 @@ variable "create_upload_zip_path" {
 
 variable "kill_switch_parameter_name" {
   type        = string
-  description = "SSM parameter holding the ADR-0030 kill switch; deeper/clarify Lambdas refuse paid work when it reads \"true\" or can't be read."
+  description = "SSM parameter holding the ADR-0030 kill switch; the deeper Lambda refuses paid work when it reads \"true\" or can't be read."
 }
 
 variable "kill_switch_parameter_arn" {

@@ -5,12 +5,11 @@ variable "name_prefix" {
 
 variable "lambda_zip_paths" {
   type = object({
-    ingest                    = string
-    rule_engine               = string
-    validate                  = string
-    audit                     = string
-    finalize                  = string
-    store_clarification_token = string
+    ingest      = string
+    rule_engine = string
+    validate    = string
+    audit       = string
+    finalize    = string
   })
   description = "Path to each Lambda's deployment package (built by scripts/package_lambdas.py)."
 }
@@ -86,12 +85,6 @@ variable "mark_review_failed_zip_path" {
   type        = string
   default     = "../../../backend/lambdas/mark_review_failed/build/mark_review_failed.zip"
   description = "Deployment package for the mark-review-failed Lambda (built by scripts/package_lambdas.py)."
-}
-
-variable "max_clarification_rounds" {
-  type        = number
-  default     = 2
-  description = "How many times one review may pause for clarification before it fails with ClarificationLimitReached."
 }
 
 # ADR-0048: Trivy scan step. Defaults point at the build outputs, so the

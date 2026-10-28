@@ -36,7 +36,6 @@ flowchart LR
         Validate["Validate"]
         Audit["Audit"]
         Finalize["Finalize"]
-        Clarify["clarify_review /<br/>store_clarification_token"]
         Deeper["deeper_review"]
         DeeperWorker["deeper worker"]
         GetReview["get_review"]
@@ -77,7 +76,6 @@ flowchart LR
     APIGW --> Chat
     Chat --> S3R
     Chat -->|saved children and transcript| DDB
-    APIGW --> Clarify
     APIGW --> Deeper
     Deeper --> DeeperJob --> DeeperWorker
     DeeperWorker --> Retrieve
@@ -139,10 +137,9 @@ flowchart LR
    per-field missing-data policy, retrieves relevant RAG chunks from S3
    Vectors (embedded via Titan V2), and reasons over
    workload brief + rule findings + retrieved evidence via Claude.
-   Guardrails runs again immediately before this step. If a required
-   field truly can't be resolved, the workflow pauses at
-   `StoreClarificationToken` (a `waitForTaskToken` state, up to 7 days)
-   until the visitor answers via `POST /reviews/{reviewId}/clarify`.
+   Guardrails runs again immediately before this step. No field pauses
+   the review: the one that can't be inferred (regulatory and data
+   residency requirements) is a required question on the submission form.
 8. **Validate** — schema-checks returned findings. Quote provenance is checked
    earlier in Reason against its retrieved chunks; Validate is not a second
    retrieval or semantic-support check. Rejected items are excluded. Carrying
@@ -197,50 +194,19 @@ table or catalog.
 starting a new review or model call. The three real demos load static frontend
 files instead. Neither path is evidence of a fresh model execution.
 
-## Human-in-the-loop: the clarification pause
+## Asking for missing context up front
 
-This path is exercised end to end against the deployed system. When
-`Reason` can't resolve a required field under
-ADR-0031's per-field missing-data policy, it returns
-`needs_clarification` instead of findings, and the state machine pauses
-— for up to 7 days — rather than guessing or failing the review:
-
-```mermaid
-sequenceDiagram
-    participant Visitor
-    participant SFN as Step Functions
-    participant Worker as review_worker
-    participant Agent as AgentCore Runtime
-    participant SCT as StoreClarificationToken<br/>(Lambda)
-    participant CR as clarify_review<br/>(Lambda)
-
-    SFN->>Worker: review_id, phase: initial
-    Worker->>Agent: Stored brief, requirements, facts
-    Agent-->>Worker: needs_clarification
-    Worker-->>SFN: status: needs_clarification
-    SFN->>SFN: Outcome (Choice)
-    SFN->>SCT: lambda:invoke.waitForTaskToken
-    SCT->>SFN: DynamoDB: currentStage = needs_clarification
-    Note over SFN: Execution pauses here.<br/>Task token held, up to 7 days.
-    Visitor->>CR: POST /reviews/{id}/clarify<br/>(answers + optional notes)
-    CR->>CR: Persist answers in S3; reserve continuation
-    CR->>SFN: SendTaskSuccess(taskToken, resume_key)
-    SFN->>Worker: review_id, phase: resume, resume_key
-    Worker->>Worker: Claim resume; load answers; bound rounds
-    Worker->>Agent: Brief and settled requirements
-    Agent-->>Worker: Findings
-    Worker-->>SFN: status: complete after publication
-```
-
-The frontend never sees `needs_clarification` as a generic "still
-pending" state — polling explicitly branches on it (otherwise a paused
-review would look like a dead one) and renders a yes/no + multi-select
-question UI instead of continuing to spin.
+Reviews used to pause for up to 7 days (a `waitForTaskToken` state) when
+preflight couldn't resolve a required field, and resume once the visitor
+answered through `POST /reviews/{reviewId}/clarify`. Only the regulatory
+and data-residency field ever paused, so the form now asks it before
+submission, `submit_review` rejects a submission without it, and the
+pause, the resume path and their Lambdas are gone. Traffic and
+availability still get explicit, labeled defaults (ADR-0031).
 
 ## Durable lifecycle and content-bearing work
 
-Step Functions owns the outer lifecycle, outcome branching and clarification
-callback. A worker Lambda invokes content-bearing stages and publishes progress
+Step Functions owns the outer lifecycle and outcome branching. A worker Lambda invokes content-bearing stages and publishes progress
 to DynamoDB. It reads/writes full context in S3, keeping that content outside
 new execution histories. The LangGraph PreflightGate → Retrieve → Reason graph
 runs in AgentCore, called by the worker. Earlier executions retain their

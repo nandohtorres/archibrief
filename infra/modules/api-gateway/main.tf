@@ -16,9 +16,8 @@ data "aws_iam_policy_document" "lambda_trust" {
   }
 }
 
-# GET /reviews/{reviewId} and POST /reviews/{reviewId}/clarify need a
-# DynamoDB read and a task-token resume (states:SendTaskSuccess), so both
-# are Lambda proxy integrations.
+# GET /reviews/{reviewId} needs a DynamoDB read, so it is a Lambda proxy
+# integration.
 data "aws_iam_policy_document" "review_reader_data_access" {
   statement {
     effect    = "Allow"
@@ -75,67 +74,6 @@ resource "aws_lambda_function" "get_review" {
       REVIEWS_TABLE_NAME  = var.reviews_table_name
       REPORTS_BUCKET_NAME = var.reports_bucket_name
       FINDINGS_TABLE_NAME = var.findings_table_name
-    })
-  }
-
-  tags = var.tags
-}
-
-# clarify_review needs GetItem+UpdateItem (reads the pending token, then
-# claims it with a conditional field-level update before resuming) plus
-# states:SendTaskSuccess, which must be scoped to resource "*": the
-# task-token API has no ARN-scoped resource, and the token itself is the
-# authorization.
-data "aws_iam_policy_document" "clarify_review_data_access" {
-  statement {
-    # ADR-0030 kill switch, checked before any paid work.
-    effect    = "Allow"
-    actions   = ["ssm:GetParameter"]
-    resources = [var.kill_switch_parameter_arn]
-  }
-  statement {
-    effect    = "Allow"
-    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
-    resources = [var.reviews_table_arn]
-  }
-  statement {
-    effect    = "Allow"
-    actions   = ["states:SendTaskSuccess", "states:SendTaskFailure"]
-    resources = ["*"]
-  }
-}
-
-resource "aws_iam_role" "clarify_review" {
-  name                 = "${var.name_prefix}-clarify-review"
-  assume_role_policy   = data.aws_iam_policy_document.lambda_trust.json
-  permissions_boundary = var.permissions_boundary_arn
-  tags                 = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "clarify_review_basic_logs" {
-  role       = aws_iam_role.clarify_review.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_iam_role_policy" "clarify_review_data_access" {
-  name   = "${var.name_prefix}-clarify-review-data-access"
-  role   = aws_iam_role.clarify_review.id
-  policy = data.aws_iam_policy_document.clarify_review_data_access.json
-}
-
-resource "aws_lambda_function" "clarify_review" {
-  function_name    = "${var.name_prefix}-clarify-review"
-  role             = aws_iam_role.clarify_review.arn
-  handler          = "backend.lambdas.clarify_review.handler.handler"
-  runtime          = "python3.12"
-  filename         = var.clarify_review_zip_path
-  source_code_hash = fileexists(var.clarify_review_zip_path) ? filebase64sha256(var.clarify_review_zip_path) : null
-  timeout          = 10
-
-  environment {
-    variables = merge(local.admission_environment, {
-      REVIEWS_TABLE_NAME         = var.reviews_table_name
-      KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
     })
   }
 

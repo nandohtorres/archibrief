@@ -173,5 +173,5 @@ def test_sdk_feature_users_bundle_the_pinned_boto3():
         for n, s in LAMBDA_SPECS.items()
         if n != "ask_question" and "boto3" in s["packages"]
     ]
-    assert set(others) == {"create_upload", "submit_review", "review_worker", "clarify_review", "deeper_review"}
+    assert set(others) == {"create_upload", "submit_review", "review_worker", "deeper_review"}
     assert PACKAGER.pinned_versions()["boto3"] == "1.43.96"
