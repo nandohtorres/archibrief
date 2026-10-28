@@ -14,8 +14,9 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from backend.shared.baseline import SUBMISSION_REQUIRED_FIELDS
+from backend.agent.nodes.retrieve import MAX_RETRIEVAL_CALLS
 from backend.corpus.lexical_index import build_lexical_corpus_index_from_disk
+from backend.shared.baseline import SUBMISSION_REQUIRED_FIELDS
 from backend.shared.clients import (
     BedrockEmbeddingClient,
     BedrockReasoningClient,
@@ -197,7 +198,8 @@ def main() -> int:
             "max_output_tokens": 8192,
         },
     )
-    calls = 5 * len(cases)
+    # Ingest and reasoning Guardrails checks, retrieval and one model call.
+    calls = (MAX_RETRIEVAL_CALLS + 3) * len(cases)
     metadata = {
         "mode": "integrated-local-application-evaluation",
         "partial": bool(

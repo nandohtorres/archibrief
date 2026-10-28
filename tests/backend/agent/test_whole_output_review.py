@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.agent import validate_reasoning_eval as runner
+from backend.agent.nodes.retrieve import MAX_RETRIEVAL_CALLS
 from backend.agent.trap_eval import TRAP_BRIEFS, review_whole_output, score_trap
 
 
@@ -107,7 +108,7 @@ def test_safe_quoted_phrase_requires_review_without_becoming_a_semantic_failure(
             "--limit",
             "1",
             "--max-paid-calls",
-            "4",
+            str(MAX_RETRIEVAL_CALLS + 2),
             "--run-log",
             str(tmp_path / "calls.json"),
             "--out",

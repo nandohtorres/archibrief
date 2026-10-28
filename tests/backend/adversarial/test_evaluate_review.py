@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.agent.nodes.retrieve import MAX_RETRIEVAL_CALLS
 from tests.backend.adversarial import evaluate_review as runner
 from tests.backend.agent.nodes.test_reason import _chunk, _valid_finding_item
 
@@ -21,7 +22,10 @@ def test_integrated_preview_never_constructs_clients(monkeypatch, capsys):
     monkeypatch.setattr("sys.argv", ["eval", "--plan", "--case", "F06-dangerous"])
     assert runner.main() == 0
     plan = json.loads(capsys.readouterr().out)
-    assert plan["admission"]["planned_service_calls_upper_bound"] == 5
+    assert (
+        plan["admission"]["planned_service_calls_upper_bound"]
+        == MAX_RETRIEVAL_CALLS + 3
+    )
     assert plan["required_baseline_fields"] == {
         "F06-dangerous": ["regulatory_data_residency"]
     }
@@ -127,7 +131,7 @@ def test_integrated_fake_service_run_retains_failed_and_successful_cases(
             str(answer_file),
             "--confirm-paid",
             "--max-paid-calls",
-            "10",
+            str(2 * (MAX_RETRIEVAL_CALLS + 3)),
             "--run-log",
             str(journal),
             "--out",
@@ -142,18 +146,20 @@ def test_integrated_fake_service_run_retains_failed_and_successful_cases(
     ]
     delivered = result["attempts"][1]
     assert delivered["contract_passed"] is True
-    assert delivered["service_operations"] == [
-        "guardrail",
-        "embedding",
-        "vectors",
-        "guardrail",
-        "model",
-    ]
+    operations = delivered["service_operations"]
+    # Ingest screening, then the brief search and one search per topic,
+    # then reasoning screening and the model.
+    assert operations[0] == "guardrail" and operations[-2:] == ["guardrail", "model"]
+    searches = operations[1:-2]
+    assert searches == ["embedding", "vectors"] * (len(searches) // 2)
+    assert len(searches) // 2 >= 2
     assert delivered["audit_persisted"] is False
     assert (
         delivered["audit_entry"]["deterministicRuleVersion"] == "rule_engine@2026-10-23"
     )
     assert delivered["report"]["analysis_scope"]
     assert delivered["semantic_verdict"] == "not_scored"
-    assert len(json.loads(journal.read_text())["calls"]) == 10
+    assert len(json.loads(journal.read_text())["calls"]) == sum(
+        attempt["service_call_attempts"] for attempt in result["attempts"]
+    )
     assert "PRIVATE-ERROR" not in output.read_text()
