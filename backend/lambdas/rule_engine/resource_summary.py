@@ -29,7 +29,8 @@ So the summary carries facts but leaves no room to write instructions in:
   security group rules, container definitions and similar nested
   configuration appear only as the fixed-vocabulary facts
   resource_details.py derives from them, never verbatim.
-- Resources with count = 0 are left out; the list is capped.
+- Resources with count = 0 are left out; the list is capped, keeping the
+  resources most likely to matter (see _summary_priority).
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from __future__ import annotations
 import re
 
 from backend.lambdas.rule_engine.hcl_eval import is_created, resolve
-from backend.lambdas.rule_engine.resource_details import resource_details
+from backend.lambdas.rule_engine.resource_details import DETAILED_TYPES, resource_details
 from backend.shared.configuration_checks import enrich_observations
 from backend.shared.terraform_observations import ObservationBudget, ResourceObservations
 from backend.shared.terraform_scope import display_name, module_of
@@ -608,62 +609,136 @@ def declared_context(parsed: dict) -> dict | None:
     }
 
 
-def build_resource_summary(parsed: dict) -> dict:
-    """{"resources": [{"type", "name", "settings"}...], "truncated": bool,
-    "note": str}."""
-    entries: list[dict] = []
-    total = 0
-    observation_budget = ObservationBudget()
+# Wiring that carries no risk fact of its own: dropped first at the cap.
+_PLUMBING_TYPES = frozenset(
+    {
+        "aws_route_table_association",
+        "aws_main_route_table_association",
+        "aws_db_subnet_group",
+        "aws_elasticache_subnet_group",
+        "aws_redshift_subnet_group",
+        "aws_neptune_subnet_group",
+        "aws_docdb_subnet_group",
+        "aws_eip",
+        "aws_eip_association",
+        "aws_internet_gateway",
+        "aws_egress_only_internet_gateway",
+        "aws_route53_zone",
+        "aws_acm_certificate",
+        "aws_acm_certificate_validation",
+        "aws_lb_target_group",
+        "aws_lb_target_group_attachment",
+        "aws_sns_topic_subscription",
+        "aws_cloudwatch_metric_alarm",
+        "aws_cloudwatch_dashboard",
+        "aws_cloudwatch_log_stream",
+        "aws_iam_openid_connect_provider",
+        "aws_iam_instance_profile",
+        "aws_appautoscaling_target",
+        "aws_appautoscaling_policy",
+    }
+)
+# Types that decide who can reach what, or where data goes.
+_ACCESS_TYPE = re.compile(
+    r"policy|_acl$|permission|ingress|egress_rule|public_access|secret|ssm_parameter"
+    r"|identity_pool|authorizer|_route$|_method$|replication|function_url|access_key"
+    r"|_user$|event_bus"
+)
+# Types that hold data, run code or set retention and capacity.
+_STATEFUL_TYPE = re.compile(
+    r"cluster$|_instance$|_table$|bucket$|_domain$|_queue$|_topic$|_function$|_stream$"
+    r"|_group$|distribution$|_repository$|_key$|_api$|_record$|_listener$|_lb$|trail$"
+    r"|_vault$|_plan$|_selection$|launch_template$|_pool$|lifecycle|nat_gateway"
+    r"|file_system|state_machine|provisioned_concurrency"
+)
+
+
+def _summary_priority(resource_type: str) -> int:
+    """Lower is kept first at the cap: 0 decides access or exposure, 1 holds
+    data or has listed settings, 2 is any other AWS resource, 3 is wiring
+    with nothing to report.
+
+    The cap used to keep resources in alphabetical order, so a large
+    submission lost every S3 bucket, security group, SQS policy and SSM
+    parameter (2026-10-28)."""
+    if resource_type in _PLUMBING_TYPES or not resource_type.startswith("aws_"):
+        return 3
+    if resource_type in DETAILED_TYPES or _ACCESS_TYPE.search(resource_type):
+        return 0
+    if resource_type in SETTINGS or _STATEFUL_TYPE.search(resource_type):
+        return 1
+    return 2
+
+
+def _kept_resources(parsed: dict) -> tuple[list[tuple[str, str, object]], int]:
+    """The created resources the summary shows, in (type, key) order, and
+    how many were created in all. Past the cap, higher-priority resources
+    win, and within a priority each type's first resource comes before any
+    type's second, so one large type can't crowd out the others."""
+    created: list[tuple[str, str, object]] = []
     for resource_type in sorted(parsed.get("resources", {})):
         if not _RESOURCE_TYPE.fullmatch(resource_type):
             continue
         bodies = parsed["resources"][resource_type]
         if not isinstance(bodies, dict):
             continue
-        for key in sorted(bodies):
-            body = bodies[key]
-            if not is_created(body, parsed):
-                continue
-            total += 1
-            if len(entries) >= MAX_RESOURCES:
-                continue
-            module = module_of(body)
-            settings = {
-                path: _read(body, resource_type, path, parsed, module)
-                if isinstance(body, dict)
-                else UNKNOWN
-                for path in SETTINGS.get(resource_type, ())
-            }
-            if (
-                resource_type == "aws_cloudwatch_log_group"
-                and settings.get("retention_in_days") == 0
-            ):
-                settings["retention_in_days"] = "never expires (configured: 0)"
-            if (
-                resource_type == "aws_lambda_function"
-                and settings.get("reserved_concurrent_executions") == 0
-            ):
-                # Read as "unreserved" in a live review (2026-10-28).
-                settings["reserved_concurrent_executions"] = (
-                    "0: never runs (every invocation is throttled)"
-                )
-            entry = {"type": resource_type, "name": display_name(key), "settings": settings}
-            copies = copies_of(body, parsed, module) if isinstance(body, dict) else None
-            if copies is not None:
-                entry["copies"] = copies
-            if isinstance(body, dict):
-                bundle = ResourceObservations(resource_type, key, body, parsed, copies).build()
-                entry["observations"] = bundle
-                details = resource_details(resource_type, body, parsed, module)
-                if details:
-                    entry["details"] = details
-            if resource_type == "aws_backup_plan" and isinstance(body, dict):
-                entry["rules"] = _backup_rules(body, parsed, module)
-                raw_rules = body.get("rule", [])
-                raw_rules = raw_rules if isinstance(raw_rules, list) else [raw_rules]
-                entry["rules_total"] = sum(isinstance(rule, dict) for rule in raw_rules)
-                entry["rules_truncated"] = entry["rules_total"] > len(entry["rules"])
-            entries.append(entry)
+        created += [
+            (resource_type, key, bodies[key])
+            for key in sorted(bodies)
+            if is_created(bodies[key], parsed)
+        ]
+    if len(created) <= MAX_RESOURCES:
+        return created, len(created)
+    rank: dict[str, int] = {}
+    ordered = []
+    for position, (resource_type, _key, _body) in enumerate(created):
+        rank[resource_type] = rank.get(resource_type, -1) + 1
+        ordered.append((_summary_priority(resource_type), rank[resource_type], position))
+    kept = {position for *_order, position in sorted(ordered)[:MAX_RESOURCES]}
+    return [item for position, item in enumerate(created) if position in kept], len(created)
+
+
+def build_resource_summary(parsed: dict) -> dict:
+    """{"resources": [{"type", "name", "settings"}...], "truncated": bool,
+    "note": str}."""
+    entries: list[dict] = []
+    observation_budget = ObservationBudget()
+    kept, total = _kept_resources(parsed)
+    for resource_type, key, body in kept:
+        module = module_of(body)
+        settings = {
+            path: _read(body, resource_type, path, parsed, module)
+            if isinstance(body, dict)
+            else UNKNOWN
+            for path in SETTINGS.get(resource_type, ())
+        }
+        if resource_type == "aws_cloudwatch_log_group" and settings.get("retention_in_days") == 0:
+            settings["retention_in_days"] = "never expires (configured: 0)"
+        if (
+            resource_type == "aws_lambda_function"
+            and settings.get("reserved_concurrent_executions") == 0
+        ):
+            # Read as "unreserved" in a live review (2026-10-28).
+            settings["reserved_concurrent_executions"] = (
+                "0: never runs (every invocation is throttled)"
+            )
+        entry = {"type": resource_type, "name": display_name(key), "settings": settings}
+        copies = copies_of(body, parsed, module) if isinstance(body, dict) else None
+        if copies is not None:
+            entry["copies"] = copies
+        if isinstance(body, dict):
+            bundle = ResourceObservations(resource_type, key, body, parsed, copies).build()
+            entry["observations"] = bundle
+            details = resource_details(resource_type, body, parsed, module)
+            if details:
+                entry["details"] = details
+        if resource_type == "aws_backup_plan" and isinstance(body, dict):
+            entry["rules"] = _backup_rules(body, parsed, module)
+            raw_rules = body.get("rule", [])
+            raw_rules = raw_rules if isinstance(raw_rules, list) else [raw_rules]
+            entry["rules_total"] = sum(isinstance(rule, dict) for rule in raw_rules)
+            entry["rules_truncated"] = entry["rules_total"] > len(entry["rules"])
+        entries.append(entry)
     enrich_observations(entries)
     default_region = _common_placement_region(entries)
     placement_only = 0

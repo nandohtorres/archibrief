@@ -700,6 +700,10 @@ _POLICY_DOCUMENTS = {
 }
 
 
+# Types that get a "details" object.
+DETAILED_TYPES = frozenset(_EXTRACTORS) | frozenset(_POLICY_DOCUMENTS)
+
+
 def resource_details(resource_type: str, body: dict, parsed: dict, module: str) -> dict | None:
     """Fixed-vocabulary facts for one resource, or None for other types."""
     if resource_type in _POLICY_DOCUMENTS:
