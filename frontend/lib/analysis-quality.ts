@@ -31,8 +31,12 @@ export function qualityMessage(quality?: AnalysisQuality): string {
   const message = descriptions[quality?.outcome ?? "unknown"] ?? descriptions.unknown;
   const model = quality?.model_verification;
   const schema = quality?.schema_validation;
+  const capped = quality?.reason_codes?.includes("model_findings_capped")
+    ? " The AI proposed more findings than a report keeps; the least severe were left out."
+    : "";
   return (
     message +
+    capped +
     (model
       ? ` Model output checks: ${model.accepted} of ${model.attempted} retained, ${model.rejected} rejected.`
       : "") +

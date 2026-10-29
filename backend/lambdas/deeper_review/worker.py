@@ -22,6 +22,22 @@ from backend.shared.models.finding import DepthLevel, Finding
 from backend.shared.retention import review_expires_at, review_is_live
 
 AGENT_READ_TIMEOUT_SECONDS = 300
+# Kept back from the Lambda's remaining time to record the outcome.
+POST_AGENT_RESERVE_SECONDS = 20
+# Below this, a deeper model call can't finish, so the job fails cleanly
+# instead of letting the Lambda time out mid-call.
+MIN_AGENT_SECONDS = 90
+
+
+def agent_read_timeout(context: object) -> int | None:
+    """How long to wait for the runtime, or None when there isn't time."""
+    remaining = getattr(context, "get_remaining_time_in_millis", None)
+    if not callable(remaining):
+        return AGENT_READ_TIMEOUT_SECONDS
+    left = int(remaining() / 1000) - POST_AGENT_RESERVE_SECONDS
+    if left < MIN_AGENT_SECONDS:
+        return None
+    return min(AGENT_READ_TIMEOUT_SECONDS, left)
 
 
 def existing_result(
@@ -75,7 +91,7 @@ def _fail(table: DynamoDBClient, review_id: str, finding_id: str, job_id: str, c
     return {"status": "failed"}
 
 
-def run_job(event: dict, _context: object) -> dict:
+def run_job(event: dict, context: object) -> dict:
     if set(event) != {"review_id", "finding_id", "job_id", "phase"} or event["phase"] not in {
         "run",
         "fail",
@@ -125,9 +141,12 @@ def run_job(event: dict, _context: object) -> dict:
         parent = next((f for f in ledger.get("findings", []) if f.get("finding_id") == fid), None)
         if parent is None or not ledger.get("workload_brief"):
             return _fail(table, rid, fid, jid, "invalid_context")
+        agent_wait = agent_read_timeout(context)
+        if agent_wait is None:
+            return _fail(table, rid, fid, jid, "timed_out")
         result = AgentCoreRuntimeClient(
             agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
-            read_timeout_seconds=AGENT_READ_TIMEOUT_SECONDS,
+            read_timeout_seconds=agent_wait,
         ).invoke(
             payload={
                 "mode": "deeper",
@@ -154,7 +173,10 @@ def run_job(event: dict, _context: object) -> dict:
         raw = result["findings"]
         valid, _rejected = validate_findings(raw)
         quality = build_analysis_quality(
-            result.get("model_output_counts"), raw, [f.model_dump(mode="json") for f in valid]
+            result.get("model_output_counts"),
+            raw,
+            [f.model_dump(mode="json") for f in valid],
+            model_findings_capped=bool(result.get("model_findings_capped")),
         )
         findings = [
             f.model_copy(

@@ -25,6 +25,8 @@ from backend.agent.nodes.reason import (
     GuardrailBlocked,
     build_user_content,
     call_reasoning_model,
+    framework_mapping_for,
+    keep_most_severe,
     parse_model_findings,
     reason_node,
     verify_model_findings,
@@ -62,9 +64,7 @@ def _valid_finding_item(**overrides: object) -> dict:
         },
         "risk_impact": "Low",
         "recommendation": "Continue using CMKs.",
-        "framework_mapping": ["SEC08-BP01"],
         "alternatives_considered": [],
-        "depth_level": "lightweight",
     }
     item.update(overrides)
     return item
@@ -355,18 +355,27 @@ def test_max_tokens_defaults_to_a_bounded_value_when_omitted():
     assert reasoning_client.calls[0]["max_tokens"] == 4096
 
 
-def test_model_findings_past_the_cap_are_dropped_before_verification(capsys):
-    items = [_valid_finding_item(finding=f"finding {n}") for n in range(MAX_MODEL_FINDINGS + 3)]
-    reasoning_client = _FakeReasoningClient(tool_input={"findings": items})
-    kept = call_reasoning_model(
-        reasoning_client=reasoning_client,
-        workload_brief="brief",
-        rule_findings=[],
-        retrieved_chunks=[],
-        max_tokens=8192,
-    )
-    assert kept == items[:MAX_MODEL_FINDINGS]
+def _with_severity(n: int, severity: str | None) -> dict:
+    return {"finding": f"finding {n}", "plain": {"severity": severity} if severity else None}
+
+
+def test_the_cap_keeps_the_most_severe_findings_in_the_models_order(capsys):
+    severities = ["low"] * 4 + ["critical", "high"] + ["medium"] * 8 + [None]
+    items = [_with_severity(n, s) for n, s in enumerate(severities)]
+    kept, left_out = keep_most_severe(items)
+    assert left_out == len(items) - MAX_MODEL_FINDINGS
+    assert len(kept) == MAX_MODEL_FINDINGS
+    # The critical and high findings survive though they came late, the
+    # earliest lows fill the last places, and the unrated one goes.
+    assert [i["finding"] for i in kept] == [
+        f"finding {n}" for n in [0, 1, *range(4, 14)]
+    ]
     assert '"emitted": 15' in capsys.readouterr().out
+
+
+def test_findings_within_the_cap_are_all_kept():
+    items = [_with_severity(n, "low") for n in range(MAX_MODEL_FINDINGS)]
+    assert keep_most_severe(items) == (items, 0)
 
 
 def test_prompt_treats_brief_claims_as_unverified_and_never_lets_them_narrow_the_review():
@@ -666,3 +675,79 @@ def test_model_fixes_cant_add_shield_advanced_or_large_quantities():
     assert _with_plain({**_PLAIN, "fix_components": big}) is None
     shield = [{"item": "shield_advanced", "quantity": 1, "size": None}]
     assert _with_plain({**_PLAIN, "fix_components": shield}) is None
+
+
+# --- Model-facing input and fields code fills in
+
+
+def test_framework_mapping_comes_from_the_cited_chunk_not_the_model():
+    state = _reason_state([_valid_finding_item(framework_mapping=["MADE-UP-01"])])
+    state["retrieved_chunks"][0]["heading_path"] = "Security > SEC08-BP01 Implement data classification"
+    finding = reason_node(state)["reasoned_findings"][0]
+    assert finding["framework_mapping"] == [
+        "AWS Well-Architected: Security Pillar",
+        "SEC08-BP01",
+    ]
+
+
+def test_a_finding_without_a_citation_maps_to_no_framework():
+    assert framework_mapping_for(None) == []
+
+
+def test_depth_level_is_set_by_mode_not_by_the_model():
+    lightweight = reason_node(_reason_state([_valid_finding_item(depth_level="deep")]))
+    assert lightweight["reasoned_findings"][0]["depth_level"] == "lightweight"
+    state = _reason_state([_valid_finding_item()])
+    state.update(deep_mode=True, parent_finding={"finding": "Original finding"})
+    assert reason_node(state)["reasoned_findings"][0]["depth_level"] == "deep"
+
+
+def test_at_most_one_alternative_is_kept():
+    alternatives = [{"option": f"o{n}", "reason_rejected": "r"} for n in range(3)]
+    result = reason_node(_reason_state([_valid_finding_item(alternatives_considered=alternatives)]))
+    assert len(result["reasoned_findings"][0]["alternatives_considered"]) == 1
+
+
+def test_reason_node_reports_how_many_findings_the_cap_left_out():
+    items = [_valid_finding_item(finding=f"finding {n}") for n in range(MAX_MODEL_FINDINGS + 2)]
+    result = reason_node(_reason_state(items))
+    assert result["model_findings_capped"] == 2
+    assert result["model_output_counts"]["attempted"] == MAX_MODEL_FINDINGS
+    assert reason_node(_reason_state([_valid_finding_item()]))["model_findings_capped"] == 0
+
+
+def test_the_model_sees_only_what_it_needs_from_chunks_and_rule_findings():
+    sent = build_user_content(
+        "brief",
+        [
+            {
+                "category": "encryption",
+                "finding": "Bucket is unencrypted.",
+                "evidence": "aws_s3_bucket.logs",
+                "citation": {"content_hash": "PRIVATE-HASH"},
+                "confidence": 1.0,
+            }
+        ],
+        [_chunk("chunk-a", "Encrypt data at rest using AWS KMS customer managed keys.")],
+    )
+    assert sent["retrieved_evidence"] == [
+        {
+            "chunk_id": "chunk-a",
+            "source": "Security > Data Protection",
+            "text": "Encrypt data at rest using AWS KMS customer managed keys.",
+        }
+    ]
+    assert sent["rule_engine_findings"] == [
+        {
+            "category": "encryption",
+            "finding": "Bucket is unencrypted.",
+            "evidence": "aws_s3_bucket.logs",
+        }
+    ]
+
+
+def test_the_model_input_is_sent_as_compact_json():
+    state = _reason_state([])
+    reason_node(state)
+    content = state["reasoning_client"].calls[0]["user_content"]
+    assert content == json.dumps(json.loads(content), separators=(",", ":"))

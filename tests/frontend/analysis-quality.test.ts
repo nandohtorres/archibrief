@@ -47,3 +47,17 @@ it("keeps configuration coverage limits in HTML and JSON exports", () => {
     scopeMessage(analysis_scope),
   );
 });
+
+it("says when the least severe AI findings were left out", () => {
+  const quality: AnalysisQuality = {
+    version: 1,
+    outcome: "complete",
+    model_verification: { attempted: 12, accepted: 12, rejected: 0 },
+    schema_validation: { attempted: 20, accepted: 20, rejected: 0 },
+    reason_codes: ["model_findings_capped"],
+  };
+  expect(qualityMessage(quality)).toContain("the least severe were left out");
+  expect(qualityMessage({ ...quality, reason_codes: [] })).not.toContain(
+    "left out",
+  );
+});

@@ -303,6 +303,33 @@ def test_model_timeout_is_terminal_and_does_not_autoretry(env):
     assert job(env)["failure_code"] == "analysis_failed"
 
 
+def test_agent_wait_fits_the_time_the_lambda_has_left():
+    def context(seconds_left):
+        return SimpleNamespace(get_remaining_time_in_millis=lambda: seconds_left * 1000)
+
+    assert worker.agent_read_timeout(None) == worker.AGENT_READ_TIMEOUT_SECONDS
+    assert worker.agent_read_timeout(context(900)) == worker.AGENT_READ_TIMEOUT_SECONDS
+    assert worker.agent_read_timeout(context(200)) == 200 - worker.POST_AGENT_RESERVE_SECONDS
+    assert worker.agent_read_timeout(context(worker.POST_AGENT_RESERVE_SECONDS + 60)) is None
+
+
+def test_too_little_time_left_fails_the_job_without_calling_the_model(env):
+    api.handler(event(), None)
+    short = SimpleNamespace(get_remaining_time_in_millis=lambda: 30_000)
+    result = worker.run_job(
+        {
+            "review_id": "r1",
+            "finding_id": "base",
+            "job_id": job_id_for("r1", "base"),
+            "phase": "run",
+        },
+        short,
+    )
+    assert result == {"status": "failed"}
+    assert env.calls == []
+    assert job(env)["failure_code"] == "timed_out"
+
+
 def test_worker_exception_does_not_leak_private_error_text(env, capsys):
     api.handler(event(), None)
     env.error = RuntimeError("PRIVATE-CANARY")

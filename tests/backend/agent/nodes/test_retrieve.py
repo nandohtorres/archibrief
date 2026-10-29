@@ -3,6 +3,8 @@ from backend.agent.nodes.retrieve import (
     MAX_COST_TOPICS,
     MAX_TOPICS,
     TOPIC_QUERIES,
+    BRIEF_TOP_K,
+    DEEPER_TOP_K,
     TOPIC_TOP_K,
     RetrievedChunk,
     extract_lexical_terms,
@@ -248,10 +250,12 @@ def test_retrieve_adds_topic_searches_to_the_brief_search():
     chunks = retrieve_node(state)["retrieved_chunks"]
     assert clients.queries[0] == "testyy"
     assert clients.queries[1:] == topic_queries(state["terraform_resources"])
-    assert clients.top_ks == [8, TOPIC_TOP_K, TOPIC_TOP_K]
+    assert clients.top_ks == [BRIEF_TOP_K, TOPIC_TOP_K, TOPIC_TOP_K]
     # The brief's own results stay first.
-    assert [c["chunk_id"] for c in chunks][:8] == [f"chunk-1-{i}" for i in range(8)]
-    assert len(chunks) == 8 + 2 * TOPIC_TOP_K
+    assert [c["chunk_id"] for c in chunks][:BRIEF_TOP_K] == [
+        f"chunk-1-{i}" for i in range(BRIEF_TOP_K)
+    ]
+    assert len(chunks) == BRIEF_TOP_K + 2 * TOPIC_TOP_K
 
 
 def test_go_deeper_keeps_its_single_finding_scoped_search():
@@ -266,3 +270,4 @@ def test_go_deeper_keeps_its_single_finding_scoped_search():
         }
     )
     assert clients.queries == ["finding-scoped query"]
+    assert clients.top_ks == [DEEPER_TOP_K]

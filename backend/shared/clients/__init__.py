@@ -276,16 +276,6 @@ class UnexpectedStopReason(Exception):
         super().__init__(f"expected stopReason={expected!r}, got {stop_reason!r}")
 
 
-class ReasoningDeadlineExceeded(Exception):
-    """Raised when a streamed reasoning call is still producing output past
-    its overall deadline. The stream is closed and nothing it produced is
-    used: a forced tool call's input is only valid JSON once complete."""
-
-    def __init__(self, deadline_seconds: float) -> None:
-        self.deadline_seconds = deadline_seconds
-        super().__init__(f"reasoning stream exceeded its {deadline_seconds:g} s deadline")
-
-
 class ToolCallMissing(Exception):
     """Raised when a forced tool-use Converse call didn't come back with
     exactly one matching toolUse content block: none (e.g. the model
@@ -305,11 +295,6 @@ class BedrockReasoningClient:
     read_timeout_seconds: float | None = None
     no_retries: bool = False
     connect_timeout_seconds: float | None = None
-    # Set = converse_structured streams the response (ConverseStream) and
-    # gives up once this many seconds have passed. While streaming,
-    # read_timeout_seconds limits the wait between chunks, so a slow but
-    # steady response finishes and a stalled one fails fast.
-    stream_deadline_seconds: float | None = None
 
     def __post_init__(self) -> None:
         self._client = boto3.client(
@@ -392,10 +377,24 @@ class BedrockReasoningClient:
                 "toolChoice": {"tool": {"name": tool_name}},
             },
         }
-        if self.stream_deadline_seconds is None:
+        started = time.monotonic()
+        try:
             response = self._client.converse(**request)
-        else:
-            response = self._converse_streamed(request, self.stream_deadline_seconds)
+        except Exception as exc:
+            # A timeout or service error leaves no usage to log, so record
+            # how long it ran: otherwise failures are invisible in the
+            # timings used to tune max_tokens and the read timeout.
+            print(
+                json.dumps(
+                    {
+                        "event": "reasoning_call_failed",
+                        "kind": type(exc).__name__,
+                        "elapsed_ms": int((time.monotonic() - started) * 1000),
+                        "max_tokens": max_tokens,
+                    }
+                )
+            )
+            raise
         # Sizes and timing only, logged before the stop-reason check so a
         # truncated call is measured too. Used to tune max_tokens.
         usage = response.get("usage") or {}
@@ -408,6 +407,7 @@ class BedrockReasoningClient:
                     "output_tokens": usage.get("outputTokens"),
                     "max_tokens": max_tokens,
                     "latency_ms": (response.get("metrics") or {}).get("latencyMs"),
+                    "elapsed_ms": int((time.monotonic() - started) * 1000),
                 }
             )
         )
@@ -427,66 +427,6 @@ class BedrockReasoningClient:
         raise ToolCallMissing(
             f"expected exactly one {tool_name!r} tool call, got {len(matches)}: {response!r}"
         )
-
-    def _converse_streamed(
-        self, request: dict[str, Any], deadline_seconds: float
-    ) -> dict[str, Any]:
-        """ConverseStream, reassembled into the response shape converse()
-        returns, so the checks after it are the same either way.
-
-        A long review used to wait in silence for the whole response and
-        hit the read timeout while the model was still writing
-        (2026-10-28). Streaming turns that one long wait into many short
-        ones. Tool input arrives as JSON text fragments and is parsed only
-        once the model stops for tool_use: a partial answer is never used.
-        """
-        started = time.monotonic()
-        stream = self._client.converse_stream(**request)["stream"]
-        blocks: dict[int, dict[str, Any]] = {}
-        stop_reason: str | None = None
-        usage: dict[str, Any] = {}
-        metrics: dict[str, Any] = {}
-        try:
-            for event in stream:
-                if time.monotonic() - started > deadline_seconds:
-                    raise ReasoningDeadlineExceeded(deadline_seconds)
-                if "contentBlockStart" in event:
-                    start = event["contentBlockStart"]
-                    tool_use = (start.get("start") or {}).get("toolUse")
-                    if tool_use:
-                        blocks[start.get("contentBlockIndex", 0)] = {
-                            "name": tool_use.get("name"),
-                            "parts": [],
-                        }
-                elif "contentBlockDelta" in event:
-                    delta = event["contentBlockDelta"]
-                    block = blocks.get(delta.get("contentBlockIndex", 0))
-                    text = ((delta.get("delta") or {}).get("toolUse") or {}).get("input")
-                    if block is not None and isinstance(text, str):
-                        block["parts"].append(text)
-                elif "messageStop" in event:
-                    stop_reason = event["messageStop"].get("stopReason")
-                elif "metadata" in event:
-                    usage = event["metadata"].get("usage") or {}
-                    metrics = event["metadata"].get("metrics") or {}
-        finally:
-            close = getattr(stream, "close", None)
-            if callable(close):
-                close()
-        content = []
-        if stop_reason == "tool_use":
-            for index in sorted(blocks):
-                try:
-                    tool_input = json.loads("".join(blocks[index]["parts"]) or "{}")
-                except json.JSONDecodeError as exc:
-                    raise ToolCallMissing(f"streamed tool input is not valid JSON: {exc}") from exc
-                content.append({"toolUse": {"name": blocks[index]["name"], "input": tool_input}})
-        return {
-            "stopReason": stop_reason,
-            "usage": usage,
-            "metrics": metrics,
-            "output": {"message": {"content": content}},
-        }
 
     def converse_tool_cached(
         self,

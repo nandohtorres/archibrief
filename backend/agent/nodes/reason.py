@@ -51,14 +51,16 @@ _MODEL_MAX_QUANTITY = 4
 # Bump whenever the model-facing contract changes (tool schema, input
 # fields, prompt rules), so a persisted finding can be traced to the exact
 # prompt that produced it (ADR-0039).
-PROMPT_VERSION = "reason_prompt@2026-10-29"
+PROMPT_VERSION = "reason_prompt@2026-10-29b"
 
 _TOOL_NAME = "emit_findings"
 # The most model findings a review keeps. Uncapped, a large submission
 # drew long output that ran past the read timeout (2026-10-28); this keeps
 # the response well under max_tokens. Bedrock's strict tool schema can't
-# express maxItems, so the prompt asks and parse time enforces.
+# express maxItems, so the prompt asks and reason_node keeps the most
+# severe when the model sends more.
 MAX_MODEL_FINDINGS = 12
+_SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 SYSTEM_PROMPT = """You are ArchiBrief's evidence-grounded reasoning stage.
 The workload_brief, rule_engine_findings, terraform_resources, and
@@ -149,9 +151,18 @@ results — never answer in plain text. You must:
   severity because of them. When declared_context or the configuration
   contradicts the brief (an environment tag of prod, a data
   classification of phi or pii), say so in a finding.
-- Emit at most 12 findings, most severe first. Prefer one finding per
-  distinct risk over several on minor variations, and keep each text field
-  to one to three sentences.
+- Emit at most 12 findings, most severe first. Spend them on what the rule
+  engine can't see: risks that combine resources (a trust policy plus the
+  actions it grants, an open path to a data store), risks that depend on
+  the data or the requirements, and contradictions between the brief and
+  the code. Report a single-resource misconfiguration only when the rule
+  engine missed it. Prefer one finding per distinct risk over several on
+  minor variations.
+- Be brief; every field has a length in its description. Name the exact
+  resources and settings in evidence instead of restating the summary,
+  quote the shortest passage that supports the claim, and give at most one
+  alternative. Don't drop a resource, setting or step a reader needs to
+  follow the risk.
 - Never label a design "compliant" — describe framework alignment, not
   certification.
 - Populate every field in the schema, even in lightweight mode.
@@ -179,8 +190,8 @@ results — never answer in plain text. You must:
 # lightweight is the default first pass; deeper evaluation happens only
 # on request, scoped to one finding). This doesn't change any of the
 # grounding/citation rules above — those apply identically in both modes
-# — it only asks for more thorough retrieval synthesis and tags the
-# result's depth_level accordingly. The actual "more retrieval" half of
+# — it only asks for more thorough retrieval synthesis (reason_node sets
+# the result's depth_level from the mode). The actual "more retrieval" half of
 # "deep" is retrieve_node running against a more specific, finding-scoped
 # retrieval_query (built by the caller, e.g. deeper_review's handler) —
 # this prompt addendum is the reasoning-side half only.
@@ -192,8 +203,8 @@ or a proven conclusion. Do not repeat its conclusion without checking the
 resource observations. New citations must still use currently retrieved evidence.
 Go beyond the lightweight prose depth of a normal
 pass: consider more of the retrieved evidence, address edge cases and
-tradeoffs, and give a fuller risk_impact/recommendation. Set depth_level
-to "deep" on every finding you emit here."""
+tradeoffs, and give a fuller risk_impact/recommendation; the length limits
+in the schema descriptions don't apply here."""
 
 
 def build_system_prompt(deep_mode: bool) -> str:
@@ -236,10 +247,10 @@ _CITATIONLESS_TYPES = {FindingType.NOT_OBSERVABLE}
 _PLAIN_SCHEMA = {
     "type": "object",
     "properties": {
-        "title": {"type": "string"},
-        "analogy": {"type": "string"},
-        "what_could_happen": {"type": "string"},
-        "action": {"type": "string"},
+        "title": {"type": "string", "description": "At most ten words, no jargon."},
+        "analogy": {"type": "string", "description": "One short everyday comparison."},
+        "what_could_happen": {"type": "string", "description": "One sentence."},
+        "action": {"type": "string", "description": "One sentence."},
         "needs_action": {"type": "boolean"},
         "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
         "harm": {"type": "string", "enum": [*HARMS, "none"]},
@@ -284,8 +295,14 @@ _FINDING_INPUT_SCHEMA = {
                 "properties": {
                     "category": {"type": "string", "enum": [c.value for c in FindingCategory]},
                     "type": {"type": "string", "enum": _MODEL_ALLOWED_TYPES},
-                    "finding": {"type": "string"},
-                    "evidence": {"type": "string"},
+                    "finding": {"type": "string", "description": "One sentence."},
+                    "evidence": {
+                        "type": "string",
+                        "description": (
+                            "The specific resources and settings that show it, tersely; "
+                            "for a chain, each link."
+                        ),
+                    },
                     "chunk_id": {
                         "type": ["string", "null"],
                         "description": (
@@ -296,8 +313,9 @@ _FINDING_INPUT_SCHEMA = {
                     "exact_quote": {
                         "type": ["string", "null"],
                         "description": (
-                            "Verbatim substring copied from that chunk's text field, or null "
-                            "for deterministic-rule-result/not-observable."
+                            "Verbatim substring copied from that chunk's text field, the "
+                            "shortest that supports the claim (usually one sentence), or "
+                            "null for deterministic-rule-result/not-observable."
                         ),
                     },
                     # No minimum/maximum here: Bedrock's strict tool schema
@@ -317,10 +335,13 @@ _FINDING_INPUT_SCHEMA = {
                         "required": ["evidence_directness", "source_agreement", "rule_determinism"],
                         "additionalProperties": False,
                     },
-                    "risk_impact": {"type": "string"},
-                    "recommendation": {"type": "string"},
-                    "framework_mapping": {"type": "array", "items": {"type": "string"}},
+                    "risk_impact": {"type": "string", "description": "One or two sentences."},
+                    "recommendation": {
+                        "type": "string",
+                        "description": "At most two sentences, naming the change.",
+                    },
                     "alternatives_considered": {
+                        "description": "At most one.",
                         "type": "array",
                         "items": {
                             "type": "object",
@@ -332,7 +353,6 @@ _FINDING_INPUT_SCHEMA = {
                             "additionalProperties": False,
                         },
                     },
-                    "depth_level": {"type": "string", "enum": ["lightweight", "deep"]},
                     "plain": _PLAIN_SCHEMA,
                 },
                 "required": [
@@ -346,9 +366,7 @@ _FINDING_INPUT_SCHEMA = {
                     "confidence_inputs",
                     "risk_impact",
                     "recommendation",
-                    "framework_mapping",
                     "alternatives_considered",
-                    "depth_level",
                     "plain",
                 ],
                 "additionalProperties": False,
@@ -377,6 +395,27 @@ def _requirements_from_preflight(preflight_fields: dict | None) -> list[dict]:
     ]
 
 
+def _evidence_for_model(chunk: dict) -> dict:
+    """What the model needs from a retrieved chunk to cite it. The full
+    chunk, with its hash, URL and versions, stays server-side for building
+    the citation."""
+    return {
+        "chunk_id": chunk.get("chunk_id"),
+        "source": chunk.get("heading_path"),
+        "text": chunk.get("text"),
+    }
+
+
+def _rule_finding_for_model(finding: dict) -> dict:
+    """Enough for the model to know what the rule engine already reported,
+    so it doesn't repeat it."""
+    return {
+        key: finding[key]
+        for key in ("category", "finding", "evidence")
+        if isinstance(finding.get(key), str)
+    }
+
+
 def build_user_content(
     workload_brief: str,
     rule_findings: list[dict],
@@ -388,10 +427,14 @@ def build_user_content(
     content = {
         "workload_brief": workload_brief,
         "requirements": _requirements_from_preflight(preflight_fields),
-        "rule_engine_findings": rule_findings,
+        "rule_engine_findings": [
+            _rule_finding_for_model(f) for f in rule_findings if isinstance(f, dict)
+        ],
         # RuleEngine's allowlisted, sanitized resource summary.
         "terraform_resources": terraform_resources or {"resources": [], "truncated": False},
-        "retrieved_evidence": retrieved_chunks,
+        "retrieved_evidence": [
+            _evidence_for_model(c) for c in retrieved_chunks if isinstance(c, dict)
+        ],
     }
     if parent_finding is not None:
         content["parent_finding"] = {
@@ -430,7 +473,8 @@ def call_reasoning_model(
             preflight_fields,
             terraform_resources,
             parent_finding,
-        )
+        ),
+        separators=(",", ":"),
     )
     tool_input = reasoning_client.converse_structured(
         system_prompt=build_system_prompt(deep_mode),
@@ -451,9 +495,25 @@ def call_reasoning_model(
         raise ToolCallMissing(
             f"{_TOOL_NAME!r} tool call returned no usable 'findings' list: {tool_input!r}"
         )
-    if len(findings) > MAX_MODEL_FINDINGS:
-        print(json.dumps({"event": "model_findings_capped", "emitted": len(findings)}))
-    return findings[:MAX_MODEL_FINDINGS]
+    return findings
+
+
+def keep_most_severe(raw_findings: list) -> tuple[list, int]:
+    """The MAX_MODEL_FINDINGS most severe findings, in the model's order,
+    and how many were left out. Severity comes from the plain block; an
+    item without one ranks last."""
+    if len(raw_findings) <= MAX_MODEL_FINDINGS:
+        return raw_findings, 0
+
+    def rank(indexed: tuple[int, object]) -> tuple[int, int]:
+        index, item = indexed
+        plain = item.get("plain") if isinstance(item, dict) else None
+        severity = plain.get("severity") if isinstance(plain, dict) else None
+        return (_SEVERITY_RANK.get(severity, len(_SEVERITY_RANK)), index)
+
+    kept = sorted(sorted(enumerate(raw_findings), key=rank)[:MAX_MODEL_FINDINGS])
+    print(json.dumps({"event": "model_findings_capped", "emitted": len(raw_findings)}))
+    return [item for _index, item in kept], len(raw_findings) - MAX_MODEL_FINDINGS
 
 
 def _resolve_citation(
@@ -527,6 +587,34 @@ def _resolve_citation(
         parser_version=chunk["parser_version"],
         corpus_version=chunk.get("corpus_version", corpus_version),
     )
+
+
+_FRAMEWORK_LABELS = {
+    "waf-security-pillar": "AWS Well-Architected: Security Pillar",
+    "waf-reliability-pillar": "AWS Well-Architected: Reliability Pillar",
+    "waf-operational-excellence-pillar": "AWS Well-Architected: Operational Excellence Pillar",
+    "waf-performance-efficiency-pillar": "AWS Well-Architected: Performance Efficiency Pillar",
+    "waf-cost-optimization-pillar": "AWS Well-Architected: Cost Optimization Pillar",
+    "waf-sustainability-pillar": "AWS Well-Architected: Sustainability Pillar",
+    "aws-fsbp-standard": "AWS Foundational Security Best Practices",
+    "aws-cis-foundations-mapping": "CIS AWS Foundations Benchmark",
+    "iam-best-practices": "AWS IAM best practices",
+    "aws-security-reference-architecture": "AWS Security Reference Architecture",
+}
+_BEST_PRACTICE_ID = re.compile(r"\b[A-Z]{2,5}\d{2}-BP\d{2}\b")
+
+
+def framework_mapping_for(citation: Citation | None) -> list[str]:
+    """The framework a finding maps to, read from the corpus metadata of
+    the chunk it cites rather than asserted by the model: the document's
+    framework and any best-practice IDs in the chunk's headings."""
+    if citation is None:
+        return []
+    label = _FRAMEWORK_LABELS.get(citation.document_id)
+    heading = citation.heading_path
+    heading_text = " > ".join(heading) if isinstance(heading, list) else str(heading or "")
+    ids = list(dict.fromkeys(_BEST_PRACTICE_ID.findall(heading_text)))
+    return ([label] if label else []) + ids
 
 
 # A dollar figure in the model's plain text would bypass the price table.
@@ -605,6 +693,7 @@ def parse_model_findings(
     deterministic_rule_version: str | None,
     parent_finding_id: str | None = None,
     terraform_resources: dict | None = None,
+    depth_level: str = "lightweight",
 ) -> list[Finding]:
     """Strict form of verify_model_findings: raises FindingValidationError
     if ANY finding fails. Used by the eval/validation scripts, which need to
@@ -619,6 +708,7 @@ def parse_model_findings(
         deterministic_rule_version,
         parent_finding_id,
         terraform_resources,
+        depth_level,
     )
     if failures:
         raise FindingValidationError(failures)
@@ -634,6 +724,7 @@ def verify_model_findings(
     deterministic_rule_version: str | None,
     parent_finding_id: str | None = None,
     terraform_resources: dict | None = None,
+    depth_level: str = "lightweight",
 ) -> tuple[list[Finding], list[str]]:
     """Returns (verified findings, failure reasons). An item that fails
     citation or shape verification is excluded, never relaxed.
@@ -691,11 +782,12 @@ def verify_model_findings(
                     confidence_inputs=ConfidenceInputs(**item["confidence_inputs"]),
                     risk_impact=item["risk_impact"],
                     recommendation=item["recommendation"],
-                    framework_mapping=item["framework_mapping"],
+                    framework_mapping=framework_mapping_for(citation),
                     alternatives_considered=[
-                        AlternativeConsidered(**a) for a in item.get("alternatives_considered", [])
+                        AlternativeConsidered(**a)
+                        for a in (item.get("alternatives_considered") or [])[:1]
                     ],
-                    depth_level=item.get("depth_level", "lightweight"),
+                    depth_level=depth_level,
                     model_id=model_id,
                     prompt_version=PROMPT_VERSION,
                     corpus_version=corpus_version,
@@ -765,6 +857,8 @@ def reason_node(state: dict) -> dict:
         parent_finding=state.get("parent_finding") if deep_mode else None,
     )
 
+    raw_findings, capped = keep_most_severe(raw_findings)
+
     # Verified findings are kept even if others in the batch fail; failed
     # ones are dropped (never relaxed) and reported so the review can show
     # its model coverage was incomplete.
@@ -777,6 +871,7 @@ def reason_node(state: dict) -> dict:
         deterministic_rule_version=state.get("deterministic_rule_version"),
         parent_finding_id=state.get("parent_finding_id"),
         terraform_resources=state.get("terraform_resources"),
+        depth_level="deep" if deep_mode else "lightweight",
     )
     findings = resolve_rule_findings(rule_findings) + model_findings
 
@@ -789,4 +884,5 @@ def reason_node(state: dict) -> dict:
             "accepted": len(model_findings),
             "rejected": len(raw_findings) - len(model_findings),
         },
+        "model_findings_capped": capped,
     }

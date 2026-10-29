@@ -280,7 +280,12 @@ COST_TOPIC_QUERIES: tuple[tuple[tuple[str, ...], str], ...] = (
     ),
 )
 MAX_COST_TOPICS = 2
-TOPIC_TOP_K = 3
+# Chunks kept per search. A review's evidence was ~11k of its ~46k input
+# tokens (2026-10-28), and input size drives the model's time, so a review
+# keeps fewer per search than "go deeper", which searches once.
+BRIEF_TOP_K = 6
+TOPIC_TOP_K = 2
+DEEPER_TOP_K = 8
 # Embedding plus vector query for the brief and each topic: the most
 # service calls one retrieval makes, for evaluation call budgets.
 MAX_RETRIEVAL_CALLS = 2 * (1 + MAX_TOPICS + MAX_COST_TOPICS)
@@ -311,9 +316,15 @@ def retrieve_node(state: dict) -> dict:
 
     lexical_terms = extract_lexical_terms(query_text)
     lexical_results = lexical_companion_lookup(lexical_terms, corpus_index)
-    vector_results = vector_search(query_text, embedding_client, vectors_client)
+    deep_mode = bool(state.get("deep_mode"))
+    vector_results = vector_search(
+        query_text,
+        embedding_client,
+        vectors_client,
+        top_k=DEEPER_TOP_K if deep_mode else BRIEF_TOP_K,
+    )
     # "Go deeper" already searches with a finding-specific query.
-    if not state.get("deep_mode"):
+    if not deep_mode:
         for topic in topic_queries(state.get("terraform_resources")):
             vector_results += vector_search(
                 topic, embedding_client, vectors_client, top_k=TOPIC_TOP_K

@@ -68,6 +68,20 @@ def test_an_unavailable_model_is_named_rather_than_reported_as_rejections(valid,
     assert public_analysis_quality(quality) == quality
 
 
+def test_a_capped_review_is_named_but_stays_complete():
+    valid = [{"model_id": "m"}]
+    quality = build_analysis_quality(
+        stage_counts(1, 1), [{}], valid, model_findings_capped=True
+    )
+    assert quality["outcome"] == "complete"
+    assert quality["reason_codes"] == ["model_findings_capped"]
+    assert public_analysis_quality(quality) == quality
+    unavailable = build_analysis_quality(
+        None, [{}], valid, model_unavailable=True, model_findings_capped=True
+    )
+    assert "model_findings_capped" not in unavailable["reason_codes"]
+
+
 def test_rejections_at_two_gates_are_counted_separately_and_never_leak_text():
     quality = build_analysis_quality(
         stage_counts(4, 2), [{"secret": "PRIVATE"}, {}], [{"model_id": "m"}]

@@ -115,14 +115,23 @@ AGENT_READ_TIMEOUT_SECONDS = 600
 # Kept back from the Lambda's remaining time for Validate, Audit and
 # Finalize after the runtime returns or times out.
 POST_AGENT_RESERVE_SECONDS = 90
+# Below this, a model call can't finish (the fastest measured took 20 s,
+# plus retrieval), so the review publishes its rule findings instead.
+MIN_AGENT_SECONDS = 120
 
 
-def _agent_read_timeout(context: object) -> int:
+def _agent_read_timeout(context: object) -> int | None:
+    """How long to wait for the runtime, or None when there isn't time to
+    call it. Never more than the Lambda has left after the reserve: a wait
+    longer than that would let the Lambda time out before the rule
+    findings are published."""
     remaining = getattr(context, "get_remaining_time_in_millis", None)
     if not callable(remaining):
         return AGENT_READ_TIMEOUT_SECONDS
     left = int(remaining() / 1000) - POST_AGENT_RESERVE_SECONDS
-    return max(60, min(AGENT_READ_TIMEOUT_SECONDS, left))
+    if left < MIN_AGENT_SECONDS:
+        return None
+    return min(AGENT_READ_TIMEOUT_SECONDS, left)
 
 
 def handler(event: dict, context: object) -> dict:
@@ -210,10 +219,13 @@ def handler(event: dict, context: object) -> dict:
         stage = _progress(table, review_id, "reasoning")
         rules = state["rules"]
         model_unavailable = False
+        agent_wait = _agent_read_timeout(context)
         try:
+            if agent_wait is None:
+                raise TimeoutError("not enough Lambda time left for the model")
             agent = AgentCoreRuntimeClient(
                 agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
-                read_timeout_seconds=_agent_read_timeout(context),
+                read_timeout_seconds=agent_wait,
             ).invoke(
                 payload={
                     "review_id": review_id,
@@ -246,6 +258,7 @@ def handler(event: dict, context: object) -> dict:
             agent["findings"],
             validated["valid_findings"],
             model_unavailable=model_unavailable,
+            model_findings_capped=bool(agent.get("model_findings_capped")),
         )
         stage = _progress(table, review_id, "audit")
         _invoke(

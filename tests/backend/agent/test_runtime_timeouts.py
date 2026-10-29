@@ -1,9 +1,9 @@
 """The runtime's model call must end before the workers stop waiting for
 the runtime, and never fall back to botocore's 60 s default.
 
-The call streams: read_timeout_seconds is the longest wait between chunks
-and stream_deadline_seconds bounds the whole call. A stall can begin just
-before the deadline, so the worst case is deadline + one idle wait.
+The call doesn't stream: Bedrock holds a forced, strict tool call's output
+until it is finished, so read_timeout_seconds is the wait for the whole
+answer and the worst case.
 
 The runtime module imports the AgentCore SDK, which only ships in the
 runtime package, so these checks read the source instead of importing it.
@@ -51,27 +51,27 @@ def _client_kwargs(name: str) -> dict[str, str]:
     raise AssertionError(f"{name} not found")
 
 
-def test_both_reasoning_clients_stream_with_their_own_timeouts_and_no_retries():
+def test_both_reasoning_clients_wait_for_the_whole_answer_with_no_retries():
     review = _client_kwargs("_REASONING_CLIENT")
     deeper = _client_kwargs("_DEEPER_REASONING_CLIENT")
     for kwargs in (review, deeper):
-        assert {"read_timeout_seconds", "no_retries", "stream_deadline_seconds"} <= set(kwargs)
         assert kwargs["no_retries"] == "True"
-    assert review["stream_deadline_seconds"] == "_REASONING_DEADLINE_SECONDS"
-    assert deeper["stream_deadline_seconds"] == "_DEEPER_REASONING_DEADLINE_SECONDS"
+        assert "stream_deadline_seconds" not in kwargs
+    assert review["read_timeout_seconds"] == "_REASONING_READ_TIMEOUT_SECONDS"
+    assert deeper["read_timeout_seconds"] == "_DEEPER_REASONING_READ_TIMEOUT_SECONDS"
 
 
-def test_idle_wait_outlasts_botocores_default():
-    assert _default("_REASONING_READ_TIMEOUT_SECONDS") > 60
+def test_the_wait_outlasts_botocores_default_and_the_slowest_measured_call():
+    # The slowest healthy review measured took 112 s (2026-10-28).
+    assert _default("_REASONING_READ_TIMEOUT_SECONDS") > 112
+    assert _default("_DEEPER_REASONING_READ_TIMEOUT_SECONDS") > 60
 
 
 def test_review_call_ends_before_the_review_worker_gives_up():
-    worst = _default("_REASONING_DEADLINE_SECONDS") + _default("_REASONING_READ_TIMEOUT_SECONDS")
+    worst = _default("_REASONING_READ_TIMEOUT_SECONDS")
     assert worst + RETRIEVAL_MARGIN_SECONDS < REVIEW_WORKER_WAIT_SECONDS
 
 
 def test_deeper_call_ends_before_the_deeper_worker_gives_up():
-    worst = _default("_DEEPER_REASONING_DEADLINE_SECONDS") + _default(
-        "_REASONING_READ_TIMEOUT_SECONDS"
-    )
+    worst = _default("_DEEPER_REASONING_READ_TIMEOUT_SECONDS")
     assert worst + RETRIEVAL_MARGIN_SECONDS < DEEPER_WORKER_WAIT_SECONDS

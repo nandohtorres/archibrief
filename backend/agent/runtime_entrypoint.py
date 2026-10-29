@@ -74,35 +74,33 @@ _GUARDRAILS_CLIENT = GuardrailsClient(
     region_name=_REGION,
     no_retries=True,
 )
-# The reasoning call streams. The read timeout is the longest wait for the
-# next chunk: a stalled call fails after it, while a long review that keeps
-# writing does not (a 240 s wait for the whole response timed out on a
-# large review, 2026-10-28). The deadline bounds the whole call; with
-# retrieval and one last idle wait it stays below the 600 s the review
-# worker waits for this runtime, so a slow call ends here first.
+# One non-streaming call that waits for the complete answer. Bedrock holds
+# a forced, strict tool call's output until it is finished, so a streamed
+# call showed 90 s of silence on healthy reviews and an idle limit cut them
+# off (2026-10-29). The read timeout is therefore the whole-answer wait:
+# long enough for a large review (the slowest measured call took 112 s),
+# and with retrieval it stays below the 600 s the review worker waits for
+# this runtime, so a slow call ends here first and the worker can still
+# publish the rule findings.
 _REASONING_READ_TIMEOUT_SECONDS = float(
-    os.environ.get("ARCHIBRIEF_REASONING_READ_TIMEOUT_SECONDS", "90")
+    os.environ.get("ARCHIBRIEF_REASONING_READ_TIMEOUT_SECONDS", "400")
 )
-_REASONING_DEADLINE_SECONDS = float(os.environ.get("ARCHIBRIEF_REASONING_DEADLINE_SECONDS", "420"))
 _REASONING_CLIENT = BedrockReasoningClient(
     model_id=_MODEL_ID,
     region_name=_REGION,
     no_retries=True,
     read_timeout_seconds=_REASONING_READ_TIMEOUT_SECONDS,
-    stream_deadline_seconds=_REASONING_DEADLINE_SECONDS,
 )
-# "Go deeper" re-reviews one finding, so its output is short, and its
-# worker waits only 300 s for this runtime: a tighter deadline keeps the
-# whole call (plus one last idle wait) inside that.
-_DEEPER_REASONING_DEADLINE_SECONDS = float(
-    os.environ.get("ARCHIBRIEF_DEEPER_REASONING_DEADLINE_SECONDS", "180")
+# "Go deeper" re-reviews one finding, so its answer is short, and its worker
+# waits only 300 s for this runtime.
+_DEEPER_REASONING_READ_TIMEOUT_SECONDS = float(
+    os.environ.get("ARCHIBRIEF_DEEPER_REASONING_READ_TIMEOUT_SECONDS", "240")
 )
 _DEEPER_REASONING_CLIENT = BedrockReasoningClient(
     model_id=_MODEL_ID,
     region_name=_REGION,
     no_retries=True,
-    read_timeout_seconds=_REASONING_READ_TIMEOUT_SECONDS,
-    stream_deadline_seconds=_DEEPER_REASONING_DEADLINE_SECONDS,
+    read_timeout_seconds=_DEEPER_REASONING_READ_TIMEOUT_SECONDS,
 )
 
 
@@ -138,6 +136,7 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
         "findings": result_state.get("reasoned_findings", []),
         "dropped_model_findings": result_state.get("dropped_model_findings", []),
         "model_output_counts": result_state.get("model_output_counts"),
+        "model_findings_capped": result_state.get("model_findings_capped", 0),
     }
 
 
@@ -156,8 +155,7 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     retrieval_query, rule_findings) JSON-serialized via States.JsonToString.
 
     Real failures (GuardrailBlocked from reason_node, FindingValidationError/
-    ModelOutputTruncated/UnexpectedStopReason/ToolCallMissing/
-    ReasoningDeadlineExceeded from
+    ModelOutputTruncated/UnexpectedStopReason/ToolCallMissing from
     reason.py/clients) are deliberately left to propagate as real exceptions
     rather than caught and returned as an {"error": ...} dict. AgentCore
     surfaces an uncaught exception as a real runtime invocation error Step
@@ -212,6 +210,7 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
         "findings": result_state.get("reasoned_findings", []),
         "dropped_model_findings": result_state.get("dropped_model_findings", []),
         "model_output_counts": result_state.get("model_output_counts"),
+        "model_findings_capped": result_state.get("model_findings_capped", 0),
         # Returned on the success path too, so Finalize can persist
         # per-field preflight outcomes for a completed review.
         "preflight_fields": result_state.get("preflight_fields", {}),

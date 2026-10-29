@@ -240,7 +240,14 @@ def test_agent_wait_fits_the_time_the_lambda_has_left():
     assert worker._agent_read_timeout(None) == worker.AGENT_READ_TIMEOUT_SECONDS
     assert worker._agent_read_timeout(context(880)) == worker.AGENT_READ_TIMEOUT_SECONDS
     assert worker._agent_read_timeout(context(500)) == 500 - worker.POST_AGENT_RESERVE_SECONDS
-    assert worker._agent_read_timeout(context(100)) == 60
+    # Not enough left for a model call: no wait, the rule findings publish.
+    assert worker._agent_read_timeout(context(worker.POST_AGENT_RESERVE_SECONDS + 100)) is None
+    assert (
+        worker._agent_read_timeout(
+            context(worker.POST_AGENT_RESERVE_SECONDS + worker.MIN_AGENT_SECONDS)
+        )
+        == worker.MIN_AGENT_SECONDS
+    )
 
 
 GRAPH = {
