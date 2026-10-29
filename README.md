@@ -17,25 +17,27 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 **Report chat is live.** Questions about one finished review get cited answers checked server-side against that review ([docs/chat.md](docs/chat.md), [ADR-0050](docs/adr/0050-grounded-chat-build.md)). It runs on Claude Sonnet 4.6 behind Guardrails, a five-question limit per review and a daily estimated-cost allowance. On the demos, the suggested questions' answers were generated once and are served free.
 
-**How public use is bounded:** a Cloudflare Turnstile check before each upload, AWS WAF in front of the API, and spending limits reserved in DynamoDB before every paid call, globally, per visitor and per review ([public access design](docs/public-access-implementation.md)). Not yet done: the paid chat evaluation.
+**How public use is bounded:** a Cloudflare Turnstile check before each upload, AWS WAF in front of the API, and spending limits reserved in DynamoDB before every paid call: a monthly ceiling, plus daily limits globally, per visitor and per review. At 90% of the monthly AWS budget a kill switch turns itself on ([public access design](docs/public-access-implementation.md)). Not yet done: the paid chat evaluation.
+
+**Tested like an adversary.** Besides the unit and trap suites, three larger Terraform submissions with planted issues, decoys and lying briefs were run through the live site and scored by hand. They found a model blind to nested configuration, a timeout on large reviews, a polite brief that steered the review, and a summary cap that cut resources alphabetically; each is fixed and recorded ([live hard tests](docs/evaluation.md#live-hard-tests), [case study](docs/case-study.md#testing-it-like-an-adversary)).
 
 ## How it works
 
 1. Upload a bounded Terraform archive and describe the workload. Ingestion validates the archive and parses HCL statically; it does not run Terraform, providers, or provisioners.
 2. Trivy supplies selected trusted checks, augmented by ArchiBrief's deterministic rules. If scanning is unavailable, rules still run and scanner status is recorded.
 3. The form asks the one question a review can't infer (regulatory or data-residency requirements) up front, so a review never stops to ask. Preflight records explicit, labeled defaults for traffic and availability. Step Functions owns the review lifecycle.
-4. A LangGraph subworkflow on Bedrock AgentCore retrieves AWS guidance and reasons over the brief, rule findings, and a sanitized resource summary. The reasoning model does not receive raw Terraform.
-5. Server-side validation checks typed findings and citation provenance before audit/finalization. A model finding's quote must match a retrieved chunk. Deterministic findings use configuration evidence rather than model citations.
+4. A LangGraph subworkflow on Bedrock AgentCore retrieves AWS guidance (the brief plus topic searches picked from the declared resource types) and reasons over the brief, rule findings, and a sanitized resource summary: allowlisted settings, fixed-vocabulary facts from nested configuration, and environment and data-classification labels from tags. The reasoning model does not receive raw Terraform, and the brief can add context but never narrow the review or lower a severity.
+5. Server-side validation checks typed findings and citation provenance before audit/finalization. A model finding's quote must match a retrieved chunk. Deterministic findings use configuration evidence rather than model citations. If the model step fails, the report still ships with the deterministic findings and says the AI analysis didn't finish.
 
 The frontend exposes progress with an early architecture diagram, findings, a stakeholder view of the same evidence, per-finding “go deeper,” report chat, and an HTML report download that includes the conversation. See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [evaluation](docs/evaluation.md), and [Trivy comparison](docs/comparison.md).
 
-The [engineering case study](docs/case-study.md) explains the tradeoffs and a reporting failure found during review.
+The [engineering case study](docs/case-study.md) explains the tradeoffs, a reporting failure found during review, and what adversarial testing broke. The [decision records](docs/adr/README.md) (58 ADRs) give the reasoning behind each architectural choice.
 
 ## What the receipts establish—and their limits
 
 - A matching citation proves that a passage exists in retrieved material; it does **not** prove the passage supports the conclusion. The saved breach report includes a weak attack-chain citation and an incorrect data-transfer cost claim; [the demo audit](docs/demos.md) records both.
 - This is static review of the submitted slice, not inspection of deployed AWS resources, a complete dependency graph, a compliance certification, or a penetration test. Remote modules are neutralized before scanning.
-- Counts, expressions, missing modules, and omitted settings limit what the model can observe. The demo audits found three such gaps (resource counts, backup plans, snapshot settings); each was fixed in the resource summary, and the FEC demo was re-run after the count fix.
+- Counts, expressions, missing modules, and omitted settings limit what the model can observe. The demo audits found three such gaps (resource counts, backup plans, snapshot settings); each was fixed in the resource summary, and the FEC demo was re-run after the count fix. The hard tests found more: about 30 resource types (EKS, Cognito, API Gateway v2, EventBridge, MSK, Redshift, Route 53 and others) still reach the model with no settings, modules whose inputs reference other resources aren't evaluated, and the summary holds 80 resources ([coverage](docs/terraform-coverage.md)).
 - Trap tests cover their fixtures. Mocked tests do not measure live model quality, production IAM correctness, or deployed accessibility.
 - “Go deeper” runs as a background job, and reloading the page recovers its status. A job that fails or times out is not retried automatically, so one request is never charged twice.
 - Reviews are reachable for seven days, but deletion is asynchronous and backups last longer; there is no seven-day physical-deletion guarantee ([privacy](https://archibrief.dev/privacy.html)).

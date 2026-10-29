@@ -83,7 +83,7 @@ flowchart LR
     DeeperWorker --> S3R
     APIGW --> CreateUpload
 
-    SFN -->|review ID / phase / resume reference| Worker
+    SFN -->|review ID / phase| Worker
     Worker --> Ingest --> GR
     Worker --> Scan
     Worker --> Rules
@@ -113,7 +113,7 @@ flowchart LR
 2. **Dispatch and worker claim** — upload IDs are server-issued. Admission,
    immutable input binding and a stable Standard execution name prevent retries
    from starting another paid job. `review_worker` conditionally claims the
-   initial or resumed work using the stored review record.
+   review using the stored record; a later `poll` phase only reads status.
 3. **Kill switch** — admission and the worker check the SSM switch before
    paid work. The worker loads content from `jobs/<review_id>/` in S3;
    Step Functions state carries identifiers/status, not briefs or findings.
@@ -127,16 +127,23 @@ flowchart LR
    for any reason the review continues without it and says the scanner
    didn't run (ADR-0048).
 6. **RuleEngine** — deterministic checks against the parsed Terraform,
-   independent of any model call: Trivy's 16 trusted checks when Scan
+   independent of any model call: Trivy's 17 trusted checks when Scan
    ran, plus ArchiBrief's own rules for what Trivy misses (and for
    everything, if Scan didn't run). It also builds a sanitized resource
    summary (allowlisted settings, documented defaults, values restricted
    to each setting's real formats) that Reason receives instead of the
-   raw Terraform (ADR-0049).
+   raw Terraform (ADR-0049). It adds fixed-vocabulary facts from nested
+   configuration (`details`), environment and data-classification labels
+   from tags (`declared_context`), and keeps the riskiest resources when a
+   submission passes the 80-resource cap (ADR-0056).
 7. **PreflightGate → Retrieve → Reason** (AgentCore Runtime) — resolves
    per-field missing-data policy, retrieves relevant RAG chunks from S3
-   Vectors (embedded via Titan V2), and reasons over
-   workload brief + rule findings + retrieved evidence via Claude.
+   Vectors (embedded via Titan V2) for the brief plus up to 8 risk and 2
+   cost topic searches picked from the declared resource types (ADR-0057),
+   and reasons over workload brief + rule findings + resource summary +
+   retrieved evidence via Claude Sonnet 4.6. The prompt treats the brief's
+   unverifiable claims as unverified; the brief can't narrow the review or
+   lower a severity (ADR-0058).
    Guardrails runs again immediately before this step. No field pauses
    the review: the one that can't be inferred (regulatory and data
    residency requirements) is a required question on the submission form.
@@ -145,12 +152,13 @@ flowchart LR
    once the whole tool call has arrived. Model findings are capped at 12.
    If this step fails, the worker publishes the rule and scanner findings
    on their own, marked `model_unavailable` in the analysis quality, instead
-   of failing the review.
+   of failing the review (ADR-0058).
 8. **Validate** — schema-checks returned findings. Quote provenance is checked
    earlier in Reason against its retrieved chunks; Validate is not a second
-   retrieval or semantic-support check. Rejected items are excluded. Carrying
-   rejection/completeness metadata into the published report remains follow-up
-   work, so lifecycle `complete` must not be read as complete analysis coverage.
+   retrieval or semantic-support check. Rejected items are excluded, and the
+   counts of attempted, accepted and rejected findings travel with the report
+   as its analysis quality (`backend/shared/analysis_quality.py`), so a
+   `complete` lifecycle is never read as complete analysis coverage.
 9. **Audit → Finalize** — assembles the evidence ledger, persists it to
    S3, and updates the review's DynamoDB pointer item.
 10. **Read results** — `GET /reviews/{reviewId}` returns the assembled
@@ -207,7 +215,7 @@ preflight couldn't resolve a required field, and resume once the visitor
 answered through `POST /reviews/{reviewId}/clarify`. Only the regulatory
 and data-residency field ever paused, so the form now asks it before
 submission, `submit_review` rejects a submission without it, and the
-pause, the resume path and their Lambdas are gone. Traffic and
+pause, the resume path and their Lambdas are gone (ADR-0054). Traffic and
 availability still get explicit, labeled defaults (ADR-0031).
 
 ## Durable lifecycle and content-bearing work
@@ -241,3 +249,14 @@ creation. Region/AZ details on diagrams use those same observations. The stored
 summary flows to reasoning, deeper reviews and report chat; sanitized scope
 limits accompany API reports and HTML/JSON exports. Chat discloses any detail it
 omits under its context limit. See [coverage and explicit limits](terraform-coverage.md).
+
+## Delivery
+
+The frontend deploys itself: after a green `ci` run on `master`,
+`deploy-frontend.yml` publishes that revision through a GitHub OIDC role
+that can only write the site bucket and invalidate its distribution, then
+checks the live build. A daily smoke workflow runs GET-only checks
+(ADR-0055, [frontend deployment](frontend-deployment.md)). The backend is
+not deployed by CI: the owner builds the Lambda and AgentCore packages
+(`scripts/package_lambdas.py`, `backend/agent/build_runtime_package.py`),
+reviews a `terraform plan` in `infra/environments/dev` and applies it.

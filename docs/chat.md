@@ -100,21 +100,21 @@ the Lambda, so they change without a code deploy):
 
 ## Deployment status and remaining validation
 
-The first live deployment (owner-only at the time) and its model, timeout and budget changes
-are documented in ADR-0050's first-live-deploy amendment. Demo suggested answers
-are committed in `frontend/public/demos/chats/`. This documentation cleanup did
-not inspect AWS or repeat those paid runs.
+Chat is live for every review (`chat_public_enabled` follows
+`public_access_enabled`) with Turnstile-gated uploads, visitor limits,
+server-issued review IDs and the shared spending limits in front of it
+([public access design](public-access-implementation.md)). The first live
+deployment and its model, timeout and budget changes are documented in
+ADR-0050's first-live-deploy amendment. Demo suggested answers are committed in
+`frontend/public/demos/chats/`.
 
-Remaining before public access:
+Still open:
 
-1. Run the paid chat quality/trap evaluation with explicit approval, then choose
-   the model and decide whether grounding scores should block an answer.
-2. Deploy and verify the local input-screening reservation fix, then complete
-   atomic accounting across initial review, deeper review and continuation paths.
-3. Implement Turnstile, visitor limits, retention enforcement and server-issued
-   review IDs/upload binding before enabling `chat_public_enabled`.
-4. Reconcile measured charges with the configured estimates and set explicit
-   operational limits. The model/guardrail reservation is not a total AWS bill cap.
+1. Run the paid chat quality/trap evaluation with explicit approval, then
+   confirm the model and decide whether grounding scores should block an
+   answer.
+2. Reconcile measured charges with the configured estimates. The
+   model/guardrail reservation is not a total AWS bill cap.
 
 Deployment packaging is `python scripts/package_lambdas.py`; infrastructure
 application and live smoke tests are separate operator actions. The backfill
@@ -123,14 +123,15 @@ requires `--confirm-paid`. None of these commands is part of an offline test run
 
 ## Known limits
 
-- Handler defaults match Terraform's Sonnet 4.6 and $1.00/day allowance,
-  and a configuration-contract test fails if they drift. Deployments should
-  still set both explicitly.
+- Handler defaults match the Terraform module's Sonnet 4.6 and $1.00/day
+  allowance, and a configuration-contract test fails if they drift. The live
+  environment sets $0.50/day (`chat_daily_budget_micro_usd` in
+  `infra/environments/dev/main.tf`).
 - Chat admission atomically reserves screening cost and a daily request before
   Guardrails. Blocked or failed screening keeps that estimate; allowed
   screening reserves the remaining model allowance separately. Every paid path
   shares the same global, visitor and review limits.
-- Replay, transcript, suggestion, review, clarification and deeper-review
+- Replay, transcript, suggestion, review and deeper-review
   paths enforce expiry, and chat records can't outlive their review. Storage
   cleanup is covered in [public access design](public-access-implementation.md).
 
@@ -138,6 +139,9 @@ requires `--confirm-paid`. None of these commands is part of an offline test run
   same id after 90 s is admitted and charged again. The local model timeout
   is sized after retrieval, up to 24 s; it declines to start when fewer than
   five read-timeout seconds remain after connection time and the handler margin.
+- The chat sees the same resource summary as the review (ADR-0056). Under
+  its context bound it drops nested `details` before it drops findings, and
+  says what it omitted.
 - Citations prove that what's cited exists, not that it supports the
   sentence. The grounding score is logged for the eval; the UI says
   "cited answer".

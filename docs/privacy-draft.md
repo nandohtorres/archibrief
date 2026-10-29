@@ -1,44 +1,21 @@
-# Privacy notice draft — do not publish as current deployed behavior
+# Privacy notice draft (superseded)
 
-The seven-day access boundary, cleanup settings, Turnstile, HMAC visitor
-identifiers and capability-bound uploads below are built but not yet deployed
-or verified against AWS; anonymous access is off. See
-[public access design](public-access-implementation.md) for release limits.
+This was the pre-launch draft, written while public submissions were still
+off. It is superseded by the published notice, effective 23 October 2026:
+[archibrief.dev/privacy.html](https://archibrief.dev/privacy.html), source
+[`frontend/app/privacy/page.tsx`](../frontend/app/privacy/page.tsx).
 
-ArchiBrief processes the Terraform archive, workload description, clarification
-answers and questions you submit to create an architecture review. AWS storage,
-compute and Bedrock services process this information. Do not submit secrets,
-personal/customer records or confidential production data. Automated checks can
-miss sensitive information, and generated findings can be wrong.
+The published notice covers what the draft left open: the operator, the
+processing region (AWS us-east-1, including Bedrock), Cloudflare Turnstile and
+the keyed network hash, how review keys are kept in the browser and shared
+(ADR-0053), and retention by store. Retention is asynchronous: archives,
+parsed input and reports are scheduled for deletion after seven days, review
+records expire after seven days, DynamoDB recovery backups keep a copy for up
+to 35 days, and logs and workflow history are kept 7 to 90 days depending on
+the service. There is no seven-day physical-deletion guarantee.
 
-The proposed public flow uses Cloudflare Turnstile and a keyed hash of the
-API-observed network address to limit abuse. Hashes remain pseudonymous
-identifiers. Read capabilities can be shared; writes also depend on the
-original network grouping. The browser stores capabilities in tab session
-storage, so closing the tab loses access. Actual provider policies, regions
-and retention still need verification before publication.
-
-The current service is gated for the site owner. Public saved demos are separate
-examples. Anonymous review submission is not open. Before enabling it, this
-notice must explain the deployed anti-abuse provider, network identifiers,
-capabilities and sharing behavior, with links to provider privacy policies.
-
-The prepared application code stops serving a review and accepting follow-up
-work at its original seven-day deadline, or an earlier explicit expiry. It also
-rejects records without a trustworthy lifetime. Copying answers and finishing a
-review do not renew that deadline. This describes the proposed release's access
-behavior, not a guarantee that stored copies disappear at that instant.
-
-Cleanup is asynchronous. S3 object versions, DynamoDB TTL deletion, backups,
-workflow execution history and operational logs have different lifetimes.
-Historical Standard workflow history includes submitted/derived content and
-has a separate retention period. The public-access pipeline limits workflow state to
-identifiers/status and stores content in S3; it is not yet deployed. Turning off CloudWatch payload logging does not
-erase that history. Exact physical-deletion, backup and log periods must be
-verified and disclosed before publication. No blanket seven-day deletion or
-provider no-retention/no-training claim is established here.
-
-Before publishing, add the operator identity, working privacy/deletion contact,
-verified processing region, provider feature/data-use policies, retention
-inventory, and the date the final notice takes effect. Reconcile the notice with
-the deployed system and the release checks in [public access design](public-access-implementation.md).
+When the system changes what it collects or keeps, update the published page
+and the infrastructure it describes together (S3 lifecycle in
+`infra/modules/s3/retention.tf`, DynamoDB TTL and point-in-time recovery in
+`infra/modules/dynamodb`, log retention). The draft's earlier text is in git
+history.

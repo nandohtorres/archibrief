@@ -1,7 +1,9 @@
 # ADR 0031: Per-Field Missing-Data Policy
 
 **Status:** Accepted (2026-09-03) — **supersedes** ADR-0012's single
-blanket "assume the negative" rule
+blanket "assume the negative" rule. The "required for a meaningful review:
+stop" branch is superseded by ADR-0054 (2026-10-27): the one field that
+paused is now asked on the form, and reviews never pause.
 
 ## Context
 
