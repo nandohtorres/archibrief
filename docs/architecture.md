@@ -1,6 +1,7 @@
 # ArchiBrief Architecture
 
-This describes the source architecture. Deployment checks are recorded separately;
+This describes the source architecture; the [system walkthrough](system-walkthrough.md)
+tells the same story as one review, with failure modes. Deployment checks are recorded separately;
 reading this document does not establish that a particular revision is live.
 Diagrams are Mermaid rather than
 `mingrammer/diagrams` (ADR-0025's stated tool), which needs a local

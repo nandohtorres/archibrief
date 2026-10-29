@@ -117,6 +117,10 @@ Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo
 
 ## Repository map
 
+New here? Start with the [system walkthrough](docs/system-walkthrough.md) (one
+review end to end, with diagrams), then [design trade-offs](docs/design-tradeoffs.md)
+and ArchiBrief's own [Well-Architected self-review](docs/well-architected-self-review.md).
+
 [Static coverage and limits](docs/terraform-coverage.md) describe supported
 configuration observations and unknowns. The [release handoff](docs/release-readiness.md)
 records validation and the remaining model-quality and live-integration gates.
