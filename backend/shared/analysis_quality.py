@@ -10,7 +10,12 @@ from decimal import Decimal
 from typing import Any
 
 OUTCOMES = {"complete", "partial", "rules-only", "all-rejected", "no-findings", "unknown"}
-REASONS = {"model_verification_rejected", "schema_validation_rejected", "quality_not_recorded"}
+REASONS = {
+    "model_verification_rejected",
+    "schema_validation_rejected",
+    "quality_not_recorded",
+    "model_unavailable",
+}
 
 
 def stage_counts(attempted: int, accepted: int) -> dict[str, int]:
@@ -36,11 +41,15 @@ def _counts(value: Any) -> dict[str, int] | None:
 
 
 def build_analysis_quality(
-    model_output: Any, candidates: list[dict], valid: list[dict]
+    model_output: Any, candidates: list[dict], valid: list[dict], *, model_unavailable: bool = False
 ) -> dict[str, Any]:
+    """model_unavailable: the model step failed (timed out, errored) and
+    the report holds only the deterministic findings."""
+    if model_unavailable:
+        model_output = stage_counts(0, 0)
     model = _counts(model_output)
     validation = stage_counts(len(candidates), len(valid))
-    reasons = []
+    reasons = ["model_unavailable"] if model_unavailable else []
     if model and model["rejected"]:
         reasons.append("model_verification_rejected")
     if validation["rejected"]:
@@ -48,6 +57,8 @@ def build_analysis_quality(
     if model is None:
         reasons.append("quality_not_recorded")
         outcome = "partial" if validation["rejected"] else "unknown"
+    elif model_unavailable:
+        outcome = "rules-only" if valid else "no-findings"
     elif not valid:
         outcome = "all-rejected" if reasons else "no-findings"
     elif not any(f.get("model_id") for f in valid):

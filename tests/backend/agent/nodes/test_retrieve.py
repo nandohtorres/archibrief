@@ -1,4 +1,6 @@
 from backend.agent.nodes.retrieve import (
+    COST_TOPIC_QUERIES,
+    MAX_COST_TOPICS,
     MAX_TOPICS,
     TOPIC_QUERIES,
     TOPIC_TOP_K,
@@ -217,14 +219,20 @@ def test_topic_queries_follow_the_declared_resource_types_in_risk_order():
     queries = topic_queries(
         _resources("aws_sqs_queue", "aws_iam_role", "aws_s3_bucket")
     )
-    assert queries == [TOPIC_QUERIES[0][1], TOPIC_QUERIES[7][1]]
+    assert queries == [TOPIC_QUERIES[0][1], TOPIC_QUERIES[7][1], COST_TOPIC_QUERIES[2][1]]
     assert topic_queries(None) == []
     assert topic_queries({"resources": "not a list"}) == []
 
 
 def test_topic_queries_are_capped():
+    every_type = [t for types, _ in TOPIC_QUERIES + COST_TOPIC_QUERIES for t in types]
+    assert len(topic_queries(_resources(*every_type))) == MAX_TOPICS + MAX_COST_TOPICS
+
+
+def test_cost_topics_are_searched_even_when_risk_topics_fill_their_cap():
     every_type = [t for types, _ in TOPIC_QUERIES for t in types]
-    assert len(topic_queries(_resources(*every_type))) == MAX_TOPICS
+    queries = topic_queries(_resources(*every_type, "aws_dynamodb_table"))
+    assert queries[MAX_TOPICS:] == [COST_TOPIC_QUERIES[0][1], COST_TOPIC_QUERIES[1][1]]
 
 
 def test_retrieve_adds_topic_searches_to_the_brief_search():

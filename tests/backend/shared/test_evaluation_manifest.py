@@ -61,7 +61,7 @@ def test_attached_manifest_records_real_contracts_without_creating_clients(monke
     args = argparse.Namespace()
     attach_manifest(args, {"test": []}, {"model": "recorded-model"})
     contracts = args.evaluation_manifest["contracts"]
-    assert contracts["reason_prompt"] == "reason_prompt@2026-10-28"
+    assert contracts["reason_prompt"] == "reason_prompt@2026-10-29"
     assert contracts["chat_prompt"] == "chat_prompt@2026-10-23b"
     assert len(contracts["finding_schema_sha256"]) == 64
 

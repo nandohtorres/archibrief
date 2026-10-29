@@ -57,6 +57,17 @@ def test_quality_distinguishes_pipeline_completion_from_retained_output(
     assert public_analysis_quality(quality) == quality
 
 
+@pytest.mark.parametrize(
+    ("valid", "outcome"), [([{}, {}], "rules-only"), ([], "no-findings")]
+)
+def test_an_unavailable_model_is_named_rather_than_reported_as_rejections(valid, outcome):
+    quality = build_analysis_quality(None, [{}, {}], valid, model_unavailable=True)
+    assert quality["outcome"] == outcome
+    assert quality["model_verification"] == {"attempted": 0, "accepted": 0, "rejected": 0}
+    assert quality["reason_codes"][0] == "model_unavailable"
+    assert public_analysis_quality(quality) == quality
+
+
 def test_rejections_at_two_gates_are_counted_separately_and_never_leak_text():
     quality = build_analysis_quality(
         stage_counts(4, 2), [{"secret": "PRIVATE"}, {}], [{"model_id": "m"}]

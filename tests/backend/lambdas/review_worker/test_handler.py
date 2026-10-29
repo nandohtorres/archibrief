@@ -190,41 +190,57 @@ def test_resume_phase_is_rejected(prepared):
     assert calls == []
 
 
-def test_agent_service_error_logs_stage_and_code_without_content(
-    prepared, monkeypatch, capsys
-):
+def test_a_model_failure_still_publishes_the_rule_findings(prepared, monkeypatch, capsys):
     from botocore.exceptions import ClientError
 
-    review_id, *_ = prepared
+    from backend.shared.report import build_review_report
+
+    review_id, s3, calls, _replies, _agent_calls = prepared
+    rule_finding = {"rule": "RULE-FINDING"}
+    original = worker._invoke
+
+    def stage(name, payload):
+        if name == "rule_engine":
+            calls.append((name, payload))
+            return {"findings": [rule_finding], "rule_version": "test", "resource_summary": {}}
+        return original(name, payload)
 
     def invoke(**kwargs):
         raise ClientError(
-            {
-                "Error": {
-                    "Code": "RuntimeClientError",
-                    "Message": "PRIVATE-CONTENT-CANARY",
-                }
-            },
+            {"Error": {"Code": "RuntimeClientError", "Message": "PRIVATE-CONTENT-CANARY"}},
             "InvokeAgentRuntime",
         )
 
+    monkeypatch.setattr(worker, "_invoke", stage)
     monkeypatch.setattr(
         worker,
         "AgentCoreRuntimeClient",
         lambda **kwargs: SimpleNamespace(invoke=invoke),
     )
-    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
     out = capsys.readouterr().out
     assert "PRIVATE-CONTENT-CANARY" not in out
-    failure = json.loads(
-        next(line for line in out.splitlines() if "review_worker_failed" in line)
+    logged = json.loads(next(line for line in out.splitlines() if "reasoning_unavailable" in line))
+    assert logged == {"event": "reasoning_unavailable", "kind": "ClientError"}
+    assert dict(calls)["validate"] == {"findings": [rule_finding]}
+    ledger = json.loads(
+        s3.get_object(
+            Bucket="reports", Key=f"reports/{review_id}/evidence-ledger.json"
+        )["Body"].read()
     )
-    assert failure == {
-        "event": "review_worker_failed",
-        "stage": "reasoning",
-        "kind": "ClientError",
-        "code": "RuntimeClientError",
-    }
+    quality = build_review_report({"reviewId": review_id}, ledger)["analysis_quality"]
+    assert "model_unavailable" in quality["reason_codes"]
+    assert quality["model_verification"] == {"attempted": 0, "accepted": 0, "rejected": 0}
+
+
+def test_agent_wait_fits_the_time_the_lambda_has_left():
+    def context(seconds_left):
+        return SimpleNamespace(get_remaining_time_in_millis=lambda: seconds_left * 1000)
+
+    assert worker._agent_read_timeout(None) == worker.AGENT_READ_TIMEOUT_SECONDS
+    assert worker._agent_read_timeout(context(880)) == worker.AGENT_READ_TIMEOUT_SECONDS
+    assert worker._agent_read_timeout(context(500)) == 500 - worker.POST_AGENT_RESERVE_SECONDS
+    assert worker._agent_read_timeout(context(100)) == 60
 
 
 GRAPH = {

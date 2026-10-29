@@ -109,7 +109,23 @@ def _fail_unpaid(table: DynamoDBClient, review_id: str, code: str, operation: st
     return result
 
 
-def handler(event: dict, _context: object) -> dict:
+# The longest the worker waits for the reasoning runtime, which bounds its
+# own model call below this (backend/agent/runtime_entrypoint.py).
+AGENT_READ_TIMEOUT_SECONDS = 600
+# Kept back from the Lambda's remaining time for Validate, Audit and
+# Finalize after the runtime returns or times out.
+POST_AGENT_RESERVE_SECONDS = 90
+
+
+def _agent_read_timeout(context: object) -> int:
+    remaining = getattr(context, "get_remaining_time_in_millis", None)
+    if not callable(remaining):
+        return AGENT_READ_TIMEOUT_SECONDS
+    left = int(remaining() / 1000) - POST_AGENT_RESERVE_SECONDS
+    return max(60, min(AGENT_READ_TIMEOUT_SECONDS, left))
+
+
+def handler(event: dict, context: object) -> dict:
     # API admission always constructs this envelope, never forwards the body.
     if set(event) - {"review_id", "phase"}:
         raise ValueError("invalid workflow envelope")
@@ -193,20 +209,32 @@ def handler(event: dict, _context: object) -> dict:
             return {"status": "failed"}
         stage = _progress(table, review_id, "reasoning")
         rules = state["rules"]
-        agent = AgentCoreRuntimeClient(
-            agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"], read_timeout_seconds=300
-        ).invoke(
-            payload={
-                "review_id": review_id,
-                "workload_brief": state["workload_brief"],
-                "baseline_answers": state["baseline_answers"],
-                "retrieval_query": state["submission"]["retrieval_query"],
-                "rule_findings": rules["findings"],
-                "deterministic_rule_version": rules["rule_version"],
-                "terraform_resources": rules.get("resource_summary", {}),
-            },
-            runtime_session_id=f"archibrief-review-session-{review_id}-0",
-        )
+        model_unavailable = False
+        try:
+            agent = AgentCoreRuntimeClient(
+                agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
+                read_timeout_seconds=_agent_read_timeout(context),
+            ).invoke(
+                payload={
+                    "review_id": review_id,
+                    "workload_brief": state["workload_brief"],
+                    "baseline_answers": state["baseline_answers"],
+                    "retrieval_query": state["submission"]["retrieval_query"],
+                    "rule_findings": rules["findings"],
+                    "deterministic_rule_version": rules["rule_version"],
+                    "terraform_resources": rules.get("resource_summary", {}),
+                },
+                runtime_session_id=f"archibrief-review-session-{review_id}-0",
+            )
+        except Exception as exc:  # noqa: BLE001 - any model failure falls back to the rules
+            # The rule and scanner findings are final before the model
+            # starts, so a model timeout or error still yields a report,
+            # marked as deterministic findings only, instead of nothing.
+            # Never retried: a second attempt would be a second paid call.
+            # Guardrails already passed the brief at Ingest.
+            print(json.dumps({"event": "reasoning_unavailable", "kind": type(exc).__name__}))
+            model_unavailable = True
+            agent = {"status": "complete", "findings": rules["findings"]}
         if agent.get("status") == "needs_clarification":
             # No field pauses any more (submit_review requires the
             # regulatory answer), so this would be a preflight policy bug.
@@ -214,7 +242,10 @@ def handler(event: dict, _context: object) -> dict:
         stage = _progress(table, review_id, "validate")
         validated = _invoke("validate", {"findings": agent["findings"]})
         quality = build_analysis_quality(
-            agent.get("model_output_counts"), agent["findings"], validated["valid_findings"]
+            agent.get("model_output_counts"),
+            agent["findings"],
+            validated["valid_findings"],
+            model_unavailable=model_unavailable,
         )
         stage = _progress(table, review_id, "audit")
         _invoke(

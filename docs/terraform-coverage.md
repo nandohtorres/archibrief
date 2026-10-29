@@ -61,9 +61,31 @@ filled the byte budget before security groups or queues were reached. The
 summary states them once as `default_placement`, and
 `analysis_coverage.placement_only_resources` counts them.
 
+### What the code says about itself (2026-10-29)
+
+A second hard test (a telehealth platform submitted with a brief calling it
+a "throwaway sandbox with synthetic data") showed the model taking the brief's
+word, though the code tags everything `Environment = prod` and
+`DataClass = phi`. The summary now carries `declared_context`: environment
+and data-classification labels from provider `default_tags`, resource `tags`
+and environment-named root variables. Keys and values both come from fixed
+lists (`prod`, `staging`, `dev`, `sandbox`, ... and `phi`, `pii`, `pci`,
+`confidential`, ...); any other value is dropped, so no free text reaches the
+model through a tag. The prompt treats the brief's unverifiable claims as
+unverified and asks the model to name contradictions with `declared_context`.
+
+A Lambda `reserved_concurrent_executions` of 0 is shown as "never runs
+(every invocation is throttled)", after the model read it as "unreserved".
+
 ## Bounds and publication
 
-The existing 80-resource cap remains. Observations additionally enforce 48,000
+The existing 80-resource cap remains. Past it, resources are kept by risk, not
+alphabet: access decisions (policies, ACLs, permissions, ingress rules, secrets,
+SSM parameters, authorizers, routes) first, then data stores and anything with
+listed settings, then other services, then wiring (route table associations,
+subnet groups, EIPs, zones). Within a tier every type's first resource comes
+before any type's second. Alphabetical order had cut every S3, security group,
+SQS and SSM resource from a 119-resource test. Observations additionally enforce 48,000
 serialized UTF-8 bytes and 256 facts, 16 expanded instances, 32 rule/reference
 items and 16 copy actions per rule. Omissions are counted; dynamic blocks are
 incomplete. Tokenizer counts remain explicitly unmeasured; byte bounds are not

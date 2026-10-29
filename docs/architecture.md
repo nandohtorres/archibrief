@@ -140,6 +140,12 @@ flowchart LR
    Guardrails runs again immediately before this step. No field pauses
    the review: the one that can't be inferred (regulatory and data
    residency requirements) is a required question on the submission form.
+   The model call streams (ConverseStream): it fails after 90 s without a
+   new chunk or 420 s overall, never retried, and its output is used only
+   once the whole tool call has arrived. Model findings are capped at 12.
+   If this step fails, the worker publishes the rule and scanner findings
+   on their own, marked `model_unavailable` in the analysis quality, instead
+   of failing the review.
 8. **Validate** — schema-checks returned findings. Quote provenance is checked
    earlier in Reason against its retrieved chunks; Validate is not a second
    retrieval or semantic-support check. Rejected items are excluded. Carrying
