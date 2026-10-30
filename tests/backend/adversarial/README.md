@@ -33,6 +33,14 @@ the static fixtures.
 
 ## Freeze record
 
+Post-freeze bound change, 2026-10-30: the resource summary's cap
+(`resource_summary.py MAX_RESOURCES`) went from 80 to 120 once the model
+started reading observations in a shorter form; a 119-resource live test had
+hidden five S3 buckets at 80. The frozen key still records 80. F10-S-79,
+F10-S-80 and F10-S-81 test the same boundary at the current cap (cap - 1, cap,
+cap + 1); `test_evidence_overflow.py` `MOVED_BOUNDS` records the change. No
+frozen key or historical result was changed.
+
 Post-freeze expectation correction, 2026-10-23: richer typed scope metadata and
 an affirmative versioning statement trigger F06-D-04/F08-D-04's lexical probes.
 Their raw verdicts remain failures; the suite additionally checks the versioned

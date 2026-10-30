@@ -27,10 +27,12 @@ from backend.agent.nodes.reason import (
     call_reasoning_model,
     framework_mapping_for,
     keep_most_severe,
+    rejection_kind,
     parse_model_findings,
     reason_node,
     verify_model_findings,
 )
+from backend.shared.terraform_observations import MODEL_FORMAT_NOTE
 
 
 def _chunk(chunk_id: str, text: str) -> dict:
@@ -571,13 +573,76 @@ def test_reason_node_sends_the_resource_summary_to_the_model():
     state["terraform_resources"] = summary
     reason_node(state)
     sent = json.loads(state["reasoning_client"].calls[0]["user_content"])
-    assert sent["terraform_resources"] == summary
+    assert sent["terraform_resources"] == {**summary, "observation_format": MODEL_FORMAT_NOTE}
     assert "terraform_resources" in SYSTEM_PROMPT
+    assert "observation_format" in SYSTEM_PROMPT
+
+
+def _fact(setting, state, value, basis):
+    return {"id": "x", "resource": "r", "setting": setting, "state": state,
+            "value": value, "basis": basis}
+
+
+def test_the_model_reads_observations_in_their_short_form():
+    full = {
+        "version": "terraform-observations@2026-10-23",
+        "resource": "aws_apigatewayv2_route.payout",
+        "creation": "declared",
+        "source": {"kind": "submitted_resource_block", "module": "root", "line": None},
+        "facts": [
+            _fact("provider.account", "unknown", None, "runtime_identity_not_observed"),
+            _fact("authorization_type", "known", "NONE", "declared_configuration"),
+            _fact("resource.region", "known", "eu-central-1", "provider_configuration"),
+            _fact("runtime_invocation", "unknown", None, "effective_policy_and_runtime_not_observed"),
+            _fact("dynamic", "unsupported", None, "dynamic_blocks_not_expanded"),
+        ],
+        "relations": [
+            {"source": "r", "setting": "api_id", "target": "aws_apigatewayv2_api.payouts",
+             "state": "known", "basis": "direct_submitted_reference"},
+            {"source": "r", "setting": "authorizer_id", "target": None,
+             "state": "absent", "basis": "direct_submitted_reference"},
+        ],
+        "coverage": {"placement": "provider_only", "routing": "not_inspected"},
+        "omitted_items": 0,
+        "truncated": False,
+        "incomplete": True,
+    }
+    summary = {"resources": [{"type": "t", "name": "n", "settings": {}, "observations": full}]}
+    sent = build_user_content("brief", [], [], terraform_resources=summary)["terraform_resources"]
+    assert sent["resources"][0]["observations"] == {
+        "facts": {
+            "authorization_type": "NONE",
+            "resource.region": {"value": "eu-central-1", "basis": "provider_configuration"},
+        },
+        "absent": ["authorizer_id"],
+        "unknown": {"runtime_invocation": "effective_policy_and_runtime_not_observed"},
+        "unsupported": {"dynamic": "dynamic_blocks_not_expanded"},
+        "refs": {"api_id": "aws_apigatewayv2_api.payouts"},
+        "coverage": {"placement": "provider_only"},
+        "incomplete": True,
+    }
+    # The server-side summary is untouched.
+    assert summary["resources"][0]["observations"] is full
+
+
+def test_a_setting_seen_twice_keeps_both_values():
+    full = {
+        "facts": [
+            _fact("availability_zone", "known", "eu-central-1a", "declared_configuration"),
+            _fact("availability_zone", "known", "eu-central-1b", "declared_configuration"),
+        ]
+    }
+    summary = {"resources": [{"type": "t", "name": "n", "observations": full}]}
+    sent = build_user_content("brief", [], [], terraform_resources=summary)["terraform_resources"]
+    assert sent["resources"][0]["observations"]["facts"] == {
+        "availability_zone": ["eu-central-1a", "eu-central-1b"]
+    }
 
 
 def test_missing_resource_summary_sends_an_empty_list_not_null():
     content = build_user_content("brief", [], [])
-    assert content["terraform_resources"] == {"resources": [], "truncated": False}
+    assert content["terraform_resources"]["resources"] == []
+    assert content["terraform_resources"]["truncated"] is False
 
 
 # --- Plain-language explanation (stakeholder view) ---------------------------
@@ -751,3 +816,34 @@ def test_the_model_input_is_sent_as_compact_json():
     reason_node(state)
     content = state["reasoning_client"].calls[0]["user_content"]
     assert content == json.dumps(json.loads(content), separators=(",", ":"))
+
+
+def test_reasoning_logs_sizes_and_rejection_kinds_never_text(capsys):
+    good = _valid_finding_item()
+    bad = _valid_finding_item(exact_quote="PRIVATE-QUOTE not in any chunk")
+    reason_node(_reason_state([good, bad]))
+    out = capsys.readouterr().out
+    assert "PRIVATE" not in out
+    logged = [json.loads(line) for line in out.splitlines() if line.startswith("{")]
+    sent = next(e for e in logged if e["event"] == "reasoning_input")
+    assert sent["review_id"] == "r1"
+    assert sent["evidence_passages"] == 1
+    assert set(sent["section_chars"]) >= {"terraform_resources", "retrieved_evidence"}
+    result = next(e for e in logged if e["event"] == "reasoning_result")
+    assert result == {
+        "event": "reasoning_result",
+        "review_id": "r1",
+        "emitted": 2,
+        "capped": 0,
+        "accepted": 1,
+        "rejected": {"quote_not_in_chunk": 1},
+    }
+
+
+def test_every_rejection_message_has_a_kind():
+    assert (
+        rejection_kind("finding[0]: chunk_id 'x' is not in the retrieved evidence set")
+        == "chunk_not_retrieved"
+    )
+    assert rejection_kind("finding[0]: failed to build a valid Finding: bad") == "invalid_fields"
+    assert rejection_kind("something new") == "other"

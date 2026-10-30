@@ -67,6 +67,7 @@ def test_structured_call_logs_sizes_and_timing_only(capsys):
         "max_tokens": 8192,
         "latency_ms": 71000,
         "elapsed_ms": logged_elapsed,
+        "near_max_tokens": False,
     }
 
 
@@ -74,7 +75,9 @@ def test_truncated_call_is_still_measured(capsys):
     response = {"stopReason": "max_tokens", "usage": {"outputTokens": 8192}}
     with pytest.raises(ModelOutputTruncated):
         _call(_client(response))
-    assert _logged(capsys)["output_tokens"] == 8192
+    logged = _logged(capsys)
+    assert logged["output_tokens"] == 8192
+    assert logged["near_max_tokens"] is True
 
 
 class _Failing:

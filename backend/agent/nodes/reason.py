@@ -42,6 +42,7 @@ from backend.shared.models.finding import (
 from backend.shared.sanitize import clip, normalize_text
 from backend.shared.stakeholder.catalog import HARMS
 from backend.shared.stakeholder.pricing import PRICE_ITEM_KEYS
+from backend.shared.terraform_observations import MODEL_FORMAT_NOTE, compact_for_model
 
 # What a model finding's fix may add. Shield Advanced ($3,000/month) is
 # left out: a figure that size only comes from a hand-written recipe.
@@ -51,7 +52,7 @@ _MODEL_MAX_QUANTITY = 4
 # Bump whenever the model-facing contract changes (tool schema, input
 # fields, prompt rules), so a persisted finding can be traced to the exact
 # prompt that produced it (ADR-0039).
-PROMPT_VERSION = "reason_prompt@2026-10-29b"
+PROMPT_VERSION = "reason_prompt@2026-10-30"
 
 _TOOL_NAME = "emit_findings"
 # The most model findings a review keeps. Uncapped, a large submission
@@ -119,7 +120,8 @@ results — never answer in plain text. You must:
   truncation, coverage notices, conditional creation, unsupported modules
   and unresolved inputs. Omitted resources/settings are not proof of absence.
   Versioned observations distinguish known configuration, inspected absence,
-  unknown values and unsupported expressions. A known observation is not a
+  unknown values and unsupported expressions; observation_format says how
+  each resource's observations are laid out. A known observation is not a
   runtime measurement. Respect analysis_coverage and per-resource omissions.
   Provider aliases do not prove different Regions or accounts. Routes do not
   prove packet reachability; URL authentication does not prove invocation
@@ -406,6 +408,19 @@ def _evidence_for_model(chunk: dict) -> dict:
     }
 
 
+def _resources_for_model(summary: dict | None) -> dict:
+    """The resource summary with each resource's observations in their
+    shorter model form (terraform_observations.compact_for_model)."""
+    if not isinstance(summary, dict):
+        return {"resources": [], "truncated": False}
+    resources = []
+    for entry in summary.get("resources") or []:
+        if isinstance(entry, dict) and isinstance(entry.get("observations"), dict):
+            entry = {**entry, "observations": compact_for_model(entry["observations"])}
+        resources.append(entry)
+    return {**summary, "resources": resources, "observation_format": MODEL_FORMAT_NOTE}
+
+
 def _rule_finding_for_model(finding: dict) -> dict:
     """Enough for the model to know what the rule engine already reported,
     so it doesn't repeat it."""
@@ -431,7 +446,7 @@ def build_user_content(
             _rule_finding_for_model(f) for f in rule_findings if isinstance(f, dict)
         ],
         # RuleEngine's allowlisted, sanitized resource summary.
-        "terraform_resources": terraform_resources or {"resources": [], "truncated": False},
+        "terraform_resources": _resources_for_model(terraform_resources),
         "retrieved_evidence": [
             _evidence_for_model(c) for c in retrieved_chunks if isinstance(c, dict)
         ],
@@ -464,18 +479,18 @@ def call_reasoning_model(
     preflight_fields: dict | None = None,
     terraform_resources: dict | None = None,
     parent_finding: dict | None = None,
+    review_id: str | None = None,
 ) -> list[dict]:
-    user_content = json.dumps(
-        build_user_content(
-            workload_brief,
-            rule_findings,
-            retrieved_chunks,
-            preflight_fields,
-            terraform_resources,
-            parent_finding,
-        ),
-        separators=(",", ":"),
+    content = build_user_content(
+        workload_brief,
+        rule_findings,
+        retrieved_chunks,
+        preflight_fields,
+        terraform_resources,
+        parent_finding,
     )
+    user_content = json.dumps(content, separators=(",", ":"))
+    log_input_size(review_id, content, user_content)
     tool_input = reasoning_client.converse_structured(
         system_prompt=build_system_prompt(deep_mode),
         user_content=user_content,
@@ -496,6 +511,52 @@ def call_reasoning_model(
             f"{_TOOL_NAME!r} tool call returned no usable 'findings' list: {tool_input!r}"
         )
     return findings
+
+
+def log_input_size(review_id: str | None, content: dict, user_content: str) -> None:
+    """Characters per section of what the model is sent, and how many
+    resources and evidence passages it holds: sizes only, never content.
+    Input size drives the model's time, so this shows which section grew."""
+    resources = content.get("terraform_resources")
+    print(
+        json.dumps(
+            {
+                "event": "reasoning_input",
+                "review_id": review_id,
+                "chars": len(user_content),
+                "section_chars": {
+                    key: len(json.dumps(value, separators=(",", ":")))
+                    for key, value in content.items()
+                },
+                "resources_sent": len(resources.get("resources") or [])
+                if isinstance(resources, dict)
+                else 0,
+                "resources_truncated": bool(
+                    isinstance(resources, dict) and resources.get("truncated")
+                ),
+                "evidence_passages": len(content.get("retrieved_evidence") or []),
+                "rule_findings": len(content.get("rule_engine_findings") or []),
+            }
+        )
+    )
+
+
+# Why a model finding failed verification, by the start of its failure
+# message. Logged as counts only: the messages quote model text.
+_REJECTION_KINDS = (
+    ("is not in the retrieved evidence set", "chunk_not_retrieved"),
+    ("exact_quote does not appear", "quote_not_in_chunk"),
+    ("requires a non-empty string exact_quote", "quote_missing"),
+    ("requires a chunk_id", "chunk_missing"),
+    ("must not carry a chunk_id/exact_quote", "citation_on_uncited_type"),
+    ("reserved for the rule engine", "rule_type_from_model"),
+    ("invalid or missing finding type", "invalid_type"),
+    ("failed to build a valid Finding", "invalid_fields"),
+)
+
+
+def rejection_kind(failure: str) -> str:
+    return next((kind for marker, kind in _REJECTION_KINDS if marker in failure), "other")
 
 
 def keep_most_severe(raw_findings: list) -> tuple[list, int]:
@@ -855,6 +916,7 @@ def reason_node(state: dict) -> dict:
         preflight_fields=state.get("preflight_fields"),
         terraform_resources=state.get("terraform_resources"),
         parent_finding=state.get("parent_finding") if deep_mode else None,
+        review_id=state.get("review_id"),
     )
 
     raw_findings, capped = keep_most_severe(raw_findings)
@@ -874,6 +936,22 @@ def reason_node(state: dict) -> dict:
         depth_level="deep" if deep_mode else "lightweight",
     )
     findings = resolve_rule_findings(rule_findings) + model_findings
+    rejected: dict[str, int] = {}
+    for failure in dropped:
+        kind = rejection_kind(failure)
+        rejected[kind] = rejected.get(kind, 0) + 1
+    print(
+        json.dumps(
+            {
+                "event": "reasoning_result",
+                "review_id": state.get("review_id"),
+                "emitted": len(raw_findings) + capped,
+                "capped": capped,
+                "accepted": len(model_findings),
+                "rejected": rejected,
+            }
+        )
+    )
 
     return {
         **state,

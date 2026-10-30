@@ -408,6 +408,9 @@ class BedrockReasoningClient:
                     "max_tokens": max_tokens,
                     "latency_ms": (response.get("metrics") or {}).get("latencyMs"),
                     "elapsed_ms": int((time.monotonic() - started) * 1000),
+                    # Past this, a longer answer would be cut off and the
+                    # whole model step lost, so raise max_tokens before then.
+                    "near_max_tokens": (usage.get("outputTokens") or 0) >= 0.8 * max_tokens,
                 }
             )
         )

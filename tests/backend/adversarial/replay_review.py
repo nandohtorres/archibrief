@@ -11,7 +11,9 @@ Output contains raw responses: keep it private and inspect before sharing.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import sys
 import tempfile
 from copy import deepcopy
 from pathlib import Path
@@ -214,7 +216,10 @@ def main() -> int:
     # Reserve a fresh output before processing; never overwrite an earlier run.
     with args.out.open("x", encoding="utf-8") as output:
         with tempfile.TemporaryDirectory(prefix="archibrief-replay-") as directory:
-            result = replay_case(case, transcript, Path(directory))
+            # The pipeline's own size logs go to stderr; stdout carries
+            # only the sanitized summary line below.
+            with contextlib.redirect_stdout(sys.stderr):
+                result = replay_case(case, transcript, Path(directory))
         json.dump(result, output, indent=2, default=str)
         output.write("\n")
     print(

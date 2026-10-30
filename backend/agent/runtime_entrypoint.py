@@ -48,7 +48,7 @@ _GUARDRAIL_VERSION = os.environ.get("ARCHIBRIEF_GUARDRAIL_VERSION", "1")
 # The model ID comes from an env var so it can change without a code
 # change; the default matches the other call sites.
 _MODEL_ID = os.environ.get("ARCHIBRIEF_REASONING_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
-_MAX_TOKENS = int(os.environ.get("ARCHIBRIEF_REASONING_MAX_TOKENS", "8192"))
+_MAX_TOKENS = int(os.environ.get("ARCHIBRIEF_REASONING_MAX_TOKENS", "12288"))
 
 app = BedrockAgentCoreApp()
 
