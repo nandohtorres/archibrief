@@ -155,7 +155,7 @@ def test_integrated_fake_service_run_retains_failed_and_successful_cases(
     assert len(searches) // 2 >= 2
     assert delivered["audit_persisted"] is False
     assert (
-        delivered["audit_entry"]["deterministicRuleVersion"] == "rule_engine@2026-10-23"
+        delivered["audit_entry"]["deterministicRuleVersion"] == "rule_engine@2026-10-30"
     )
     assert delivered["report"]["analysis_scope"]
     assert delivered["semantic_verdict"] == "not_scored"

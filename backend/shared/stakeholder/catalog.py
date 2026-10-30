@@ -339,6 +339,52 @@ RECIPES: dict[str, Recipe] = {
         (0.25, 1),
         "data_breach",
     ),
+    "rds_force_ssl": Recipe(
+        "high",
+        "The database accepts connections that aren't encrypted",
+        "Like a bank teller who'll also take instructions shouted across the room.",
+        "Passwords and the data the database returns can travel the network readable by "
+        "anyone who can watch it.",
+        "Turn on the database setting that refuses unencrypted connections.",
+        _FREE,
+        (0.5, 2),
+        "data_breach",
+    ),
+    "lb_tls_policy": Recipe(
+        "high",
+        "The website's front door still accepts old, weak encryption",
+        "Like a lock that also opens with an old key everyone has copies of.",
+        "A connection can be pushed down to an old encryption version with known weaknesses, "
+        "and audits such as PCI DSS fail on it.",
+        "Switch the load balancer to a modern TLS 1.2+ security policy.",
+        _FREE,
+        (0.25, 1),
+        "data_breach",
+    ),
+    "nat_single": Recipe(
+        "medium",
+        "One network exit serves every zone",
+        "Like a building whose every floor shares one fire exit.",
+        "If the data center holding it has a problem, servers in the other zones can't reach "
+        "the internet or outside services either.",
+        "Add a NAT gateway in each zone, or private connections (VPC endpoints) to the AWS "
+        "services the system calls.",
+        (Component("nat_gateway"),),
+        (1, 4),
+        "downtime",
+        caveat="Each extra NAT gateway adds {nat_gateway}, plus data processing.",
+    ),
+    "sqs_dlq_retention": Recipe(
+        "high",
+        "Failed jobs can be deleted before anyone sees them",
+        "Like a lost-and-found that throws things out sooner than the shop that sent them.",
+        "A job that failed after waiting in the queue can expire from the failure queue almost "
+        "at once, so the failure is never investigated or retried.",
+        "Make the failure queue keep messages longer than the main queue (up to 14 days).",
+        _FREE,
+        (0.25, 1),
+        "data_loss",
+    ),
     "rds_backup_retention": Recipe(
         "medium",
         "The database keeps a day of backups or less",
@@ -431,6 +477,10 @@ _LEGACY_TITLES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
         (r"^API Gateway stage '.*' has no access logging$", "apigw_access_logging"),
         (r"^CloudFront distribution '.*' has no access logging$", "cloudfront_logging"),
         (r"^CloudFront distribution '.*' has no WAF", "cloudfront_waf"),
+        (r"^Load balancer listener '.*' accepts outdated TLS", "lb_tls_policy"),
+        (r"^Database parameter group '.*' allows unencrypted connections$", "rds_force_ssl"),
+        (r"^NAT gateway '.*' is the only one for \d+ subnets$", "nat_single"),
+        (r"^Dead-letter queue '.*' keeps messages for less time than", "sqs_dlq_retention"),
     )
 )
 

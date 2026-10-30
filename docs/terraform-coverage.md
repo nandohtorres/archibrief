@@ -1,7 +1,7 @@
 # Bounded Terraform configuration coverage
 
 Observation version: `terraform-observations@2026-10-23`; rules:
-`rule_engine@2026-10-23`. This describes local source, not a deployed release
+`rule_engine@2026-10-30`. This describes local source, not a deployed release
 or a measured model-quality improvement. The existing static HCL parser/resolver
 is extended incrementally; Terraform, providers and submitted code never run.
 
@@ -103,6 +103,18 @@ Reports and HTML/JSON exports include sanitized scope limits. Chat uses the
 same observations, removes detail under its context bound with explicit omission
 notices, and disallows citations to trimmed resources. Diagrams show known
 Region/AZ details from those facts. Prompts preserve the same boundaries.
+
+## Rules added 2026-10-30
+
+A live payments test showed the model missing four plain configuration
+facts, so they became deterministic:
+
+| Concern | Finding when |
+|---|---|
+| `rds_force_ssl` | A DB or cluster parameter group explicitly sets `rds.force_ssl` or `require_secure_transport` off. An unset parameter is not flagged: its default depends on the engine version. |
+| `nat_single` | Exactly one NAT gateway serves two or more subnets. Skipped when a `count` can't be resolved. |
+| `sqs_dlq_retention` | A standard queue's dead-letter queue keeps messages for less time than the queue (SQS keeps the original enqueue time). FIFO queues are skipped. |
+| `lb_tls_policy` | Trivy AWS-0047, now trusted: a load balancer listener's TLS policy allows TLS 1.0 or 1.1. |
 
 ## Frozen expectation reconciliation
 

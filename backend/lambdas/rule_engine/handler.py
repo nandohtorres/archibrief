@@ -49,7 +49,7 @@ from backend.shared.models.finding import (
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
 from backend.shared.trivy_checks import TRIVY_OWNED_CONCERNS, TRUSTED_CHECKS
 
-RULE_VERSION = "rule_engine@2026-10-23"
+RULE_VERSION = "rule_engine@2026-10-30"
 
 ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}
@@ -1044,6 +1044,157 @@ def rule_api_gateway_no_throttling(parsed: dict, review_id: str) -> list[Finding
     return []
 
 
+# --- Transport encryption, NAT and queues (2026-10-30) ----------------------
+# Each of these was missed by both the rules and the model on a live
+# payments test; they are configuration facts, so a rule is the reliable
+# place for them.
+
+# Database parameters that make the engine accept unencrypted connections,
+# and the values that turn them off. Only an explicit off value counts:
+# the default depends on the engine version, which the code may not say.
+_TRANSPORT_OFF = {
+    "rds.force_ssl": {"0", "false", "off"},
+    "require_secure_transport": {"0", "false", "off"},
+}
+
+
+@concern("rds_force_ssl")
+def rule_rds_force_ssl_off(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    for resource_type in ("aws_db_parameter_group", "aws_rds_cluster_parameter_group"):
+        for key, body in _resources(parsed, resource_type):
+            module = module_of(body)
+            for parameter in _as_list(body.get("parameter")):
+                if not isinstance(parameter, dict):
+                    continue
+                name = resolve(parameter.get("name"), parsed, module)
+                value = resolve(parameter.get("value"), parsed, module)
+                off = _TRANSPORT_OFF.get(name) if isinstance(name, str) else None
+                if off is None or str(value).strip().lower() not in off:
+                    continue
+                group = display_name(key)
+                findings.append(
+                    _finding(
+                        review_id,
+                        FindingCategory.ENCRYPTION,
+                        f"Database parameter group '{group}' allows unencrypted connections",
+                        f'resource "{resource_type}" "{group}" sets {name} = {value}',
+                        "Clients can connect without TLS, so credentials and query results "
+                        "can cross the network in clear text.",
+                        f"Set {name} to 1 (on) so the database refuses unencrypted connections.",
+                        ["AWS Well-Architected: Security Pillar", "SEC09-BP02"],
+                    )
+                )
+    return findings
+
+
+def _known_copies(body: dict, parsed: dict) -> int | None:
+    copies = copies_of(body, parsed, module_of(body))
+    if copies is None:
+        return 1
+    return copies if isinstance(copies, int) else None
+
+
+@concern("nat_single")
+def rule_single_nat_gateway(parsed: dict, review_id: str) -> list[Finding]:
+    """One NAT gateway for several subnets: losing its AZ cuts outbound
+    access for every private subnet that routes through it. Skipped when
+    a count can't be read, rather than guessed."""
+    nats = list(_resources(parsed, "aws_nat_gateway"))
+    nat_count = [_known_copies(body, parsed) for _, body in nats]
+    subnet_count = [_known_copies(body, parsed) for _, body in _resources(parsed, "aws_subnet")]
+    if None in nat_count or None in subnet_count or sum(nat_count) != 1 or sum(subnet_count) < 2:
+        return []
+    name = display_name(nats[0][0])
+    return [
+        _finding(
+            review_id,
+            FindingCategory.AVAILABILITY,
+            f"NAT gateway '{name}' is the only one for {sum(subnet_count)} subnets",
+            f'one resource "aws_nat_gateway" "{name}" and {sum(subnet_count)} aws_subnet copies',
+            "If the NAT gateway's Availability Zone fails, private subnets in every zone that "
+            "route through it lose outbound access: calls to outside APIs and to AWS services "
+            "without VPC endpoints fail.",
+            "Create one NAT gateway per Availability Zone and route each private subnet to the "
+            "one in its own zone, or add VPC endpoints for the AWS services the workload calls.",
+            ["AWS Well-Architected: Reliability Pillar", "REL10-BP01"],
+        )
+    ]
+
+
+# SQS keeps a message this long when the queue doesn't say (4 days).
+_SQS_DEFAULT_RETENTION = 345600
+
+
+def _retention_seconds(body: dict, parsed: dict) -> int | None:
+    value = body.get("message_retention_seconds")
+    if value is None:
+        return _SQS_DEFAULT_RETENTION
+    value = resolve(value, parsed, module_of(body))
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _redrive_target(policy: object, body: dict, parsed: dict) -> str | None:
+    policy = resolve(policy, parsed, module_of(body))
+    if isinstance(policy, str):
+        try:
+            policy = json.loads(policy)
+        except ValueError:
+            return None
+    if not isinstance(policy, dict):
+        return None
+    return _referenced_key(policy.get("deadLetterTargetArn"), body, parsed, "aws_sqs_queue")
+
+
+@concern("sqs_dlq_retention")
+def rule_sqs_dlq_retention(parsed: dict, review_id: str) -> list[Finding]:
+    """A standard queue's message keeps its original enqueue time when it
+    moves to the dead-letter queue, so a dead-letter queue that keeps
+    messages for less time can delete a failed message soon after it
+    lands (AWS SQS developer guide, dead-letter queues)."""
+    queues = dict(_resources(parsed, "aws_sqs_queue"))
+    pairs = []
+    for key, body in queues.items():
+        if body.get("redrive_policy") is not None:
+            pairs.append((key, body.get("redrive_policy"), body))
+    for _, body in _resources(parsed, "aws_sqs_queue_redrive_policy"):
+        source = _referenced_key(body.get("queue_url"), body, parsed, "aws_sqs_queue")
+        if source in queues:
+            pairs.append((source, body.get("redrive_policy"), body))
+
+    findings = []
+    for source, policy, holder in pairs:
+        target = _redrive_target(policy, holder, parsed)
+        if target not in queues or truthy(
+            queues[source].get("fifo_queue"), parsed, module_of(queues[source])
+        ):
+            continue
+        kept = _retention_seconds(queues[source], parsed)
+        dlq_kept = _retention_seconds(queues[target], parsed)
+        if kept is None or dlq_kept is None or dlq_kept >= kept:
+            continue
+        name, dlq = display_name(source), display_name(target)
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.RECOVERY,
+                f"Dead-letter queue '{dlq}' keeps messages for less time than queue '{name}'",
+                f'aws_sqs_queue "{name}" keeps messages {kept} s; its dead-letter queue '
+                f'"{dlq}" keeps them {dlq_kept} s',
+                "A failed message keeps its original enqueue time, so one that waited in the "
+                "source queue can expire from the dead-letter queue almost at once: the failure "
+                "is lost before anyone can look at it.",
+                f"Set the dead-letter queue's message_retention_seconds longer than {kept} s "
+                "(the SQS maximum is 1209600, 14 days).",
+                ["AWS Well-Architected: Reliability Pillar", "REL05-BP04"],
+            )
+        )
+    return findings
+
+
 ALL_RULES: list[Callable[[dict, str], list[Finding]]] = [
     rule_s3_public_access_block,
     rule_s3_encryption,
@@ -1065,6 +1216,9 @@ ALL_RULES: list[Callable[[dict, str], list[Finding]]] = [
     rule_lambda_no_vpc_for_sensitive_env,
     rule_api_gateway_no_throttling,
     rule_public_subnet_auto_assign_ip,
+    rule_rds_force_ssl_off,
+    rule_single_nat_gateway,
+    rule_sqs_dlq_retention,
 ]
 
 

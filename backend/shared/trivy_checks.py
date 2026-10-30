@@ -189,6 +189,18 @@ TRUSTED_CHECKS: dict[str, TrustedCheck] = {
         "Associate an AWS WAF web ACL with the distribution.",
         (_SECURITY, "SEC05-BP03"),
     ),
+    # Fired on a live payments test's ELBSecurityPolicy-2016-08 listener and
+    # stayed quiet on a TLS 1.3 policy (2026-10-30).
+    "AWS-0047": TrustedCheck(
+        "lb_tls_policy",
+        "encryption",
+        "Load balancer listener '{name}' accepts outdated TLS versions",
+        "ssl_policy allows TLS 1.0 or 1.1",
+        "Clients can negotiate TLS versions with known weaknesses; PCI DSS and most "
+        "security baselines no longer allow them.",
+        "Set ssl_policy to a TLS 1.2+ policy such as ELBSecurityPolicy-TLS13-1-2-2021-06.",
+        (_SECURITY, "SEC09-BP02"),
+    ),
 }
 
 TRUSTED_CHECK_IDS = frozenset(TRUSTED_CHECKS)
