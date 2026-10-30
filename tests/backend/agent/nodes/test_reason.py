@@ -28,6 +28,8 @@ from backend.agent.nodes.reason import (
     framework_mapping_for,
     keep_most_severe,
     rejection_kind,
+    rule_findings_for_model,
+    MAX_RULE_FINDINGS_FOR_MODEL,
     parse_model_findings,
     reason_node,
     verify_model_findings,
@@ -847,3 +849,54 @@ def test_every_rejection_message_has_a_kind():
     )
     assert rejection_kind("finding[0]: failed to build a valid Finding: bad") == "invalid_fields"
     assert rejection_kind("something new") == "other"
+
+
+# --- Rule findings sent to the model: capped, varied, never the report
+
+
+def _rule(concern: str, n: int = 0) -> dict:
+    return {"concern": concern, "category": "exposure", "finding": f"{concern} {n}", "evidence": "e"}
+
+
+def test_a_normal_number_of_rule_findings_is_sent_whole():
+    rules = [_rule("s3_public_access", n) for n in range(MAX_RULE_FINDINGS_FOR_MODEL)]
+    sent, omitted = rule_findings_for_model(rules)
+    assert len(sent) == MAX_RULE_FINDINGS_FOR_MODEL and omitted == 0
+
+
+def test_one_problem_repeated_hundreds_of_times_cannot_crowd_out_the_others():
+    rules = [_rule("s3_public_access", n) for n in range(300)]
+    rules += [_rule("rds_multi_az"), _rule("iam_wildcard"), _rule("sqs_dlq_retention")]
+    sent, omitted = rule_findings_for_model(rules)
+    assert len(sent) == MAX_RULE_FINDINGS_FOR_MODEL
+    assert omitted == len(rules) - MAX_RULE_FINDINGS_FOR_MODEL
+    titles = [f["finding"] for f in sent]
+    for concern in ("rds_multi_az 0", "iam_wildcard 0", "sqs_dlq_retention 0"):
+        assert concern in titles
+    # Kept findings stay in the rule engine's order.
+    assert titles[0] == "s3_public_access 0"
+
+
+def test_past_one_of_each_kind_the_most_severe_come_first():
+    # iam_wildcard is critical and rds_multi_az medium in the catalog.
+    rules = [_rule("rds_multi_az", n) for n in range(30)] + [
+        _rule("iam_wildcard", n) for n in range(30)
+    ]
+    sent, _ = rule_findings_for_model(rules)
+    kinds = [f["finding"].split()[0] for f in sent]
+    assert kinds.count("iam_wildcard") > kinds.count("rds_multi_az")
+
+
+def test_rule_finding_text_is_clipped_and_extra_fields_dropped():
+    rule = {**_rule("s3_public_access"), "evidence": "x" * 5000, "citation": {"a": 1}}
+    sent, _ = rule_findings_for_model([rule])
+    assert len(sent[0]["evidence"]) <= 500
+    assert set(sent[0]) == {"category", "finding", "evidence"}
+
+
+def test_the_model_is_told_how_many_rule_findings_it_did_not_see():
+    rules = [_rule("s3_public_access", n) for n in range(MAX_RULE_FINDINGS_FOR_MODEL + 7)]
+    content = build_user_content("brief", rules, [])
+    assert content["rule_engine_findings_omitted"] == 7
+    assert "rule_engine_findings_omitted" in SYSTEM_PROMPT
+    assert "rule_engine_findings_omitted" not in build_user_content("brief", rules[:3], [])

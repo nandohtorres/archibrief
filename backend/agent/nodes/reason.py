@@ -40,7 +40,7 @@ from backend.shared.models.finding import (
     PlainLanguage,
 )
 from backend.shared.sanitize import clip, normalize_text
-from backend.shared.stakeholder.catalog import HARMS
+from backend.shared.stakeholder.catalog import HARMS, RECIPES, SEVERITIES, infer_concern
 from backend.shared.stakeholder.pricing import PRICE_ITEM_KEYS
 from backend.shared.terraform_observations import MODEL_FORMAT_NOTE, compact_for_model
 
@@ -77,7 +77,9 @@ validated server-side (citation grounding, type restrictions) regardless
 of what you produce.
 The rule_engine_findings you're given are already-finalized results from a
 separate deterministic rule engine — do not restate, summarize, or emit any
-of them yourself. Your job is to synthesize the retrieved AWS
+of them yourself. A large submission's list is a sample: one of each kind
+of problem first, most severe first, and rule_engine_findings_omitted says
+how many more the rule engine reported. Those are in the report too. Your job is to synthesize the retrieved AWS
 Well-Architected Framework evidence into NEW findings (fact, inference,
 assumption, recommendation, or not-observable) that go beyond what the
 rule engine already established, and call the emit_findings tool with your
@@ -421,14 +423,53 @@ def _resources_for_model(summary: dict | None) -> dict:
     return {**summary, "resources": resources, "observation_format": MODEL_FORMAT_NOTE}
 
 
+# The most rule findings the model is sent, and how long each text may be.
+# Real submissions produced at most 24, the longest evidence about 400
+# characters (2026-10-30); without a cap, a submission written to trip
+# hundreds of rules would make the rule list the largest part of the input.
+# The report keeps every rule finding; only the model's copy is trimmed.
+MAX_RULE_FINDINGS_FOR_MODEL = 40
+_RULE_TEXT_CHARS = {"category": 40, "finding": 200, "evidence": 500}
+
+
 def _rule_finding_for_model(finding: dict) -> dict:
     """Enough for the model to know what the rule engine already reported,
     so it doesn't repeat it."""
     return {
-        key: finding[key]
-        for key in ("category", "finding", "evidence")
+        key: clip(finding[key], limit)
+        for key, limit in _RULE_TEXT_CHARS.items()
         if isinstance(finding.get(key), str)
     }
+
+
+def _rule_severity_rank(finding: dict) -> int:
+    concern = finding.get("concern") or infer_concern(str(finding.get("finding", "")))
+    recipe = RECIPES.get(concern) if isinstance(concern, str) else None
+    return SEVERITIES.index(recipe.severity) if recipe else len(SEVERITIES)
+
+
+def rule_findings_for_model(rule_findings: list) -> tuple[list[dict], int]:
+    """The rule findings the model is sent, and how many were left out.
+
+    Past the cap, every kind of problem (concern) gets one place first, the
+    most severe kinds first, so a submission repeating one problem hundreds
+    of times can't push the others out. The remaining places go to the most
+    severe repeats. Kept findings stay in the rule engine's order."""
+    findings = [f for f in rule_findings if isinstance(f, dict)]
+    if len(findings) <= MAX_RULE_FINDINGS_FOR_MODEL:
+        return [_rule_finding_for_model(f) for f in findings], 0
+    seen: dict[object, int] = {}
+    order = []
+    for position, finding in enumerate(findings):
+        kind = finding.get("concern") or finding.get("finding")
+        seen[kind] = seen.get(kind, -1) + 1
+        repeat = seen[kind] > 0
+        order.append((repeat, _rule_severity_rank(finding), seen[kind], position))
+    kept = sorted(position for *_rank, position in sorted(order)[:MAX_RULE_FINDINGS_FOR_MODEL])
+    return (
+        [_rule_finding_for_model(findings[position]) for position in kept],
+        len(findings) - len(kept),
+    )
 
 
 def build_user_content(
@@ -439,18 +480,19 @@ def build_user_content(
     terraform_resources: dict | None = None,
     parent_finding: dict | None = None,
 ) -> dict:
+    rules_sent, rules_omitted = rule_findings_for_model(rule_findings)
     content = {
         "workload_brief": workload_brief,
         "requirements": _requirements_from_preflight(preflight_fields),
-        "rule_engine_findings": [
-            _rule_finding_for_model(f) for f in rule_findings if isinstance(f, dict)
-        ],
+        "rule_engine_findings": rules_sent,
         # RuleEngine's allowlisted, sanitized resource summary.
         "terraform_resources": _resources_for_model(terraform_resources),
         "retrieved_evidence": [
             _evidence_for_model(c) for c in retrieved_chunks if isinstance(c, dict)
         ],
     }
+    if rules_omitted:
+        content["rule_engine_findings_omitted"] = rules_omitted
     if parent_finding is not None:
         content["parent_finding"] = {
             key: clip(normalize_text(parent_finding.get(key, "")), 1200)

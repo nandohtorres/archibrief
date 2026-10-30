@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from backend.agent.nodes.reason import build_user_content
+from backend.agent.nodes.reason import MAX_RULE_FINDINGS_FOR_MODEL, build_user_content
 from backend.lambdas.ingest.handler import parse_terraform_files
+from backend.lambdas.rule_engine.handler import run_rules
 from backend.lambdas.rule_engine.resource_summary import MAX_RESOURCES, build_resource_summary
 from backend.shared.archive import extract_archive
 
@@ -83,3 +84,49 @@ def test_a_submission_at_the_cap_still_sends_a_bounded_summary():
     assert _chars(sent) <= WORST_SUMMARY_CHARS
     # The short form is what makes the cap affordable.
     assert _chars(sent) < _chars(summary) / 2
+
+
+# A submission written to break the review: hundreds of resources that
+# each trip several rules, with the longest names Terraform allows.
+_HOSTILE = """
+resource "aws_s3_bucket" "b{i}_{pad}" {{}}
+resource "aws_db_instance" "d{i}_{pad}" {{
+  publicly_accessible = true
+  storage_encrypted   = false
+}}
+resource "aws_security_group" "g{i}_{pad}" {{
+  ingress {{
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }}
+}}
+"""
+# Everything the model reads except retrieved evidence, which retrieval
+# bounds by passage count. About 30k tokens.
+WORST_INPUT_CHARS = 120_000
+
+
+def test_a_submission_built_to_trip_hundreds_of_rules_stays_bounded():
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "main.tf"
+        path.write_text(
+            "".join(_HOSTILE.format(i=i, pad="x" * 50) for i in range(400)), encoding="utf-8"
+        )
+        parsed = json.loads(
+            json.dumps(asdict(parse_terraform_files([str(path)])), default=str)
+        )
+    rules = [f.model_dump(mode="json") for f in run_rules(parsed, "r")]
+    assert len(rules) > 3 * MAX_RULE_FINDINGS_FOR_MODEL, "the submission trips many rules"
+    content = build_user_content(
+        "brief", rules, [], terraform_resources=build_resource_summary(parsed)
+    )
+    assert len(content["rule_engine_findings"]) == MAX_RULE_FINDINGS_FOR_MODEL
+    assert content["rule_engine_findings_omitted"] == len(rules) - MAX_RULE_FINDINGS_FOR_MODEL
+    # Every kind of problem the rules found still reaches the model.
+    found = {f["concern"] for f in rules}
+    sent = {f["finding"] for f in content["rule_engine_findings"]}
+    assert len(found) <= len(sent)
+    assert _chars(content["terraform_resources"]) <= WORST_SUMMARY_CHARS
+    assert _chars(content) <= WORST_INPUT_CHARS
