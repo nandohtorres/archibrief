@@ -74,7 +74,7 @@ COVERAGE_NOTE = (
 # A count above this is reported as unknown rather than trusted.
 MAX_COPIES = 1000
 UNKNOWN = "unknown"
-# The model reads observations in their short form (terraform_observations.
+# The model reads observations in their short form (model_observations.
 # compact_for_model), so 120 resources cost it less than 80 did in full
 # (2026-10-30); a 119-resource test had hidden five S3 buckets at 80.
 MAX_RESOURCES = 120

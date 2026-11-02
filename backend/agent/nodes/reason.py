@@ -29,6 +29,7 @@ from pydantic import ValidationError
 
 from backend.shared.citations import build_tolerant_pattern as _build_tolerant_pattern
 from backend.shared.clients import BedrockReasoningClient, GuardrailsClient, ToolCallMissing
+from backend.shared.model_observations import MODEL_FORMAT_NOTE, compact_for_model
 from backend.shared.models.finding import (
     AlternativeConsidered,
     Citation,
@@ -42,7 +43,6 @@ from backend.shared.models.finding import (
 from backend.shared.sanitize import clip, normalize_text
 from backend.shared.stakeholder.catalog import HARMS, RECIPES, SEVERITIES, infer_concern
 from backend.shared.stakeholder.pricing import PRICE_ITEM_KEYS
-from backend.shared.terraform_observations import MODEL_FORMAT_NOTE, compact_for_model
 
 # What a model finding's fix may add. Shield Advanced ($3,000/month) is
 # left out: a figure that size only comes from a hand-written recipe.
@@ -412,7 +412,7 @@ def _evidence_for_model(chunk: dict) -> dict:
 
 def _resources_for_model(summary: dict | None) -> dict:
     """The resource summary with each resource's observations in their
-    shorter model form (terraform_observations.compact_for_model)."""
+    shorter model form (model_observations.compact_for_model)."""
     if not isinstance(summary, dict):
         return {"resources": [], "truncated": False}
     resources = []

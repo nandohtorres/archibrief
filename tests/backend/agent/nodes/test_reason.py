@@ -34,7 +34,7 @@ from backend.agent.nodes.reason import (
     reason_node,
     verify_model_findings,
 )
-from backend.shared.terraform_observations import MODEL_FORMAT_NOTE
+from backend.shared.model_observations import MODEL_FORMAT_NOTE
 
 
 def _chunk(chunk_id: str, text: str) -> dict:
