@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from backend.agent.nodes.reason import _resources_for_model
 from backend.agent.nodes.retrieve import topic_queries
 from tests.backend.adversarial.harness import load_answer_key
 from tests.backend.adversarial.replay_review import replay_case
@@ -48,9 +49,10 @@ def test_replay_uses_real_graph_merging_schema_quality_and_report(
         transcript["baseline_answers"]["regulatory_data_residency"]
         in result["screened_input"]
     )
-    assert (
-        result["model_input"]["terraform_resources"]
-        == result["ledger"]["terraform_resources"]
+    # The model reads the ledger's summary, with observations in their
+    # short form.
+    assert result["model_input"]["terraform_resources"] == _resources_for_model(
+        result["ledger"]["terraform_resources"]
     )
     findings = result["ledger"]["findings"]
     assert any(f["type"] == "deterministic-rule-result" for f in findings)

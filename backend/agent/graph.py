@@ -67,6 +67,8 @@ class ReviewState(TypedDict, total=False):
     # Model findings excluded by citation/shape verification (reason_node).
     dropped_model_findings: list[str]
     model_output_counts: dict[str, int]
+    # How many model findings were left out by the per-review cap.
+    model_findings_capped: int
     # "Go deeper" only (build_deeper_graph below). Declared even though
     # build_graph()'s path never sets them. reason_node reads deep_mode to pick
     # the deep-mode system prompt variant and stamp depth_level="deep";

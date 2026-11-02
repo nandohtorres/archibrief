@@ -52,3 +52,31 @@ resource "aws_subnet" "public" {
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
 }
+
+resource "aws_subnet" "private" {
+  count = 2
+}
+
+resource "aws_nat_gateway" "main" {
+  subnet_id = aws_subnet.public.id
+}
+
+resource "aws_rds_cluster_parameter_group" "main" {
+  family = "aurora-postgresql15"
+  parameter {
+    name  = "rds.force_ssl"
+    value = "0"
+  }
+}
+
+resource "aws_sqs_queue" "jobs_dlq" {
+  message_retention_seconds = 345600
+}
+
+resource "aws_sqs_queue" "jobs" {
+  message_retention_seconds = 1209600
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.jobs_dlq.arn
+    maxReceiveCount     = 3
+  })
+}

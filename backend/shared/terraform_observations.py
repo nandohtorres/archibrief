@@ -18,8 +18,12 @@ from backend.shared.hcl_eval import resolve as static_resolve
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
 
 VERSION = "terraform-observations@2026-10-23"
-MAX_BYTES = 48000
-MAX_FACTS = 256
+# Measured on the full bundles. The model reads them in a short form
+# (model_observations.compact_for_model), about half the size, so these leave room for every
+# resource the summary keeps (MAX_RESOURCES): 60 databases and their 60
+# open security groups took 143,870 bytes and 480 facts (2026-10-30).
+MAX_BYTES = 160000
+MAX_FACTS = 640
 MAX_INSTANCES = 16
 DOMAINS = ("placement", "routing", "retention", "backup_selection", "entry_paths")
 REGION = re.compile(r"[a-z]{2}(?:-[a-z]+){1,3}-\d")

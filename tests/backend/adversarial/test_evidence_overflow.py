@@ -44,14 +44,25 @@ from tests.backend.adversarial.harness import load_answer_key, trivy_path
 
 KEY = load_answer_key()
 CONSTANTS = KEY["boundary_cases"]["constants_verified"]
+# Bounds moved after the freeze, each recorded in README.md's freeze record.
+# The frozen key keeps the value it was written against; its cases run at
+# the current bound, so F10-S-79/80/81 mean "cap - 1", "cap" and "cap + 1".
+MOVED_BOUNDS = {
+    "backend/lambdas/rule_engine/resource_summary.py MAX_RESOURCES": (80, 120),
+}
+
+
+def _bound(name: str) -> int:
+    frozen, current = MOVED_BOUNDS.get(name, (CONSTANTS[name], CONSTANTS[name]))
+    assert CONSTANTS[name] == frozen
+    return current
 
 
 def test_constants_match_the_frozen_answer_key() -> None:
     # The cases below are built from these; if the code's bounds move, the
     # answer key has to be revisited deliberately.
-    assert (
-        MAX_RESOURCES
-        == CONSTANTS["backend/lambdas/rule_engine/resource_summary.py MAX_RESOURCES"]
+    assert MAX_RESOURCES == _bound(
+        "backend/lambdas/rule_engine/resource_summary.py MAX_RESOURCES"
     )
     assert (
         MAX_BACKUP_RULES
@@ -102,16 +113,16 @@ resource "aws_db_instance" "{name}" {{
 '''
 
 
-# --- resource summary: 79 / 80 / 81 ----------------------------------------
+# --- resource summary: cap - 1 / cap / cap + 1 (frozen as 79 / 80 / 81) ----
 
 
 @pytest.mark.parametrize(
     ("total", "decisive", "expect_truncated", "expect_in_summary"),
     [
-        pytest.param(79, "zzz_public", False, True, id="F10-S-79"),
-        pytest.param(80, "zzz_public", False, True, id="F10-S-80"),
-        pytest.param(81, "zzz_public", True, False, id="F10-S-81"),
-        pytest.param(81, "aaa_public", True, True, id="F10-S-81-renamed"),
+        pytest.param(MAX_RESOURCES - 1, "zzz_public", False, True, id="F10-S-79"),
+        pytest.param(MAX_RESOURCES, "zzz_public", False, True, id="F10-S-80"),
+        pytest.param(MAX_RESOURCES + 1, "zzz_public", True, False, id="F10-S-81"),
+        pytest.param(MAX_RESOURCES + 1, "aaa_public", True, True, id="F10-S-81-renamed"),
     ],
 )
 def test_summary_bound(

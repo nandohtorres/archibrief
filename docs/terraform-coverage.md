@@ -1,7 +1,7 @@
 # Bounded Terraform configuration coverage
 
 Observation version: `terraform-observations@2026-10-23`; rules:
-`rule_engine@2026-10-23`. This describes local source, not a deployed release
+`rule_engine@2026-10-30`. This describes local source, not a deployed release
 or a measured model-quality improvement. The existing static HCL parser/resolver
 is extended incrementally; Terraform, providers and submitted code never run.
 
@@ -79,14 +79,18 @@ A Lambda `reserved_concurrent_executions` of 0 is shown as "never runs
 
 ## Bounds and publication
 
-The existing 80-resource cap remains. Past it, resources are kept by risk, not
+The summary keeps up to 120 resources (80 until 2026-10-30). The model reads
+each resource's observations in a shorter form, without fact IDs or the
+resource name repeated on every fact, so 120 resources cost it less than 80
+did; the full observations stay server-side. Past the cap,
+resources are kept by risk, not
 alphabet: access decisions (policies, ACLs, permissions, ingress rules, secrets,
 SSM parameters, authorizers, routes) first, then data stores and anything with
 listed settings, then other services, then wiring (route table associations,
 subnet groups, EIPs, zones). Within a tier every type's first resource comes
 before any type's second. Alphabetical order had cut every S3, security group,
-SQS and SSM resource from a 119-resource test. Observations additionally enforce 48,000
-serialized UTF-8 bytes and 256 facts, 16 expanded instances, 32 rule/reference
+SQS and SSM resource from a 119-resource test. Observations additionally enforce 160,000
+serialized UTF-8 bytes and 640 facts (48,000 and 256 until 2026-10-30), 16 expanded instances, 32 rule/reference
 items and 16 copy actions per rule. Omissions are counted; dynamic blocks are
 incomplete. Tokenizer counts remain explicitly unmeasured; byte bounds are not
 presented as an exact model token budget. Missing output never proves absence.
@@ -99,6 +103,18 @@ Reports and HTML/JSON exports include sanitized scope limits. Chat uses the
 same observations, removes detail under its context bound with explicit omission
 notices, and disallows citations to trimmed resources. Diagrams show known
 Region/AZ details from those facts. Prompts preserve the same boundaries.
+
+## Rules added 2026-10-30
+
+A live payments test showed the model missing four plain configuration
+facts, so they became deterministic:
+
+| Concern | Finding when |
+|---|---|
+| `rds_force_ssl` | A DB or cluster parameter group explicitly sets `rds.force_ssl` or `require_secure_transport` off. An unset parameter is not flagged: its default depends on the engine version. |
+| `nat_single` | Exactly one NAT gateway serves two or more subnets. Skipped when a `count` can't be resolved. |
+| `sqs_dlq_retention` | A standard queue's dead-letter queue keeps messages for less time than the queue (SQS keeps the original enqueue time). FIFO queues are skipped. |
+| `lb_tls_policy` | Trivy AWS-0047, now trusted: a load balancer listener's TLS policy allows TLS 1.0 or 1.1. |
 
 ## Frozen expectation reconciliation
 

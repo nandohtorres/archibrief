@@ -25,10 +25,16 @@ from backend.agent.nodes.reason import (
     GuardrailBlocked,
     build_user_content,
     call_reasoning_model,
+    framework_mapping_for,
+    keep_most_severe,
+    rejection_kind,
+    rule_findings_for_model,
+    MAX_RULE_FINDINGS_FOR_MODEL,
     parse_model_findings,
     reason_node,
     verify_model_findings,
 )
+from backend.shared.model_observations import MODEL_FORMAT_NOTE
 
 
 def _chunk(chunk_id: str, text: str) -> dict:
@@ -62,9 +68,7 @@ def _valid_finding_item(**overrides: object) -> dict:
         },
         "risk_impact": "Low",
         "recommendation": "Continue using CMKs.",
-        "framework_mapping": ["SEC08-BP01"],
         "alternatives_considered": [],
-        "depth_level": "lightweight",
     }
     item.update(overrides)
     return item
@@ -355,18 +359,27 @@ def test_max_tokens_defaults_to_a_bounded_value_when_omitted():
     assert reasoning_client.calls[0]["max_tokens"] == 4096
 
 
-def test_model_findings_past_the_cap_are_dropped_before_verification(capsys):
-    items = [_valid_finding_item(finding=f"finding {n}") for n in range(MAX_MODEL_FINDINGS + 3)]
-    reasoning_client = _FakeReasoningClient(tool_input={"findings": items})
-    kept = call_reasoning_model(
-        reasoning_client=reasoning_client,
-        workload_brief="brief",
-        rule_findings=[],
-        retrieved_chunks=[],
-        max_tokens=8192,
-    )
-    assert kept == items[:MAX_MODEL_FINDINGS]
+def _with_severity(n: int, severity: str | None) -> dict:
+    return {"finding": f"finding {n}", "plain": {"severity": severity} if severity else None}
+
+
+def test_the_cap_keeps_the_most_severe_findings_in_the_models_order(capsys):
+    severities = ["low"] * 4 + ["critical", "high"] + ["medium"] * 8 + [None]
+    items = [_with_severity(n, s) for n, s in enumerate(severities)]
+    kept, left_out = keep_most_severe(items)
+    assert left_out == len(items) - MAX_MODEL_FINDINGS
+    assert len(kept) == MAX_MODEL_FINDINGS
+    # The critical and high findings survive though they came late, the
+    # earliest lows fill the last places, and the unrated one goes.
+    assert [i["finding"] for i in kept] == [
+        f"finding {n}" for n in [0, 1, *range(4, 14)]
+    ]
     assert '"emitted": 15' in capsys.readouterr().out
+
+
+def test_findings_within_the_cap_are_all_kept():
+    items = [_with_severity(n, "low") for n in range(MAX_MODEL_FINDINGS)]
+    assert keep_most_severe(items) == (items, 0)
 
 
 def test_prompt_treats_brief_claims_as_unverified_and_never_lets_them_narrow_the_review():
@@ -562,13 +575,76 @@ def test_reason_node_sends_the_resource_summary_to_the_model():
     state["terraform_resources"] = summary
     reason_node(state)
     sent = json.loads(state["reasoning_client"].calls[0]["user_content"])
-    assert sent["terraform_resources"] == summary
+    assert sent["terraform_resources"] == {**summary, "observation_format": MODEL_FORMAT_NOTE}
     assert "terraform_resources" in SYSTEM_PROMPT
+    assert "observation_format" in SYSTEM_PROMPT
+
+
+def _fact(setting, state, value, basis):
+    return {"id": "x", "resource": "r", "setting": setting, "state": state,
+            "value": value, "basis": basis}
+
+
+def test_the_model_reads_observations_in_their_short_form():
+    full = {
+        "version": "terraform-observations@2026-10-23",
+        "resource": "aws_apigatewayv2_route.payout",
+        "creation": "declared",
+        "source": {"kind": "submitted_resource_block", "module": "root", "line": None},
+        "facts": [
+            _fact("provider.account", "unknown", None, "runtime_identity_not_observed"),
+            _fact("authorization_type", "known", "NONE", "declared_configuration"),
+            _fact("resource.region", "known", "eu-central-1", "provider_configuration"),
+            _fact("runtime_invocation", "unknown", None, "effective_policy_and_runtime_not_observed"),
+            _fact("dynamic", "unsupported", None, "dynamic_blocks_not_expanded"),
+        ],
+        "relations": [
+            {"source": "r", "setting": "api_id", "target": "aws_apigatewayv2_api.payouts",
+             "state": "known", "basis": "direct_submitted_reference"},
+            {"source": "r", "setting": "authorizer_id", "target": None,
+             "state": "absent", "basis": "direct_submitted_reference"},
+        ],
+        "coverage": {"placement": "provider_only", "routing": "not_inspected"},
+        "omitted_items": 0,
+        "truncated": False,
+        "incomplete": True,
+    }
+    summary = {"resources": [{"type": "t", "name": "n", "settings": {}, "observations": full}]}
+    sent = build_user_content("brief", [], [], terraform_resources=summary)["terraform_resources"]
+    assert sent["resources"][0]["observations"] == {
+        "facts": {
+            "authorization_type": "NONE",
+            "resource.region": {"value": "eu-central-1", "basis": "provider_configuration"},
+        },
+        "absent": ["authorizer_id"],
+        "unknown": {"runtime_invocation": "effective_policy_and_runtime_not_observed"},
+        "unsupported": {"dynamic": "dynamic_blocks_not_expanded"},
+        "refs": {"api_id": "aws_apigatewayv2_api.payouts"},
+        "coverage": {"placement": "provider_only"},
+        "incomplete": True,
+    }
+    # The server-side summary is untouched.
+    assert summary["resources"][0]["observations"] is full
+
+
+def test_a_setting_seen_twice_keeps_both_values():
+    full = {
+        "facts": [
+            _fact("availability_zone", "known", "eu-central-1a", "declared_configuration"),
+            _fact("availability_zone", "known", "eu-central-1b", "declared_configuration"),
+        ]
+    }
+    summary = {"resources": [{"type": "t", "name": "n", "observations": full}]}
+    sent = build_user_content("brief", [], [], terraform_resources=summary)["terraform_resources"]
+    assert sent["resources"][0]["observations"]["facts"] == {
+        "availability_zone": ["eu-central-1a", "eu-central-1b"]
+    }
 
 
 def test_missing_resource_summary_sends_an_empty_list_not_null():
     content = build_user_content("brief", [], [])
-    assert content["terraform_resources"] == {"resources": [], "truncated": False}
+    assert content["terraform_resources"]["resources"] == []
+    assert content["terraform_resources"]["truncated"] is False
 
 
 # --- Plain-language explanation (stakeholder view) ---------------------------
@@ -666,3 +742,161 @@ def test_model_fixes_cant_add_shield_advanced_or_large_quantities():
     assert _with_plain({**_PLAIN, "fix_components": big}) is None
     shield = [{"item": "shield_advanced", "quantity": 1, "size": None}]
     assert _with_plain({**_PLAIN, "fix_components": shield}) is None
+
+
+# --- Model-facing input and fields code fills in
+
+
+def test_framework_mapping_comes_from_the_cited_chunk_not_the_model():
+    state = _reason_state([_valid_finding_item(framework_mapping=["MADE-UP-01"])])
+    state["retrieved_chunks"][0]["heading_path"] = "Security > SEC08-BP01 Implement data classification"
+    finding = reason_node(state)["reasoned_findings"][0]
+    assert finding["framework_mapping"] == [
+        "AWS Well-Architected: Security Pillar",
+        "SEC08-BP01",
+    ]
+
+
+def test_a_finding_without_a_citation_maps_to_no_framework():
+    assert framework_mapping_for(None) == []
+
+
+def test_depth_level_is_set_by_mode_not_by_the_model():
+    lightweight = reason_node(_reason_state([_valid_finding_item(depth_level="deep")]))
+    assert lightweight["reasoned_findings"][0]["depth_level"] == "lightweight"
+    state = _reason_state([_valid_finding_item()])
+    state.update(deep_mode=True, parent_finding={"finding": "Original finding"})
+    assert reason_node(state)["reasoned_findings"][0]["depth_level"] == "deep"
+
+
+def test_at_most_one_alternative_is_kept():
+    alternatives = [{"option": f"o{n}", "reason_rejected": "r"} for n in range(3)]
+    result = reason_node(_reason_state([_valid_finding_item(alternatives_considered=alternatives)]))
+    assert len(result["reasoned_findings"][0]["alternatives_considered"]) == 1
+
+
+def test_reason_node_reports_how_many_findings_the_cap_left_out():
+    items = [_valid_finding_item(finding=f"finding {n}") for n in range(MAX_MODEL_FINDINGS + 2)]
+    result = reason_node(_reason_state(items))
+    assert result["model_findings_capped"] == 2
+    assert result["model_output_counts"]["attempted"] == MAX_MODEL_FINDINGS
+    assert reason_node(_reason_state([_valid_finding_item()]))["model_findings_capped"] == 0
+
+
+def test_the_model_sees_only_what_it_needs_from_chunks_and_rule_findings():
+    sent = build_user_content(
+        "brief",
+        [
+            {
+                "category": "encryption",
+                "finding": "Bucket is unencrypted.",
+                "evidence": "aws_s3_bucket.logs",
+                "citation": {"content_hash": "PRIVATE-HASH"},
+                "confidence": 1.0,
+            }
+        ],
+        [_chunk("chunk-a", "Encrypt data at rest using AWS KMS customer managed keys.")],
+    )
+    assert sent["retrieved_evidence"] == [
+        {
+            "chunk_id": "chunk-a",
+            "source": "Security > Data Protection",
+            "text": "Encrypt data at rest using AWS KMS customer managed keys.",
+        }
+    ]
+    assert sent["rule_engine_findings"] == [
+        {
+            "category": "encryption",
+            "finding": "Bucket is unencrypted.",
+            "evidence": "aws_s3_bucket.logs",
+        }
+    ]
+
+
+def test_the_model_input_is_sent_as_compact_json():
+    state = _reason_state([])
+    reason_node(state)
+    content = state["reasoning_client"].calls[0]["user_content"]
+    assert content == json.dumps(json.loads(content), separators=(",", ":"))
+
+
+def test_reasoning_logs_sizes_and_rejection_kinds_never_text(capsys):
+    good = _valid_finding_item()
+    bad = _valid_finding_item(exact_quote="PRIVATE-QUOTE not in any chunk")
+    reason_node(_reason_state([good, bad]))
+    out = capsys.readouterr().out
+    assert "PRIVATE" not in out
+    logged = [json.loads(line) for line in out.splitlines() if line.startswith("{")]
+    sent = next(e for e in logged if e["event"] == "reasoning_input")
+    assert sent["review_id"] == "r1"
+    assert sent["evidence_passages"] == 1
+    assert set(sent["section_chars"]) >= {"terraform_resources", "retrieved_evidence"}
+    result = next(e for e in logged if e["event"] == "reasoning_result")
+    assert result == {
+        "event": "reasoning_result",
+        "review_id": "r1",
+        "emitted": 2,
+        "capped": 0,
+        "accepted": 1,
+        "rejected": {"quote_not_in_chunk": 1},
+    }
+
+
+def test_every_rejection_message_has_a_kind():
+    assert (
+        rejection_kind("finding[0]: chunk_id 'x' is not in the retrieved evidence set")
+        == "chunk_not_retrieved"
+    )
+    assert rejection_kind("finding[0]: failed to build a valid Finding: bad") == "invalid_fields"
+    assert rejection_kind("something new") == "other"
+
+
+# --- Rule findings sent to the model: capped, varied, never the report
+
+
+def _rule(concern: str, n: int = 0) -> dict:
+    return {"concern": concern, "category": "exposure", "finding": f"{concern} {n}", "evidence": "e"}
+
+
+def test_a_normal_number_of_rule_findings_is_sent_whole():
+    rules = [_rule("s3_public_access", n) for n in range(MAX_RULE_FINDINGS_FOR_MODEL)]
+    sent, omitted = rule_findings_for_model(rules)
+    assert len(sent) == MAX_RULE_FINDINGS_FOR_MODEL and omitted == 0
+
+
+def test_one_problem_repeated_hundreds_of_times_cannot_crowd_out_the_others():
+    rules = [_rule("s3_public_access", n) for n in range(300)]
+    rules += [_rule("rds_multi_az"), _rule("iam_wildcard"), _rule("sqs_dlq_retention")]
+    sent, omitted = rule_findings_for_model(rules)
+    assert len(sent) == MAX_RULE_FINDINGS_FOR_MODEL
+    assert omitted == len(rules) - MAX_RULE_FINDINGS_FOR_MODEL
+    titles = [f["finding"] for f in sent]
+    for concern in ("rds_multi_az 0", "iam_wildcard 0", "sqs_dlq_retention 0"):
+        assert concern in titles
+    # Kept findings stay in the rule engine's order.
+    assert titles[0] == "s3_public_access 0"
+
+
+def test_past_one_of_each_kind_the_most_severe_come_first():
+    # iam_wildcard is critical and rds_multi_az medium in the catalog.
+    rules = [_rule("rds_multi_az", n) for n in range(30)] + [
+        _rule("iam_wildcard", n) for n in range(30)
+    ]
+    sent, _ = rule_findings_for_model(rules)
+    kinds = [f["finding"].split()[0] for f in sent]
+    assert kinds.count("iam_wildcard") > kinds.count("rds_multi_az")
+
+
+def test_rule_finding_text_is_clipped_and_extra_fields_dropped():
+    rule = {**_rule("s3_public_access"), "evidence": "x" * 5000, "citation": {"a": 1}}
+    sent, _ = rule_findings_for_model([rule])
+    assert len(sent[0]["evidence"]) <= 500
+    assert set(sent[0]) == {"category", "finding", "evidence"}
+
+
+def test_the_model_is_told_how_many_rule_findings_it_did_not_see():
+    rules = [_rule("s3_public_access", n) for n in range(MAX_RULE_FINDINGS_FOR_MODEL + 7)]
+    content = build_user_content("brief", rules, [])
+    assert content["rule_engine_findings_omitted"] == 7
+    assert "rule_engine_findings_omitted" in SYSTEM_PROMPT
+    assert "rule_engine_findings_omitted" not in build_user_content("brief", rules[:3], [])

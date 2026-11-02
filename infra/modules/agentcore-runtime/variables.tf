@@ -42,8 +42,11 @@ variable "reasoning_model_id" {
 }
 
 variable "reasoning_max_tokens" {
+  # Billed per token produced, not per token allowed. A cut-off answer
+  # loses every model finding, and a 119-resource review used 6,446 of
+  # 8,192 (2026-10-29), so this leaves room.
   type    = number
-  default = 8192
+  default = 12288
 }
 
 variable "tags" {

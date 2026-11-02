@@ -15,6 +15,7 @@ REASONS = {
     "schema_validation_rejected",
     "quality_not_recorded",
     "model_unavailable",
+    "model_findings_capped",
 }
 
 
@@ -41,10 +42,17 @@ def _counts(value: Any) -> dict[str, int] | None:
 
 
 def build_analysis_quality(
-    model_output: Any, candidates: list[dict], valid: list[dict], *, model_unavailable: bool = False
+    model_output: Any,
+    candidates: list[dict],
+    valid: list[dict],
+    *,
+    model_unavailable: bool = False,
+    model_findings_capped: bool = False,
 ) -> dict[str, Any]:
     """model_unavailable: the model step failed (timed out, errored) and
-    the report holds only the deterministic findings."""
+    the report holds only the deterministic findings.
+    model_findings_capped: the model proposed more findings than a report
+    keeps, and the least severe were left out."""
     if model_unavailable:
         model_output = stage_counts(0, 0)
     model = _counts(model_output)
@@ -65,6 +73,10 @@ def build_analysis_quality(
         outcome = "rules-only"
     else:
         outcome = "partial" if reasons else "complete"
+    # Added after the outcome: leaving out the least severe findings is a
+    # size limit, not a failed check, so it doesn't make a report partial.
+    if model_findings_capped and not model_unavailable:
+        reasons.append("model_findings_capped")
     return {
         "version": 1,
         "outcome": outcome,

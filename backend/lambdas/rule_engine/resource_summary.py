@@ -74,7 +74,10 @@ COVERAGE_NOTE = (
 # A count above this is reported as unknown rather than trusted.
 MAX_COPIES = 1000
 UNKNOWN = "unknown"
-MAX_RESOURCES = 80
+# The model reads observations in their short form (model_observations.
+# compact_for_model), so 120 resources cost it less than 80 did in full
+# (2026-10-30); a 119-resource test had hidden five S3 buckets at 80.
+MAX_RESOURCES = 120
 # Provider resource types are lowercase snake case and some real ones are
 # long (aws_s3_bucket_server_side_encryption_configuration is 50).
 _RESOURCE_TYPE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
