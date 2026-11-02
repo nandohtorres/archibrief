@@ -1,87 +1,86 @@
-# Local candidate and release handoff
+# Release status
 
-This is a source/verification checkpoint, not a declaration that every roadmap
-gate or the live application is complete. Work is isolated on
-`codex/report-contract-redesign`; the bounded checkpoint remains
-`codex/portfolio-trust-fixes` / `checkpoint/bounded-fixes-2026-10-23`.
-Nothing in this session was pushed, deployed or evaluated with a real model.
+What is live, how a release ships, and what is still open. Updated
+2026-10-29. The earlier local-candidate handoff (Codex branches, 2026-10-24)
+is in git history; its branches were merged as PR #29 and later.
 
-## Implemented locally
+## Live
 
-- Demo corrections and saved-answer warnings travel with exports; direct links,
-  browser recovery and clearer failure states have regression coverage.
-- Risk/action assessments are independent of evidence type; rejected-output
-  quality counters survive publication.
-- Original S3 evidence plus durable children feed report, diagrams and chat.
-  Deeper reviews use bounded background jobs, atomic outcomes and reload recovery.
-- Corrected semantic criteria preserve the frozen baseline. Six guarded runners
-  distinguish free contracts, model components and integrated local application
-  evaluation. Raw failures stay counted; source/case/schema/corpus/configuration
-  fingerprints and call/generation controls make later runs reviewable.
-- [Bounded architecture coverage](terraform-coverage.md) supplies placement,
-  routing, retention, backup-selection and entry-path observations with explicit
-  unknowns and limits. It does not implement all Terraform or verify deployment.
-- Startup logs survive browser-server build failure. CI uploads them alongside
-  traces/reports. Static builds emit `build-info.json` with the actual exported
-  index hash, a declared revision when supplied and an explicit unverified backend.
-- The [retention example](examples/retention-remediation/README.md) is a measured
-  static before/after comparison, not a model benchmark.
+[archibrief.dev](https://archibrief.dev) is open to the public: anyone can
+submit Terraform within the daily limits, open the three hand-checked demos,
+go deeper on a finding, ask the report chat and share a read-only link.
 
-The current candidate's exact checks are recorded in the session/review ledgers.
-The final full backend run passed 1,234 tests / 5 skipped / 26 coverage-gap cases
-deselected, including conservative noncurrent-block controls. The full browser
-suite passed 75; frontend unit tests passed 83; tooling tests passed four. One
-real static export verified the new postbuild stamp against its index bytes.
-Backend Ruff lint/format, continuation Python lint/format, ESLint, TypeScript,
-Prettier and staged Gitleaks checks passed. Broader optional tests/scripts Ruff
-scans also expose pre-existing style debt outside CI's backend-only scope; no
-unrelated formatting sweep was made. Local Python was 3.14.3 with isolated pinned
-LangGraph dependencies; CI's Python 3.12 run remains pending publication.
+| Part | Revision | How it got there |
+|---|---|---|
+| Frontend | `master` after PR #53 | Deployed automatically by `deploy-frontend.yml` after green CI (ADR-0055) |
+| Backend (Lambdas, Step Functions, AgentCore runtime) | `master` after PR #53 | Owner applied the plans on 2026-10-29 and 2026-11-02; live hard tests 1-3 then completed the model step in 76-94 s |
 
-The separate frozen coverage selection is 18 pass / 8 fail, not a hidden clean
-score. [Coverage reconciliation](terraform-coverage.md) explains its four remaining
-expectations and the two separate lexical false-positive corrections. No frozen
-key, fixture, saved score, historical model input or demo result was rewritten.
+## Shipping a release
 
-## Public read-only observations, 2026-10-24
+- **Frontend:** merge to `master`. CD publishes the exact CI-tested revision
+  and checks the live build stamp; a daily GET-only smoke watches it. If two
+  merges land close together, rerun the workflow on `master` afterwards so
+  the newest revision is the one deployed.
+- **Backend:** from the repository root, build the packages, then plan and
+  apply in `infra/environments/dev`:
 
-The landing page returned HTTP 200 and contains the GitHub source link. Its
-last-modified header was 2026-10-23 18:49:17 GMT; downloaded HTML SHA256 was
-`7655e3a7800d22aac45a4ee53dc33c015adae87be437bfc81d2471b459f2810f`.
-GitHub master was `4fb3ac42cf5ade8711f2adad814b89e6b3a54791` (PR #28).
-No redesign PR was found for this branch during the check. These observations
-do not establish which full revision is deployed, public submission behavior,
-model quality, retention, IAM or successful end-to-end reviews.
+  ```text
+  backend\.venv\Scripts\python.exe scripts\package_lambdas.py
+  backend\.venv\Scripts\python.exe backend\agent\build_runtime_package.py
+  terraform plan "-out=tmp/<name>.tfplan"
+  terraform apply tmp/<name>.tfplan
+  ```
 
-## Remaining gates
+  The owner reviews every plan and runs the apply. CI never deploys the
+  backend.
 
-| Gate | Needed before claiming completion |
+## Verification at this revision
+
+Measured on the PR #52 branch (2026-10-29); CI ran the same suites green.
+
+| Suite | Result |
 |---|---|
-| Peer review/publication | Publish the two explicitly approved branches and draft reviews; have Claude review the full history and choose changes. Pushes require Fernando's specific instruction. |
-| Terraform/deployment | Rebuild affected Lambda/AgentCore packages; validate locked provider schemas and a fresh plan; review IAM/KMS, workflow timing and migration; deploy only after approval. Earlier HCL parse/fmt/Trivy checks are not a fresh plan. |
-| Paid quality | Approve account/SDK Region/model/guards, exact cases and call/output scope plus an actual spending allowance. Limits do not enforce a verified dollar ceiling. Run a small batch and inspect all attempts before extending it. |
-| Semantic adjudication | Review correctness, source support, scope and recommendations across retained/rejected output. Keyword matches, quote integrity and successful contracts are not model accuracy. |
-| Live integration | Verify capabilities, Turnstile, CORS/WAF/default-endpoint boundaries, immutable uploads, concurrency/idempotency, clarification, partial/all-rejected output, deeper recovery, chat, kill switch and callbacks against deployed services. |
-| Privacy/retention | Inventory current objects/history/logs/PITR/backups, verify actual retention and contact/processors, and reconcile public text. Preserve data before destructive retention changes. |
-| Portfolio evidence | Capture the approved deployed revision and fresh screenshots/performance. Finish human accessibility checks and the paired-workload model demonstration; historical Lighthouse numbers remain historical. |
-| Money/effort UI | Explicitly deferred by Fernando. Prices, numeric effort and aggregation were left unchanged. New qualitative findings do not receive invented price recipes. |
+| Backend, CI selection (`-m "not coverage_gap"`) | 1,272 passed, 1 skipped, 26 deselected |
+| Adversarial suite | 249 passed, 8 failed: the documented coverage gaps ([FIX_REPORT](../tests/backend/adversarial/FIX_REPORT.md)) |
+| Frontend unit | 89 passed in 16 files |
+| Playwright | 78 passed |
+| Deterministic traps | 60 passed |
+| Lint and types | Ruff, ESLint, TypeScript, Prettier pass |
 
-No rollout, paid smoke test, migration, notification or retention change is
-authorized merely by this document. The next concrete step is publishing the
-reviewable branches after the specific push instruction, then independent review.
+None of these measures live model quality. The live hard tests below do,
+by hand.
+
+## Live hard tests
+
+Three Terraform submissions with planted issues and answer keys (kept
+outside this repository): a 74-resource payments platform, a 69-resource telehealth platform with a
+lying brief, and a 119-resource EU logistics platform with a data-residency
+requirement and injection planted in the code. Results and the fixes they
+drove are in [evaluation](evaluation.md#live-hard-tests).
+
+## Open gates
+
+| Gate | Status |
+|---|---|
+| Data residency rule | Hard test 3's EU residency breach (driver documents replicated to us-east-1) was missed by rules and model. A deterministic rule comparing resource Regions with the stated requirement is next. |
+| Model blind spots | 30+ resource types with no settings or details (Redshift, EKS clusters, EventBridge policies, AMI permissions among them) and unevaluated modules ([coverage](terraform-coverage.md)). Four of hard test 3's eight criticals sit in them. |
+| Paid evaluations | The chat's paid trap and quality runs are still pending. Model trap briefs run by hand. |
+| Semantic accuracy | Quote matching proves provenance, not support. Hard-test scoring is a manual judgment against answer keys. |
+| Retention inventory | Verify actual retention against the [privacy page](https://archibrief.dev/privacy.html). |
+| Portfolio evidence | Fresh screenshots and demo GIF (current ones predate the report header redesign and the clarify removal). |
+| Lambda concurrency (T4) | Unreserved; the account's concurrency ceiling is too low to reserve. Accepted. |
+
+No rollout, paid run or retention change is authorized by this document.
 
 ## Build identity and failure diagnostics
 
 Both `npm run build` and `npm run build:e2e` generate `build-info.json` after the
 static export. `ARCHIBRIEF_BUILD_REVISION` may name the approved commit; GitHub
 Actions otherwise supplies `GITHUB_SHA`. Unavailable/invalid revisions stay null,
-with `revision_source: unrecorded`. Operator-supplied identity is not an attestation.
-The index SHA256 can be compared with downloaded HTML after an approved deployment;
-backend versions/permissions require separate verification. No arbitrary environment
-values enter the stamp.
+with `revision_source: unrecorded`. The index SHA256 can be compared with the
+downloaded HTML; backend versions need separate verification. No arbitrary
+environment values enter the stamp.
 
 Per-variant build logs are written while compilation runs under ignored
-`frontend/e2e-build-logs/`. A timeout can therefore leave diagnostic evidence even
-before Playwright creates its report. CI retains failure artifacts for seven days.
-Local success does not diagnose the historical remote CI failure or replace the
-next actual CI run. No blind timeout or production ranking change was made.
+`frontend/e2e-build-logs/`, so a timeout leaves diagnostic evidence before
+Playwright creates its report. CI keeps failure artifacts for seven days.

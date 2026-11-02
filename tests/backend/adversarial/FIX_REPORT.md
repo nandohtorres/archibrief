@@ -1,5 +1,15 @@
 # Adversarial fixes, 2026-10-22
 
+> **Current status (2026-10-29):** the full adversarial suite is 249 passed /
+> 8 failed. The 8 are the remaining documented coverage gaps, each in rules
+> and Trivy mode: F04-D-07 (a "private" subnet routed to an internet
+> gateway), F07-D-03 and F07-D-05 (an unauthenticated Lambda function URL
+> as a second entry path, and the diagram edge to it) and F07-D-04 (an API
+> route with authorization NONE beside one with an authorizer). Live hard
+> test 2 missed the same three patterns. CI deselects all 26
+> `coverage_gap` cases; 18 of them now pass. The record below is the
+> original dated report, kept as written.
+
 All B1-B20 were confirmed and addressed. All frozen non-coverage checks
 pass in rules and offline Trivy modes; no previously passing raw check
 regressed. The complete adversarial suite still fails on documented

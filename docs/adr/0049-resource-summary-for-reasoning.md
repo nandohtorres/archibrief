@@ -1,6 +1,8 @@
 # ADR 0049: Give the Reasoning Model a Sanitized Resource Summary
 
-**Status:** Accepted (2026-10-15).
+**Status:** Accepted (2026-10-15). Extended by ADR-0056 (2026-10-28):
+fixed-vocabulary nested facts and tag labels now reach the model, and the
+cap keeps the riskiest resources rather than the first alphabetically.
 
 ## Context
 

@@ -1,9 +1,9 @@
 # Demo reviews
 
 ArchiBrief's public demos are real reviews of real, public Terraform.
-Each was run once through the deployed pipeline, on the admin path, and
-saved. Visitors open the saved report: visiting never starts a paid
-review (ADR-0029).
+Each was run once through the deployed pipeline in mid-October 2026, on
+the admin path that existed before public launch, and saved. Visitors open
+the saved report: visiting never starts a paid review (ADR-0029).
 
 Everything a demo needs lives in `frontend/public/demos/`:
 
@@ -65,7 +65,10 @@ one.
 All runs through `https://api.archibrief.dev` (admin
 path), rule version `rule_engine@2026-10-15b` with Trivy 0.76.0, model
 `us.anthropic.claude-sonnet-4-6`, prompt `reason_prompt@2026-10-15d`,
-corpus v3.
+corpus v3. The pipeline has changed since (nested-configuration facts,
+topic searches, brief rules; ADR-0056 to ADR-0058), so a fresh run of the
+same code would differ; the saved reports and their audits describe that
+version.
 
 | Demo | Review ID | Duration | Findings | Status |
 |---|---|---|---|---|

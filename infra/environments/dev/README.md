@@ -91,3 +91,23 @@ The optional GitHub OIDC provider and frontend-only deploy role are documented
 in [frontend deployment](../../../docs/frontend-deployment.md). The provider flag
 defaults to false. Fernando applies infrastructure and IAM permission-set changes
 manually; the Actions workflows only publish static files and run read-only smoke.
+
+## Routine backend deploy
+
+From the repository root, rebuild what changed, then plan and apply here:
+
+```
+python scripts/package_lambdas.py
+python backend/agent/build_runtime_package.py   # AgentCore runtime; needs uv
+cd infra/environments/dev
+terraform plan "-out=tmp/<name>.tfplan"
+terraform apply tmp/<name>.tfplan
+```
+
+Quote the `-out` argument in PowerShell, which otherwise splits it at the
+dot. Read the plan before applying: a change that only re-reads
+`state_machine_invoke` is expected; a destroy usually isn't. Account-specific
+values live in the gitignored `terraform.tfvars`. A variable left there after
+its declaration is removed only produces an "undeclared variable" warning;
+delete it once a rollback past that change is no longer wanted. Old plan
+files in `tmp/` can be deleted after their apply.
