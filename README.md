@@ -21,6 +21,10 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 **Tested like an adversary.** Besides the unit and trap suites, three larger Terraform submissions with planted issues, decoys and lying briefs were run through the live site and scored by hand. They found a model blind to nested configuration, a timeout on large reviews, a polite brief that steered the review, and a summary cap that cut resources alphabetically; each is fixed and recorded. After the fixes, all three complete the AI step in 76–94 s (about $0.20 each); the 119-resource test still misses its EU data-residency breach and four critical issues in resource types the model can't see yet ([live hard tests](docs/evaluation.md#live-hard-tests), [case study](docs/case-study.md#testing-it-like-an-adversary), [timeout incident write-up](docs/incidents/2026-10-29-review-timeouts.md)).
 
+## Who built it
+
+Designed and built by Fernando Torres. I defined the architecture, threat model, spend controls and the adversarial test plan (including the planted-issue hard tests), and directed and reviewed the implementation, using AI coding assistants (Claude Code, Codex) to write and review much of the code. Every deploy goes through a Terraform plan I review and apply myself.
+
 ## How it works
 
 1. Upload a bounded Terraform archive and describe the workload. Ingestion validates the archive and parses HCL statically; it does not run Terraform, providers, or provisioners.
