@@ -80,6 +80,22 @@ SSO fallback are in [frontend deployment](docs/frontend-deployment.md).
 The deploy role can only write the site bucket and invalidate its CloudFront
 distribution, and only a `production`-environment run from `master` can assume it.
 
+## Operations
+
+The review runtime logs sizes and counts, never review content: the model
+input by section, tokens, time, findings kept and rejections by kind.
+`scripts/analyze_review_logs.py` reads those CloudWatch logs and reports each
+review's outcome, model time, tokens, estimated cost and anything needing
+attention (a timed-out call, an answer near its token limit, a runtime crash):
+
+```text
+python scripts/analyze_review_logs.py --profile archibrief-deploy --hours 72
+```
+
+It replaced reading the logs by hand while diagnosing review timeouts, and
+names a broken deploy (such as a module missing from the runtime package) in
+one line.
+
 ## Screenshots
 
 Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo reviews without an account.

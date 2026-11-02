@@ -446,6 +446,8 @@ h4 {
 .report-frame {
   display: grid;
   gap: var(--space-3);
+  /* Room between the site header's border and the report's first card. */
+  padding-top: var(--space-3);
 }
 
 .report-content > .report-section:first-child {
