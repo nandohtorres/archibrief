@@ -22,19 +22,19 @@ const html = `<!doctype html>
     width: 1200px; height: 630px; box-sizing: border-box;
     padding: 72px 88px;
     display: flex; flex-direction: column; justify-content: space-between;
-    background-color: #0e131a;
-    background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px);
+    background-color: #f4f7f9;
+    background-image: radial-gradient(rgba(19,28,36,0.09) 1px, transparent 1px);
     background-size: 22px 22px;
-    color: #e8eef3;
+    color: #131c24;
   }
   .brand { display: flex; align-items: center; gap: 16px; }
-  .brand svg { width: 52px; height: 52px; color: #7cc0dc; }
+  .brand svg { width: 52px; height: 52px; color: #235f7a; }
   .brand strong { font: 700 30px/1 "IBM Plex Mono", monospace; letter-spacing: -0.01em; }
-  .brand span { display: block; margin-top: 8px; color: #9fb1c0; font: 500 17px/1 "IBM Plex Mono", monospace; }
+  .brand span { display: block; margin-top: 8px; color: #43596c; font: 500 17px/1 "IBM Plex Mono", monospace; }
   h1 { margin: 0; max-width: 980px; font: 600 70px/1.08 "Source Serif 4", Georgia, serif; letter-spacing: -0.015em; }
-  h1 em { color: #7cc0dc; font-weight: 500; }
-  ul { display: flex; gap: 36px; margin: 0; padding: 0; list-style: none; color: #b8c6d2; font: 500 19px/1 "IBM Plex Mono", monospace; white-space: nowrap; }
-  li::before { content: "✓"; margin-right: 10px; color: #5fcf9f; }
+  h1 em { color: #235f7a; font-weight: 500; }
+  ul { display: flex; gap: 36px; margin: 0; padding: 0; list-style: none; color: #43596c; font: 500 19px/1 "IBM Plex Mono", monospace; white-space: nowrap; }
+  li::before { content: "✓"; margin-right: 10px; color: #1f6d51; }
 </style>
 </head>
 <body>
