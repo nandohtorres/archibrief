@@ -127,7 +127,7 @@ What each step guarantees:
 | The archive is invalid | A clear failure; the reservation is given back | Nothing billed yet |
 | Guardrails blocks the brief | "Flagged by our safety checks" | Guardrails was billed; the reservation stays |
 | Trivy fails | The review continues with ArchiBrief's own rules and says the scanner didn't run | A scanner outage shouldn't block a review (ADR-0048) |
-| The model stalls or runs long | After 90 s idle or 420 s overall, the review finishes with the rule findings and a note that the AI analysis didn't finish | Some evidence beats none; never retried, so never charged twice (ADR-0058) |
+| The model fails or runs long | If the call fails or hasn't answered within 400 s, the review finishes with the rule findings and a note that the AI analysis didn't finish | Some evidence beats none; never retried, so never charged twice (ADR-0058, ADR-0059) |
 | A model finding cites a quote that isn't in the evidence | That finding is dropped; the report counts it | One bad citation doesn't discard the review |
 | Spend nears the monthly AWS budget | At 90% the kill switch turns itself on; every paid path refuses | Billing lags, so the $75 admission ceiling is the real-time limit (ADR-0052) |
 | A deeper review times out | The job shows failed; reloading recovers its status | One model attempt per request |
@@ -140,7 +140,7 @@ flowchart LR
     B --> C["Upload limits<br/>40/day, 6 per visitor"]
     C --> D["Spend reservation<br/>month $75, day $8,<br/>visitor $2, review $1"]
     D --> E["Kill switch<br/>checked before paid work"]
-    E --> F["Per-call bounds<br/>max tokens, 12 findings,<br/>420 s, no retries"]
+    E --> F["Per-call bounds<br/>max tokens, 12 findings,<br/>400 s, no retries"]
     G["AWS budget $100<br/>90% turns the kill switch on"] -.-> E
 ```
 

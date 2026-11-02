@@ -136,7 +136,7 @@ flowchart LR
    raw Terraform (ADR-0049). It adds fixed-vocabulary facts from nested
    configuration (`details`), environment and data-classification labels
    from tags (`declared_context`), and keeps the riskiest resources when a
-   submission passes the 80-resource cap (ADR-0056).
+   submission passes the 120-resource cap (ADR-0056, ADR-0059).
 7. **PreflightGate → Retrieve → Reason** (AgentCore Runtime) — resolves
    per-field missing-data policy, retrieves relevant RAG chunks from S3
    Vectors (embedded via Titan V2) for the brief plus up to 8 risk and 2
@@ -148,9 +148,12 @@ flowchart LR
    Guardrails runs again immediately before this step. No field pauses
    the review: the one that can't be inferred (regulatory and data
    residency requirements) is a required question on the submission form.
-   The model call streams (ConverseStream): it fails after 90 s without a
-   new chunk or 420 s overall, never retried, and its output is used only
-   once the whole tool call has arrived. Model findings are capped at 12.
+   The model call is one non-streaming request that waits up to 400 s for
+   the whole answer (240 s for "go deeper") and is never retried. Bedrock
+   holds a forced, strict tool call's output until it is complete, so a
+   streamed call had nothing to show early (ADR-0059). The model reads
+   observations in a compact form and at most 40 rule findings, one of each
+   kind first. Model findings are capped at 12, the most severe kept.
    If this step fails, the worker publishes the rule and scanner findings
    on their own, marked `model_unavailable` in the analysis quality, instead
    of failing the review (ADR-0058).

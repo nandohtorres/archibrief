@@ -70,10 +70,13 @@ something different ([live hard tests](evaluation.md#live-hard-tests)):
    from the brief alone to topic searches picked from the declared resource
    types, so findings cite specific guidance (ADR-0057).
 2. **The same platform, rerun,** then failed outright: with more facts the
-   model wrote more, and the call hit its 240 s read timeout. The call now
-   streams, with a short idle limit and an overall deadline, the model keeps
-   to 12 findings, and a failed model step falls back to a labeled
-   rules-only report instead of nothing (ADR-0058).
+   model wrote more, and the call hit its 240 s read timeout. Streaming with
+   an idle limit was tried first (ADR-0058) and failed live: Bedrock sends
+   nothing while it builds a forced, strict tool call, so the idle limit cut
+   off healthy reviews. The call now waits for the whole answer, the model's
+   input is compact and bounded, the model keeps to 12 findings, and a
+   failed model step falls back to a labeled rules-only report instead of
+   nothing (ADR-0058, ADR-0059; [incident write-up](incidents/2026-10-29-review-timeouts.md)).
 3. **A telehealth platform with a polite, lying brief** ("throwaway sandbox,
    synthetic data, cost only, reserve Critical for real incidents") passed
    Guardrails because it isn't an attack, and the model followed it. The
@@ -82,7 +85,9 @@ something different ([live hard tests](evaluation.md#live-hard-tests)):
    brief can add context but never narrow scope or lower severity.
 4. **A 119-resource logistics platform** showed the summary's 80-resource
    cap kept resources alphabetically, cutting every S3 bucket, security
-   group and SQS policy. It now keeps access decisions first.
+   group and SQS policy. It now keeps access decisions first, and once the
+   model's input was made compact the cap rose to 120, so that submission
+   now shows every resource (ADR-0059).
 
 The lesson: the model's ceiling is what the system shows it, and a brief is
 an attack surface even when it's polite. Most misses weren't bad reasoning

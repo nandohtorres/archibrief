@@ -17,7 +17,7 @@ accepted here on purpose.
 | Operational excellence | Everything is Terraform; 58 decision records; CI gates every change | Backend deploys are manual; no alarm on failed reviews |
 | Security | Untrusted input never executes, and the model can't change anything | Review keys in `localStorage` are readable by any script in the page |
 | Reliability | No paid step is ever retried blindly; a failed model step still ships a report | One Region; Lambda concurrency can't be reserved in this account |
-| Performance efficiency | Static frontend on a CDN; serverless backend; streamed model call | A review takes minutes, and nothing has been load-tested |
+| Performance efficiency | Static frontend on a CDN; serverless backend; one bounded model call per review | A review takes minutes, and nothing has been load-tested |
 | Cost optimization | Spend reserved before every paid call, with a monthly ceiling and an automatic stop | Reservations are estimates, never settled to the actual bill |
 | Sustainability | Scale to zero; no idle compute | The largest model in use for every review, without a measured smaller alternative |
 
@@ -93,9 +93,9 @@ accepted here on purpose.
   that recovers a lost upload response.
 - **No blind retries of paid work.** Non-paid stages retry transient errors;
   the model call runs once, because a timed-out call may already be billed.
-- **Timeouts nest:** the streamed model call ends at 420 s, the worker waits
-  up to 600 s bounded by its remaining time, the Lambda times out at 900 s,
-  the state machine task at 910 s (ADR-0058).
+- **Timeouts nest:** the model call ends at 400 s, the worker waits up to
+  600 s bounded by its remaining time, the Lambda times out at 900 s, the
+  state machine task at 910 s (ADR-0058, ADR-0059).
 - **Graceful degradation:** a Trivy failure falls back to ArchiBrief's own
   rules; a model failure ships the rule findings with a clear note.
 - "Go deeper" runs as a durable background job whose result and completion
@@ -146,8 +146,8 @@ accepted here on purpose.
   no instance runs while nobody is reviewing.
 - **The demos cost nothing to open:** they load saved reports, and their
   suggested chat answers were generated once.
-- Per-call bounds: max tokens, at most 12 model findings, a deadline, no
-  retries.
+- Per-call bounds: max tokens, at most 12 model findings, a 400 s wait,
+  bounded input, no retries.
 
 **Gaps**
 

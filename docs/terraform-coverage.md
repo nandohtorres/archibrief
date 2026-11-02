@@ -156,7 +156,7 @@ reach the model. Each is a candidate for the next round of summary work:
 |---|---|---|
 | About 30 resource types with no settings or details: EKS clusters and node groups, Cognito user and identity pools, API Gateway v2 routes and authorizers, API Gateway method settings, Lambda function URLs, EventBridge buses and rules, MSK, Redshift, OpenSearch, Route 53 records, AMI launch permissions, Step Functions logging, Firehose, EFS | The model can only reason about them from rule findings or names | Hard tests 2 and 3 |
 | Local modules whose inputs reference other resources aren't evaluated ("input value unresolved in parent scope") | Nothing inside the module reaches rules or the model | Hard test 2 (`modules/records`) |
-| The 80-resource cap | A 119-resource submission loses its 39 least risky resources; some still matter (a Route 53 record, an S3 lifecycle rule) | Hard test 3 |
+| The resource cap (120 since 2026-10-30, 80 before) | Past it, the least risky resources are left out. At 80, hard test 3 lost 39 (a Route 53 record, an S3 lifecycle rule); at 120 all 119 fit | Hard test 3 |
 | Launch template `user_data`, DynamoDB `replica` blocks, Terraform `backend` and `output` blocks aren't summarized | Secrets in user data, cross-region replicas and unencrypted state are invisible | Hard test 3 |
 | Cognito `aud`/`amr` conditions on a federated trust aren't listed as condition keys | A guarded trust looks unguarded | Hard test 3 |
 | No rule flags a "private" subnet routed to an internet gateway (the route itself is observed), an unauthenticated function URL or an unauthenticated API route | Left to the model, which misses them; also open adversarial coverage gaps F04-D-07 and F07-D-03 to F07-D-05 | Hard test 2 |

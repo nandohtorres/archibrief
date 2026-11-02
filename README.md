@@ -19,7 +19,7 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 **How public use is bounded:** a Cloudflare Turnstile check before each upload, AWS WAF in front of the API, and spending limits reserved in DynamoDB before every paid call: a monthly ceiling, plus daily limits globally, per visitor and per review. At 90% of the monthly AWS budget a kill switch turns itself on ([public access design](docs/public-access-implementation.md)). Not yet done: the paid chat evaluation.
 
-**Tested like an adversary.** Besides the unit and trap suites, three larger Terraform submissions with planted issues, decoys and lying briefs were run through the live site and scored by hand. They found a model blind to nested configuration, a timeout on large reviews, a polite brief that steered the review, and a summary cap that cut resources alphabetically; each is fixed and recorded ([live hard tests](docs/evaluation.md#live-hard-tests), [case study](docs/case-study.md#testing-it-like-an-adversary)).
+**Tested like an adversary.** Besides the unit and trap suites, three larger Terraform submissions with planted issues, decoys and lying briefs were run through the live site and scored by hand. They found a model blind to nested configuration, a timeout on large reviews, a polite brief that steered the review, and a summary cap that cut resources alphabetically; each is fixed and recorded ([live hard tests](docs/evaluation.md#live-hard-tests), [case study](docs/case-study.md#testing-it-like-an-adversary), [timeout incident write-up](docs/incidents/2026-10-29-review-timeouts.md)).
 
 ## How it works
 
@@ -31,7 +31,7 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 The frontend exposes progress with an early architecture diagram, findings, a stakeholder view of the same evidence, per-finding “go deeper,” report chat, and an HTML report download that includes the conversation. See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [evaluation](docs/evaluation.md), and [Trivy comparison](docs/comparison.md).
 
-The [engineering case study](docs/case-study.md) explains the tradeoffs, a reporting failure found during review, and what adversarial testing broke. The [decision records](docs/adr/README.md) (58 ADRs) give the reasoning behind each architectural choice.
+The [engineering case study](docs/case-study.md) explains the tradeoffs, a reporting failure found during review, and what adversarial testing broke. The [decision records](docs/adr/README.md) (60 ADRs) give the reasoning behind each architectural choice.
 
 ## What the receipts establish—and their limits
 

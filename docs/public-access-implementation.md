@@ -100,9 +100,9 @@ reads the submission object under `jobs/` in S3
 and runs the content-bearing stages. Stages that don't call the model retry
 transient Lambda errors; the AgentCore call runs once, because a timed-out
 model call may already be billed. The worker waits up to 600 s for it,
-bounded by its remaining time; the runtime's streamed model call ends first
-(420 s overall, 90 s idle), and a failed model step still publishes the rule
-findings (ADR-0058). The Step Functions task timeout (910 s) sits above the
+bounded by its remaining time; the runtime's model call ends first (a 400 s
+wait for the whole answer, ADR-0059), and a failed model step still publishes
+the rule findings (ADR-0058). The Step Functions task timeout (910 s) sits above the
 worker's 900 s Lambda timeout, so the Lambda's own timeout fires first.
 
 Access ends at the review's seven-day expiry. S3 lifecycle rules cover

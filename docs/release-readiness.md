@@ -12,9 +12,8 @@ go deeper on a finding, ask the report chat and share a read-only link.
 
 | Part | Revision | How it got there |
 |---|---|---|
-| Frontend | `master` after PR #51 | Deployed automatically by `deploy-frontend.yml` after green CI (ADR-0055) |
-| Backend (Lambdas, Step Functions, AgentCore runtime) | `master` after PR #51 | Owner applied the review-quality plan on 2026-10-28 (0 add / 13 change / 0 destroy) |
-| Open, not deployed | PR #52: streamed model call, rules-only fallback, brief hardening, risk-ordered summary cap | Waiting for merge, then package build and plan |
+| Frontend | `master` after PR #53 | Deployed automatically by `deploy-frontend.yml` after green CI (ADR-0055) |
+| Backend (Lambdas, Step Functions, AgentCore runtime) | `master` after PR #53 | Owner applied the plans on 2026-10-29 and 2026-11-02; live hard tests 1-3 then completed the model step in 76-94 s |
 
 ## Shipping a release
 
@@ -63,8 +62,8 @@ drove are in [evaluation](evaluation.md#live-hard-tests).
 
 | Gate | Status |
 |---|---|
-| Deploy PR #52 | Merge, build packages, plan, apply. Then rerun hard test 1 (timed out before) and run hard test 3. |
-| Model blind spots | 30+ resource types with no settings or details, unevaluated modules, the 80-resource cap ([coverage](terraform-coverage.md)). Next fixes are chosen from hard test results. |
+| Data residency rule | Hard test 3's EU residency breach (driver documents replicated to us-east-1) was missed by rules and model. A deterministic rule comparing resource Regions with the stated requirement is next. |
+| Model blind spots | 30+ resource types with no settings or details (Redshift, EKS clusters, EventBridge policies, AMI permissions among them) and unevaluated modules ([coverage](terraform-coverage.md)). Four of hard test 3's eight criticals sit in them. |
 | Paid evaluations | The chat's paid trap and quality runs are still pending. Model trap briefs run by hand. |
 | Semantic accuracy | Quote matching proves provenance, not support. Hard-test scoring is a manual judgment against answer keys. |
 | Retention inventory | Verify actual retention against the [privacy page](https://archibrief.dev/privacy.html). |

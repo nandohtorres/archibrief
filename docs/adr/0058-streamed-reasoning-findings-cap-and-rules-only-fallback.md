@@ -1,7 +1,8 @@
 # ADR 0058: Streamed Reasoning, a Findings Cap, a Rules-Only Fallback and Untrusted Brief Claims
 
-**Status:** Accepted (2026-10-29, PR #52). Extends ADR-0028 (orchestration
-boundary), ADR-0038 (prompt-injection boundaries) and ADR-0039.
+**Status:** Accepted (2026-10-29, PR #52); decision 1 superseded by ADR-0059
+(2026-10-30, PR #53). Extends ADR-0028 (orchestration boundary), ADR-0038
+(prompt-injection boundaries) and ADR-0039.
 
 ## Context
 
@@ -19,7 +20,8 @@ Two hard tests ran at once on 2026-10-28:
 
 ## Decision
 
-1. **The reasoning call streams** (ConverseStream). It fails after 90 s
+1. *(Superseded by ADR-0059: the call no longer streams.)*
+   **The reasoning call streams** (ConverseStream). It fails after 90 s
    without a new chunk or 420 s overall; "go deeper" has a 180 s deadline
    to fit its worker's 300 s wait. The tool input is parsed only once the
    model stops for `tool_use`, so a partial answer is never used. Nothing
