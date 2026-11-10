@@ -8,13 +8,13 @@ anyio==4.16.0
     #   httpx2
     #   langsmith
     #   starlette
-bedrock-agentcore==1.25.2
+bedrock-agentcore==1.25.4
     # via -r backend/agent/runtime_requirements.in
-boto3==1.43.123
+boto3==1.43.126
     # via
     #   -r backend/agent/runtime_requirements.in
     #   bedrock-agentcore
-botocore==1.43.123
+botocore==1.43.126
     # via
     #   bedrock-agentcore
     #   boto3
@@ -26,7 +26,7 @@ certifi==2026.10.23
     #   requests
 charset-normalizer==3.5.2
     # via requests
-click==8.5.0
+click==8.5.1
     # via uvicorn
 distro==1.9.0
     # via langsmith
@@ -55,21 +55,21 @@ jmespath==1.1.0
     # via
     #   boto3
     #   botocore
-jsonpatch==1.39
+jsonpatch==1.44
     # via langchain-core
-jsonpointer==3.7
+jsonpointer==3.10
     # via jsonpatch
-langchain-core==1.7.4
+langchain-core==1.7.6
     # via
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
     #   langgraph-sdk
-langchain-protocol==0.0.20
+langchain-protocol==0.0.21
     # via
     #   langchain-core
     #   langgraph-sdk
-langgraph==1.2.19
+langgraph==1.2.20
     # via -r backend/agent/runtime_requirements.in
 langgraph-checkpoint==4.3.1
     # via
@@ -77,7 +77,7 @@ langgraph-checkpoint==4.3.1
     #   langgraph-prebuilt
 langgraph-prebuilt==1.1.1
     # via langgraph
-langgraph-sdk==0.4.11
+langgraph-sdk==0.4.14
     # via langgraph
 langsmith==0.14.17
     # via langchain-core
@@ -91,14 +91,14 @@ packaging==26.3
     # via
     #   langchain-core
     #   langsmith
-pydantic==2.14.2
+pydantic==2.14.3
     # via
     #   -r backend/agent/runtime_requirements.in
     #   bedrock-agentcore
     #   langchain-core
     #   langgraph
     #   langsmith
-pydantic-core==2.50.2
+pydantic-core==2.50.4
     # via pydantic
 python-dateutil==2.9.0.post0
     # via botocore
@@ -136,7 +136,7 @@ typing-extensions==4.16.0
     #   pydantic-core
     #   starlette
     #   typing-inspection
-typing-inspection==0.4.4
+typing-inspection==0.4.5
     # via pydantic
 urllib3==2.8.0
     # via
