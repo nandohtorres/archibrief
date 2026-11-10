@@ -12,15 +12,15 @@ anyio==4.16.0
     #   starlette
 beautifulsoup4==4.15.0
     # via -r backend/dev-requirements.in
-bedrock-agentcore==1.25.2
+bedrock-agentcore==1.25.4
     # via -r backend/dev-requirements.in
-boto3==1.43.123
+boto3==1.43.126
     # via
     #   -c scripts/lambda_constraints.txt
     #   -r backend/dev-requirements.in
     #   bedrock-agentcore
     #   moto
-botocore==1.43.123
+botocore==1.43.126
     # via
     #   -c scripts/lambda_constraints.txt
     #   bedrock-agentcore
@@ -38,9 +38,9 @@ charset-normalizer==3.5.2
     # via
     #   reportlab
     #   requests
-click==8.5.0
+click==8.5.1
     # via uvicorn
-coverage==7.17.0
+coverage==7.17.2
     # via pytest-cov
 cryptography==50.0.2
     # via moto
@@ -76,21 +76,21 @@ jmespath==1.1.0
     #   -c scripts/lambda_constraints.txt
     #   boto3
     #   botocore
-jsonpatch==1.39
+jsonpatch==1.44
     # via langchain-core
-jsonpointer==3.7
+jsonpointer==3.10
     # via jsonpatch
-langchain-core==1.7.4
+langchain-core==1.7.6
     # via
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
     #   langgraph-sdk
-langchain-protocol==0.0.20
+langchain-protocol==0.0.21
     # via
     #   langchain-core
     #   langgraph-sdk
-langgraph==1.2.19
+langgraph==1.2.20
     # via -r backend/dev-requirements.in
 langgraph-checkpoint==4.3.1
     # via
@@ -98,7 +98,7 @@ langgraph-checkpoint==4.3.1
     #   langgraph-prebuilt
 langgraph-prebuilt==1.1.1
     # via langgraph
-langgraph-sdk==0.4.11
+langgraph-sdk==0.4.14
     # via langgraph
 langsmith==0.14.17
     # via langchain-core
@@ -131,7 +131,7 @@ py-partiql-parser==0.6.3
     # via moto
 pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
-pydantic==2.14.2
+pydantic==2.14.3
     # via
     #   -c scripts/lambda_constraints.txt
     #   -r backend/dev-requirements.in
@@ -139,7 +139,7 @@ pydantic==2.14.2
     #   langchain-core
     #   langgraph
     #   langsmith
-pydantic-core==2.50.2
+pydantic-core==2.50.4
     # via
     #   -c scripts/lambda_constraints.txt
     #   pydantic
@@ -166,7 +166,7 @@ pyyaml==6.0.3
     #   langchain-core
     #   moto
     #   responses
-regex==2026.9.29
+regex==2026.11.7
     # via
     #   -c scripts/lambda_constraints.txt
     #   python-hcl2
@@ -183,7 +183,7 @@ requests-toolbelt==1.0.0
     # via langsmith
 responses==0.26.3
     # via moto
-ruff==0.17.3
+ruff==0.17.4
     # via -r backend/dev-requirements.in
 s3transfer==0.19.3
     # via
@@ -219,7 +219,7 @@ typing-extensions==4.16.0
     #   pydantic-core
     #   starlette
     #   typing-inspection
-typing-inspection==0.4.4
+typing-inspection==0.4.5
     # via
     #   -c scripts/lambda_constraints.txt
     #   pydantic
