@@ -349,7 +349,10 @@ def trust_facts(body: dict, parsed: dict, module: str) -> dict | None:
     facts = []
     for statement in statements[:MAX_STATEMENTS]:
         principal = statement.get("Principal")
-        fact: dict = {"effect": statement.get("Effect", "Allow")}
+        # Same allowlist as policy_facts: Effect is submitted text and must
+        # never reach the model verbatim.
+        effect = statement.get("Effect", "Allow")
+        fact: dict = {"effect": effect if effect in ("Allow", "Deny") else UNKNOWN}
         if principal == "*" or (isinstance(principal, dict) and principal.get("AWS") == "*"):
             fact["trusted"] = "anyone (*)"
         elif isinstance(principal, dict):
