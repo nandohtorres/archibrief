@@ -19,6 +19,7 @@ counted. Anything that can't be resolved statically is "unknown".
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 from backend.lambdas.rule_engine.hcl_eval import policy_statements, resolve
 from backend.shared.terraform_scope import display_name
@@ -28,6 +29,31 @@ MAX_RULES = 10
 MAX_STATEMENTS = 10
 MAX_CONTAINERS = 10
 _OPEN_CIDRS = {"0.0.0.0/0", "::/0"}
+
+
+def _bounded(
+    name: str, facts: list, limit: int, risk: Callable, *, total: int | None = None
+) -> dict:
+    """Prefer risky facts only on overflow; stable ties preserve source order.
+
+    Selection is not policy evaluation. Omitted facts (including Deny statements)
+    remain a coverage gap even when the most obvious risks fit in the bound.
+    """
+    total = len(facts) if total is None else total
+    kept = sorted(facts, key=risk, reverse=True)[:limit] if len(facts) > limit else facts
+    return {name: kept, f"{name}_total": total, f"{name}_omitted": total - len(kept)}
+
+
+def omitted_detail_items(details: object) -> int:
+    """Count omissions in fixed-vocabulary details, including role inline policies."""
+    if isinstance(details, list):
+        return sum(omitted_detail_items(item) for item in details)
+    if isinstance(details, dict):
+        return sum(
+            value if key.endswith("_omitted") else omitted_detail_items(value)
+            for key, value in details.items()
+        )
+    return 0
 
 
 def _as_list(value: object) -> list:
@@ -134,10 +160,16 @@ def ingress_rules(body: dict, parsed: dict, module: str) -> dict:
                 if known:
                     fact["created"] = "yes (dynamic block, enabled by its current inputs)"
                 rules.append(fact)
-    return {
-        "ingress": rules[:MAX_RULES],
-        "ingress_total": len(rules),
-    }
+    return _bounded(
+        "ingress",
+        rules,
+        MAX_RULES,
+        lambda fact: (
+            fact["source"] == "internet (0.0.0.0/0 or ::/0)",
+            fact["ports"] == "all",
+            fact["ports"] in {"22", "3389", "3306", "5432", "1433", "6379", "27017"},
+        ),
+    )
 
 
 # --- IAM ----------------------------------------------------------------
@@ -269,7 +301,7 @@ def policy_facts(document: object, parsed: dict, module: str) -> dict | None:
     if not statements:
         return None
     facts = []
-    for statement in statements[:MAX_STATEMENTS]:
+    for statement in statements:
         effect = statement.get("Effect", "Allow")
         fact: dict = {"effect": effect if effect in ("Allow", "Deny") else UNKNOWN}
         if statement.get("NotAction") is not None:
@@ -284,7 +316,20 @@ def policy_facts(document: object, parsed: dict, module: str) -> dict | None:
         fact["resources"] = _resource_scope(statement)
         fact["has_condition"] = bool(statement.get("Condition"))
         facts.append(fact)
-    return {"statements": facts, "statements_total": len(statements)}
+    return _bounded("statements", facts, MAX_STATEMENTS, _policy_risk)
+
+
+def _policy_risk(fact: dict) -> tuple:
+    actions = fact.get("sensitive_actions", [])
+    # Only known Allows get a risk priority; unknown and Deny stay explicit.
+    broad = bool(fact.get("actions")) or any("*" in action for action in actions)
+    return (
+        fact["effect"] == "Allow" and broad,
+        fact["effect"] == "Allow" and bool(actions),
+        fact["resources"]
+        in {"all resources (*)", "everything except listed resources (NotResource)"},
+        not fact["has_condition"],
+    )
 
 
 # Condition keys a trust policy's safety depends on.
@@ -347,13 +392,15 @@ def trust_facts(body: dict, parsed: dict, module: str) -> dict | None:
     if not statements:
         return None
     facts = []
-    for statement in statements[:MAX_STATEMENTS]:
+    for statement in statements:
         principal = statement.get("Principal")
         # Same allowlist as policy_facts: Effect is submitted text and must
         # never reach the model verbatim.
         effect = statement.get("Effect", "Allow")
         fact: dict = {"effect": effect if effect in ("Allow", "Deny") else UNKNOWN}
-        if principal == "*" or (isinstance(principal, dict) and principal.get("AWS") == "*"):
+        if principal == "*" or (
+            isinstance(principal, dict) and "*" in _as_list(principal.get("AWS"))
+        ):
             fact["trusted"] = "anyone (*)"
         elif isinstance(principal, dict):
             trusted = []
@@ -408,7 +455,19 @@ def trust_facts(body: dict, parsed: dict, module: str) -> dict | None:
         if github_values:
             fact["github_subject_admits"] = _github_scope(github_values)
         facts.append(fact)
-    return {"trust": facts}
+    return _bounded("trust", facts, MAX_STATEMENTS, _trust_risk)
+
+
+def _trust_risk(fact: dict) -> tuple:
+    trusted = _as_list(fact["trusted"])
+    return (
+        fact["effect"] == "Allow" and "anyone (*)" in trusted,
+        fact["effect"] == "Allow"
+        and (
+            "wildcard" in fact.get("github_subject_admits", "")
+            or "a whole AWS account by ID (any role or user that account allows)" in trusted
+        ),
+    )
 
 
 # AWS-managed policies a reviewer should see by name. Others are
@@ -490,8 +549,9 @@ def _points_to(domain: object) -> str:
 
 
 def cloudfront_facts(body: dict, parsed: dict, module: str) -> dict:
+    raw_origins = _as_list(body.get("origin"))
     origins = []
-    for origin in _as_list(body.get("origin"))[:MAX_RULES]:
+    for origin in raw_origins:
         if not isinstance(origin, dict):
             continue
         fact: dict = {"points_to": _points_to(origin.get("domain_name"))}
@@ -519,11 +579,24 @@ def cloudfront_facts(body: dict, parsed: dict, module: str) -> dict:
     certificate = certificate if isinstance(certificate, dict) else {}
     minimum = resolve(certificate.get("minimum_protocol_version"), parsed, module)
     return {
-        "origins": origins,
+        **_bounded(
+            "origins",
+            origins,
+            MAX_RULES,
+            lambda fact: (
+                fact.get("connection_to_origin") == "http-only",
+                fact.get("connection_to_origin") == "match-viewer",
+                fact.get("access_control") == "none declared",
+            ),
+            total=len(raw_origins),
+        ),
         "default_viewer_protocol": viewer(_first(body.get("default_cache_behavior"))),
-        "other_behaviors_viewer_protocol": [
-            viewer(b) for b in _as_list(body.get("ordered_cache_behavior"))[:MAX_RULES]
-        ],
+        **_bounded(
+            "other_behaviors_viewer_protocol",
+            [viewer(b) for b in _as_list(body.get("ordered_cache_behavior"))],
+            MAX_RULES,
+            lambda policy: policy == "allow-all",
+        ),
         "web_acl_attached": bool(body.get("web_acl_id")),
         "uses_default_cloudfront_certificate": bool(
             resolve(certificate.get("cloudfront_default_certificate"), parsed, module) is True
@@ -578,7 +651,7 @@ def task_definition_facts(body: dict, parsed: dict, module: str) -> dict | None:
     if not isinstance(containers, list):
         return None
     facts = []
-    for container in containers[:MAX_CONTAINERS]:
+    for container in containers:
         if not isinstance(container, dict):
             continue
         env = [
@@ -601,7 +674,18 @@ def task_definition_facts(body: dict, parsed: dict, module: str) -> dict | None:
                 else "not set (default: false)",
             }
         )
-    return {"containers": facts, "containers_total": len(containers)}
+    return _bounded(
+        "containers",
+        facts,
+        MAX_CONTAINERS,
+        lambda fact: (
+            fact["privileged"] is True,
+            fact["environment"]["secret_like_names_with_literal_values"] > 0,
+            fact["read_only_root_filesystem"] is not True,
+            fact["image_tag"] in {"latest", "no tag (defaults to latest)"},
+        ),
+        total=len(containers),
+    )
 
 
 def lambda_facts(body: dict, parsed: dict, module: str) -> dict:

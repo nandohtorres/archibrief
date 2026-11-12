@@ -38,7 +38,11 @@ from __future__ import annotations
 import re
 
 from backend.lambdas.rule_engine.hcl_eval import is_created, resolve
-from backend.lambdas.rule_engine.resource_details import DETAILED_TYPES, resource_details
+from backend.lambdas.rule_engine.resource_details import (
+    DETAILED_TYPES,
+    omitted_detail_items,
+    resource_details,
+)
 from backend.shared.configuration_checks import enrich_observations
 from backend.shared.terraform_observations import ObservationBudget, ResourceObservations
 from backend.shared.terraform_scope import display_name, module_of
@@ -54,7 +58,7 @@ COVERAGE_NOTE = (
     "it can't be worked out from the code); a resource without it is created once. "
     '"rules" on a backup plan lists each backup rule: its schedule, how many days '
     "recovery points are kept, and whether they are copied to another vault."
-    " rules_total and rules_truncated disclose omitted backup rules; when truncated, "
+    " rules_total, rules_omitted and rules_truncated disclose omitted backup rules; when truncated, "
     "copy rules and short retention are prioritized and source_index is one-based."
     ' A setting named "has X" says only whether X is set, never its value. "details" '
     "holds facts from nested configuration: security group ingress (ports, protocol, "
@@ -63,7 +67,11 @@ COVERAGE_NOTE = (
     "actions by name, others counted, and the resource scope), managed policy "
     "attachments, CloudFront origins and viewer settings, container and function "
     "environment variables (counts only; names and values are never shown), queue "
-    "dead-letter links and security-relevant database parameters. default_placement "
+    "dead-letter links and security-relevant database parameters. Bounded detail collections "
+    "have matching _total and _omitted counts. On overflow, clearly risky facts are "
+    "prioritized; the displayed order is not source order or policy precedence. "
+    "Any omission is a coverage gap, included in analysis_coverage.omitted_items; "
+    "never infer that omitted statements or configuration are safe or absent. default_placement "
     "gives the region and account for every resource without its own observations."
     " declared_context lists environment and data-classification labels the code "
     "declares in tags or variables, from a fixed vocabulary: what the code says about "
@@ -740,7 +748,8 @@ def build_resource_summary(parsed: dict) -> dict:
             raw_rules = body.get("rule", [])
             raw_rules = raw_rules if isinstance(raw_rules, list) else [raw_rules]
             entry["rules_total"] = sum(isinstance(rule, dict) for rule in raw_rules)
-            entry["rules_truncated"] = entry["rules_total"] > len(entry["rules"])
+            entry["rules_omitted"] = entry["rules_total"] - len(entry["rules"])
+            entry["rules_truncated"] = bool(entry["rules_omitted"])
         entries.append(entry)
     enrich_observations(entries)
     default_region = _common_placement_region(entries)
@@ -763,6 +772,14 @@ def build_resource_summary(parsed: dict) -> dict:
             "applies_to": "every resource without its own observations entry",
         }
     result["analysis_coverage"] = observation_budget.manifest()
+    # Details survive independently of observation compaction/admission. Count
+    # their gaps here so placement-only and rejected bundles cannot hide them.
+    detail_omissions = sum(
+        omitted_detail_items(entry.get("details")) + entry.get("rules_omitted", 0)
+        for entry in entries
+    )
+    result["analysis_coverage"]["detail_omitted_items"] = detail_omissions
+    result["analysis_coverage"]["omitted_items"] += detail_omissions
     result["analysis_coverage"]["placement_only_resources"] = placement_only
     result["analysis_coverage"]["omitted_resources"] += total - len(entries)
     result["analysis_coverage"]["truncated"] = bool(
