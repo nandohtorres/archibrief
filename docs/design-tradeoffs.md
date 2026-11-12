@@ -18,6 +18,7 @@ would make it the wrong call. Each links to its full decision record.
 | **Ask the one un-inferable question up front** ([ADR-0054](adr/0054-regulatory-question-up-front-no-review-pause.md)) | Pausing a review to ask | No review waits on the visitor; less infrastructure | One more required field on the form | Several fields turn out to need answers |
 | **S3 Vectors for retrieval** ([ADR-0007](adr/0007-vector-store-s3-vectors.md)) | OpenSearch Serverless | No minimum monthly cost for a small, fixed corpus | Fewer query features | The corpus grows or needs hybrid ranking in one service |
 | **Frontend CD, backend by hand** ([ADR-0055](adr/0055-frontend-continuous-deployment-with-scoped-oidc.md)) | Full CD | A frontend mistake is a revert; a backend mistake can delete data, so a person reads the plan | Slower backend releases | More than one person ships backend changes |
+| **Review small workloads well** ([ADR-0061](adr/0061-small-workload-accuracy-pilot.md), proposed) | Accepting any size and capping what the model sees | Accuracy can be measured and stated; more of the supplied configuration fits the model's bounded input, and what wasn't reviewed is listed | Large roots are rejected and must be split; registry modules give partial reviews | Measured accuracy holds at 75 or 100 declarations |
 
 ## Patterns worth reusing
 
