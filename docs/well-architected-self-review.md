@@ -54,7 +54,8 @@ accepted here on purpose.
 
 - **Untrusted input never executes.** Terraform is parsed statically;
   providers, provisioners and remote modules never run (ADR-0027). Trivy
-  runs in its own Lambda with no AWS credentials and no network (ADR-0048).
+  runs in its own Lambda with no AWS credentials and its HTTP(S) proxies
+  pointed at a closed port; that is not an OS-level network sandbox (ADR-0048).
 - **The model can't act.** Its only output is one schema-checked tool call,
   and the runtime's role is read and invoke only (threat model, LLM06).
 - **The model never reads the code.** It gets a summary built from

@@ -100,10 +100,11 @@ caps at once, and the model can't reason about what it never sees. In
 November the project narrowed its target to small AWS workloads, with a
 provisional limit of 50 resource declarations per review, counted before
 any paid call ([ADR-0061](adr/0061-small-workload-accuracy-pilot.md)).
-The work is ordered to measure before changing anything: reports first
-state exactly what was reviewed, then a baseline is scored against answer
-keys, then the limit is enforced, and only then is a second AI pass that
-checks each finding tested. It ships only if it cuts wrong findings
+The work is ordered to measure before changing anything: each review
+first records internally what it covered, then a baseline is scored
+against answer keys, then the visible scope and the enforced limit ship
+together, and only then is a second AI pass that checks each finding
+tested. It ships only if it cuts wrong findings
 without losing Critical or High catches. This is in progress; the full
 sequence of decisions is in the [project history](project-history.md).
 

@@ -2,9 +2,9 @@
 
 **Status:** Proposed (direction accepted 2026-11-10; implementation details
 under precision review). Extends ADR-0027 (untrusted ingestion), ADR-0049
-and ADR-0056 (resource summary), ADR-0059 (bounded model input). When
-accepted, it supersedes ADR-0059's 120-resource summary cap for public
-reviews.
+and ADR-0056 (resource summary), ADR-0059 (bounded model input). It adds a
+50-declaration admission limit; ADR-0059's 120-entry summary cap stays
+unchanged and should never bind an admitted review.
 
 ## Context
 
@@ -48,8 +48,10 @@ Options considered:
 4. **Reject before paying.** The count runs after safe parsing and before
    Guardrails, embeddings, vector search or generation. An oversized root
    gets a clear, actionable message and starts no paid call.
-5. **Show exactly what was reviewed.** Reports state how many declarations
-   were sent to the model out of the total, with reasons for any omitted.
+5. **Show exactly what was reviewed.** Reports distinguish supported AWS
+   declarations included in a completed AI review from the total counted,
+   disclose unknown outcomes and unreadable modules, and give reasons for
+   any omitted.
 6. **Measure before changing the model path.** A baseline against written
    answer keys comes first. A second, bounded AI pass that checks each
    finding against the configuration and its cited source is tested next,
@@ -76,8 +78,9 @@ Options considered:
   root. This trades breadth for accuracy that can be measured and stated.
 - Many small real repositories use registry modules; partial reviews keep
   them usable, at the cost of reviewing less than the whole design.
-- ArchiBrief's own infrastructure (154 resource blocks) is above the limit
-  and would need to be reviewed one module at a time.
+- ArchiBrief's own infrastructure has 154 resource blocks, above the
+  limit. Its modules depend on each other, so it would be reviewed as
+  an explicitly partial slice, not as independent workloads.
 - The second AI pass adds at least one paid call per review. It ships only
   if the measured reduction in wrong findings justifies it.
 - Evaluation spend is approved per batch; the first baseline batch is

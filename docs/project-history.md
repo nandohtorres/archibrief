@@ -111,11 +111,13 @@ resource declarations per review**, and spend the effort on measured
 accuracy instead of breadth
 ([ADR-0061](adr/0061-small-workload-accuracy-pilot.md)). The plan, in order:
 
-1. **Show exactly what was reviewed:** "Reviewed 47 of 50 declarations",
-   with modules that couldn't be read listed as a labeled partial review.
+1. **Record what each review covered**, internally, so the baseline can
+   be scored.
 2. **Measure a baseline** against written answer keys before changing
    anything.
-3. **Enforce the limit before any paid call**, with a clear message.
+3. **Enforce the limit before any paid call** and show "Reviewed 47 of 50
+   declarations" together, with unreadable modules listed as a labeled
+   partial review.
 4. **Test a second AI pass** that checks each finding against the
    configuration and its cited source, and ship it only if it reduces wrong
    findings without losing Critical or High catches.
@@ -125,8 +127,8 @@ Larger limits (75, then 100) are a later, measured step, not a promise.
 The plan itself went through several review rounds between two AI assistants,
 with the owner deciding each trade-off. The first detailed build contract was
 correct but over-built (request hashing through the paid AI path, a public API
-and UI for a phase that shows nothing to users). It was cut back to the six
-files the count actually needs, and a second review then caught eight real
+and UI for a phase that shows nothing to users). It was cut back to a bounded
+inventory, a summary sidecar and a final ledger record, and a second review then caught eight real
 errors in the slimmed version, such as non-AWS resources also being sent to the
 model and a failed model call not proving nothing was sent. The principle that
 came out of it: minimal changes, each one needed for the accuracy goal, and
