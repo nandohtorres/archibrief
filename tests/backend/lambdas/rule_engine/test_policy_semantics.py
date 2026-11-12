@@ -51,6 +51,59 @@ def test_compute_role_boundary_qualifies_effective_permissions():
     assert "across the whole account" not in findings[0].risk_impact
 
 
+def _scanner(check_id: str, resource_type: str, key: str) -> dict:
+    return {
+        "status": "ok",
+        "tool": "trivy",
+        "results": [
+            {
+                "check_id": check_id,
+                "resource_type": resource_type,
+                "resource_key": key,
+                "file": "main.tf",
+                "start_line": 1,
+                "end_line": 5,
+            }
+        ],
+    }
+
+
+_SSH_GROUP = {"resources": {"aws_security_group": {"orphan": {"ingress": [{
+    "from_port": 22, "to_port": 22, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"]
+}]}}}}
+_PLAIN_VOLUME = {"resources": {"aws_ebs_volume": {"data": {"size": 20}}}}
+
+
+@pytest.mark.parametrize("mode", ["rules", "trivy"])
+def test_open_ssh_group_does_not_claim_internet_reachability(mode):
+    """Audit F09: an unattached group with open SSH is a permissive
+    declaration, not proof the port is reachable. Both modes must say so."""
+    scanner = _scanner("AWS-0107", "aws_security_group", "orphan") if mode == "trivy" else None
+    findings = [
+        f
+        for f in run_rules(_SSH_GROUP, "admin-ingress", scanner=scanner)
+        if f.concern in ("sg_open_ingress", "sg_admin_ingress")
+    ]
+    assert findings, mode
+    for finding in findings:
+        assert "reachable from the entire internet" not in finding.risk_impact
+        assert "if attached" in finding.risk_impact
+
+
+@pytest.mark.parametrize("mode", ["rules", "trivy"])
+def test_undeclared_ebs_encryption_does_not_claim_unencrypted_data(mode):
+    """Audit F09: encryption the code doesn't request may still come from the
+    account's EBS encryption-by-default setting, which the code doesn't show."""
+    scanner = _scanner("AWS-0026", "aws_ebs_volume", "data") if mode == "trivy" else None
+    (finding,) = [
+        f
+        for f in run_rules(_PLAIN_VOLUME, "ebs", scanner=scanner)
+        if f.concern == "ebs_encryption"
+    ]
+    assert finding.risk_impact != "Data at rest on the volume is unencrypted."
+    assert "encryption by default" in finding.risk_impact
+
+
 def test_open_group_does_not_establish_network_reachability():
     parsed = {"resources": {"aws_security_group": {"orphan": {"ingress": [{
         "from_port": 5432, "to_port": 5432, "cidr_blocks": ["0.0.0.0/0"]
