@@ -8,6 +8,7 @@ import pytest
 from backend.lambdas.scan import handler as scan
 from backend.lambdas.scan.handler import (
     NEUTRALIZED_SOURCE,
+    neutralize_ignore_directives,
     neutralize_remote_sources,
     trusted_results,
 )
@@ -312,6 +313,76 @@ def test_handler_cleans_up_its_work_directory(monkeypatch, tmp_path):
     scan.handler(event, None, s3_client=_FakeS3(_archive({"main.tf": ""})))
 
     assert created and not any(os.path.exists(p) for p in created)
+
+
+# Every spelling Trivy 0.76.0 was observed honoring (audit F02), plus an
+# upper-case one it currently ignores, defused in case a later version doesn't.
+IGNORE_COMMENTS = [
+    "#trivy:ignore:AVD-AWS-0107",
+    "# trivy:ignore:AWS-0107",
+    "//trivy:ignore:*",
+    "/* trivy:ignore:* */",
+    "#trivy:ignore:*:exp:2099-01-01",
+    "# note trivy:ignore:*",
+    "#tfsec:ignore:aws-ec2-no-public-ingress-sgr",
+    "#TRIVY:IGNORE:*",
+]
+
+
+def test_ignore_directives_are_defused_without_moving_lines(tmp_path):
+    text = "\n".join(f'{c}\nresource "aws_sns_topic" "t{i}" {{}}' for i, c in enumerate(IGNORE_COMMENTS))
+    path = _write(tmp_path / "main.tf", text)
+    tfvars = _write(tmp_path / "terraform.tfvars", 'note = "trivy:ignore:*"\n')
+
+    changed = neutralize_ignore_directives([path, tfvars])
+
+    defused = Path(path).read_text(encoding="utf-8")
+    assert changed == len(IGNORE_COMMENTS)
+    assert "ignore:" not in defused.lower().replace("removed-hint", "")
+    assert len(defused) == len(text) and defused.count("\n") == text.count("\n")
+    assert Path(tfvars).read_text(encoding="utf-8") == 'note = "trivy:ignore:*"\n'
+
+
+def test_a_file_without_directives_is_not_rewritten(tmp_path):
+    path = _write(tmp_path / "main.tf", 'resource "aws_sns_topic" "t" {}\n')
+    before = os.stat(path).st_mtime_ns
+
+    assert neutralize_ignore_directives([path]) == 0
+    assert os.stat(path).st_mtime_ns == before
+
+
+@pytest.mark.skipif(not os.environ.get("TRIVY_PATH"), reason="needs a Trivy binary")
+@pytest.mark.parametrize("comment", IGNORE_COMMENTS)
+def test_submitted_ignore_comments_cannot_hide_a_trusted_check(tmp_path, comment):
+    """Audit F02: one comment line used to drop the scanner finding and, because
+    the scan still reported ok, the rule engine's own fallback rule too."""
+    from dataclasses import asdict
+
+    from backend.lambdas.ingest.handler import parse_terraform_files
+    from backend.lambdas.rule_engine.handler import run_rules
+
+    files = [
+        _write(
+            tmp_path / "main.tf",
+            f"{comment}\n"
+            'resource "aws_security_group" "admin" {\n'
+            "  ingress {\n"
+            "    from_port   = 22\n"
+            "    to_port     = 22\n"
+            '    protocol    = "tcp"\n'
+            '    cidr_blocks = ["0.0.0.0/0"]\n'
+            "  }\n"
+            "}\n",
+        )
+    ]
+    parsed = asdict(parse_terraform_files(files))
+
+    result = scan.scan_files(str(tmp_path), files, os.environ["TRIVY_PATH"])
+
+    assert result["status"] == "ok"
+    assert any(r["check_id"] == "AWS-0107" for r in result["results"])
+    concerns = {f.concern for f in run_rules(parsed, "f02", scanner=result)}
+    assert "sg_admin_ingress" in concerns
 
 
 @pytest.mark.skipif(not os.environ.get("TRIVY_PATH"), reason="needs a Trivy binary")

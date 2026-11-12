@@ -14,6 +14,9 @@ so it is boxed in on every side:
   the archive is rewritten. Trivy otherwise downloads remote modules named
   by the submitter, which would let them make this service fetch
   arbitrary URLs.
+- Inline `trivy:ignore` / `tfsec:ignore` comments are defused in the scan
+  copy. Trivy honors them, and a suppressed trusted check would also turn
+  off ArchiBrief's own rule for that concern (audit F02).
 - Trivy only parses and evaluates HCL statically. It never runs terraform,
   providers, or provisioners.
 - Any failure returns status "unavailable": the review continues on
@@ -44,6 +47,13 @@ MAX_RESULTS = 200
 NEUTRALIZED_SOURCE = "./.archibrief-remote-module-removed"
 # A port nothing listens on: any HTTP(S) request Trivy attempts fails fast.
 _DEAD_PROXY = "http://127.0.0.1:9"
+
+# Trivy 0.76.0 honors these in any comment style, anywhere in the comment,
+# with or without :exp: dates. Matching is case-insensitive here so a
+# future, laxer Trivy can't reopen the bypass.
+_IGNORE_DIRECTIVE = re.compile(rb"(?i)(?:trivy|tfsec):ignore")
+# Same length as the directive, so line and column numbers don't move.
+_DEFUSED_DIRECTIVE = b"removed-hint"
 
 _RESOURCE_TYPE = re.compile(r"^[a-z0-9_]+$")
 _RESOURCE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -117,6 +127,26 @@ def neutralize_remote_sources(files: list[str], root: str) -> int:
         if new_text != text:
             with path.open("w", encoding="utf-8", newline="") as fh:
                 fh.write(new_text)
+    return changed
+
+
+def neutralize_ignore_directives(files: list[str]) -> int:
+    """Defuse inline scanner suppressions in place. Returns how many changed.
+
+    Submitted Terraform must not be able to switch off a trusted check: the
+    scan would still report "ok", so the rule engine would also skip its
+    own rule for that concern and the issue would vanish from the report.
+    """
+    changed = 0
+    for file in files:
+        path = Path(file)
+        if path.suffix != ".tf":
+            continue
+        data = path.read_bytes()
+        new_data, count = _IGNORE_DIRECTIVE.subn(_DEFUSED_DIRECTIVE, data)
+        if count:
+            path.write_bytes(new_data)
+            changed += count
     return changed
 
 
@@ -242,6 +272,7 @@ def scan_files(scan_dir: str, files: list[str], trivy_path: str | None = None) -
     if not os.path.exists(trivy_path):
         return {"status": "unavailable", "tool": "trivy", "reason": "scanner_not_installed"}
     neutralized = neutralize_remote_sources(files, scan_dir)
+    defused = neutralize_ignore_directives(files)
     report = run_trivy(scan_dir, trivy_path)
     results = trusted_results(report, scan_dir, files, bounded=False)
     return {
@@ -249,6 +280,7 @@ def scan_files(scan_dir: str, files: list[str], trivy_path: str | None = None) -
         "tool": "trivy",
         "version": os.environ.get("TRIVY_VERSION", "unknown"),
         "neutralized_sources": neutralized,
+        "neutralized_ignores": defused,
         "results": results[:MAX_RESULTS],
         "results_total": len(results),
         "truncated": len(results) > MAX_RESULTS,
