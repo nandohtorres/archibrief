@@ -33,7 +33,7 @@ from backend.shared.archive import (  # noqa: F401  (re-exported for callers/tes
     extract_archive,
 )
 from backend.shared.clients import GuardrailsClient, S3Client
-from backend.shared.hcl_eval import ResolutionBudgetExceeded, resolve
+from backend.shared.hcl_eval import ResolutionBudgetExceeded, is_created, resolve
 from backend.shared.review_scope import (
     MAX_ADDRESS_LENGTH,
     MAX_DECLARATIONS,
@@ -148,6 +148,15 @@ def _instances(body: object, parsed: ParsedTerraform, module: str) -> int | None
     except Exception:  # noqa: BLE001 - an unresolvable count is unknown, not an error
         return None
     return 1
+
+
+def _created(body: object, parsed: ParsedTerraform) -> bool:
+    """The rule engine's own creation test (is_created), so a resource it
+    drops from the summary as never created counts as zero copies here."""
+    try:
+        return is_created(body, vars(parsed))
+    except Exception:  # noqa: BLE001 - unknown creation is treated as created, as the rule engine does
+        return True
 
 
 def _module_for(path: str, root: str) -> str:
@@ -320,6 +329,10 @@ def _review_scope(
         entry["retained"] = body is not None
         module = body.get(MODULE_FIELD, "") if isinstance(body, dict) else ""
         entry["instances"] = _instances(body, result, module) if body is not None else None
+        if body is not None and entry["instances"] != 0 and not _created(body, result):
+            # The rule engine leaves this out of the summary as never
+            # created; without this it would be labelled cut by the cap.
+            entry["instances"] = 0
     return pending_record(
         "recorded",
         inventory.declarations,
