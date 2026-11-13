@@ -3,6 +3,7 @@
 import json
 
 import pytest
+
 from scripts import small_workload_eval as ev
 
 IDS = [f"00000000-0000-4000-8000-{n:012d}" for n in range(1, 14)]
@@ -309,3 +310,13 @@ def test_score_flags_misses_false_claims_and_unsafe_fixes(tmp_path):
     }
     assert report["slots"][0]["cost_known"] is False
     assert report["slots"][0]["cost_usd"] == ev.RESERVATION_USD
+
+
+def test_plan_hash_covers_the_manifest_itself(tmp_path):
+    corpus = _corpus(tmp_path)
+    first = ev.build_plan(ev.load_manifest(corpus), _estimates(), "abc")
+    manifest = json.loads((corpus / "manifest.json").read_text())
+    manifest["note"] = "edited after freezing"
+    (corpus / "manifest.json").write_text(json.dumps(manifest))
+    second = ev.build_plan(ev.load_manifest(corpus), _estimates(), "abc")
+    assert first["plan_hash"] != second["plan_hash"]

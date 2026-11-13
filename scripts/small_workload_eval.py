@@ -119,6 +119,8 @@ def load_manifest(corpus: Path = CORPUS) -> dict:
     """The corpus manifest, with every listed file's hash verified and every
     scheduled case present. Raises PlanError on any mismatch."""
     manifest = _read_json(corpus / "manifest.json")
+    # The manifest cannot list its own hash; the plan records it instead.
+    manifest["_sha256"] = sha256_file(corpus / "manifest.json")
     files = manifest.get("files")
     cases = manifest.get("cases")
     if not isinstance(files, dict) or not files or not isinstance(cases, list):
@@ -234,6 +236,7 @@ def build_plan(manifest: dict, estimates: dict[str, dict], code_revision: str) -
             for n, case_id in enumerate(SCHEDULE, start=1)
         ],
         "corpus_files": manifest["files"],
+        "manifest_sha256": manifest.get("_sha256"),
         "configuration": {
             "path": "production (live site, owner-submitted)",
             "model_id": PRODUCTION_MODEL_ID,
