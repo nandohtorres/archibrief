@@ -18,8 +18,14 @@ ALLOWED_SUFFIXES = {".tf", ".tfvars", ".hcl"}
 
 
 class IngestRejected(Exception):
-    def __init__(self, reason: str) -> None:
+    """A submission Ingest refuses. `code`/`detail` are fixed vocabulary for
+    rejections the worker reports distinctly (e.g. duplicate declarations);
+    `reason` never carries source text."""
+
+    def __init__(self, reason: str, *, code: str | None = None, detail: str | None = None) -> None:
         self.reason = reason
+        self.code = code
+        self.detail = detail
         super().__init__(reason)
 
 
@@ -35,11 +41,16 @@ def _reject_unsafe_member(member: tarfile.TarInfo) -> None:
         raise IngestRejected(f"archive member too large: {name}")
 
 
-def extract_archive(archive_path: str, dest_dir: str) -> list[str]:
+def extract_archive(
+    archive_path: str, dest_dir: str, skipped_tf_json: list[str] | None = None
+) -> list[str]:
     """Extract a submitted Terraform archive, statically, with no code execution.
 
     Rejects path traversal, symlink escapes, archive bombs, oversized
-    members, and non-text file types outside the allowlist.
+    members, and non-text file types outside the allowlist. General
+    *.tf.json files are not extracted; their member names are appended to
+    `skipped_tf_json` when given, so the review scope can say the count is
+    incomplete.
     """
     extracted: list[str] = []
     total_uncompressed = 0
@@ -67,6 +78,8 @@ def extract_archive(archive_path: str, dest_dir: str) -> list[str]:
                 ".auto.tfvars.json"
             )
             if suffix not in ALLOWED_SUFFIXES and not variable_json:
+                if skipped_tf_json is not None and basename.endswith(".tf.json"):
+                    skipped_tf_json.append(member.name)
                 continue
             archive.extract(member, path=dest_dir, filter="data")
             extracted.append(os.path.join(dest_dir, member.name))

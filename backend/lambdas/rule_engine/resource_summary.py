@@ -44,6 +44,7 @@ from backend.lambdas.rule_engine.resource_details import (
     resource_details,
 )
 from backend.shared.configuration_checks import enrich_observations
+from backend.shared.review_scope import SUMMARY_RESOURCE_TYPE
 from backend.shared.terraform_observations import ObservationBudget, ResourceObservations
 from backend.shared.terraform_scope import display_name, module_of
 
@@ -88,7 +89,7 @@ UNKNOWN = "unknown"
 MAX_RESOURCES = 120
 # Provider resource types are lowercase snake case and some real ones are
 # long (aws_s3_bucket_server_side_encryption_configuration is 50).
-_RESOURCE_TYPE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+_RESOURCE_TYPE = SUMMARY_RESOURCE_TYPE
 
 # A setting prefixed with this is reported only as whether it is set
 # (true/false), never its value: a key ARN or an auth token is a
@@ -707,6 +708,14 @@ def _kept_resources(parsed: dict) -> tuple[list[tuple[str, str, object]], int]:
         ordered.append((_summary_priority(resource_type), rank[resource_type], position))
     kept = {position for *_order, position in sorted(ordered)[:MAX_RESOURCES]}
     return [item for position, item in enumerate(created) if position in kept], len(created)
+
+
+def summary_members(parsed: dict) -> list[list[str]]:
+    """[[resource_type, parsed_key], ...] for every resource the summary
+    shows (P0 review scope). Raw parsed keys, not display names, so the
+    worker can join them to the scope's declarations."""
+    kept, _total = _kept_resources(parsed)
+    return [[resource_type, key] for resource_type, key, _body in kept]
 
 
 def build_resource_summary(parsed: dict) -> dict:
