@@ -43,20 +43,22 @@ def runs(tmp_path_factory: pytest.TempPathFactory):
     return get
 
 
+# Coverage gaps still open (FIX_REPORT.md status). Only these stay out of
+# normal CI; every other coverage_gap check passes and now runs, so a
+# regression in a recovered feature fails CI (audit F15).
+UNRESOLVED_GAPS = frozenset({"F04-D-07", "F07-D-03", "F07-D-04", "F07-D-05"})
+
+
 def _params():
     for case in KEY["cases"]:
         for check in case["checks"]:
             for mode in MODES:
                 marks = []
                 if mode == "trivy" and TRIVY is None:
-                    marks.append(
-                        pytest.mark.skip(reason="Trivy not installed (set TRIVY_PATH)")
-                    )
-                if check["scope"] == "coverage_gap":
+                    marks.append(pytest.mark.skip(reason="Trivy not installed (set TRIVY_PATH)"))
+                if check["scope"] == "coverage_gap" and check["id"] in UNRESOLVED_GAPS:
                     marks.append(pytest.mark.coverage_gap)
-                yield pytest.param(
-                    case, check, mode, id=f"{check['id']}-{mode}", marks=marks
-                )
+                yield pytest.param(case, check, mode, id=f"{check['id']}-{mode}", marks=marks)
 
 
 @pytest.mark.parametrize(("case", "check", "mode"), list(_params()))
@@ -72,11 +74,19 @@ def test_check(case: dict, check: dict, mode: str, runs, tmp_path: Path) -> None
     verdict = judge(check["kind"], matched)
     if not verdict.startswith("pass") and check["id"] in CHECKS:
         corrected, reason = corrected_probe(check["id"], run)
-        assert corrected, (
-            f"Raw frozen verdict: {verdict}; supplemental contract failed: {reason}"
-        )
+        assert corrected, f"Raw frozen verdict: {verdict}; supplemental contract failed: {reason}"
         return
     assert verdict.startswith("pass"), (
         f"{check['id']} [{check['kind']}, {check['scope']}] {check['what']}\n"
         f"resource: {check['resource']}\nevidence: {check['evidence']}\nobserved: {observed}"
     )
+
+
+def test_unresolved_gaps_name_real_coverage_gap_checks() -> None:
+    gap_ids = {
+        check["id"]
+        for case in KEY["cases"]
+        for check in case["checks"]
+        if check["scope"] == "coverage_gap"
+    }
+    assert UNRESOLVED_GAPS <= gap_ids
