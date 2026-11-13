@@ -93,6 +93,21 @@ The lesson: the model's ceiling is what the system shows it, and a brief is
 an attack surface even when it's polite. Most misses weren't bad reasoning
 about what the model saw; they were things it never saw.
 
+## Narrowing scope to raise accuracy
+
+The hard tests showed the next limit: a large configuration hits several
+caps at once, and the model can't reason about what it never sees. In
+November the project narrowed its target to small AWS workloads, with a
+provisional limit of 50 resource declarations per review, counted before
+any paid call ([ADR-0061](adr/0061-small-workload-accuracy-pilot.md)).
+The work is ordered to measure before changing anything: each review
+first records internally what it covered, then a baseline is scored
+against answer keys, then the visible scope and the enforced limit ship
+together, and only then is a second AI pass that checks each finding
+tested. It ships only if it cuts wrong findings
+without losing Critical or High catches. This is in progress; the full
+sequence of decisions is in the [project history](project-history.md).
+
 ## Evidence and limits
 
 [Evaluation evidence](evaluation.md) distinguishes deterministic/mocked tests

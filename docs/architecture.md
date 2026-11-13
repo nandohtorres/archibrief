@@ -123,7 +123,7 @@ flowchart LR
    through Bedrock Guardrails.
 5. **Scan** — runs Trivy (pinned, checksum-verified, shipped as a Lambda
    layer) over the uploaded Terraform in its own Lambda: no AWS
-   credentials in its environment, no network, remote module sources
+   credentials in its environment, HTTP(S) proxies pointed at a closed port (not an OS-level network sandbox), remote module sources
    rewritten before scanning, read-only access to `uploads/`. If it fails
    for any reason the review continues without it and says the scanner
    didn't run (ADR-0048).

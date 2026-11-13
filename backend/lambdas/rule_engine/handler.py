@@ -47,7 +47,11 @@ from backend.shared.models.finding import (
     FindingType,
 )
 from backend.shared.terraform_scope import display_name, module_of, scoped_key
-from backend.shared.trivy_checks import TRIVY_OWNED_CONCERNS, TRUSTED_CHECKS
+from backend.shared.trivy_checks import (
+    EBS_UNENCRYPTED_RISK,
+    TRIVY_OWNED_CONCERNS,
+    TRUSTED_CHECKS,
+)
 
 RULE_VERSION = "rule_engine@2026-10-30"
 
@@ -494,7 +498,7 @@ def rule_ebs_encryption(parsed: dict, review_id: str) -> list[Finding]:
                     FindingCategory.ENCRYPTION,
                     f"EBS volume '{name}' is not encrypted",
                     f'resource "aws_ebs_volume" "{name}" has encrypted = false or unset',
-                    "Data at rest on the volume is unencrypted.",
+                    EBS_UNENCRYPTED_RISK,
                     "Set encrypted = true (and kms_key_id if a CMK is required).",
                     ["AWS Well-Architected: Security Pillar", "SEC08-BP02"],
                 )

@@ -35,7 +35,7 @@ flowchart TB
     end
 
     subgraph Bedrock["Amazon Bedrock"]
-        Claude["Claude Sonnet 4.6<br/>streamed, forced tool call"]
+        Claude["Claude Sonnet 4.6<br/>non-streaming, forced tool call"]
         Titan["Titan V2 embeddings"]
         GR["Guardrails"]
     end
@@ -63,7 +63,7 @@ flowchart TB
     Worker -.->|checked before paid work| SSM
 ```
 
-Seventeen single-purpose Lambdas, one Standard state machine, one AgentCore
+Seventeen single-purpose Lambdas, two Standard state machines (initial review and go-deeper), one AgentCore
 runtime, six DynamoDB tables, four S3 buckets (review data, the site, two
 deployment-artifact buckets) and an S3 Vectors index. Everything
 is Terraform in `infra/`.
@@ -91,12 +91,12 @@ sequenceDiagram
     API->>SFN: StartExecution (stable name: no double start)
     SFN->>W: review ID only
     W->>W: Ingest: static HCL parse, Guardrails on the brief
-    W->>W: Scan: Trivy with no credentials, no network
+    W->>W: Scan: Trivy with no credentials, dead proxies
     W->>W: RuleEngine: findings, diagram, resource summary
     Note over UI,W: the progress screen already shows the diagram
     W->>AC: invoke (one attempt, up to 600 s)
     AC->>BR: embed brief + up to 10 topic searches
-    AC->>BR: Guardrails, then streamed Converse
+    AC->>BR: Guardrails, then non-streaming Converse
     BR-->>AC: tool call: up to 12 findings
     AC->>AC: verify every quote against retrieved chunks
     AC-->>W: rule + verified model findings
@@ -113,7 +113,7 @@ What each step guarantees:
 | Submit | Money is reserved before any paid call, in one DynamoDB transaction across four scopes (month, day, visitor, review); a retry can't start a second run | `backend/shared/admission.py`, ADR-0052 |
 | Workflow | Briefs and findings never enter Step Functions history; it carries IDs and status | ADR-0028 |
 | Ingest | Terraform is parsed, never executed; remote modules are never fetched | ADR-0027 |
-| Scan | Trivy runs boxed in: no AWS credentials, no network, module sources rewritten | ADR-0048 |
+| Scan | Trivy runs boxed in: no AWS credentials, HTTP(S) proxies pointed at a closed port (not an OS-level network sandbox), module sources and ignore comments rewritten | ADR-0048 |
 | RuleEngine | Deterministic findings that don't depend on the model or the brief | `backend/lambdas/rule_engine/` |
 | Summary | The model gets facts, not code: allowlisted settings and fixed-vocabulary details, so no free text from the submission reaches it except capped names | ADR-0049, ADR-0056 |
 | Reason | Every model quote must match a retrieved chunk; the model can only call `emit_findings` | ADR-0038 |
@@ -127,7 +127,7 @@ What each step guarantees:
 | The archive is invalid | A clear failure; the reservation is given back | Nothing billed yet |
 | Guardrails blocks the brief | "Flagged by our safety checks" | Guardrails was billed; the reservation stays |
 | Trivy fails | The review continues with ArchiBrief's own rules and says the scanner didn't run | A scanner outage shouldn't block a review (ADR-0048) |
-| The model fails or runs long | If the call fails or hasn't answered within 400 s, the review finishes with the rule findings and a note that the AI analysis didn't finish | Some evidence beats none; never retried, so never charged twice (ADR-0058, ADR-0059) |
+| The model fails or runs long | If the call fails or hasn't answered within 400 s, the review finishes with the rule findings and a note that the AI analysis didn't finish | Some evidence beats none; the model call is never retried, so it is never charged twice (ADR-0058, ADR-0059) |
 | A model finding cites a quote that isn't in the evidence | That finding is dropped; the report counts it | One bad citation doesn't discard the review |
 | Spend nears the monthly AWS budget | At 90% the kill switch turns itself on; every paid path refuses | Billing lags, so the $75 admission ceiling is the real-time limit (ADR-0052) |
 | A deeper review times out | The job shows failed; reloading recovers its status | One model attempt per request |
@@ -158,7 +158,7 @@ flowchart TB
     G1 --> G2["Guardrails before Reason"]
     S --> M["Model: data fields only,<br/>brief claims unverified,<br/>one schema-checked tool"]
     G2 --> M
-    M --> V["Server checks: quote must match<br/>a retrieved chunk, type rules,<br/>no prices in model text"]
+    M --> V["Server checks: quote must match<br/>a retrieved chunk, type rules,<br/>no prices in plain-language blocks"]
     V --> R["Report: provenance shown,<br/>rejections counted"]
 ```
 

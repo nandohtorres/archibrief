@@ -39,6 +39,13 @@ _S3_PUBLIC_FIX = (
     "Attach aws_s3_bucket_public_access_block with block_public_acls, block_public_policy, "
     "ignore_public_acls and restrict_public_buckets all set to true."
 )
+# Shared with the rule engine's own EBS rule so both modes say the same thing.
+# The code can't show the account's EBS encryption-by-default setting.
+EBS_UNENCRYPTED_RISK = (
+    "The volume doesn't request encryption, so its data at rest is unencrypted unless "
+    "EBS encryption by default is enabled for the account and Region, which this code "
+    "doesn't show."
+)
 _SECURITY = "AWS Well-Architected: Security Pillar"
 _RELIABILITY = "AWS Well-Architected: Reliability Pillar"
 _OPS = "AWS Well-Architected: Operational Excellence Pillar"
@@ -86,7 +93,8 @@ TRUSTED_CHECKS: dict[str, TrustedCheck] = {
         "exposure",
         "Security group '{name}' allows SSH or RDP from anywhere",
         "ingress from 0.0.0.0/0 or ::/0 reaches SSH (22) or RDP (3389)",
-        "Remote administration ports are reachable from the entire internet.",
+        "This group permits SSH or RDP from any internet address if attached to a resource. "
+        "Actual reachability also depends on routing and listeners.",
         "Restrict ingress to specific CIDR ranges, a bastion, or use SSM Session Manager.",
         (_SECURITY, "SEC05-BP02", "CIS Controls v8: 4.4"),
     ),
@@ -95,7 +103,7 @@ TRUSTED_CHECKS: dict[str, TrustedCheck] = {
         "encryption",
         "EBS volume '{name}' is not encrypted",
         "encrypted is not true",
-        "Data at rest on the volume is unencrypted.",
+        EBS_UNENCRYPTED_RISK,
         "Set encrypted = true (and kms_key_id if a customer-managed key is required).",
         (_SECURITY, "SEC08-BP02"),
     ),
