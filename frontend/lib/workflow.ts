@@ -83,6 +83,8 @@ export const REVIEW_DEADLINE_MS = 8 * 60 * 1000;
 const FAILURE_MESSAGES: Record<string, string> = {
   invalid_archive:
     "We couldn't read that archive. Upload a .tar or .tar.gz containing your .tf files and try again.",
+  malformed_configuration:
+    "This configuration declares the same resource or module twice. Make each name unique within its module and start a new review. No AI analysis was started.",
   input_blocked:
     "Your workload brief was flagged by our safety checks. Rephrase it as a plain description of the system and try again.",
   paused: "Reviews are temporarily paused. Please try again later.",

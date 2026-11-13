@@ -137,6 +137,10 @@ def handler(event, context):
     architecture = place_findings(event.get("architecture"), findings)
     if architecture is not None:
         ledger["architecture"] = architecture
+    # P0 review scope, already final and validated by the worker; absent when
+    # the worker dropped it.
+    if "review_scope" in event:
+        ledger["review_scope"] = event["review_scope"]
 
     report_bucket = event.get("report_bucket")
     reviews_table = event.get("reviews_table_name")

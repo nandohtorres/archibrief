@@ -65,6 +65,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/admission.py",
             "backend/shared/retention.py",
             "backend/shared/kill_switch.py",
+            "backend/shared/review_scope.py",
         ],
         "packages": ["boto3"],
     },
@@ -175,6 +176,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/stakeholder/__init__.py",
             "backend/shared/stakeholder/catalog.py",
             "backend/shared/stakeholder/pricing.py",
+            "backend/shared/review_scope.py",
             "backend/shared/terraform_scope.py",
             "backend/shared/trivy_checks.py",
         ],
@@ -244,6 +246,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/__init__.py",
             "backend/shared/archive.py",
             "backend/shared/clients/__init__.py",
+            "backend/shared/review_scope.py",
             "backend/shared/terraform_scope.py",
         ],
         # Static HCL parsing (ADR-0027) — never a terraform binary.

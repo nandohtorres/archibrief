@@ -20,6 +20,7 @@ from backend.shared.architecture_links import link_findings
 from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.retention import review_is_live
+from backend.shared.review_scope import finalize_scope, validate_scope
 
 
 def _invoke(stage: str, payload: dict) -> dict:
@@ -134,6 +135,24 @@ def _agent_read_timeout(context: object) -> int | None:
     return min(AGENT_READ_TIMEOUT_SECONDS, left)
 
 
+def _final_scope(rules: dict, model_outcome: str) -> dict | None:
+    """The finalized review scope (P0), or None when it is dropped. A
+    dropped scope never fails the review: the report is still published,
+    without the scope record."""
+    pending = rules.get("review_scope")
+    reason = "missing"
+    if isinstance(pending, dict):
+        try:
+            final = finalize_scope(pending, rules.get("summary_members"), model_outcome)
+            reason = "invalid" if validate_scope(final) else None
+        except Exception:  # noqa: BLE001 - a scope problem never fails the review
+            reason = "finalize_failed"
+        if reason is None:
+            return final
+    print(json.dumps({"event": "review_scope_dropped", "reason": reason}))
+    return None
+
+
 def handler(event: dict, context: object) -> dict:
     # API admission always constructs this envelope, never forwards the body.
     if set(event) - {"review_id", "phase"}:
@@ -181,7 +200,12 @@ def handler(event: dict, context: object) -> dict:
         stage = _progress(table, review_id, "ingest")
         ingest = _invoke("ingest", {**submission, "report_bucket": bucket})
         if ingest.get("status") == "rejected":
-            return _fail_unpaid(table, review_id, "invalid_archive", operation)
+            code = (
+                "malformed_configuration"
+                if ingest.get("code") == "malformed_configuration"
+                else "invalid_archive"
+            )
+            return _fail_unpaid(table, review_id, code, operation)
         if ingest.get("status") == "blocked":
             # Guardrails, which is billed, has already run.
             return _fail(table, review_id, "input_blocked")
@@ -220,9 +244,14 @@ def handler(event: dict, context: object) -> dict:
         rules = state["rules"]
         model_unavailable = False
         agent_wait = _agent_read_timeout(context)
+        # P0 review scope: whether the model could have received the summary.
+        # Set to "unknown" before invoking: once the call starts, a failure
+        # does not prove nothing was sent.
+        model_outcome = "not_invoked"
         try:
             if agent_wait is None:
                 raise TimeoutError("not enough Lambda time left for the model")
+            model_outcome = "unknown"
             agent = AgentCoreRuntimeClient(
                 agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
                 read_timeout_seconds=agent_wait,
@@ -238,6 +267,7 @@ def handler(event: dict, context: object) -> dict:
                 },
                 runtime_session_id=f"archibrief-review-session-{review_id}-0",
             )
+            model_outcome = "completed"
         except Exception as exc:  # noqa: BLE001 - any model failure falls back to the rules
             # The rule and scanner findings are final before the model
             # starts, so a model timeout or error still yields a report,
@@ -271,6 +301,7 @@ def handler(event: dict, context: object) -> dict:
                 "deterministic_rule_version": rules["rule_version"],
             },
         )
+        review_scope = _final_scope(rules, model_outcome)
         stage = _progress(table, review_id, "finalize")
         _invoke(
             "finalize",
@@ -286,6 +317,7 @@ def handler(event: dict, context: object) -> dict:
                 "architecture": rules.get("architecture"),
                 "report_bucket": bucket,
                 "reviews_table_name": os.environ["REVIEWS_TABLE_NAME"],
+                **({"review_scope": review_scope} if review_scope is not None else {}),
             },
         )
         return {"status": "complete"}

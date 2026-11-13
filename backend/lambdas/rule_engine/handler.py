@@ -38,7 +38,11 @@ from backend.lambdas.rule_engine.hcl_eval import (
     truthy,
 )
 from backend.lambdas.rule_engine.resource_details import inline_ingress_rules
-from backend.lambdas.rule_engine.resource_summary import build_resource_summary, copies_of
+from backend.lambdas.rule_engine.resource_summary import (
+    build_resource_summary,
+    copies_of,
+    summary_members,
+)
 from backend.shared.clients import S3Client
 from backend.shared.models.finding import (
     ConfidenceInputs,
@@ -1488,4 +1492,8 @@ def handler(event, context):
         "resource_summary": build_resource_summary(parsed),
         # Resources and references only; Finalize places the findings.
         "architecture": safe_graph(parsed),
+        # P0 review scope, beside the summary and never inside it: the
+        # model input is unchanged. The worker finalizes the record.
+        "review_scope": parsed.get("review_scope"),
+        "summary_members": summary_members(parsed),
     }
