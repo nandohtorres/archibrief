@@ -1,0 +1,356 @@
+{
+  "declarations": [
+    {
+      "address": "aws_cloudwatch_log_group.contractor_export",
+      "type": "aws_cloudwatch_log_group",
+      "file": "main.tf",
+      "line": 165,
+      "instances": 1
+    },
+    {
+      "address": "aws_cloudwatch_metric_alarm.central_backlog",
+      "type": "aws_cloudwatch_metric_alarm",
+      "file": "main.tf",
+      "line": 231,
+      "instances": 1
+    },
+    {
+      "address": "aws_ebs_encryption_by_default.regional",
+      "type": "aws_ebs_encryption_by_default",
+      "file": "main.tf",
+      "line": 87,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_instance_profile.maintenance",
+      "type": "aws_iam_instance_profile",
+      "file": "main.tf",
+      "line": 107,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_policy.maintenance",
+      "type": "aws_iam_policy",
+      "file": "main.tf",
+      "line": 111,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_role.contractor_export",
+      "type": "aws_iam_role",
+      "file": "main.tf",
+      "line": 149,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_role.maintenance",
+      "type": "aws_iam_role",
+      "file": "main.tf",
+      "line": 91,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_role_policy.contractor_export_logs",
+      "type": "aws_iam_role_policy",
+      "file": "main.tf",
+      "line": 170,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_role_policy_attachment.maintenance",
+      "type": "aws_iam_role_policy_attachment",
+      "file": "main.tf",
+      "line": 125,
+      "instances": 1
+    },
+    {
+      "address": "aws_instance.maintenance",
+      "type": "aws_instance",
+      "file": "main.tf",
+      "line": 130,
+      "instances": 1
+    },
+    {
+      "address": "aws_internet_gateway.edge",
+      "type": "aws_internet_gateway",
+      "file": "main.tf",
+      "line": 29,
+      "instances": 1
+    },
+    {
+      "address": "aws_lambda_function.contractor_export",
+      "type": "aws_lambda_function",
+      "file": "main.tf",
+      "line": 188,
+      "instances": 1
+    },
+    {
+      "address": "aws_lambda_function_url.contractor_export",
+      "type": "aws_lambda_function_url",
+      "file": "main.tf",
+      "line": 199,
+      "instances": 1
+    },
+    {
+      "address": "aws_lambda_permission.contractor_export_invoke",
+      "type": "aws_lambda_permission",
+      "file": "main.tf",
+      "line": 212,
+      "instances": 1
+    },
+    {
+      "address": "aws_lambda_permission.contractor_export_url",
+      "type": "aws_lambda_permission",
+      "file": "main.tf",
+      "line": 204,
+      "instances": 1
+    },
+    {
+      "address": "aws_route_table.app",
+      "type": "aws_route_table",
+      "file": "main.tf",
+      "line": 41,
+      "instances": 1
+    },
+    {
+      "address": "aws_route_table.edge",
+      "type": "aws_route_table",
+      "file": "main.tf",
+      "line": 33,
+      "instances": 1
+    },
+    {
+      "address": "aws_route_table_association.app_a",
+      "type": "aws_route_table_association",
+      "file": "main.tf",
+      "line": 54,
+      "instances": 1
+    },
+    {
+      "address": "aws_route_table_association.edge_a",
+      "type": "aws_route_table_association",
+      "file": "main.tf",
+      "line": 49,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket.dispatch_summary",
+      "type": "aws_s3_bucket",
+      "file": "exports.tf",
+      "line": 112,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket.inspection_index",
+      "type": "aws_s3_bucket",
+      "file": "exports.tf",
+      "line": 167,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket.shift_roster",
+      "type": "aws_s3_bucket",
+      "file": "exports.tf",
+      "line": 57,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket.stock_snapshot",
+      "type": "aws_s3_bucket",
+      "file": "exports.tf",
+      "line": 222,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket.vendor_catalog",
+      "type": "aws_s3_bucket",
+      "file": "exports.tf",
+      "line": 2,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_lifecycle_configuration.dispatch_summary",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "file": "exports.tf",
+      "line": 130,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_lifecycle_configuration.inspection_index",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "file": "exports.tf",
+      "line": 185,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_lifecycle_configuration.shift_roster",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "file": "exports.tf",
+      "line": 75,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_lifecycle_configuration.stock_snapshot",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "file": "exports.tf",
+      "line": 240,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_lifecycle_configuration.vendor_catalog",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "file": "exports.tf",
+      "line": 20,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_policy.dispatch_summary",
+      "type": "aws_s3_bucket_policy",
+      "file": "exports.tf",
+      "line": 143,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_policy.inspection_index",
+      "type": "aws_s3_bucket_policy",
+      "file": "exports.tf",
+      "line": 198,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_policy.shift_roster",
+      "type": "aws_s3_bucket_policy",
+      "file": "exports.tf",
+      "line": 88,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_policy.stock_snapshot",
+      "type": "aws_s3_bucket_policy",
+      "file": "exports.tf",
+      "line": 253,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_policy.vendor_catalog",
+      "type": "aws_s3_bucket_policy",
+      "file": "exports.tf",
+      "line": 33,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.dispatch_summary",
+      "type": "aws_s3_bucket_public_access_block",
+      "file": "exports.tf",
+      "line": 117,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.inspection_index",
+      "type": "aws_s3_bucket_public_access_block",
+      "file": "exports.tf",
+      "line": 172,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.shift_roster",
+      "type": "aws_s3_bucket_public_access_block",
+      "file": "exports.tf",
+      "line": 62,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.stock_snapshot",
+      "type": "aws_s3_bucket_public_access_block",
+      "file": "exports.tf",
+      "line": 227,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.vendor_catalog",
+      "type": "aws_s3_bucket_public_access_block",
+      "file": "exports.tf",
+      "line": 7,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_versioning.dispatch_summary",
+      "type": "aws_s3_bucket_versioning",
+      "file": "exports.tf",
+      "line": 125,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_versioning.inspection_index",
+      "type": "aws_s3_bucket_versioning",
+      "file": "exports.tf",
+      "line": 180,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_versioning.shift_roster",
+      "type": "aws_s3_bucket_versioning",
+      "file": "exports.tf",
+      "line": 70,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_versioning.stock_snapshot",
+      "type": "aws_s3_bucket_versioning",
+      "file": "exports.tf",
+      "line": 235,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_versioning.vendor_catalog",
+      "type": "aws_s3_bucket_versioning",
+      "file": "exports.tf",
+      "line": 15,
+      "instances": 1
+    },
+    {
+      "address": "aws_security_group.internal_https",
+      "type": "aws_security_group",
+      "file": "main.tf",
+      "line": 220,
+      "instances": 1
+    },
+    {
+      "address": "aws_security_group.maintenance",
+      "type": "aws_security_group",
+      "file": "main.tf",
+      "line": 59,
+      "instances": 1
+    },
+    {
+      "address": "aws_security_group.spare",
+      "type": "aws_security_group",
+      "file": "main.tf",
+      "line": 76,
+      "instances": 1
+    },
+    {
+      "address": "aws_subnet.app_a",
+      "type": "aws_subnet",
+      "file": "main.tf",
+      "line": 22,
+      "instances": 1
+    },
+    {
+      "address": "aws_subnet.edge_a",
+      "type": "aws_subnet",
+      "file": "main.tf",
+      "line": 15,
+      "instances": 1
+    },
+    {
+      "address": "aws_vpc.workload",
+      "type": "aws_vpc",
+      "file": "main.tf",
+      "line": 9,
+      "instances": 1
+    }
+  ],
+  "module_gaps": [],
+  "disabled_module_calls": []
+}

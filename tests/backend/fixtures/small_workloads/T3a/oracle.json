@@ -1,0 +1,644 @@
+{
+  "schema_version": "small-workload-oracle@1",
+  "architecture_id": "T3a",
+  "status": "reviewed_pending_owner_freeze",
+  "authored_before_model_runs": true,
+  "critical_high_review": {
+    "reviewer": "Claude",
+    "status": "approved",
+    "date": "2026-11-14",
+    "method": "every evidence quote checked at its stated line; every Critical/High claim read against source; no severity or claim changed",
+    "independent_outside_reviewer": false
+  },
+  "outside_independent_review": false,
+  "scope": "Expected observable configuration and declared-requirement defects. No assertion of a deployed exploit, real credentials, or runtime measurements.",
+  "scoring": {
+    "deduplicate_by": [
+      "id",
+      "resource_address"
+    ],
+    "must_find_severities": [
+      "Critical",
+      "High"
+    ],
+    "unlisted_findings": "Adjudicate on evidence; do not automatically mark false. Record draft-oracle corrections before any paid outputs; later corrections require a versioned rationale and rescore all runs.",
+    "counterexamples": "Each prohibits only its named false claim, not every conceivable concern about that resource.",
+    "scope_disclosures": "Score separately from issue recall; unsupported/unknown is not safe.",
+    "grouped_findings": "One finding may match multiple IDs only if it explicitly establishes each defect and affected resource. Never count duplicate wording twice."
+  },
+  "issues": [
+    {
+      "id": "T3A-SEC-01",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_security_group.maintenance",
+      "title": "World-wide SSH ingress on the maintenance worker",
+      "expected_finding": "The attached maintenance group allows TCP/22 from every IPv4 address. The instance also has a public-IP setting and an associated IGW route. This is a configured network exposure, not proof of a listening SSH daemon or successful compromise.",
+      "severity_rationale": "The attached maintenance group allows TCP/22 from every IPv4 address. The instance also has a public-IP setting and an associated IGW route. This is a configured network exposure, not proof of a listening SSH daemon or successful compromise.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 66,
+          "location": "main.tf:66",
+          "quote": "cidr_blocks = [\"0.0.0.0/0\"]"
+        },
+        {
+          "file": "main.tf",
+          "line": 135,
+          "location": "main.tf:135",
+          "quote": "vpc_security_group_ids = [aws_security_group.maintenance.id]"
+        },
+        {
+          "file": "main.tf",
+          "line": 134,
+          "location": "main.tf:134",
+          "quote": "associate_public_ip_address = true"
+        },
+        {
+          "file": "main.tf",
+          "line": 45,
+          "location": "main.tf:45",
+          "quote": "gateway_id = aws_internet_gateway.edge.id"
+        },
+        {
+          "file": "brief.md",
+          "line": 7,
+          "location": "brief.md:7",
+          "quote": "application subnet. The edge subnet may be public. Public management is forbidden."
+        }
+      ],
+      "safe_remediation": "Establish and test a private management path such as SSM with its endpoints/egress and narrowly scoped role, or a controlled VPN, before removing public SSH. Remove the world-wide rule; do not lock operators out by deleting their only tested access path.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-SEC-02",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_route_table.app",
+      "title": "The intended private application subnet routes directly to an IGW",
+      "expected_finding": "The default route and explicit association make app_a a public-routed subnet despite its private-tier requirement. map_public_ip_on_launch=false does not undo the route or the instance's explicit public-IP setting. This placement defect is distinct from the SSH ingress rule.",
+      "severity_rationale": "The default route and explicit association make app_a a public-routed subnet despite its private-tier requirement. map_public_ip_on_launch=false does not undo the route or the instance's explicit public-IP setting. This placement defect is distinct from the SSH ingress rule.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 45,
+          "location": "main.tf:45",
+          "quote": "gateway_id = aws_internet_gateway.edge.id"
+        },
+        {
+          "file": "main.tf",
+          "line": 56,
+          "location": "main.tf:56",
+          "quote": "route_table_id = aws_route_table.app.id"
+        },
+        {
+          "file": "main.tf",
+          "line": 26,
+          "location": "main.tf:26",
+          "quote": "map_public_ip_on_launch = false"
+        },
+        {
+          "file": "brief.md",
+          "line": 7,
+          "location": "brief.md:7",
+          "quote": "application subnet. The edge subnet may be public. Public management is forbidden."
+        }
+      ],
+      "safe_remediation": "Move the application tier to an isolated/private route table, remove explicit public addresses, and provide only required egress via endpoints or a correctly placed NAT gateway. Validate management and application connectivity before switching associations.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-SEC-03",
+      "severity": "Critical",
+      "must_find": true,
+      "resource_address": "aws_iam_policy.maintenance",
+      "title": "An attached worker policy permits every action on every resource",
+      "expected_finding": "The Allow Action=* Resource=* policy is attached to the EC2 maintenance role used by the instance profile. This is an administrator-equivalent identity-policy grant, far beyond the read-only diagnostics requirement; unprovided SCPs or other account controls may still limit effective permissions.",
+      "severity_rationale": "The Allow Action=* Resource=* policy is attached to the EC2 maintenance role used by the instance profile. This is an administrator-equivalent identity-policy grant, far beyond the read-only diagnostics requirement; unprovided SCPs or other account controls may still limit effective permissions.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 118,
+          "location": "main.tf:118",
+          "quote": "\"Action\": \"*\","
+        },
+        {
+          "file": "main.tf",
+          "line": 119,
+          "location": "main.tf:119",
+          "quote": "\"Resource\": \"*\""
+        },
+        {
+          "file": "main.tf",
+          "line": 127,
+          "location": "main.tf:127",
+          "quote": "policy_arn = aws_iam_policy.maintenance.arn"
+        },
+        {
+          "file": "main.tf",
+          "line": 136,
+          "location": "main.tf:136",
+          "quote": "iam_instance_profile = aws_iam_instance_profile.maintenance.name"
+        },
+        {
+          "file": "brief.md",
+          "line": 6,
+          "location": "brief.md:6",
+          "quote": "The maintenance instance only needs read-only diagnostics and belongs in a private"
+        }
+      ],
+      "safe_remediation": "Replace the grant with the required diagnostic actions and resource ARNs, keeping only genuinely non-resource-scopable actions on '*'. Test the replacement before detaching the old policy; consider a workload permissions boundary. Do not attach another administrator policy to restore access.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-SEC-04",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_instance.maintenance",
+      "title": "The privileged worker permits IMDSv1",
+      "expected_finding": "http_tokens=optional allows metadata requests without IMDSv2 tokens on an instance carrying a privileged role. This increases credential-theft impact if an application or local access flaw exists; the fixture does not prove SSRF.",
+      "severity_rationale": "http_tokens=optional allows metadata requests without IMDSv2 tokens on an instance carrying a privileged role. This increases credential-theft impact if an application or local access flaw exists; the fixture does not prove SSRF.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 139,
+          "location": "main.tf:139",
+          "quote": "http_tokens = \"optional\""
+        },
+        {
+          "file": "main.tf",
+          "line": 136,
+          "location": "main.tf:136",
+          "quote": "iam_instance_profile = aws_iam_instance_profile.maintenance.name"
+        },
+        {
+          "file": "brief.md",
+          "line": 6,
+          "location": "brief.md:6",
+          "quote": "The maintenance instance only needs read-only diagnostics and belongs in a private"
+        }
+      ],
+      "safe_remediation": "Verify agents and SDKs support IMDSv2, then require tokens and use an appropriate hop limit. Also reduce role permissions. Do not disable metadata blindly if the workload still needs role credentials.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-SEC-05",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_lambda_function_url.dispatch",
+      "title": "An internal operation has a public unauthenticated function URL",
+      "expected_finding": "The URL uses NONE and both function-URL and URL-scoped function invocation permissions grant Principal=*. The workload requires authenticated operations and declares no in-function authentication. Any gateway authentication does not protect this separate endpoint.",
+      "severity_rationale": "The URL uses NONE and both function-URL and URL-scoped function invocation permissions grant Principal=*. The workload requires authenticated operations and declares no in-function authentication. Any gateway authentication does not protect this separate endpoint.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 201,
+          "location": "main.tf:201",
+          "quote": "authorization_type = \"NONE\""
+        },
+        {
+          "file": "main.tf",
+          "line": 208,
+          "location": "main.tf:208",
+          "quote": "principal = \"*\""
+        },
+        {
+          "file": "main.tf",
+          "line": 217,
+          "location": "main.tf:217",
+          "quote": "invoked_via_function_url = true"
+        },
+        {
+          "file": "brief.md",
+          "line": 5,
+          "location": "brief.md:5",
+          "quote": "does not authenticate callers itself. The JWT issuer is externally operated."
+        }
+      ],
+      "safe_remediation": "Remove the alternate URL and its public permissions if unused, or require AWS_IAM and narrowly authorize intended callers with signed requests. Preserve a tested authenticated entry path; hiding the URL or adding CORS is not authentication.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-DATA-01",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_db_instance.records",
+      "title": "Production records have no RDS automated backups",
+      "expected_finding": "backup_retention_period=0 disables RDS automated backups and its associated point-in-time recovery. The brief requires a 15-minute recovery point and declares no other database backup mechanism. Deletion protection/final snapshots do not meet that ongoing recovery requirement.",
+      "severity_rationale": "backup_retention_period=0 disables RDS automated backups and its associated point-in-time recovery. The brief requires a 15-minute recovery point and declares no other database backup mechanism. Deletion protection/final snapshots do not meet that ongoing recovery requirement.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 310,
+          "location": "main.tf:310",
+          "quote": "backup_retention_period = 0"
+        },
+        {
+          "file": "brief.md",
+          "line": 9,
+          "location": "brief.md:9",
+          "quote": "backup/replay, and require a 15-minute RPO. The database needs cross-AZ availability"
+        }
+      ],
+      "safe_remediation": "Enable an appropriate positive backup retention period, schedule the zero-to-nonzero change with its possible outage, and test PITR restores. Validate the required RPO; do not claim backups alone deliver the stated recovery time.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.BackupRetention.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-DATA-02",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_db_instance.records",
+      "title": "The critical database has no cross-AZ standby",
+      "expected_finding": "multi_az=false leaves this RDS instance without a Multi-AZ standby despite the brief's requirement to survive an AZ outage and restore service within 15 minutes. A subnet group spanning two AZs does not itself create a standby.",
+      "severity_rationale": "multi_az=false leaves this RDS instance without a Multi-AZ standby despite the brief's requirement to survive an AZ outage and restore service within 15 minutes. A subnet group spanning two AZs does not itself create a standby.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 311,
+          "location": "main.tf:311",
+          "quote": "multi_az = false"
+        },
+        {
+          "file": "main.tf",
+          "line": 295,
+          "location": "main.tf:295",
+          "quote": "subnet_ids = [aws_subnet.edge_a.id, aws_subnet.app_a.id]"
+        },
+        {
+          "file": "brief.md",
+          "line": 10,
+          "location": "brief.md:10",
+          "quote": "with a 15-minute target recovery time. Evidence objects and all retained versions"
+        }
+      ],
+      "safe_remediation": "Evaluate and enable a supported Multi-AZ deployment with capacity and cost approval; test failover and client reconnect behavior. Backups remain necessary and Multi-AZ is not a guarantee of an exact recovery time.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZSingleStandby.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-DATA-03",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_dynamodb_table.journal",
+      "title": "The authoritative journal lacks point-in-time recovery",
+      "expected_finding": "PITR is explicitly disabled on the durable event journal. The brief requires restoration after accidental writes/deletes and provides no external backup or replay source for this table.",
+      "severity_rationale": "PITR is explicitly disabled on the durable event journal. The brief requires restoration after accidental writes/deletes and provides no external backup or replay source for this table.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 326,
+          "location": "main.tf:326",
+          "quote": "point_in_time_recovery { enabled = false }"
+        },
+        {
+          "file": "brief.md",
+          "line": 9,
+          "location": "brief.md:9",
+          "quote": "backup/replay, and require a 15-minute RPO. The database needs cross-AZ availability"
+        }
+      ],
+      "safe_remediation": "Enable PITR for future recovery points and test restoration to a new table with an application cutover plan. Enabling it does not recover data lost before enablement and does not replace retention controls.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Point-in-time-recovery.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-DATA-05",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_s3_bucket_lifecycle_configuration.evidence",
+      "title": "Evidence lifecycle retention contradicts the 90-day requirement",
+      "expected_finding": "The enabled lifecycle rule expires current objects after one day and noncurrent versions after one day. That makes required evidence eligible for deletion far before 90 days. Lifecycle execution is asynchronous, so do not assert deletion at an exact timestamp.",
+      "severity_rationale": "The enabled lifecycle rule expires current objects after one day and noncurrent versions after one day. That makes required evidence eligible for deletion far before 90 days. Lifecycle execution is asynchronous, so do not assert deletion at an exact timestamp.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 369,
+          "location": "main.tf:369",
+          "quote": "expiration { days = 1 }"
+        },
+        {
+          "file": "main.tf",
+          "line": 370,
+          "location": "main.tf:370",
+          "quote": "noncurrent_version_expiration { noncurrent_days = 1 }"
+        },
+        {
+          "file": "brief.md",
+          "line": 11,
+          "location": "brief.md:11",
+          "quote": "must stay in EU AWS Regions and be recoverable for at least 90 days; this is the"
+        }
+      ],
+      "safe_remediation": "Suspend the destructive lifecycle rule while assessing existing data, then set current and noncurrent retention to at least the required window. Recover still-available versions/backups before expiry; a configuration change cannot resurrect deleted objects.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-expire-general-considerations.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-DATA-06",
+      "severity": "Medium",
+      "must_find": false,
+      "resource_address": "aws_sqs_queue.ingest_failed",
+      "title": "The standard-queue DLQ retains failures for only 60 seconds",
+      "expected_finding": "The source retains messages for four days but its DLQ retains them for 60 seconds. Standard queues preserve original enqueue age across redrive, so older failures can expire on arrival before the operator's daily inspection.",
+      "severity_rationale": "The source retains messages for four days but its DLQ retains them for 60 seconds. Standard queues preserve original enqueue age across redrive, so older failures can expire on arrival before the operator's daily inspection.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 403,
+          "location": "main.tf:403",
+          "quote": "message_retention_seconds = 60"
+        },
+        {
+          "file": "main.tf",
+          "line": 409,
+          "location": "main.tf:409",
+          "quote": "message_retention_seconds = 345600"
+        },
+        {
+          "file": "main.tf",
+          "line": 411,
+          "location": "main.tf:411",
+          "quote": "redrive_policy = jsonencode({ deadLetterTargetArn = aws_sqs_queue.ingest_failed.arn, maxReceiveCount = 5 })"
+        },
+        {
+          "file": "brief.md",
+          "line": 13,
+          "location": "brief.md:13",
+          "quote": "Failed standard-queue messages receive daily inspection. Debug output is high-volume,"
+        }
+      ],
+      "safe_remediation": "Set the DLQ retention above source retention, such as 14 days, and alarm on failures. Investigate poison messages before controlled redrive; do not purge the DLQ or increase receive attempts indefinitely.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-DATA-07",
+      "severity": "Low",
+      "must_find": false,
+      "resource_address": "aws_cloudwatch_log_group.debug",
+      "title": "High-volume diagnostic logs never expire",
+      "expected_finding": "retention_in_days=0 retains these non-audit diagnostic logs indefinitely. The brief says they are regenerable, high-volume, and only needed for 30 days, creating avoidable storage growth. No dollar saving is inferable from Terraform alone.",
+      "severity_rationale": "retention_in_days=0 retains these non-audit diagnostic logs indefinitely. The brief says they are regenerable, high-volume, and only needed for 30 days, creating avoidable storage growth. No dollar saving is inferable from Terraform alone.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 427,
+          "location": "main.tf:427",
+          "quote": "retention_in_days = 0"
+        },
+        {
+          "file": "brief.md",
+          "line": 14,
+          "location": "brief.md:14",
+          "quote": "non-audit data needed for 30 days; audit logs require 90 days. The scratch importer"
+        }
+      ],
+      "safe_remediation": "Confirm incident/legal holds, archive needed history, then use the approved 30-day retention. Do not apply this short retention to the separately identified audit/evidence data.",
+      "reference_urls": [],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-DATA-08",
+      "severity": "Medium",
+      "must_find": false,
+      "resource_address": "aws_ebs_volume.scratch",
+      "title": "A costly provisioned-IOPS scratch volume has no declared attachment",
+      "expected_finding": "This root declares a 1,000-GiB io2 volume with 64,000 IOPS, no attachment, and a brief explicitly saying the scratch importer was retired. It is a planned unused cost, not a measured live bill or proof of a universally wrong volume type.",
+      "severity_rationale": "This root declares a 1,000-GiB io2 volume with 64,000 IOPS, no attachment, and a brief explicitly saying the scratch importer was retired. It is a planned unused cost, not a measured live bill or proof of a universally wrong volume type.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 442,
+          "location": "main.tf:442",
+          "quote": "size = 1000"
+        },
+        {
+          "file": "main.tf",
+          "line": 444,
+          "location": "main.tf:444",
+          "quote": "iops = 64000"
+        },
+        {
+          "file": "brief.md",
+          "line": 15,
+          "location": "brief.md:15",
+          "quote": "was retired, and no external stack attaches its regenerable disk. SNS subscribers"
+        }
+      ],
+      "safe_remediation": "Verify ownership, attachments and retention needs before removing the retired volume from desired state; snapshot any needed data first. If still needed, benchmark and right-size type/capacity/IOPS rather than deleting a potentially live disk. Quantify costs separately with regional pricing.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volume-types.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-ENTRY-01",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_apigatewayv2_route.override",
+      "title": "The dispatch override route bypasses the adjacent JWT authorizer",
+      "expected_finding": "POST /dispatch/override explicitly uses authorization_type=NONE and reaches the same function as the JWT-protected read route. The brief requires staff authentication and says the image does not implement its own authorization. A protected neighbouring route does not secure this route.",
+      "severity_rationale": "POST /dispatch/override explicitly uses authorization_type=NONE and reaches the same function as the JWT-protected read route. The brief requires staff authentication and says the image does not implement its own authorization. A protected neighbouring route does not secure this route.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 256,
+          "location": "main.tf:256",
+          "quote": "authorization_type = \"NONE\""
+        },
+        {
+          "file": "main.tf",
+          "line": 255,
+          "location": "main.tf:255",
+          "quote": "target = \"integrations/${aws_apigatewayv2_integration.dispatch.id}\""
+        },
+        {
+          "file": "main.tf",
+          "line": 248,
+          "location": "main.tf:248",
+          "quote": "authorizer_id = aws_apigatewayv2_authorizer.staff.id"
+        },
+        {
+          "file": "brief.md",
+          "line": 4,
+          "location": "brief.md:4",
+          "quote": "authentication. The dispatch image relies on infrastructure authorization and"
+        }
+      ],
+      "safe_remediation": "Require the staff JWT authorizer and an appropriate write/override scope, then test rejected unauthenticated and insufficient-scope calls. Preserve read-only access separately; fix the alternate function URL too.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T3A-REGION-01",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_s3_bucket.evidence",
+      "title": "EU-only evidence storage is explicitly placed in a US Region",
+      "expected_finding": "The evidence bucket and its controls use aws.archive_us, whose region is us-east-2, contradicting the brief's EU-only location requirement for originals and versions. The default EU provider does not override this alias. This is a declared requirement violation, not a legal conclusion or proof of a completed transfer.",
+      "severity_rationale": "The evidence bucket and its controls use aws.archive_us, whose region is us-east-2, contradicting the brief's EU-only location requirement for originals and versions. The default EU provider does not override this alias. This is a declared requirement violation, not a legal conclusion or proof of a completed transfer.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 341,
+          "location": "main.tf:341",
+          "quote": "provider = aws.archive_us"
+        },
+        {
+          "file": "main.tf",
+          "line": 337,
+          "location": "main.tf:337",
+          "quote": "region = \"us-east-2\""
+        },
+        {
+          "file": "brief.md",
+          "line": 11,
+          "location": "brief.md:11",
+          "quote": "must stay in EU AWS Regions and be recoverable for at least 90 days; this is the"
+        }
+      ],
+      "safe_remediation": "Create an EU-region destination with equivalent access, encryption, versioning and retention controls. Inventory and migrate any existing data under the owner's residency procedures, update producers, validate recovery, and retire the US copy only after approved migration. Merely changing a provider alias does not move an existing bucket safely.",
+      "reference_urls": [],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    }
+  ],
+  "safe_counterexamples": [
+    {
+      "id": "T3A-SEC-SAFE-01",
+      "resource_address": "aws_security_group.spare",
+      "must_not_report": "A deployed Windows host is reachable from the public internet through this group.",
+      "why_safe_for_this_claim": "The group has only private-CIDR ingress and no declared attachment. Neither an RDP listener nor a public path is established.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 83,
+          "location": "main.tf:83",
+          "quote": "cidr_blocks = [\"10.74.0.0/16\"]"
+        }
+      ]
+    },
+    {
+      "id": "T3A-SEC-SAFE-02",
+      "resource_address": "aws_instance.maintenance",
+      "must_not_report": "The root disk is unencrypted.",
+      "why_safe_for_this_claim": "The root block explicitly requests encryption, and regional EBS encryption-by-default is also enabled.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 144,
+          "location": "main.tf:144",
+          "quote": "encrypted = true"
+        },
+        {
+          "file": "main.tf",
+          "line": 88,
+          "location": "main.tf:88",
+          "quote": "enabled = true"
+        }
+      ]
+    },
+    {
+      "id": "T3A-DATA-SAFE-01",
+      "resource_address": "aws_db_instance.records",
+      "must_not_report": "The database is publicly accessible or stores an inline plaintext master password.",
+      "why_safe_for_this_claim": "publicly_accessible=false, encrypted storage, private-CIDR ingress, and managed master-user credentials are explicit. Other database reliability issues still apply.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 309,
+          "location": "main.tf:309",
+          "quote": "publicly_accessible = false"
+        },
+        {
+          "file": "main.tf",
+          "line": 306,
+          "location": "main.tf:306",
+          "quote": "manage_master_user_password = true"
+        }
+      ]
+    },
+    {
+      "id": "T3A-DATA-SAFE-02",
+      "resource_address": "aws_s3_bucket_policy.evidence",
+      "must_not_report": "The wildcard principal grants public access to evidence, or new S3 objects are unencrypted.",
+      "why_safe_for_this_claim": "This statement is a Deny of insecure transport, not an Allow. Bucket public-access blocks are enabled, and new objects have S3's default encryption.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 383,
+          "location": "main.tf:383",
+          "quote": "\"Effect\": \"Deny\","
+        },
+        {
+          "file": "main.tf",
+          "line": 351,
+          "location": "main.tf:351",
+          "quote": "block_public_policy = true"
+        }
+      ]
+    },
+    {
+      "id": "T3A-SAFE-JWT",
+      "resource_address": "aws_apigatewayv2_route.read",
+      "must_not_report": "Every API route lacks authorization.",
+      "why_safe_for_this_claim": "The read route explicitly uses JWT, its staff authorizer, and dispatch.read scope. The separate override route and function URL are the exposed paths.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 247,
+          "location": "main.tf:247",
+          "quote": "authorization_type = \"JWT\""
+        },
+        {
+          "file": "main.tf",
+          "line": 249,
+          "location": "main.tf:249",
+          "quote": "authorization_scopes = [\"dispatch.read\"]"
+        }
+      ]
+    }
+  ],
+  "required_disclosures": [
+    {
+      "id": "ENTRY-PATH-DIAGRAM",
+      "resource_address": "aws_lambda_function_url.dispatch",
+      "expectation": "If a diagram is produced, include the function URL as a separate entry path to its function. Do not imply every invocation traverses a protected gateway. Score diagram correctness separately from issue recall.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 199,
+          "location": "main.tf:199",
+          "quote": "resource \"aws_lambda_function_url\" \"dispatch\" {"
+        }
+      ]
+    }
+  ]
+}

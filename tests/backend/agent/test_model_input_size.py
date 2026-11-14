@@ -12,8 +12,11 @@ from dataclasses import asdict
 from pathlib import Path
 
 import pytest
-
-from backend.agent.nodes.reason import MAX_RULE_FINDINGS_FOR_MODEL, build_user_content
+from backend.agent.nodes.reason import (
+    MAX_RULE_FINDINGS_FOR_MODEL,
+    _rule_finding_for_model,
+    build_user_content,
+)
 from backend.lambdas.ingest.handler import parse_terraform_files
 from backend.lambdas.rule_engine.handler import run_rules
 from backend.lambdas.rule_engine.resource_summary import MAX_RESOURCES, build_resource_summary
@@ -114,9 +117,7 @@ def test_a_submission_built_to_trip_hundreds_of_rules_stays_bounded():
         path.write_text(
             "".join(_HOSTILE.format(i=i, pad="x" * 50) for i in range(400)), encoding="utf-8"
         )
-        parsed = json.loads(
-            json.dumps(asdict(parse_terraform_files([str(path)])), default=str)
-        )
+        parsed = json.loads(json.dumps(asdict(parse_terraform_files([str(path)])), default=str))
     rules = [f.model_dump(mode="json") for f in run_rules(parsed, "r")]
     assert len(rules) > 3 * MAX_RULE_FINDINGS_FOR_MODEL, "the submission trips many rules"
     content = build_user_content(
@@ -124,9 +125,12 @@ def test_a_submission_built_to_trip_hundreds_of_rules_stays_bounded():
     )
     assert len(content["rule_engine_findings"]) == MAX_RULE_FINDINGS_FOR_MODEL
     assert content["rule_engine_findings_omitted"] == len(rules) - MAX_RULE_FINDINGS_FOR_MODEL
-    # Every kind of problem the rules found still reaches the model.
-    found = {f["concern"] for f in rules}
+    # Every kind of problem the rules found still reaches the model: each
+    # concern has at least one of its own findings in what is sent (audit
+    # F15: comparing set sizes did not prove that).
     sent = {f["finding"] for f in content["rule_engine_findings"]}
-    assert len(found) <= len(sent)
+    for concern in {f["concern"] for f in rules}:
+        own = {_rule_finding_for_model(f)["finding"] for f in rules if f["concern"] == concern}
+        assert own & sent, f"no {concern} finding reached the model"
     assert _chars(content["terraform_resources"]) <= WORST_SUMMARY_CHARS
     assert _chars(content) <= WORST_INPUT_CHARS

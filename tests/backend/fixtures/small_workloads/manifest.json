@@ -1,0 +1,192 @@
+{
+  "schema_version": "small-workload-manifest@1",
+  "status": "reviewed_pending_owner_freeze",
+  "authored_date": "2026-11-13",
+  "source_base_revision": "1e8ffb8",
+  "branch": "test/p1-corpus",
+  "allocation_source": "archibrief-launch/P0-CONTRACT-2026-11-11.md section 10",
+  "allocation": {
+    "initial_reviews": 12,
+    "reservation_per_review_usd": "0.40",
+    "total_reservation_usd": "4.80",
+    "execution_authorized_by_this_manifest": false,
+    "run_order": [
+      "T1-small",
+      "T1-full",
+      "T2-small",
+      "T2-full",
+      "T3a",
+      "T3b-neutral",
+      "T3b-hostile",
+      "T3a",
+      "T1-full",
+      "T2-full",
+      "T1-full",
+      "T2-full"
+    ],
+    "failures_consume_slots": true
+  },
+  "counting_unit": "reachable resource block per module-call address, including resource count=0 and non-AWS; excluding module/data/provider/variable blocks and uncalled or count=0 module children",
+  "held_out_policy": "Both T3b briefs share one architecture and oracle; never tune on either output. A new held-out and approval are required after tuning on held-out results.",
+  "upload_policy": "Archive only each case terraform_files relative to terraform_root; send selected brief separately. Never include oracle, inventory, manifest or validation artifacts.",
+  "hash_policy": {
+    "algorithm": "sha256",
+    "scope": "exact file bytes for every corpus file other than manifest.json",
+    "excluded": [
+      "manifest.json"
+    ],
+    "manifest_digest": "Printed separately by validate_corpus.py; record outside this directory at freeze"
+  },
+  "review_status": {
+    "critical_high_review": "approved",
+    "reviewer": "Claude",
+    "independent_outside_reviewer": false
+  },
+  "cases": [
+    {
+      "id": "T1-small",
+      "architecture_id": "T1-small",
+      "terraform_root": "T1-small",
+      "known_declarations": 25,
+      "complete_workload_total_known": true,
+      "split": "development",
+      "runs": 1,
+      "brief": "T1-small/brief.md",
+      "oracle": "T1-small/oracle.json",
+      "inventory": "T1-small/inventory.json",
+      "terraform_files": [
+        "T1-small/main.tf"
+      ]
+    },
+    {
+      "id": "T1-full",
+      "architecture_id": "T1-full",
+      "terraform_root": "T1-full",
+      "known_declarations": 50,
+      "complete_workload_total_known": true,
+      "split": "development",
+      "runs": 3,
+      "brief": "T1-full/brief.md",
+      "oracle": "T1-full/oracle.json",
+      "inventory": "T1-full/inventory.json",
+      "terraform_files": [
+        "T1-full/exports.tf",
+        "T1-full/main.tf"
+      ]
+    },
+    {
+      "id": "T2-small",
+      "architecture_id": "T2-small",
+      "terraform_root": "T2-small",
+      "known_declarations": 25,
+      "complete_workload_total_known": true,
+      "split": "development",
+      "runs": 1,
+      "brief": "T2-small/brief.md",
+      "oracle": "T2-small/oracle.json",
+      "inventory": "T2-small/inventory.json",
+      "terraform_files": [
+        "T2-small/main.tf"
+      ]
+    },
+    {
+      "id": "T2-full",
+      "architecture_id": "T2-full",
+      "terraform_root": "T2-full",
+      "known_declarations": 50,
+      "complete_workload_total_known": true,
+      "split": "development",
+      "runs": 3,
+      "brief": "T2-full/brief.md",
+      "oracle": "T2-full/oracle.json",
+      "inventory": "T2-full/inventory.json",
+      "terraform_files": [
+        "T2-full/exports.tf",
+        "T2-full/main.tf"
+      ]
+    },
+    {
+      "id": "T3a",
+      "architecture_id": "T3a",
+      "terraform_root": "T3a",
+      "known_declarations": 50,
+      "complete_workload_total_known": true,
+      "split": "development",
+      "runs": 2,
+      "brief": "T3a/brief.md",
+      "oracle": "T3a/oracle.json",
+      "inventory": "T3a/inventory.json",
+      "terraform_files": [
+        "T3a/main.tf"
+      ]
+    },
+    {
+      "id": "T3b-neutral",
+      "architecture_id": "T3b",
+      "terraform_root": "T3b",
+      "known_declarations": 50,
+      "complete_workload_total_known": false,
+      "split": "held_out",
+      "runs": 1,
+      "brief": "T3b/brief-neutral.md",
+      "oracle": "T3b/oracle.json",
+      "inventory": "T3b/inventory.json",
+      "terraform_files": [
+        "T3b/main.tf",
+        "T3b/modules/lane/main.tf",
+        "T3b/modules/unused/main.tf"
+      ]
+    },
+    {
+      "id": "T3b-hostile",
+      "architecture_id": "T3b",
+      "terraform_root": "T3b",
+      "known_declarations": 50,
+      "complete_workload_total_known": false,
+      "split": "held_out",
+      "runs": 1,
+      "brief": "T3b/brief-hostile.md",
+      "oracle": "T3b/oracle.json",
+      "inventory": "T3b/inventory.json",
+      "terraform_files": [
+        "T3b/main.tf",
+        "T3b/modules/lane/main.tf",
+        "T3b/modules/unused/main.tf"
+      ]
+    }
+  ],
+  "file_sha256": {
+    "README.md": "d69076d3aed23d45a402e61f2d97d29c6f35f26a26c8fa39d4ebc3f245fad990",
+    "T1-full/brief.md": "1367b513492df1e81690f1620a5cb1f2cdab87221a4aefb3b8b184678926ec4f",
+    "T1-full/exports.tf": "69332d172c0813dd6da12e06dba6a8c168efaf543666f5866652456e87ed7b80",
+    "T1-full/inventory.json": "56a7d21bd96e3fecab12ed4d9aec334d4f5781a49ed46c2ce3ad9ea49e2971f7",
+    "T1-full/main.tf": "c80879e56db6d1309c54ef6c89ac6e352b4ce73c223ee6f5f60bd9b4188b7ae9",
+    "T1-full/oracle.json": "fc9a8e8fb442d07cc3ebf0241660ca9e2f9f6b411a7a22050b6e9011d57f8799",
+    "T1-small/brief.md": "1367b513492df1e81690f1620a5cb1f2cdab87221a4aefb3b8b184678926ec4f",
+    "T1-small/inventory.json": "8069cfa3f4ee8bd019d9873ca54f99b4a9869418a5ea1e8b418a586bbce7092b",
+    "T1-small/main.tf": "c80879e56db6d1309c54ef6c89ac6e352b4ce73c223ee6f5f60bd9b4188b7ae9",
+    "T1-small/oracle.json": "6235749ed93fd526c5becd25bb886df5731e023a5fa3db5f98b6b77adee2333b",
+    "T2-full/brief.md": "860199764a7a50066292ff6e4b0b6ea5715888a49ff1c5719a80bcf0d00ec4c4",
+    "T2-full/exports.tf": "99f1026cab753e7f1b47143f130768fe78cd5e99d2b1a0a90c8233effaa00512",
+    "T2-full/inventory.json": "3656f25ce2a23b7637f8956e4d3eb2ff924d1d7b5090270073ce29b6c8839274",
+    "T2-full/main.tf": "7cf954457efa0cdab56dd1a7b57c468e1dcf9d5c1a578d24f1986d5d92b16eb8",
+    "T2-full/oracle.json": "e7dfeec0f5dd67afa66b02d161f1577c45f6cc7c844a6eee8490b5c66ee3de1e",
+    "T2-small/brief.md": "860199764a7a50066292ff6e4b0b6ea5715888a49ff1c5719a80bcf0d00ec4c4",
+    "T2-small/inventory.json": "a4474e69650019a789b9e4388980c6317a86fe8750140821626ae284a822a16a",
+    "T2-small/main.tf": "7cf954457efa0cdab56dd1a7b57c468e1dcf9d5c1a578d24f1986d5d92b16eb8",
+    "T2-small/oracle.json": "d2c4b3adec9398a80fc7ef79dcf9f558669a85cbfe541112b3c2bec09b363909",
+    "T3a/brief.md": "92a02bedba6b514b45d754cfc54e3dfbd4e42ddfb352dcaf99de68fb6a018a0e",
+    "T3a/inventory.json": "5143988c77f553136986cd2390822d6735ee5c0d2305b20e9046e17eea0bbcf0",
+    "T3a/main.tf": "d60d7abc5b2b97a8cc1eab38080f522a8195cdd93f2b026c68f6fa97a5977669",
+    "T3a/oracle.json": "5afdfbba7f70aca85f06ec5b4f3d1b5a51828956cecea3a030629694d9e9ac46",
+    "T3b/brief-hostile.md": "68c58da7995648fde1830d37b164ac6225cd541f76e5a8da1389d4ee112fbdc0",
+    "T3b/brief-neutral.md": "6faa5683894f07d3121460f09461cc48a164d4e9d27680b4087106b8d8ef2449",
+    "T3b/inventory.json": "d721e58e7440e3d137d25c4110837427952c49f1343be3eaabef61d9d0a74a8d",
+    "T3b/main.tf": "55b34415d5cc61bc8708bc971fc1b8cf4eb3ccc0ed02f135deee12651ee08bf7",
+    "T3b/modules/lane/main.tf": "34d7dfe01bd659674a12fb59630af87f6bca09b37c08c0bfafaa9af6d1707048",
+    "T3b/modules/unused/main.tf": "fc9e5ec5d80d57801ee91572f67692645d5cf02a74fdad23e28b923254e118c7",
+    "T3b/oracle.json": "1929fee6f59271d0fb954dafde3412844447434eb22035bb6563147b8a1350d1",
+    "validate_corpus.py": "6c14d9338ce03eea386ca747bdad917ba0999c3ecc2d4c4d421b90045b89ecb8",
+    "validation.json": "9adbe38627b55c5706a9360e68221f3899e302701bb9300c5d53615027e0a1c4"
+  }
+}
