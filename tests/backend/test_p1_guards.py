@@ -90,7 +90,8 @@ def test_the_model_input_carries_the_fact_behind_each_issue(case_id, issue_id, r
 def test_a_rule_reports_the_public_lambda_url(case_id, issue_id, replays):
     name = CASE_ISSUES[case_id][issue_id].resource
     assert any(
-        re.search(r"function url", f["finding"], re.IGNORECASE) and name in f["finding"] + f["evidence"]
+        re.search(r"function url", f["finding"], re.IGNORECASE)
+        and name in f["finding"] + f["evidence"]
         for f in replays(case_id).rules
     )
 

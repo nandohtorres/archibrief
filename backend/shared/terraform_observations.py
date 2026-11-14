@@ -62,6 +62,17 @@ def enumeration(*choices):
     return lambda value: isinstance(value, str) and value in choices
 
 
+def _narrows(filter_block: dict) -> bool:
+    """Whether a lifecycle filter narrows the objects a rule covers, or that
+    cannot be told. An empty prefix is the whole bucket; any other key, or a
+    prefix that is not literally empty (a variable, a path), may narrow it."""
+    for key, value in filter_block.items():
+        if key == "__is_block__" or (key == "prefix" and value == ""):
+            continue
+        return True
+    return False
+
+
 class Fact(TypedDict):
     id: str
     resource: str
@@ -406,14 +417,17 @@ class ResourceObservations:
             self.value(
                 "status", enumeration("Enabled", "Disabled"), body=rule, setting=prefix + ".status"
             )
-            filtered = any(key in rule for key in ("prefix", "tag", "and", "dynamic"))
+            # A rule-level `prefix` is the legacy spelling of filter.prefix.
+            filtered = any(key in rule for key in ("tag", "and", "dynamic")) or _narrows(
+                {"prefix": rule["prefix"]} if "prefix" in rule else {}
+            )
             for block in (
                 rule.get("filter", [])
                 if isinstance(rule.get("filter"), list)
                 else [rule.get("filter", {})]
             ):
                 if isinstance(block, dict):
-                    filtered |= any(key not in {"__is_block__"} for key in block)
+                    filtered |= _narrows(block)
             self.emit(
                 prefix + ".filter_scope", "restricted_or_unknown" if filtered else "all_objects"
             )
