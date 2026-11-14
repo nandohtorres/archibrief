@@ -24,6 +24,8 @@ import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from backend.shared.recommendation_checks import recommends_vpc_for_function_url
+
 FIXTURES = Path(__file__).parent / "fixtures" / "p1_guards"
 RECORDED = FIXTURES / "recorded"
 
@@ -348,12 +350,12 @@ def false_lifecycle_scope(findings: list[dict]) -> list[dict]:
 
 def ineffective_url_fix(findings: list[dict]) -> list[dict]:
     """A function-URL finding whose fix is a VPC change: a VPC does not
-    restrict a function URL and can break outbound access."""
+    restrict a function URL and can break outbound access. Shares its
+    predicate with the reasoning step's verification."""
     return [
         f
         for f in findings
-        if re.search(r"function url", _text(f), re.IGNORECASE)
-        and _URL_VPC_FIX.search(str(f.get("recommendation") or ""))
+        if recommends_vpc_for_function_url(_text(f), str(f.get("recommendation") or ""))
     ]
 
 

@@ -40,6 +40,7 @@ from backend.shared.models.finding import (
     FixComponent,
     PlainLanguage,
 )
+from backend.shared.recommendation_checks import recommends_vpc_for_function_url
 from backend.shared.sanitize import clip, normalize_text
 from backend.shared.stakeholder.catalog import HARMS, RECIPES, SEVERITIES, infer_concern
 from backend.shared.stakeholder.pricing import PRICE_ITEM_KEYS
@@ -102,6 +103,12 @@ results — never answer in plain text. You must:
   in resources that only matter together (a queue and its dead-letter
   queue, a role and the policy attached to it). A problem in an unrelated
   resource gets its own finding, never a sentence inside another one.
+- A retention, expiry or backup window in the workload_brief is a
+  requirement. When a configured rule already meets that window, it is
+  correct: do not report it as a gap and never recommend removing,
+  shortening or disabling it. Report a retention finding only where the
+  configuration fails the stated window, and recommend adding or lengthening
+  the rule.
 - Connect facts across resources when together they make a risk the rule
   engine can't see: who can assume a role and what it is allowed to do;
   how CloudFront reaches an origin and whether that origin is also open
@@ -594,6 +601,7 @@ _REJECTION_KINDS = (
     ("reserved for the rule engine", "rule_type_from_model"),
     ("invalid or missing finding type", "invalid_type"),
     ("failed to build a valid Finding", "invalid_fields"),
+    ("recommendation does not fix the stated problem", "wrong_fix"),
 )
 
 
@@ -869,6 +877,16 @@ def verify_model_findings(
             # this item failed citation verification — already recorded
             # above; skip building a Finding from it but keep checking the
             # rest of the batch
+            continue
+
+        if recommends_vpc_for_function_url(
+            " ".join(str(item.get(k) or "") for k in ("finding", "evidence")),
+            str(item.get("recommendation") or ""),
+        ):
+            failures.append(
+                f"finding[{index}]: recommendation does not fix the stated problem "
+                "(a VPC does not restrict a function URL)"
+            )
             continue
 
         try:
