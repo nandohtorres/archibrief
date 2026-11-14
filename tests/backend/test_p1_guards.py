@@ -97,9 +97,6 @@ def test_a_rule_reports_the_public_lambda_url(case_id, issue_id, replays):
 
 
 @needs_trivy
-@pytest.mark.xfail(
-    strict=True, reason="defect B: an empty prefix is labelled restricted_or_unknown"
-)
 @pytest.mark.parametrize(
     ("case_id", "name"),
     [("T2-small", "evidence"), ("T2-full", "evidence"), ("T1-full", "vendor_catalog")],
