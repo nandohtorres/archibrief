@@ -1,0 +1,196 @@
+{
+ "slot": 2,
+ "case": "T1-full",
+ "review_id": "b1fc6035-1a8f-44bf-8fe6-52ea31ad3e39",
+ "note": "Recorded P1 baseline review (2026-11-14), synthetic corpus only. Reduced: no citations or retrieved text.",
+ "review_scope": {
+  "known_y": 50,
+  "x": 50,
+  "sent_count": 50,
+  "categories": {
+   "other": 0,
+   "reviewed": 50,
+   "unsupported": 0,
+   "zero_copy": 0
+  },
+  "model_outcome": "completed"
+ },
+ "model_run": {
+  "emitted": 9,
+  "capped": 0,
+  "accepted": 6,
+  "rejected": {
+   "citation_on_uncited_type": 1,
+   "quote_not_in_chunk": 2
+  },
+  "input_tokens": 17913,
+  "output_tokens": 4652
+ },
+ "findings": [
+  {
+   "finding_id": "8f1a10ea-807f-42ed-ac30-b9f643f21794",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'vendor_catalog' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"vendor_catalog\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "6d558c04-e26c-4065-93bf-05e7ae323e3a",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'shift_roster' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"shift_roster\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "9daaf9d0-616d-420d-bb7d-a402f2b433a1",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'dispatch_summary' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"dispatch_summary\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "8f11c324-5c08-4094-97c1-a96e4b99b7e5",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'inspection_index' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"inspection_index\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "4ef02767-922c-4a7f-a401-a0a247e20855",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'stock_snapshot' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"stock_snapshot\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "6afd26d9-d6f5-494a-a4ec-f97ae8b4d5da",
+   "type": "deterministic-rule-result",
+   "category": "iam",
+   "concern": "iam_wildcard",
+   "finding": "IAM policy 'maintenance' grants wildcard Action \"*\" on all resources (full admin)",
+   "evidence": "resource \"aws_iam_policy\" \"maintenance\" allows * with Resource \"*\"",
+   "risk_impact": "Overly broad permissions violate least privilege and widen blast radius on compromise.",
+   "recommendation": "Scope the policy to the specific actions and resource ARNs the workload actually needs.",
+   "severity": null
+  },
+  {
+   "finding_id": "aaca301b-d259-4daa-a86b-bef27487cb4c",
+   "type": "deterministic-rule-result",
+   "category": "observability",
+   "concern": "cloudtrail_present",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "severity": null
+  },
+  {
+   "finding_id": "d5e8b55e-04eb-4815-8e98-d1faf92f33df",
+   "type": "deterministic-rule-result",
+   "category": "exposure",
+   "concern": "ec2_imdsv2",
+   "finding": "EC2 instance 'maintenance' does not require IMDSv2 tokens",
+   "evidence": "resource \"aws_instance\" \"maintenance\" metadata_options.http_tokens is not \"required\"",
+   "risk_impact": "IMDSv1 answers plain HTTP GETs, so a request forgery or open proxy on this server can read its role's temporary credentials.",
+   "recommendation": "Set metadata_options { http_tokens = \"required\" } (or require IMDSv2 account-wide with aws_ec2_instance_metadata_defaults).",
+   "severity": null
+  },
+  {
+   "finding_id": "859101e7-2523-4550-bfe7-e7ec5085c1ee",
+   "type": "deterministic-rule-result",
+   "category": "exposure",
+   "concern": "sg_admin_ingress",
+   "finding": "Security group 'maintenance' allows SSH or RDP from anywhere",
+   "evidence": "resource \"aws_security_group\" \"maintenance\" at main.tf line 66: ingress from 0.0.0.0/0 or ::/0 reaches SSH (22) or RDP (3389) (Trivy AWS-0107)",
+   "risk_impact": "This group permits SSH or RDP from any internet address if attached to a resource. Actual reachability also depends on routing and listeners.",
+   "recommendation": "Restrict ingress to specific CIDR ranges, a bastion, or use SSM Session Manager.",
+   "severity": null
+  },
+  {
+   "finding_id": "0e680f2c-e2ca-4962-aed9-b015b73f026e",
+   "type": "fact",
+   "category": "iam",
+   "concern": null,
+   "finding": "The maintenance IAM policy grants Action * on Resource *, giving the EC2 instance full administrator access to the account, directly contradicting the brief's requirement for read-only operational diagnostics.",
+   "evidence": "aws_iam_policy.maintenance: statement effect=Allow, sensitive_actions=['* (every action)'], resources='all resources (*)', has_condition=false; aws_iam_role_policy_attachment.maintenance attaches this policy to aws_iam_role.maintenance; aws_iam_instance_profile.maintenance uses that role; aws_instance.maintenance has this profile. Brief states: 'The maintenance worker only needs read-only operational diagnostics.'",
+   "risk_impact": "Full administrator credentials on a publicly reachable, SSH-exposed instance means account-level compromise is one successful SSH login away.",
+   "recommendation": "Replace aws_iam_policy.maintenance with a least-privilege policy scoped to the specific read-only actions and resources needed for operational diagnostics; remove the Action * / Resource * statement entirely.",
+   "severity": "critical"
+  },
+  {
+   "finding_id": "2e30b631-7ed5-4c0c-b03e-cb8e5c18c159",
+   "type": "fact",
+   "category": "exposure",
+   "concern": null,
+   "finding": "The app route table routes all traffic (0.0.0.0/0) to the internet gateway and is associated with aws_subnet.app_a, turning what the brief describes as a private application subnet into an effectively public subnet.",
+   "evidence": "aws_route_table.app: route[0].cidr_block=0.0.0.0/0, refs.route[0].gateway_id=aws_internet_gateway.edge; aws_route_table_association.app_a: subnet_id=aws_subnet.app_a, route_table_id=aws_route_table.app. Brief: 'The maintenance worker … must remain in a private application subnet.'",
+   "risk_impact": "The subnet's IGW default route combined with the maintenance instance's public IP directly undermines the network-layer isolation that the brief identifies as the remaining access control.",
+   "recommendation": "Remove the 0.0.0.0/0 → IGW route from aws_route_table.app and replace it with a NAT gateway route if outbound access is required, keeping inbound internet traffic blocked.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "c1abe59d-07a0-443c-8446-7a538fa036ae",
+   "type": "fact",
+   "category": "observability",
+   "concern": null,
+   "finding": "The contractor_export Lambda has no dead-letter queue and X-Ray tracing is at the default PassThrough mode, so silent invocation failures will not be detected or retried.",
+   "evidence": "aws_lambda_function.contractor_export: tracing_config.mode=not set (default: PassThrough), dead_letter_target=false; aws_cloudwatch_log_group.contractor_export: retention_in_days=90 (exists). No X-Ray tracing or DLQ configured for the Lambda.",
+   "risk_impact": "Without a DLQ or active tracing, failed exports produce no durable signal; operations teams cannot distinguish a silent Lambda failure from normal quiescence.",
+   "recommendation": "Configure a dead_letter_config SQS or SNS target on aws_lambda_function.contractor_export and set tracing_config.mode = \"Active\" to capture execution traces.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "1cc21dc1-a7b5-4f9e-8136-23d32ef770b0",
+   "type": "fact",
+   "category": "observability",
+   "concern": null,
+   "finding": "The maintenance EC2 instance has detailed monitoring disabled (provider default: false) and no CloudWatch alarm is associated with it, leaving CPU, status-check, and disk metrics at 5-minute granularity with no alerting.",
+   "evidence": "aws_instance.maintenance: monitoring=not set (default: false). No aws_cloudwatch_metric_alarm referencing the maintenance instance was found; aws_cloudwatch_metric_alarm.central_backlog targets namespace AWS/SQS, not EC2.",
+   "risk_impact": "Without monitoring and alerting, operational issues on the only maintenance host are discovered reactively, increasing mean time to recovery.",
+   "recommendation": "Enable detailed monitoring on aws_instance.maintenance and add CloudWatch alarms for StatusCheckFailed_System, StatusCheckFailed_Instance, and CPUUtilization.",
+   "severity": "low"
+  },
+  {
+   "finding_id": "347aeab1-37d4-44bb-a61e-1c4765837e7c",
+   "type": "inference",
+   "category": "recovery",
+   "concern": null,
+   "finding": "All five archive bucket lifecycle rules have filter_scope=restricted_or_unknown, meaning the 90-day retention rule may apply only to a subset of objects, leaving other objects with no expiration and potentially retaining data beyond the required 90-day window.",
+   "evidence": "aws_s3_bucket_lifecycle_configuration for all five archive buckets: rule[0].expiration.days=90, rule[0].noncurrent_version_expiration.noncurrent_days=90, rule[0].filter_scope=restricted_or_unknown. absent: rule[0].noncurrent_version_expiration.newer_noncurrent_versions. The filter_scope is restricted_or_unknown, meaning the rule may not apply to the entire bucket.",
+   "risk_impact": "Uncovered objects accumulate beyond the 90-day retention requirement, creating unnecessary storage cost and potential data retention compliance issues.",
+   "recommendation": "Verify that each aws_s3_bucket_lifecycle_configuration rule uses a filter that covers the full bucket (empty filter or prefix \"\"); update rules that use restrictive prefix or tag filters unintentionally.",
+   "severity": "low"
+  },
+  {
+   "finding_id": "c9451632-6e10-4bf8-b97b-db315acf1a7a",
+   "type": "assumption",
+   "category": "cost",
+   "concern": null,
+   "finding": "The maintenance EC2 instance (t3.small) appears to run continuously for a production service with no Reserved Instance or Savings Plan commitment in the submitted configuration.",
+   "evidence": "aws_instance.maintenance: instance_type=t3.small, monitoring=not set (default: false). Brief describes this as a production maintenance service. No Savings Plan or Reserved Instance commitment is observable in the submitted configuration.",
+   "risk_impact": "Without a pricing commitment, the production maintenance instance pays full on-demand rates; a one-year Savings Plan typically reduces EC2 costs by around 30%.",
+   "recommendation": "Evaluate a one-year Compute Savings Plan or t3.small Reserved Instance for aws_instance.maintenance if the instance runs 24/7 in production.",
+   "severity": "low"
+  }
+ ]
+}

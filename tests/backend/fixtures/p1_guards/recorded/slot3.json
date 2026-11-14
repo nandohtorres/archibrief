@@ -1,0 +1,206 @@
+{
+ "slot": 3,
+ "case": "T2-small",
+ "review_id": "7aa6a665-6807-4e2b-ab5d-4eacef613e55",
+ "note": "Recorded P1 baseline review (2026-11-14), synthetic corpus only. Reduced: no citations or retrieved text.",
+ "review_scope": {
+  "known_y": 25,
+  "x": 25,
+  "sent_count": 25,
+  "categories": {
+   "other": 0,
+   "reviewed": 25,
+   "unsupported": 0,
+   "zero_copy": 0
+  },
+  "model_outcome": "completed"
+ },
+ "model_run": {
+  "emitted": 10,
+  "capped": 0,
+  "accepted": 9,
+  "rejected": {
+   "citation_on_uncited_type": 1
+  },
+  "input_tokens": 16182,
+  "output_tokens": 5326
+ },
+ "findings": [
+  {
+   "finding_id": "aa2dc155-9641-4f27-85b9-9f79587a628c",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'evidence' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"evidence\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "59ac28d3-e18b-45dd-8949-a173acd0d2ec",
+   "type": "deterministic-rule-result",
+   "category": "availability",
+   "concern": "rds_multi_az",
+   "finding": "RDS instance 'records' is not configured multi_az",
+   "evidence": "resource \"aws_db_instance\" \"records\" has multi_az = false or unset",
+   "risk_impact": "A single AZ failure causes database unavailability.",
+   "recommendation": "Set multi_az = true if the workload's availability requirement warrants it.",
+   "severity": null
+  },
+  {
+   "finding_id": "e683d124-4466-4009-afd5-0363a8ce270d",
+   "type": "deterministic-rule-result",
+   "category": "observability",
+   "concern": "cloudtrail_present",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "severity": null
+  },
+  {
+   "finding_id": "ae3a3407-3562-4904-a56a-5686a6c6cb7d",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "sqs_dlq_retention",
+   "finding": "Dead-letter queue 'ingest_failed' keeps messages for less time than queue 'ingest'",
+   "evidence": "aws_sqs_queue \"ingest\" keeps messages 345600 s; its dead-letter queue \"ingest_failed\" keeps them 60 s",
+   "risk_impact": "A failed message keeps its original enqueue time, so one that waited in the source queue can expire from the dead-letter queue almost at once: the failure is lost before anyone can look at it.",
+   "recommendation": "Set the dead-letter queue's message_retention_seconds longer than 345600 s (the SQS maximum is 1209600, 14 days).",
+   "severity": null
+  },
+  {
+   "finding_id": "80b9d1ee-af97-4dee-9bca-13c196aa0883",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "dynamodb_pitr",
+   "finding": "DynamoDB table 'journal' does not have point-in-time recovery enabled",
+   "evidence": "resource \"aws_dynamodb_table\" \"journal\" at main.tf line 87: point_in_time_recovery is not enabled (Trivy AWS-0024)",
+   "risk_impact": "Accidental writes or deletes cannot be rolled back to a prior point in time.",
+   "recommendation": "Set point_in_time_recovery { enabled = true }.",
+   "severity": null
+  },
+  {
+   "finding_id": "b09e66bc-ed38-45db-afc7-3d6e569f8878",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "rds_backup_retention",
+   "finding": "RDS instance 'records' keeps backups for one day or less",
+   "evidence": "resource \"aws_db_instance\" \"records\" at main.tf line 71: backup_retention_period is unset or 1 (Trivy AWS-0077)",
+   "risk_impact": "A problem noticed after a day can't be restored from backup.",
+   "recommendation": "Set backup_retention_period to match your recovery needs (for example 7 or more days).",
+   "severity": null
+  },
+  {
+   "finding_id": "e80a9888-7268-463a-b6ed-a6b0476225a7",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "s3_versioning",
+   "finding": "S3 bucket 'evidence' does not have versioning enabled",
+   "evidence": "resource \"aws_s3_bucket_versioning\" \"evidence\" at main.tf line 128: versioning is not enabled (Trivy AWS-0090)",
+   "risk_impact": "Accidental or malicious object deletion or overwrite cannot be recovered.",
+   "recommendation": "Enable aws_s3_bucket_versioning with status = \"Enabled\".",
+   "severity": null
+  },
+  {
+   "finding_id": "3dcfe671-9ff1-4a15-9766-5c5a39098b25",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "RDS instance 'records' has backup_retention_period=0, disabling native automated backups and PITR, making it impossible to meet the stated 15-minute RPO.",
+   "evidence": "aws_db_instance.records: backup_retention_period=0 (native backups disabled). The brief states a 15-minute RPO and that 'records' is the authoritative PostgreSQL database with no external backup or independent replay source.",
+   "risk_impact": "With backup_retention_period=0, automated backups and PITR are completely disabled. Any accidental write, corruption, or deletion is unrecoverable from native RDS backups, violating the stated 15-minute RPO for the authoritative records database.",
+   "recommendation": "Set backup_retention_period to at least 7 days (the minimum to satisfy a 15-minute RPO via PITR) on aws_db_instance.records. Validate that a restore actually completes within 15 minutes against the RTO.",
+   "severity": "critical"
+  },
+  {
+   "finding_id": "2af8fc7a-58f8-4580-a135-8befd9173dd9",
+   "type": "fact",
+   "category": "availability",
+   "concern": null,
+   "finding": "RDS instance 'records' has multi_az=false; the cross-AZ subnet group does not provision a synchronous standby, leaving the database unable to survive one AZ failure within the 15-minute RTO.",
+   "evidence": "aws_db_instance.records: multi_az=false. aws_db_subnet_group.records spans subnet_ids[0]=aws_subnet.edge_a (us-east-2a) and subnet_ids[1]=aws_subnet.app_a (us-east-2b), but a cross-AZ subnet group alone does not provision a synchronous standby. The brief explicitly states: 'The database must survive one AZ failure with a target recovery time of 15 minutes. A cross-AZ subnet group alone does not establish a standby.'",
+   "risk_impact": "Without Multi-AZ, an AZ failure causes a hard outage of the authoritative records database. Manual recovery from a snapshot (if one existed) would take far longer than 15 minutes and would also forfeit recent data.",
+   "recommendation": "Set multi_az=true on aws_db_instance.records to provision a synchronous standby replica in a second AZ, satisfying the stated single-AZ-failure survivability and 15-minute RTO requirements.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "722c2029-3daf-40fa-901c-f203f94bceb0",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "The evidence S3 bucket has versioning suspended and a lifecycle rule that expires both current objects after 1 day and noncurrent versions after 1 day, making 90-day version recovery impossible and destroying originals on overwrite.",
+   "evidence": "aws_s3_bucket_versioning.evidence: versioning_configuration.status=Suspended. aws_s3_bucket_lifecycle_configuration.evidence: rule[0].expiration.days=1 and rule[0].noncurrent_version_expiration.noncurrent_days=1. The brief states evidence documents are uploaded to stable keys that can be overwritten, originals and superseded versions must remain recoverable for at least 90 days, and there is no separate archive.",
+   "risk_impact": "With versioning suspended and a 1-day expiration on both current and noncurrent objects, the bucket cannot satisfy the stated 90-day recoverable version requirement. Overwritten evidence originals are lost immediately on overwrite, and all objects are purged within a day.",
+   "recommendation": "Enable versioning on aws_s3_bucket_versioning.evidence (status = Enabled) and update aws_s3_bucket_lifecycle_configuration.evidence to set noncurrent_version_expiration.noncurrent_days to at least 90. The current expiration.days=1 rule should also be reviewed—deleting current objects after 1 day appears unintentional for a production evidence store.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "feb449f8-0da4-4de6-bd2f-37147c049989",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "Dead-letter queue 'ingest_failed' retains messages for only 60 seconds, far shorter than the source queue's 4-day retention, so failed messages expire before daily inspection can occur.",
+   "evidence": "aws_sqs_queue.ingest: message_retention_seconds=345600 (4 days). aws_sqs_queue.ingest_failed: message_retention_seconds=60 (1 minute). The brief states failed standard-queue messages are inspected every day.",
+   "risk_impact": "Messages moved to the DLQ expire in 60 seconds. Any ingest failure that is not noticed and acted upon within that window is permanently lost, with no replay capability for the authoritative event history.",
+   "recommendation": "Set message_retention_seconds on aws_sqs_queue.ingest_failed to at least 86400 seconds (1 day) to ensure messages survive until the daily inspection window. A value matching the source queue (345600 s) is conventional and provides a 4-day buffer.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "61bf911c-1832-4f56-afd1-246707ce58f5",
+   "type": "fact",
+   "category": "observability",
+   "concern": null,
+   "finding": "CloudWatch log group 'debug' has retention set to 0 (never expires), retaining high-volume debug logs indefinitely instead of the stated 30-day requirement.",
+   "evidence": "aws_cloudwatch_log_group.debug: retention_in_days=0 (never expires). The brief states high-volume debug logs contain no audit evidence and are needed for only 30 days.",
+   "risk_impact": "Indefinite retention of high-volume debug logs that have no audit value wastes storage and complicates cost management, contradicting the workload's own stated requirement of 30-day retention.",
+   "recommendation": "Set retention_in_days = 30 on aws_cloudwatch_log_group.debug to enforce the stated 30-day retention for high-volume debug logs and prevent unbounded storage growth.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "0458ecad-a796-4b58-8fef-fb8c513c46df",
+   "type": "inference",
+   "category": "recovery",
+   "concern": null,
+   "finding": "The io2 scratch EBS volume (1,000 GiB) remains provisioned after the importer was retired; the brief confirms the data is regenerable and no stack attaches it, making it an unused cost item.",
+   "evidence": "aws_ebs_volume.scratch: type=io2, size=1000 GiB, encrypted=true, availability_zone=us-east-2b. The brief states: 'The scratch importer was retired, its disk is regenerable, and no external stack attaches that volume.'",
+   "risk_impact": "An io2 volume at 1,000 GiB is a high-cost EBS type. Retaining it after the importer's retirement provides no operational benefit while accruing ongoing storage charges.",
+   "recommendation": "Remove aws_ebs_volume.scratch from the Terraform configuration once confirmed unattached. Because the data is stated to be regenerable and no stack references the volume, there is no recovery risk in deleting it.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "ec063e04-7aa6-4fc5-ba24-9970c6b58933",
+   "type": "inference",
+   "category": "availability",
+   "concern": null,
+   "finding": "The RDS subnet group 'records' includes aws_subnet.edge_a, an edge-layer subnet, alongside aws_subnet.app_a; placing a database instance in an edge subnet risks unintended exposure if routing to that subnet is ever relaxed.",
+   "evidence": "aws_db_subnet_group.records: subnet_ids[0]=aws_subnet.edge_a (us-east-2a), subnet_ids[1]=aws_subnet.app_a (us-east-2b). Both subnets share aws_route_table.app via route_table_associations edge_a and app_a. The subnet group places 'edge_a' (a subnet named for the network edge) alongside the application subnet as the RDS subnet group.",
+   "risk_impact": "Database placement in an edge subnet introduces a latent risk: any future routing change to that subnet (internet gateway, NAT, peering) could inadvertently expose the database to unintended network paths, violating the requirement that the database must not be internet-accessible.",
+   "recommendation": "Create a dedicated data-tier subnet in a second AZ (e.g., us-east-2c) and replace aws_subnet.edge_a in aws_db_subnet_group.records. This also prepares the subnet group for enabling Multi-AZ properly.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "b431bd61-8948-400b-8a03-23cc1a0c246e",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "RDS instance 'records' does not copy tags to snapshots (copy_tags_to_snapshot defaults to false), making it harder to identify and manage snapshots by environment, workload, or retention policy.",
+   "evidence": "aws_db_instance.records: skip_final_snapshot=false (a final snapshot will be taken on deletion). copy_tags_to_snapshot=not set (default: false). The brief states a 15-minute RPO and 15-minute RTO with no external backup source.",
+   "risk_impact": "Untagged snapshots are harder to identify, audit, and expire correctly. Under time pressure during a recovery event, this increases the chance of selecting the wrong restore point or missing a snapshot that should be retained.",
+   "recommendation": "Set copy_tags_to_snapshot = true on aws_db_instance.records so that automated and manual snapshots inherit the instance's resource tags, enabling clear identification and policy-based lifecycle management.",
+   "severity": "low"
+  },
+  {
+   "finding_id": "4247ae47-d84e-4e3e-a375-706d45856d4a",
+   "type": "inference",
+   "category": "iam",
+   "concern": null,
+   "finding": "A customer-managed KMS key ('archive') with a 30-day deletion window is defined but no resource in the submitted configuration references it, leaving its purpose and key policy unverifiable.",
+   "evidence": "aws_kms_key.archive: enable_key_rotation=true, deletion_window_in_days=30. aws_kms_alias.archive references it. The brief states AWS-managed encryption is fine and no customer-managed key is required. No resource in the submitted configuration is linked to this KMS key via kms_key_id or similar reference.",
+   "risk_impact": "An unattached KMS key with a 30-day deletion window means accidental deletion provides a 30-day recovery window, but its key policy cannot be evaluated without knowing what resource it is meant to protect, leaving access controls unverifiable.",
+   "recommendation": "Confirm whether aws_kms_key.archive is intended for the reporting archives described in the full-size scope. If it is, link it explicitly to the relevant resources. If it is not currently needed, remove it to avoid unnecessary key management overhead.",
+   "severity": "low"
+  }
+ ]
+}

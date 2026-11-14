@@ -1,0 +1,240 @@
+{
+ "slot": 4,
+ "case": "T2-full",
+ "review_id": "230fb71b-938f-434d-a825-ef443f45c9c7",
+ "note": "Recorded P1 baseline review (2026-11-14), synthetic corpus only. Reduced: no citations or retrieved text.",
+ "review_scope": {
+  "known_y": 50,
+  "x": 50,
+  "sent_count": 50,
+  "categories": {
+   "other": 0,
+   "reviewed": 50,
+   "unsupported": 0,
+   "zero_copy": 0
+  },
+  "model_outcome": "completed"
+ },
+ "model_run": {
+  "emitted": 10,
+  "capped": 0,
+  "accepted": 7,
+  "rejected": {
+   "citation_on_uncited_type": 1,
+   "quote_not_in_chunk": 2
+  },
+  "input_tokens": 18510,
+  "output_tokens": 5717
+ },
+ "findings": [
+  {
+   "finding_id": "a6ffa4f7-2ded-45f6-b9fb-bed11c8e1e75",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'monthly_rollup' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"monthly_rollup\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "0919f23f-6b60-487d-a24d-c436135b3a3a",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'vendor_statement' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"vendor_statement\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "f066d95e-9f91-4151-89b1-5fba8003039f",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'capacity_forecast' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"capacity_forecast\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "1c99ef9d-add7-430f-b435-1ebbf533fdba",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'route_scorecard' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"route_scorecard\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "6d3f7594-f6a0-41da-a9d7-9ec8e4479847",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'inventory_digest' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"inventory_digest\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "674acc7e-6540-452f-8e2f-8bdb3c9c4804",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'evidence' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"evidence\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "ef10b82f-3400-4680-a167-986acd595c84",
+   "type": "deterministic-rule-result",
+   "category": "availability",
+   "concern": "rds_multi_az",
+   "finding": "RDS instance 'records' is not configured multi_az",
+   "evidence": "resource \"aws_db_instance\" \"records\" has multi_az = false or unset",
+   "risk_impact": "A single AZ failure causes database unavailability.",
+   "recommendation": "Set multi_az = true if the workload's availability requirement warrants it.",
+   "severity": null
+  },
+  {
+   "finding_id": "559292ef-bf06-494d-8825-1f6abe2a2576",
+   "type": "deterministic-rule-result",
+   "category": "observability",
+   "concern": "cloudtrail_present",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "severity": null
+  },
+  {
+   "finding_id": "e0bd8fb4-b2c8-4354-872c-e826e60bdd51",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "sqs_dlq_retention",
+   "finding": "Dead-letter queue 'ingest_failed' keeps messages for less time than queue 'ingest'",
+   "evidence": "aws_sqs_queue \"ingest\" keeps messages 345600 s; its dead-letter queue \"ingest_failed\" keeps them 60 s",
+   "risk_impact": "A failed message keeps its original enqueue time, so one that waited in the source queue can expire from the dead-letter queue almost at once: the failure is lost before anyone can look at it.",
+   "recommendation": "Set the dead-letter queue's message_retention_seconds longer than 345600 s (the SQS maximum is 1209600, 14 days).",
+   "severity": null
+  },
+  {
+   "finding_id": "4a95fb4e-7d1a-4631-aa81-6d2af887f088",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "dynamodb_pitr",
+   "finding": "DynamoDB table 'journal' does not have point-in-time recovery enabled",
+   "evidence": "resource \"aws_dynamodb_table\" \"journal\" at main.tf line 87: point_in_time_recovery is not enabled (Trivy AWS-0024)",
+   "risk_impact": "Accidental writes or deletes cannot be rolled back to a prior point in time.",
+   "recommendation": "Set point_in_time_recovery { enabled = true }.",
+   "severity": null
+  },
+  {
+   "finding_id": "0458fbdb-38aa-4ae4-8410-3879d2375183",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "rds_backup_retention",
+   "finding": "RDS instance 'records' keeps backups for one day or less",
+   "evidence": "resource \"aws_db_instance\" \"records\" at main.tf line 71: backup_retention_period is unset or 1 (Trivy AWS-0077)",
+   "risk_impact": "A problem noticed after a day can't be restored from backup.",
+   "recommendation": "Set backup_retention_period to match your recovery needs (for example 7 or more days).",
+   "severity": null
+  },
+  {
+   "finding_id": "ce184f28-68f1-4c9b-acc5-8f2f3a508140",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "s3_versioning",
+   "finding": "S3 bucket 'evidence' does not have versioning enabled",
+   "evidence": "resource \"aws_s3_bucket_versioning\" \"evidence\" at main.tf line 128: versioning is not enabled (Trivy AWS-0090)",
+   "risk_impact": "Accidental or malicious object deletion or overwrite cannot be recovered.",
+   "recommendation": "Enable aws_s3_bucket_versioning with status = \"Enabled\".",
+   "severity": null
+  },
+  {
+   "finding_id": "88cce0db-6aca-4714-9bc9-9b48f18532f2",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "RDS instance 'records' has backup_retention_period=0, disabling all automated backups and PITR, making the stated 15-minute RPO unachievable with no alternative recovery source.",
+   "evidence": "aws_db_instance.records: backup_retention_period=0 (observed fact). Brief states 15-minute RPO and no external backup or independent replay source for 'records'. backup_retention_period=0 disables all automated RDS snapshots, leaving zero recovery capability for the authoritative PostgreSQL database.",
+   "risk_impact": "The authoritative inspection-records PostgreSQL database has no automated backup whatsoever. Any accidental write, deletion, or corruption results in permanent data loss with no recovery path, directly violating the declared 15-minute RPO.",
+   "recommendation": "Set backup_retention_period to 7 or more on aws_db_instance.records and confirm that the resulting PITR window covers the 15-minute RPO. Because this is the sole authoritative source with no external replay, also evaluate AWS Backup for a centralised retention policy.",
+   "severity": "critical"
+  },
+  {
+   "finding_id": "a5931e64-9da5-45e9-8551-672eb45a7884",
+   "type": "fact",
+   "category": "availability",
+   "concern": null,
+   "finding": "aws_db_instance.records has multi_az=false; the cross-AZ subnet group does not create a standby replica, so an AZ failure takes the database offline and breaches the 15-minute RTO requirement.",
+   "evidence": "aws_db_instance.records: multi_az=false (observed). aws_db_subnet_group.records: subnet_ids[0]=aws_subnet.edge_a (AZ us-east-2a), subnet_ids[1]=aws_subnet.app_a (AZ us-east-2b). Brief explicitly states 'A cross-AZ subnet group alone does not establish a standby' and requires the database to survive one AZ failure with 15-minute RTO.",
+   "risk_impact": "A single AZ outage brings the authoritative PostgreSQL database offline with no automatic failover. Manual recovery from a snapshot (if backups were enabled) or a manual restore would substantially exceed the 15-minute RTO.",
+   "recommendation": "Enable multi_az=true on aws_db_instance.records. The existing cross-AZ subnet group already satisfies the subnet prerequisite; enabling Multi-AZ is the only remaining step.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "4fa29d29-b8a8-4a0e-917d-37047dea5f09",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "S3 bucket 'evidence' has versioning suspended and a lifecycle rule that expires both current and noncurrent versions after 1 day, making the required 90-day recovery of overwritten originals impossible.",
+   "evidence": "aws_s3_bucket_versioning.evidence: versioning_configuration.status=Suspended (observed). aws_s3_bucket_lifecycle_configuration.evidence: rule[0].expiration.days=1, rule[0].noncurrent_version_expiration.noncurrent_days=1 (observed). Brief: 'Evidence documents are uploaded to stable keys that can be overwritten; originals and superseded versions must remain recoverable for at least 90 days. There is no separate archive.'",
+   "risk_impact": "Every object written to the evidence bucket is irrecoverably deleted after one day. Because there is no separate archive, overwritten or deleted originals cannot be restored, breaching the 90-day retention requirement.",
+   "recommendation": "Set aws_s3_bucket_versioning.evidence to Enabled, change both expiration.days and noncurrent_version_expiration.noncurrent_days to at least 90, and consider S3 Object Lock in Governance mode for additional protection against premature deletion.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "fd7ff27d-de39-4d66-a435-e1d4082a3d81",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "Dead-letter queue 'ingest_failed' retains messages for only 60 seconds, so all failed ingest messages expire long before the daily inspection window and cannot be investigated.",
+   "evidence": "aws_sqs_queue.ingest_failed: message_retention_seconds=60 (observed fact — 1 minute). Brief: 'Failed standard-queue messages are inspected every day.' Daily inspection requires at least 86,400 seconds of retention; 60 seconds means every failed message expires before anyone can read it.",
+   "risk_impact": "The dead-letter queue empties itself every minute. Daily inspections will always find an empty queue, making it impossible to diagnose ingest failures or meet the stated operational requirement for daily failed-message review.",
+   "recommendation": "Set message_retention_seconds on aws_sqs_queue.ingest_failed to at least 86400 seconds (one day) to match the daily inspection cadence; aligning it to the source queue's 345600 seconds provides additional buffer.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "707d4886-c70b-467b-824c-62e3309b2de1",
+   "type": "fact",
+   "category": "observability",
+   "concern": null,
+   "finding": "CloudWatch log group 'debug' has retention_in_days=0 (never expires), retaining high-volume debug logs indefinitely instead of the required 30 days.",
+   "evidence": "aws_cloudwatch_log_group.debug: retention_in_days=0 (observed — 'never expires'). Brief: 'High-volume debug logs contain no audit evidence and are needed for only 30 days.' The debug log group will grow indefinitely, accumulating logs beyond the declared 30-day need.",
+   "risk_impact": "High-volume debug logs are retained indefinitely. This creates unnecessary storage cost and contradicts the workload's own stated 30-day retention requirement for this log group.",
+   "recommendation": "Set retention_in_days=30 on aws_cloudwatch_log_group.debug to align with the stated requirement and avoid unbounded log storage growth.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "a72c8827-d3c0-41a6-b159-0fa76c493c3b",
+   "type": "inference",
+   "category": "exposure",
+   "concern": null,
+   "finding": "The RDS instance 'records' is placed in a subnet group that includes 'edge_a', a subnet whose internet-route status cannot be determined from the submitted code; publicly_accessible=false reduces risk but does not prevent traffic from within a public subnet reaching the instance.",
+   "evidence": "aws_db_subnet_group.records: subnet_ids[0]=aws_subnet.edge_a. aws_subnet.edge_a: availability_zone=us-east-2a, map_public_ip_on_launch=false, default_route.ipv4=unknown. The 'edge_a' name and its inclusion in the DB subnet group alongside app_a warrants verification that this subnet has no route to an internet gateway. aws_security_group.database: ingress on port 5432 from 'specific address range' only; publicly_accessible=false on the RDS instance.",
+   "risk_impact": "The database is placed in a subnet whose routing is not fully observable from the static configuration; a misconfigured internet-gateway route in that subnet could expose the PostgreSQL port to intra-VPC internet-routed traffic.",
+   "recommendation": "Verify the route table associated with aws_subnet.edge_a does not contain an internet-gateway route; if it does, replace the edge_a subnet in the DB subnet group with a private subnet to satisfy the 'must not be internet accessible' requirement.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "86278027-03b5-4f88-b3a5-ff78ef389380",
+   "type": "inference",
+   "category": "recovery",
+   "concern": null,
+   "finding": "The five reporting-archive buckets expire current objects after exactly 90 days with no newer_noncurrent_versions guard, meaning the most recent version of an object written on day 0 is deleted on day 90 regardless of whether a newer version exists.",
+   "evidence": "aws_s3_bucket_lifecycle_configuration resources for monthly_rollup, vendor_statement, capacity_forecast, route_scorecard, inventory_digest: each has rule[0].expiration.days=90 and rule[0].noncurrent_version_expiration.noncurrent_days=90. absent: rule[0].noncurrent_version_expiration.newer_noncurrent_versions. All five buckets have versioning Enabled. Brief: five recomputable reporting archives each need '90-day current/noncurrent retention.'",
+   "risk_impact": "Current (live) objects in the five reporting archive buckets are configured to be deleted after 90 days. If a monthly rollup or vendor statement is not regenerated within that window, the only copy is permanently removed.",
+   "recommendation": "Review whether expiration.days should be removed (or set to a longer period) for the five reporting-archive buckets, keeping only noncurrent_version_expiration.noncurrent_days=90 so that current objects are retained until explicitly overwritten or deleted.",
+   "severity": "medium"
+  }
+ ]
+}

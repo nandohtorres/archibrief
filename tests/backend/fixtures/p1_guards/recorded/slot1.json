@@ -1,0 +1,163 @@
+{
+ "slot": 1,
+ "case": "T1-small",
+ "review_id": "2ec06b08-afea-49dd-9b5f-ea9ab66c480a",
+ "note": "Recorded P1 baseline review (2026-11-14), synthetic corpus only. Reduced: no citations or retrieved text.",
+ "review_scope": {
+  "known_y": 25,
+  "x": 25,
+  "sent_count": 25,
+  "categories": {
+   "other": 0,
+   "reviewed": 25,
+   "unsupported": 0,
+   "zero_copy": 0
+  },
+  "model_outcome": "completed"
+ },
+ "model_run": {
+  "emitted": 10,
+  "capped": 0,
+  "accepted": 8,
+  "rejected": {
+   "citation_on_uncited_type": 1,
+   "quote_not_in_chunk": 1
+  },
+  "input_tokens": 15603,
+  "output_tokens": 5052
+ },
+ "findings": [
+  {
+   "finding_id": "5c43b702-0ec5-4b97-8a4d-3d8bb7e8338b",
+   "type": "deterministic-rule-result",
+   "category": "iam",
+   "concern": "iam_wildcard",
+   "finding": "IAM policy 'maintenance' grants wildcard Action \"*\" on all resources (full admin)",
+   "evidence": "resource \"aws_iam_policy\" \"maintenance\" allows * with Resource \"*\"",
+   "risk_impact": "Overly broad permissions violate least privilege and widen blast radius on compromise.",
+   "recommendation": "Scope the policy to the specific actions and resource ARNs the workload actually needs.",
+   "severity": null
+  },
+  {
+   "finding_id": "402bc3bf-cf7f-4ca0-9e03-57a9671e9a65",
+   "type": "deterministic-rule-result",
+   "category": "observability",
+   "concern": "cloudtrail_present",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "severity": null
+  },
+  {
+   "finding_id": "28b793d4-e654-4e15-8224-a8d45235025d",
+   "type": "deterministic-rule-result",
+   "category": "exposure",
+   "concern": "ec2_imdsv2",
+   "finding": "EC2 instance 'maintenance' does not require IMDSv2 tokens",
+   "evidence": "resource \"aws_instance\" \"maintenance\" metadata_options.http_tokens is not \"required\"",
+   "risk_impact": "IMDSv1 answers plain HTTP GETs, so a request forgery or open proxy on this server can read its role's temporary credentials.",
+   "recommendation": "Set metadata_options { http_tokens = \"required\" } (or require IMDSv2 account-wide with aws_ec2_instance_metadata_defaults).",
+   "severity": null
+  },
+  {
+   "finding_id": "322dd964-72bc-4635-86da-dd0259248764",
+   "type": "deterministic-rule-result",
+   "category": "exposure",
+   "concern": "sg_admin_ingress",
+   "finding": "Security group 'maintenance' allows SSH or RDP from anywhere",
+   "evidence": "resource \"aws_security_group\" \"maintenance\" at main.tf line 66: ingress from 0.0.0.0/0 or ::/0 reaches SSH (22) or RDP (3389) (Trivy AWS-0107)",
+   "risk_impact": "This group permits SSH or RDP from any internet address if attached to a resource. Actual reachability also depends on routing and listeners.",
+   "recommendation": "Restrict ingress to specific CIDR ranges, a bastion, or use SSM Session Manager.",
+   "severity": null
+  },
+  {
+   "finding_id": "223b411c-04e6-4586-afb1-e52d385be314",
+   "type": "fact",
+   "category": "exposure",
+   "concern": null,
+   "finding": "The maintenance EC2 instance sits in aws_subnet.app_a, which is described as a private application subnet in the brief but whose route table sends 0.0.0.0/0 directly to the internet gateway, and the instance itself has associate_public_ip_address=true.",
+   "evidence": "aws_instance.maintenance: associate_public_ip_address=true, subnet_id=aws_subnet.app_a. aws_route_table.app: route[0].cidr_block=0.0.0.0/0, gateway_id=aws_internet_gateway.edge. aws_route_table_association.app_a links app_a subnet to aws_route_table.app. aws_subnet.app_a: default_route.ipv4=aws_internet_gateway (declared_relationships). The brief designates app_a as a private application subnet.",
+   "risk_impact": "The combination of a public IP, an internet-routed subnet, and an open SSH security group rule means the maintenance host is directly internet-reachable, contradicting the brief's intent of a private application subnet.",
+   "recommendation": "Remove the 0.0.0.0/0 → IGW route from aws_route_table.app and set associate_public_ip_address=false on aws_instance.maintenance; replace with a NAT gateway if outbound internet is needed.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "0c856e49-3668-47cc-815e-7ba7cb72f09a",
+   "type": "fact",
+   "category": "iam",
+   "concern": null,
+   "finding": "The maintenance IAM policy grants Action \"*\" on Resource \"*\" with no conditions; the maintenance instance profile attaches this policy, giving the EC2 instance full administrator access to the account despite a stated requirement for read-only diagnostics only.",
+   "evidence": "aws_iam_policy.maintenance: single statement, effect=Allow, sensitive_actions=['* (every action)'], resources='all resources (*)', has_condition=false. aws_iam_role_policy_attachment.maintenance attaches this policy to aws_iam_role.maintenance (trusted by ec2.amazonaws.com). aws_iam_instance_profile.maintenance uses this role. aws_instance.maintenance uses the instance profile. Brief states the maintenance worker needs only read-only operational diagnostics.",
+   "risk_impact": "Full admin credentials on an internet-reachable instance with open SSH is a critical blast-radius risk; account takeover is achievable from a single host compromise.",
+   "recommendation": "Replace aws_iam_policy.maintenance with a least-privilege read-only policy scoped to the specific diagnostic services needed, and remove the wildcard Allow statement.",
+   "severity": "critical"
+  },
+  {
+   "finding_id": "6e395839-dda1-4ffd-9a53-520fd6bf5e50",
+   "type": "fact",
+   "category": "exposure",
+   "concern": null,
+   "finding": "The spare security group allows RDP (port 3389) inbound from a specific address range, but no host currently uses this group and the brief explicitly states no approved requirement permits administrator access.",
+   "evidence": "aws_security_group.spare: ingress port 3389, protocol tcp, source='specific address range'. Workload brief states the spare group is reserved for a future internal host and no host currently uses it. Brief also states no approved requirement permits administrator permissions (RDP is the Windows remote administration protocol).",
+   "risk_impact": "An unapproved RDP rule in a standing security group creates a standing permission that could be inadvertently applied to a future host without further review.",
+   "recommendation": "Remove the port-3389 ingress rule from aws_security_group.spare; define and approve access requirements before attaching any host to this group.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "96c9681b-c5e9-4fc1-9a77-65ca92322efa",
+   "type": "fact",
+   "category": "exposure",
+   "concern": null,
+   "finding": "The contractor_export Lambda runs outside any VPC (runs_in_a_vpc=false), so it cannot be restricted to private network paths; combined with the public function URL this means there is no network-layer boundary preventing public access.",
+   "evidence": "aws_lambda_function.contractor_export: runs_in_a_vpc=false. The function produces internal shift and contact extracts but runs entirely outside any VPC, with its URL reachable from the public internet.",
+   "risk_impact": "Network isolation is a defence-in-depth layer; without it, every security control must work correctly at the application/IAM layer alone, with no fallback.",
+   "recommendation": "Attach aws_lambda_function.contractor_export to the workload VPC and a private subnet, and add a Lambda VPC endpoint; this provides a network boundary to complement IAM-based authentication.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "2079bb3d-afb9-43b6-9489-99bb450b6bf7",
+   "type": "fact",
+   "category": "observability",
+   "concern": null,
+   "finding": "The contractor_export Lambda has tracing disabled (PassThrough default) and the maintenance EC2 instance has detailed monitoring disabled, leaving both resources without active performance or error observability.",
+   "evidence": "aws_lambda_function.contractor_export: tracing_config.mode=not set (default: PassThrough). aws_instance.maintenance: monitoring=not set (default: false). No X-Ray tracing is enabled for the Lambda; no detailed EC2 monitoring. The only observability resource is a CloudWatch metric alarm on an SQS namespace (aws_cloudwatch_metric_alarm.central_backlog), not on the Lambda or EC2 instance.",
+   "risk_impact": "Without tracing and detailed metrics, silent failures or anomalous invocation patterns on the export function will not be detected until end-users report problems.",
+   "recommendation": "Set tracing_config { mode = \"Active\" } on aws_lambda_function.contractor_export and monitoring = true on aws_instance.maintenance; create CloudWatch alarms for Lambda error rate and throttle count.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "971390dc-2840-43e3-9af0-c6e2b4a1e001",
+   "type": "inference",
+   "category": "availability",
+   "concern": null,
+   "finding": "The maintenance EC2 instance and its subnet are confined to a single Availability Zone (us-east-2b) with no standby or multi-AZ configuration, creating a single point of failure for the application tier.",
+   "evidence": "aws_instance.maintenance: availability_zone=absent (not set). aws_subnet.app_a: availability_zone=us-east-2b. Only one subnet and one AZ are defined for the application tier. No auto-scaling group or multi-AZ configuration is observed.",
+   "risk_impact": "A single-AZ deployment tolerates the stated standard availability requirement but provides no resilience against an AZ-level failure event.",
+   "recommendation": "Add an EC2 auto-recovery CloudWatch alarm for the instance; if the workload's availability requirements increase, provision a second subnet in a different AZ and use an Auto Scaling group.",
+   "severity": "low"
+  },
+  {
+   "finding_id": "399c89a8-25b4-44e5-b6a3-77928d9e4f67",
+   "type": "fact",
+   "category": "observability",
+   "concern": null,
+   "finding": "The contractor_export Lambda has no dead-letter queue or on-failure destination configured; failed asynchronous invocations will be silently discarded.",
+   "evidence": "aws_lambda_function.contractor_export: dead_letter_target=false. The function has reserved_concurrent_executions=5 and timeout=30s; failed async invocations have no dead-letter queue or on-failure destination to capture errors.",
+   "risk_impact": "Without a DLQ, failed export invocations produce no observable signal; operational issues affecting contractors will not be detected or investigated promptly.",
+   "recommendation": "Configure a dead_letter_config SQS queue or an aws_lambda_function_event_invoke_config on_failure destination for aws_lambda_function.contractor_export, and alarm on that queue's depth.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "ff7b38f8-ac06-4c5d-9614-b8509a0ad708",
+   "type": "inference",
+   "category": "cost",
+   "concern": null,
+   "finding": "The maintenance EC2 instance (t3.small) is provisioned on-demand with no Reserved Instance or Savings Plan commitment visible in the submitted configuration.",
+   "evidence": "aws_instance.maintenance: instance_type=t3.small. No Reserved Instance or Savings Plan commitment is observable in the submitted configuration. The brief describes this as a production maintenance service, implying continuous operation.",
+   "risk_impact": "For a low-to-moderate production workload a Savings Plan commitment typically reduces EC2 cost by 30–40% with no operational change required.",
+   "recommendation": "Evaluate purchasing a 1-year Compute Savings Plan covering the t3.small instance if it is expected to run continuously; use AWS Cost Explorer to quantify the saving.",
+   "severity": "low"
+  }
+ ]
+}
