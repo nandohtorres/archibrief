@@ -19,11 +19,19 @@ def _corpus(tmp_path, *, declarations=25):
         (case_dir / "brief.txt").write_text("A small workload.")
         oracle = {
             "issues": [
-                {"id": "I1", "severity": "High", "address": "aws_s3_bucket.logs"},
-                {"id": "I2", "severity": "Low", "address": "aws_s3_bucket.logs"},
+                {
+                    "id": "I1",
+                    "severity": "High",
+                    "resource_address": "aws_s3_bucket.logs",
+                },
+                {
+                    "id": "I2",
+                    "severity": "Low",
+                    "resource_address": "aws_s3_bucket.logs",
+                },
             ],
             "safe_counterexamples": [
-                {"id": "S1", "address": "aws_sqs_queue.safe_queue"}
+                {"id": "S1", "resource_address": "aws_sqs_queue.safe_queue"}
             ],
         }
         (case_dir / "oracle.json").write_text(json.dumps(oracle))
@@ -32,14 +40,15 @@ def _corpus(tmp_path, *, declarations=25):
         cases.append(
             {
                 "id": case_id,
-                "dir": case_id,
+                "terraform_root": case_id,
+                "terraform_files": [f"{case_id}/main.tf"],
                 "brief": f"{case_id}/brief.txt",
                 "oracle": f"{case_id}/oracle.json",
-                "declarations": declarations,
+                "known_declarations": declarations,
             }
         )
     (tmp_path / "manifest.json").write_text(
-        json.dumps({"files": files, "cases": cases})
+        json.dumps({"file_sha256": files, "cases": cases})
     )
     return tmp_path
 
@@ -117,7 +126,9 @@ def test_plan_records_production_settings_and_hash_is_stable(tmp_path):
 def test_oracle_rejects_unknown_severity(tmp_path):
     corpus = _corpus(tmp_path)
     (corpus / "bad.json").write_text(
-        json.dumps({"issues": [{"id": "X", "severity": "Severe", "address": "a.b"}]})
+        json.dumps(
+            {"issues": [{"id": "X", "severity": "Severe", "resource_address": "a.b"}]}
+        )
     )
     with pytest.raises(ev.PlanError, match="severity"):
         ev.load_oracle(corpus, {"oracle": "bad.json"})
@@ -320,3 +331,21 @@ def test_plan_hash_covers_the_manifest_itself(tmp_path):
     (corpus / "manifest.json").write_text(json.dumps(manifest))
     second = ev.build_plan(ev.load_manifest(corpus), _estimates(), "abc")
     assert first["plan_hash"] != second["plan_hash"]
+
+
+def test_archive_holds_only_the_cases_terraform_files(tmp_path):
+    import tarfile
+
+    corpus = _corpus(tmp_path)
+    case = ev.case_by_id(ev.load_manifest(corpus))["T3a"]
+    archive = ev.build_archive(corpus, case, tmp_path / "out" / "T3a.tar.gz")
+    with tarfile.open(archive) as tar:
+        assert tar.getnames() == ["main.tf"]
+
+
+def test_archive_refuses_a_non_terraform_file(tmp_path):
+    corpus = _corpus(tmp_path)
+    case = dict(ev.case_by_id(ev.load_manifest(corpus))["T3a"])
+    case["terraform_files"] = ["T3a/oracle.json"]
+    with pytest.raises(ev.PlanError, match="not a Terraform file"):
+        ev.build_archive(corpus, case, tmp_path / "x.tar.gz")

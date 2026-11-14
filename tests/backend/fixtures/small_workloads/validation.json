@@ -1,0 +1,145 @@
+{
+  "schema_version": "small-workload-validation@1",
+  "date": "2026-11-13",
+  "base_revision": "1e8ffb8",
+  "status": "local_checks_passed_oracle_review_pending",
+  "python": "3.14.3",
+  "python_hcl2": "8.1.4",
+  "command": "& '../archibrief/backend/.venv/Scripts/python.exe' -B tests/backend/fixtures/small_workloads/validate_corpus.py",
+  "parser_entrypoint": "backend.lambdas.ingest.handler.parse_terraform_files",
+  "parser_source_sha256": {
+    "backend/lambdas/ingest/handler.py": "2055937cef420049838d735a8317ad449e3cfb913efaf65870570bf26fb73e5c",
+    "backend/shared/archive.py": "1da290cd8e3f43d92ce8a6165b6bc1061d8c83ed8bb9b64e07c6d917df706dd0",
+    "backend/shared/hcl_eval.py": "20f111a5f358dc7ab107245434c01f6778e6c8e0b43d8cddd7310f3adc787ed6",
+    "backend/shared/review_scope.py": "583ed06b80a180fd5a5f3115ca1abedc36698edb1902fb815985538e6d27c7b9",
+    "backend/shared/terraform_scope.py": "8484946afec534dc5f1bcc2fe97b2ec09244d8399653d5eaca46e8fe24bd08bc"
+  },
+  "network_policy": "Python audit hook rejects DNS, outbound sockets and subprocesses during validation",
+  "aws_calls": 0,
+  "paid_runs": 0,
+  "model_outputs_inspected": 0,
+  "terraform_init_plan_apply": false,
+  "terraform_provider_schema_validation": false,
+  "checks": [
+    "independent reachable-address inventory",
+    "ingest known_y exact equality",
+    "address and instance equality",
+    "pending review_scope validator",
+    "source evidence lines and exact quotes",
+    "paired core Terraform byte equality",
+    "paired core issue equality",
+    "hostile brief retains neutral factual prefix",
+    "hashes and file coverage",
+    "local resource-reference closure"
+  ],
+  "architectures": [
+    {
+      "architecture_id": "T1-small",
+      "independent_count": 25,
+      "ingest_known_y": 25,
+      "state": "recorded",
+      "count_complete": true,
+      "gaps_complete": true,
+      "module_gaps": [],
+      "zero_copy_addresses": [],
+      "non_aws_addresses": [],
+      "active_aws_declarations": 25,
+      "issues": 5,
+      "must_find_critical_high": 5,
+      "safe_counterexamples": 2,
+      "scope_validator_errors": []
+    },
+    {
+      "architecture_id": "T1-full",
+      "independent_count": 50,
+      "ingest_known_y": 50,
+      "state": "recorded",
+      "count_complete": true,
+      "gaps_complete": true,
+      "module_gaps": [],
+      "zero_copy_addresses": [],
+      "non_aws_addresses": [],
+      "active_aws_declarations": 50,
+      "issues": 5,
+      "must_find_critical_high": 5,
+      "safe_counterexamples": 3,
+      "scope_validator_errors": []
+    },
+    {
+      "architecture_id": "T2-small",
+      "independent_count": 25,
+      "ingest_known_y": 25,
+      "state": "recorded",
+      "count_complete": true,
+      "gaps_complete": true,
+      "module_gaps": [],
+      "zero_copy_addresses": [],
+      "non_aws_addresses": [],
+      "active_aws_declarations": 25,
+      "issues": 8,
+      "must_find_critical_high": 5,
+      "safe_counterexamples": 3,
+      "scope_validator_errors": []
+    },
+    {
+      "architecture_id": "T2-full",
+      "independent_count": 50,
+      "ingest_known_y": 50,
+      "state": "recorded",
+      "count_complete": true,
+      "gaps_complete": true,
+      "module_gaps": [],
+      "zero_copy_addresses": [],
+      "non_aws_addresses": [],
+      "active_aws_declarations": 50,
+      "issues": 8,
+      "must_find_critical_high": 5,
+      "safe_counterexamples": 4,
+      "scope_validator_errors": []
+    },
+    {
+      "architecture_id": "T3a",
+      "independent_count": 50,
+      "ingest_known_y": 50,
+      "state": "recorded",
+      "count_complete": true,
+      "gaps_complete": true,
+      "module_gaps": [],
+      "zero_copy_addresses": [],
+      "non_aws_addresses": [],
+      "active_aws_declarations": 50,
+      "issues": 14,
+      "must_find_critical_high": 11,
+      "safe_counterexamples": 5,
+      "scope_validator_errors": []
+    },
+    {
+      "architecture_id": "T3b",
+      "independent_count": 50,
+      "ingest_known_y": 50,
+      "state": "recorded",
+      "count_complete": true,
+      "gaps_complete": true,
+      "module_gaps": [
+        {
+          "address": "module.archive_bridge",
+          "reasons": [
+            "remote_source"
+          ]
+        }
+      ],
+      "zero_copy_addresses": [
+        "aws_security_group.legacy_console"
+      ],
+      "non_aws_addresses": [
+        "random_id.exchange",
+        "terraform_data.deployment_marker"
+      ],
+      "active_aws_declarations": 47,
+      "issues": 4,
+      "must_find_critical_high": 2,
+      "safe_counterexamples": 7,
+      "scope_validator_errors": []
+    }
+  ]
+}

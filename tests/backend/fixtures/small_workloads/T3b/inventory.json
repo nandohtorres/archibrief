@@ -1,0 +1,365 @@
+{
+  "declarations": [
+    {
+      "address": "aws_cloudwatch_log_group.exchange_audit",
+      "type": "aws_cloudwatch_log_group",
+      "file": "main.tf",
+      "line": 203,
+      "instances": 1
+    },
+    {
+      "address": "aws_cloudwatch_log_group.partner_access",
+      "type": "aws_cloudwatch_log_group",
+      "file": "main.tf",
+      "line": 208,
+      "instances": 1
+    },
+    {
+      "address": "aws_cloudwatch_log_group.reconciliation",
+      "type": "aws_cloudwatch_log_group",
+      "file": "main.tf",
+      "line": 213,
+      "instances": 1
+    },
+    {
+      "address": "aws_ebs_encryption_by_default.regional",
+      "type": "aws_ebs_encryption_by_default",
+      "file": "main.tf",
+      "line": 133,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_policy.reader_boundary",
+      "type": "aws_iam_policy",
+      "file": "main.tf",
+      "line": 223,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_role.archive_reader",
+      "type": "aws_iam_role",
+      "file": "main.tf",
+      "line": 237,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_role.partner",
+      "type": "aws_iam_role",
+      "file": "main.tf",
+      "line": 30,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_role_policy.archive_reader",
+      "type": "aws_iam_role_policy",
+      "file": "main.tf",
+      "line": 259,
+      "instances": 1
+    },
+    {
+      "address": "aws_iam_role_policy.partner",
+      "type": "aws_iam_role_policy",
+      "file": "main.tf",
+      "line": 51,
+      "instances": 1
+    },
+    {
+      "address": "aws_kms_alias.archive",
+      "type": "aws_kms_alias",
+      "file": "main.tf",
+      "line": 198,
+      "instances": 1
+    },
+    {
+      "address": "aws_kms_key.archive",
+      "type": "aws_kms_key",
+      "file": "main.tf",
+      "line": 192,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket.exchange_archive",
+      "type": "aws_s3_bucket",
+      "file": "main.tf",
+      "line": 137,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_lifecycle_configuration.exchange_archive",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "file": "main.tf",
+      "line": 155,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_policy.exchange_archive",
+      "type": "aws_s3_bucket_policy",
+      "file": "main.tf",
+      "line": 168,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.exchange_archive",
+      "type": "aws_s3_bucket_public_access_block",
+      "file": "main.tf",
+      "line": 142,
+      "instances": 1
+    },
+    {
+      "address": "aws_s3_bucket_versioning.exchange_archive",
+      "type": "aws_s3_bucket_versioning",
+      "file": "main.tf",
+      "line": 150,
+      "instances": 1
+    },
+    {
+      "address": "aws_security_group.legacy_console",
+      "type": "aws_security_group",
+      "file": "main.tf",
+      "line": 18,
+      "instances": 0
+    },
+    {
+      "address": "aws_sns_topic.operations",
+      "type": "aws_sns_topic",
+      "file": "main.tf",
+      "line": 218,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_cloudwatch_log_group.consumer",
+      "type": "aws_cloudwatch_log_group",
+      "file": "modules/lane/main.tf",
+      "line": 120,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_cloudwatch_metric_alarm.failed",
+      "type": "aws_cloudwatch_metric_alarm",
+      "file": "modules/lane/main.tf",
+      "line": 22,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_dynamodb_table.receipts",
+      "type": "aws_dynamodb_table",
+      "file": "modules/lane/main.tf",
+      "line": 36,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_iam_role.consumer",
+      "type": "aws_iam_role",
+      "file": "modules/lane/main.tf",
+      "line": 104,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_iam_role_policy.consumer",
+      "type": "aws_iam_role_policy",
+      "file": "modules/lane/main.tf",
+      "line": 125,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_lambda_event_source_mapping.incoming",
+      "type": "aws_lambda_event_source_mapping",
+      "file": "modules/lane/main.tf",
+      "line": 179,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_lambda_function.consumer",
+      "type": "aws_lambda_function",
+      "file": "modules/lane/main.tf",
+      "line": 168,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_s3_bucket.payloads",
+      "type": "aws_s3_bucket",
+      "file": "modules/lane/main.tf",
+      "line": 49,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_s3_bucket_lifecycle_configuration.payloads",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "file": "modules/lane/main.tf",
+      "line": 67,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_s3_bucket_policy.payloads",
+      "type": "aws_s3_bucket_policy",
+      "file": "modules/lane/main.tf",
+      "line": 80,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_s3_bucket_public_access_block.payloads",
+      "type": "aws_s3_bucket_public_access_block",
+      "file": "modules/lane/main.tf",
+      "line": 54,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_s3_bucket_versioning.payloads",
+      "type": "aws_s3_bucket_versioning",
+      "file": "modules/lane/main.tf",
+      "line": 62,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_sqs_queue.failed",
+      "type": "aws_sqs_queue",
+      "file": "modules/lane/main.tf",
+      "line": 8,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_sqs_queue.incoming",
+      "type": "aws_sqs_queue",
+      "file": "modules/lane/main.tf",
+      "line": 14,
+      "instances": 1
+    },
+    {
+      "address": "module.fulfillment.aws_ssm_parameter.lane_name",
+      "type": "aws_ssm_parameter",
+      "file": "modules/lane/main.tf",
+      "line": 187,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_cloudwatch_log_group.consumer",
+      "type": "aws_cloudwatch_log_group",
+      "file": "modules/lane/main.tf",
+      "line": 120,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_cloudwatch_metric_alarm.failed",
+      "type": "aws_cloudwatch_metric_alarm",
+      "file": "modules/lane/main.tf",
+      "line": 22,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_dynamodb_table.receipts",
+      "type": "aws_dynamodb_table",
+      "file": "modules/lane/main.tf",
+      "line": 36,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_iam_role.consumer",
+      "type": "aws_iam_role",
+      "file": "modules/lane/main.tf",
+      "line": 104,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_iam_role_policy.consumer",
+      "type": "aws_iam_role_policy",
+      "file": "modules/lane/main.tf",
+      "line": 125,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_lambda_event_source_mapping.incoming",
+      "type": "aws_lambda_event_source_mapping",
+      "file": "modules/lane/main.tf",
+      "line": 179,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_lambda_function.consumer",
+      "type": "aws_lambda_function",
+      "file": "modules/lane/main.tf",
+      "line": 168,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_s3_bucket.payloads",
+      "type": "aws_s3_bucket",
+      "file": "modules/lane/main.tf",
+      "line": 49,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_s3_bucket_lifecycle_configuration.payloads",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "file": "modules/lane/main.tf",
+      "line": 67,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_s3_bucket_policy.payloads",
+      "type": "aws_s3_bucket_policy",
+      "file": "modules/lane/main.tf",
+      "line": 80,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_s3_bucket_public_access_block.payloads",
+      "type": "aws_s3_bucket_public_access_block",
+      "file": "modules/lane/main.tf",
+      "line": 54,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_s3_bucket_versioning.payloads",
+      "type": "aws_s3_bucket_versioning",
+      "file": "modules/lane/main.tf",
+      "line": 62,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_sqs_queue.failed",
+      "type": "aws_sqs_queue",
+      "file": "modules/lane/main.tf",
+      "line": 8,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_sqs_queue.incoming",
+      "type": "aws_sqs_queue",
+      "file": "modules/lane/main.tf",
+      "line": 14,
+      "instances": 1
+    },
+    {
+      "address": "module.intake.aws_ssm_parameter.lane_name",
+      "type": "aws_ssm_parameter",
+      "file": "modules/lane/main.tf",
+      "line": 187,
+      "instances": 1
+    },
+    {
+      "address": "random_id.exchange",
+      "type": "random_id",
+      "file": "main.tf",
+      "line": 10,
+      "instances": 1
+    },
+    {
+      "address": "terraform_data.deployment_marker",
+      "type": "terraform_data",
+      "file": "main.tf",
+      "line": 14,
+      "instances": 1
+    }
+  ],
+  "module_gaps": [
+    {
+      "address": "module.archive_bridge",
+      "reasons": [
+        "remote_source"
+      ]
+    }
+  ],
+  "disabled_module_calls": [
+    "module.disabled_bridge"
+  ]
+}

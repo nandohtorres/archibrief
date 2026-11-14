@@ -112,6 +112,33 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+# ----------------------------------------------------------------- archives
+
+
+def build_archive(corpus: Path, case: dict, dest: Path) -> Path:
+    """The .tar.gz to upload for a case: only its Terraform files, laid out
+    relative to the case's root. Never the oracle, inventory or manifest."""
+    import tarfile
+
+    root = case["terraform_root"]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(dest, "w:gz") as tar:
+        for relative in sorted(case["terraform_files"]):
+            if not relative.endswith(".tf") or not relative.startswith(f"{root}/"):
+                raise PlanError(
+                    f"{case['id']}: {relative} is not a Terraform file of its root"
+                )
+            info = tar.gettarinfo(
+                str(corpus / relative), arcname=relative[len(root) + 1 :]
+            )
+            info.uid = info.gid = 0
+            info.uname = info.gname = ""
+            info.mtime = 0
+            with (corpus / relative).open("rb") as handle:
+                tar.addfile(info, handle)
+    return dest
+
+
 # ------------------------------------------------------------------ corpus
 
 
@@ -121,10 +148,12 @@ def load_manifest(corpus: Path = CORPUS) -> dict:
     manifest = _read_json(corpus / "manifest.json")
     # The manifest cannot list its own hash; the plan records it instead.
     manifest["_sha256"] = sha256_file(corpus / "manifest.json")
-    files = manifest.get("files")
+    files = manifest.get("file_sha256")
     cases = manifest.get("cases")
     if not isinstance(files, dict) or not files or not isinstance(cases, list):
-        raise PlanError("manifest needs a non-empty 'files' map and a 'cases' list")
+        raise PlanError(
+            "manifest needs a non-empty 'file_sha256' map and a 'cases' list"
+        )
     for relative, expected in files.items():
         path = corpus / relative
         if not path.is_file():
@@ -139,12 +168,18 @@ def load_manifest(corpus: Path = CORPUS) -> dict:
         raise PlanError(f"manifest is missing scheduled cases: {', '.join(missing)}")
     for case_id in set(SCHEDULE):
         case = by_id[case_id]
-        for key in ("dir", "brief", "oracle", "declarations"):
+        for key in (
+            "terraform_root",
+            "terraform_files",
+            "brief",
+            "oracle",
+            "known_declarations",
+        ):
             if key not in case:
                 raise PlanError(f"case {case_id} has no '{key}'")
-        for key in ("brief", "oracle"):
-            if case[key] not in files:
-                raise PlanError(f"case {case_id}: {case[key]} is not hash-listed")
+        for path in (case["brief"], case["oracle"], *case["terraform_files"]):
+            if path not in files:
+                raise PlanError(f"case {case_id}: {path} is not hash-listed")
     return manifest
 
 
@@ -159,11 +194,13 @@ def load_oracle(corpus: Path, case: dict) -> dict:
         raise PlanError(f"{case['oracle']}: needs a non-empty 'issues' list")
     seen: set[str] = set()
     for issue in issues:
-        if not isinstance(issue, dict) or not {"id", "severity", "address"} <= set(
-            issue
-        ):
+        if not isinstance(issue, dict) or not {
+            "id",
+            "severity",
+            "resource_address",
+        } <= set(issue):
             raise PlanError(
-                f"{case['oracle']}: every issue needs id, severity, address"
+                f"{case['oracle']}: every issue needs id, severity, resource_address"
             )
         if issue["severity"] not in SEVERITIES:
             raise PlanError(f"{case['oracle']}: {issue['id']} has unknown severity")
@@ -225,9 +262,9 @@ def build_plan(manifest: dict, estimates: dict[str, dict], code_revision: str) -
     cases = case_by_id(manifest)
     for case_id in set(SCHEDULE):
         known = estimates[case_id].get("known_y")
-        if known != cases[case_id]["declarations"]:
+        if known != cases[case_id]["known_declarations"]:
             raise PlanError(
-                f"{case_id}: manifest says {cases[case_id]['declarations']} declarations, "
+                f"{case_id}: manifest says {cases[case_id]['known_declarations']} declarations, "
                 f"the deployed parser counts {known}"
             )
     body = {
@@ -235,7 +272,7 @@ def build_plan(manifest: dict, estimates: dict[str, dict], code_revision: str) -
             {"slot": n, "case": case_id, "held_out": case_id in HELD_OUT}
             for n, case_id in enumerate(SCHEDULE, start=1)
         ],
-        "corpus_files": manifest["files"],
+        "corpus_files": manifest["file_sha256"],
         "manifest_sha256": manifest.get("_sha256"),
         "configuration": {
             "path": "production (live site, owner-submitted)",
@@ -392,15 +429,15 @@ def build_worksheet(
                     "issue_id": issue["id"],
                     "severity": issue["severity"],
                     "must_find": must_find(issue),
-                    "candidates": candidates(issue["address"], findings),
+                    "candidates": candidates(issue["resource_address"], findings),
                     "caught_by": None,  # finding id, or "missed"
                     "note": "",
                 }
             )
         counter_names = {
-            _name_of(c["address"])
+            _name_of(c["resource_address"])
             for c in oracle.get("safe_counterexamples", [])
-            if "address" in c
+            if "resource_address" in c
         }
         for finding in findings:
             text = json.dumps([finding.get("evidence"), finding.get("finding")])
@@ -587,6 +624,7 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI and AW
     approve_cmd = sub.add_parser("approve")
     approve_cmd.add_argument("--plan-hash", required=True)
     sub.add_parser("gate")
+    sub.add_parser("archives")
     record_cmd = sub.add_parser("record")
     record_cmd.add_argument("--slot", type=int, required=True)
     record_cmd.add_argument("--review-id", required=True)
@@ -603,7 +641,7 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI and AW
             for case_id in set(SCHEDULE):
                 load_oracle(CORPUS, cases[case_id])
             estimates = {
-                case_id: local_input_estimate(CORPUS / cases[case_id]["dir"])
+                case_id: local_input_estimate(CORPUS / cases[case_id]["terraform_root"])
                 for case_id in sorted(set(SCHEDULE))
             }
             plan = build_plan(manifest, estimates, _git_head())
@@ -620,6 +658,13 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI and AW
             print(
                 f"\nplan_hash {plan['plan_hash']}\nNot approved. Review, then run approve."
             )
+        elif args.command == "archives":
+            manifest = load_manifest()
+            for case_id, case in sorted(case_by_id(manifest).items()):
+                path = build_archive(
+                    CORPUS, case, OUT / "uploads" / f"{case_id}.tar.gz"
+                )
+                print(f"{case_id}: {path} (brief: {CORPUS / case['brief']})")
         elif args.command == "approve":
             journal = approve(
                 _read_json(journal_path), _read_json(plan_path), args.plan_hash

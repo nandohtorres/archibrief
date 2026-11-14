@@ -1,0 +1,308 @@
+{
+  "schema_version": "small-workload-oracle@1",
+  "architecture_id": "T1-full",
+  "status": "reviewed_pending_owner_freeze",
+  "authored_before_model_runs": true,
+  "critical_high_review": {
+    "reviewer": "Claude",
+    "status": "approved",
+    "date": "2026-11-14",
+    "method": "every evidence quote checked at its stated line; every Critical/High claim read against source; no severity or claim changed",
+    "independent_outside_reviewer": false
+  },
+  "outside_independent_review": false,
+  "scope": "Expected observable configuration and declared-requirement defects. No assertion of a deployed exploit, real credentials, or runtime measurements.",
+  "scoring": {
+    "deduplicate_by": [
+      "id",
+      "resource_address"
+    ],
+    "must_find_severities": [
+      "Critical",
+      "High"
+    ],
+    "unlisted_findings": "Adjudicate on evidence; do not automatically mark false. Record draft-oracle corrections before any paid outputs; later corrections require a versioned rationale and rescore all runs.",
+    "counterexamples": "Each prohibits only its named false claim, not every conceivable concern about that resource.",
+    "scope_disclosures": "Score separately from issue recall; unsupported/unknown is not safe.",
+    "grouped_findings": "One finding may match multiple IDs only if it explicitly establishes each defect and affected resource. Never count duplicate wording twice."
+  },
+  "issues": [
+    {
+      "id": "T1-01",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_security_group.maintenance",
+      "title": "World-wide SSH ingress on the maintenance worker",
+      "expected_finding": "The attached maintenance group allows TCP/22 from every IPv4 address. The instance also has a public-IP setting and an associated IGW route. This is a configured network exposure, not proof of a listening SSH daemon or successful compromise.",
+      "severity_rationale": "The attached maintenance group allows TCP/22 from every IPv4 address. The instance also has a public-IP setting and an associated IGW route. This is a configured network exposure, not proof of a listening SSH daemon or successful compromise.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 66,
+          "location": "main.tf:66",
+          "quote": "cidr_blocks = [\"0.0.0.0/0\"]"
+        },
+        {
+          "file": "main.tf",
+          "line": 135,
+          "location": "main.tf:135",
+          "quote": "vpc_security_group_ids = [aws_security_group.maintenance.id]"
+        },
+        {
+          "file": "main.tf",
+          "line": 134,
+          "location": "main.tf:134",
+          "quote": "associate_public_ip_address = true"
+        },
+        {
+          "file": "main.tf",
+          "line": 45,
+          "location": "main.tf:45",
+          "quote": "gateway_id = aws_internet_gateway.edge.id"
+        },
+        {
+          "file": "brief.md",
+          "line": 4,
+          "location": "brief.md:4",
+          "quote": "in a private application subnet. Contractors authenticate before any export."
+        }
+      ],
+      "safe_remediation": "Establish and test a private management path such as SSM with its endpoints/egress and narrowly scoped role, or a controlled VPN, before removing public SSH. Remove the world-wide rule; do not lock operators out by deleting their only tested access path.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T1-02",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_route_table.app",
+      "title": "The intended private application subnet routes directly to an IGW",
+      "expected_finding": "The default route and explicit association make app_a a public-routed subnet despite its private-tier requirement. map_public_ip_on_launch=false does not undo the route or the instance's explicit public-IP setting. This placement defect is distinct from the SSH ingress rule.",
+      "severity_rationale": "The default route and explicit association make app_a a public-routed subnet despite its private-tier requirement. map_public_ip_on_launch=false does not undo the route or the instance's explicit public-IP setting. This placement defect is distinct from the SSH ingress rule.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 45,
+          "location": "main.tf:45",
+          "quote": "gateway_id = aws_internet_gateway.edge.id"
+        },
+        {
+          "file": "main.tf",
+          "line": 56,
+          "location": "main.tf:56",
+          "quote": "route_table_id = aws_route_table.app.id"
+        },
+        {
+          "file": "main.tf",
+          "line": 26,
+          "location": "main.tf:26",
+          "quote": "map_public_ip_on_launch = false"
+        },
+        {
+          "file": "brief.md",
+          "line": 4,
+          "location": "brief.md:4",
+          "quote": "in a private application subnet. Contractors authenticate before any export."
+        }
+      ],
+      "safe_remediation": "Move the application tier to an isolated/private route table, remove explicit public addresses, and provide only required egress via endpoints or a correctly placed NAT gateway. Validate management and application connectivity before switching associations.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T1-03",
+      "severity": "Critical",
+      "must_find": true,
+      "resource_address": "aws_iam_policy.maintenance",
+      "title": "An attached worker policy permits every action on every resource",
+      "expected_finding": "The Allow Action=* Resource=* policy is attached to the EC2 maintenance role used by the instance profile. This is an administrator-equivalent identity-policy grant, far beyond the read-only diagnostics requirement; unprovided SCPs or other account controls may still limit effective permissions.",
+      "severity_rationale": "The Allow Action=* Resource=* policy is attached to the EC2 maintenance role used by the instance profile. This is an administrator-equivalent identity-policy grant, far beyond the read-only diagnostics requirement; unprovided SCPs or other account controls may still limit effective permissions.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 118,
+          "location": "main.tf:118",
+          "quote": "\"Action\": \"*\","
+        },
+        {
+          "file": "main.tf",
+          "line": 119,
+          "location": "main.tf:119",
+          "quote": "\"Resource\": \"*\""
+        },
+        {
+          "file": "main.tf",
+          "line": 127,
+          "location": "main.tf:127",
+          "quote": "policy_arn = aws_iam_policy.maintenance.arn"
+        },
+        {
+          "file": "main.tf",
+          "line": 136,
+          "location": "main.tf:136",
+          "quote": "iam_instance_profile = aws_iam_instance_profile.maintenance.name"
+        },
+        {
+          "file": "brief.md",
+          "line": 3,
+          "location": "brief.md:3",
+          "quote": "maintenance worker only needs read-only operational diagnostics and must remain"
+        }
+      ],
+      "safe_remediation": "Replace the grant with the required diagnostic actions and resource ARNs, keeping only genuinely non-resource-scopable actions on '*'. Test the replacement before detaching the old policy; consider a workload permissions boundary. Do not attach another administrator policy to restore access.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T1-04",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_instance.maintenance",
+      "title": "The privileged worker permits IMDSv1",
+      "expected_finding": "http_tokens=optional allows metadata requests without IMDSv2 tokens on an instance carrying a privileged role. This increases credential-theft impact if an application or local access flaw exists; the fixture does not prove SSRF.",
+      "severity_rationale": "http_tokens=optional allows metadata requests without IMDSv2 tokens on an instance carrying a privileged role. This increases credential-theft impact if an application or local access flaw exists; the fixture does not prove SSRF.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 139,
+          "location": "main.tf:139",
+          "quote": "http_tokens = \"optional\""
+        },
+        {
+          "file": "main.tf",
+          "line": 136,
+          "location": "main.tf:136",
+          "quote": "iam_instance_profile = aws_iam_instance_profile.maintenance.name"
+        },
+        {
+          "file": "brief.md",
+          "line": 3,
+          "location": "brief.md:3",
+          "quote": "maintenance worker only needs read-only operational diagnostics and must remain"
+        }
+      ],
+      "safe_remediation": "Verify agents and SDKs support IMDSv2, then require tokens and use an appropriate hop limit. Also reduce role permissions. Do not disable metadata blindly if the workload still needs role credentials.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T1-05",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_lambda_function_url.contractor_export",
+      "title": "An internal operation has a public unauthenticated function URL",
+      "expected_finding": "The URL uses NONE and both function-URL and URL-scoped function invocation permissions grant Principal=*. The workload requires authenticated operations and declares no in-function authentication. Any gateway authentication does not protect this separate endpoint.",
+      "severity_rationale": "The URL uses NONE and both function-URL and URL-scoped function invocation permissions grant Principal=*. The workload requires authenticated operations and declares no in-function authentication. Any gateway authentication does not protect this separate endpoint.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 201,
+          "location": "main.tf:201",
+          "quote": "authorization_type = \"NONE\""
+        },
+        {
+          "file": "main.tf",
+          "line": 208,
+          "location": "main.tf:208",
+          "quote": "principal = \"*\""
+        },
+        {
+          "file": "main.tf",
+          "line": 217,
+          "location": "main.tf:217",
+          "quote": "invoked_via_function_url = true"
+        },
+        {
+          "file": "brief.md",
+          "line": 6,
+          "location": "brief.md:6",
+          "quote": "does not implement authentication and relies on infrastructure access controls."
+        }
+      ],
+      "safe_remediation": "Remove the alternate URL and its public permissions if unused, or require AWS_IAM and narrowly authorize intended callers with signed requests. Preserve a tested authenticated entry path; hiding the URL or adding CORS is not authentication.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    }
+  ],
+  "safe_counterexamples": [
+    {
+      "id": "T1-SAFE-01",
+      "resource_address": "aws_security_group.spare",
+      "must_not_report": "A deployed Windows host is reachable from the public internet through this group.",
+      "why_safe_for_this_claim": "The group has only private-CIDR ingress and no declared attachment. Neither an RDP listener nor a public path is established.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 83,
+          "location": "main.tf:83",
+          "quote": "cidr_blocks = [\"10.74.0.0/16\"]"
+        }
+      ]
+    },
+    {
+      "id": "T1-SAFE-02",
+      "resource_address": "aws_instance.maintenance",
+      "must_not_report": "The root disk is unencrypted.",
+      "why_safe_for_this_claim": "The root block explicitly requests encryption, and regional EBS encryption-by-default is also enabled.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 144,
+          "location": "main.tf:144",
+          "quote": "encrypted = true"
+        },
+        {
+          "file": "main.tf",
+          "line": 88,
+          "location": "main.tf:88",
+          "quote": "enabled = true"
+        }
+      ]
+    },
+    {
+      "id": "SAFE-EXPORTS",
+      "resource_address": "aws_s3_bucket_policy.vendor_catalog",
+      "must_not_report": "The Principal wildcard in a transport Deny grants anonymous access, or lack of an explicit SSE resource means new objects are unencrypted.",
+      "why_safe_for_this_claim": "These are private 90-day derived exports with versioning, public access blocks and a transport Deny. SSE-S3 is the service default for new objects; no CMK requirement is declared.",
+      "evidence": [
+        {
+          "file": "exports.tf",
+          "line": 40,
+          "location": "exports.tf:40",
+          "quote": "\"Effect\": \"Deny\","
+        },
+        {
+          "file": "exports.tf",
+          "line": 11,
+          "location": "exports.tf:11",
+          "quote": "block_public_policy = true"
+        }
+      ]
+    }
+  ],
+  "required_disclosures": [
+    {
+      "id": "ENTRY-PATH-DIAGRAM",
+      "resource_address": "aws_lambda_function_url.contractor_export",
+      "expectation": "If a diagram is produced, include the function URL as a separate entry path to its function. Do not imply every invocation traverses a protected gateway. Score diagram correctness separately from issue recall.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 199,
+          "location": "main.tf:199",
+          "quote": "resource \"aws_lambda_function_url\" \"contractor_export\" {"
+        }
+      ]
+    }
+  ]
+}

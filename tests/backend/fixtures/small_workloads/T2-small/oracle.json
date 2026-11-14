@@ -1,0 +1,346 @@
+{
+  "schema_version": "small-workload-oracle@1",
+  "architecture_id": "T2-small",
+  "status": "reviewed_pending_owner_freeze",
+  "authored_before_model_runs": true,
+  "critical_high_review": {
+    "reviewer": "Claude",
+    "status": "approved",
+    "date": "2026-11-14",
+    "method": "every evidence quote checked at its stated line; every Critical/High claim read against source; no severity or claim changed",
+    "independent_outside_reviewer": false
+  },
+  "outside_independent_review": false,
+  "scope": "Expected observable configuration and declared-requirement defects. No assertion of a deployed exploit, real credentials, or runtime measurements.",
+  "scoring": {
+    "deduplicate_by": [
+      "id",
+      "resource_address"
+    ],
+    "must_find_severities": [
+      "Critical",
+      "High"
+    ],
+    "unlisted_findings": "Adjudicate on evidence; do not automatically mark false. Record draft-oracle corrections before any paid outputs; later corrections require a versioned rationale and rescore all runs.",
+    "counterexamples": "Each prohibits only its named false claim, not every conceivable concern about that resource.",
+    "scope_disclosures": "Score separately from issue recall; unsupported/unknown is not safe.",
+    "grouped_findings": "One finding may match multiple IDs only if it explicitly establishes each defect and affected resource. Never count duplicate wording twice."
+  },
+  "issues": [
+    {
+      "id": "T2-01",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_db_instance.records",
+      "title": "Production records have no RDS automated backups",
+      "expected_finding": "backup_retention_period=0 disables RDS automated backups and its associated point-in-time recovery. The brief requires a 15-minute recovery point and declares no other database backup mechanism. Deletion protection/final snapshots do not meet that ongoing recovery requirement.",
+      "severity_rationale": "backup_retention_period=0 disables RDS automated backups and its associated point-in-time recovery. The brief requires a 15-minute recovery point and declares no other database backup mechanism. Deletion protection/final snapshots do not meet that ongoing recovery requirement.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 71,
+          "location": "main.tf:71",
+          "quote": "backup_retention_period = 0"
+        },
+        {
+          "file": "brief.md",
+          "line": 5,
+          "location": "brief.md:5",
+          "quote": "accidental writes/deletes with a 15-minute RPO. The database must survive one AZ"
+        }
+      ],
+      "safe_remediation": "Enable an appropriate positive backup retention period, schedule the zero-to-nonzero change with its possible outage, and test PITR restores. Validate the required RPO; do not claim backups alone deliver the stated recovery time.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.BackupRetention.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T2-02",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_db_instance.records",
+      "title": "The critical database has no cross-AZ standby",
+      "expected_finding": "multi_az=false leaves this RDS instance without a Multi-AZ standby despite the brief's requirement to survive an AZ outage and restore service within 15 minutes. A subnet group spanning two AZs does not itself create a standby.",
+      "severity_rationale": "multi_az=false leaves this RDS instance without a Multi-AZ standby despite the brief's requirement to survive an AZ outage and restore service within 15 minutes. A subnet group spanning two AZs does not itself create a standby.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 72,
+          "location": "main.tf:72",
+          "quote": "multi_az = false"
+        },
+        {
+          "file": "main.tf",
+          "line": 56,
+          "location": "main.tf:56",
+          "quote": "subnet_ids = [aws_subnet.edge_a.id, aws_subnet.app_a.id]"
+        },
+        {
+          "file": "brief.md",
+          "line": 6,
+          "location": "brief.md:6",
+          "quote": "failure with a target recovery time of 15 minutes. A cross-AZ subnet group alone"
+        }
+      ],
+      "safe_remediation": "Evaluate and enable a supported Multi-AZ deployment with capacity and cost approval; test failover and client reconnect behavior. Backups remain necessary and Multi-AZ is not a guarantee of an exact recovery time.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZSingleStandby.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T2-03",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_dynamodb_table.journal",
+      "title": "The authoritative journal lacks point-in-time recovery",
+      "expected_finding": "PITR is explicitly disabled on the durable event journal. The brief requires restoration after accidental writes/deletes and provides no external backup or replay source for this table.",
+      "severity_rationale": "PITR is explicitly disabled on the durable event journal. The brief requires restoration after accidental writes/deletes and provides no external backup or replay source for this table.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 87,
+          "location": "main.tf:87",
+          "quote": "point_in_time_recovery { enabled = false }"
+        },
+        {
+          "file": "brief.md",
+          "line": 4,
+          "location": "brief.md:4",
+          "quote": "has an external backup or independent replay source. Both require recovery from"
+        }
+      ],
+      "safe_remediation": "Enable PITR for future recovery points and test restoration to a new table with an application cutover plan. Enabling it does not recover data lost before enablement and does not replace retention controls.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Point-in-time-recovery.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T2-04",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_s3_bucket_versioning.evidence",
+      "title": "Evidence overwrites are not protected by active versioning",
+      "expected_finding": "The evidence bucket's versioning is Suspended although source records can overwrite the same keys and must remain recoverable for 90 days. Suspension does not delete older versions, but new writes do not receive ordinary unique versions.",
+      "severity_rationale": "The evidence bucket's versioning is Suspended although source records can overwrite the same keys and must remain recoverable for 90 days. Suspension does not delete older versions, but new writes do not receive ordinary unique versions.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 128,
+          "location": "main.tf:128",
+          "quote": "versioning_configuration { status = \"Suspended\" }"
+        },
+        {
+          "file": "brief.md",
+          "line": 9,
+          "location": "brief.md:9",
+          "quote": "and superseded versions must remain recoverable for at least 90 days. There is"
+        }
+      ],
+      "safe_remediation": "Enable versioning, retain noncurrent versions for the required interval, and test restoration. Preserve any existing versions; consider immutable storage only after assessing operational/legal requirements, rather than blindly locking the bucket.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T2-05",
+      "severity": "High",
+      "must_find": true,
+      "resource_address": "aws_s3_bucket_lifecycle_configuration.evidence",
+      "title": "Evidence lifecycle retention contradicts the 90-day requirement",
+      "expected_finding": "The enabled lifecycle rule expires current objects after one day and noncurrent versions after one day. That makes required evidence eligible for deletion far before 90 days. Lifecycle execution is asynchronous, so do not assert deletion at an exact timestamp.",
+      "severity_rationale": "The enabled lifecycle rule expires current objects after one day and noncurrent versions after one day. That makes required evidence eligible for deletion far before 90 days. Lifecycle execution is asynchronous, so do not assert deletion at an exact timestamp.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 138,
+          "location": "main.tf:138",
+          "quote": "expiration { days = 1 }"
+        },
+        {
+          "file": "main.tf",
+          "line": 139,
+          "location": "main.tf:139",
+          "quote": "noncurrent_version_expiration { noncurrent_days = 1 }"
+        },
+        {
+          "file": "brief.md",
+          "line": 9,
+          "location": "brief.md:9",
+          "quote": "and superseded versions must remain recoverable for at least 90 days. There is"
+        }
+      ],
+      "safe_remediation": "Suspend the destructive lifecycle rule while assessing existing data, then set current and noncurrent retention to at least the required window. Recover still-available versions/backups before expiry; a configuration change cannot resurrect deleted objects.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-expire-general-considerations.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T2-06",
+      "severity": "Medium",
+      "must_find": false,
+      "resource_address": "aws_sqs_queue.ingest_failed",
+      "title": "The standard-queue DLQ retains failures for only 60 seconds",
+      "expected_finding": "The source retains messages for four days but its DLQ retains them for 60 seconds. Standard queues preserve original enqueue age across redrive, so older failures can expire on arrival before the operator's daily inspection.",
+      "severity_rationale": "The source retains messages for four days but its DLQ retains them for 60 seconds. Standard queues preserve original enqueue age across redrive, so older failures can expire on arrival before the operator's daily inspection.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 171,
+          "location": "main.tf:171",
+          "quote": "message_retention_seconds = 60"
+        },
+        {
+          "file": "main.tf",
+          "line": 177,
+          "location": "main.tf:177",
+          "quote": "message_retention_seconds = 345600"
+        },
+        {
+          "file": "main.tf",
+          "line": 179,
+          "location": "main.tf:179",
+          "quote": "redrive_policy = jsonencode({ deadLetterTargetArn = aws_sqs_queue.ingest_failed.arn, maxReceiveCount = 5 })"
+        },
+        {
+          "file": "brief.md",
+          "line": 10,
+          "location": "brief.md:10",
+          "quote": "no separate archive. Failed standard-queue messages are inspected every day."
+        }
+      ],
+      "safe_remediation": "Set the DLQ retention above source retention, such as 14 days, and alarm on failures. Investigate poison messages before controlled redrive; do not purge the DLQ or increase receive attempts indefinitely.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T2-07",
+      "severity": "Low",
+      "must_find": false,
+      "resource_address": "aws_cloudwatch_log_group.debug",
+      "title": "High-volume diagnostic logs never expire",
+      "expected_finding": "retention_in_days=0 retains these non-audit diagnostic logs indefinitely. The brief says they are regenerable, high-volume, and only needed for 30 days, creating avoidable storage growth. No dollar saving is inferable from Terraform alone.",
+      "severity_rationale": "retention_in_days=0 retains these non-audit diagnostic logs indefinitely. The brief says they are regenerable, high-volume, and only needed for 30 days, creating avoidable storage growth. No dollar saving is inferable from Terraform alone.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 198,
+          "location": "main.tf:198",
+          "quote": "retention_in_days = 0"
+        },
+        {
+          "file": "brief.md",
+          "line": 11,
+          "location": "brief.md:11",
+          "quote": "High-volume debug logs contain no audit evidence and are needed for only 30 days;"
+        }
+      ],
+      "safe_remediation": "Confirm incident/legal holds, archive needed history, then use the approved 30-day retention. Do not apply this short retention to the separately identified audit/evidence data.",
+      "reference_urls": [],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    },
+    {
+      "id": "T2-08",
+      "severity": "Medium",
+      "must_find": false,
+      "resource_address": "aws_ebs_volume.scratch",
+      "title": "A costly provisioned-IOPS scratch volume has no declared attachment",
+      "expected_finding": "This root declares a 1,000-GiB io2 volume with 64,000 IOPS, no attachment, and a brief explicitly saying the scratch importer was retired. It is a planned unused cost, not a measured live bill or proof of a universally wrong volume type.",
+      "severity_rationale": "This root declares a 1,000-GiB io2 volume with 64,000 IOPS, no attachment, and a brief explicitly saying the scratch importer was retired. It is a planned unused cost, not a measured live bill or proof of a universally wrong volume type.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 219,
+          "location": "main.tf:219",
+          "quote": "size = 1000"
+        },
+        {
+          "file": "main.tf",
+          "line": 221,
+          "location": "main.tf:221",
+          "quote": "iops = 64000"
+        },
+        {
+          "file": "brief.md",
+          "line": 12,
+          "location": "brief.md:12",
+          "quote": "audit logs are needed for 90 days. The scratch importer was retired, its disk is"
+        }
+      ],
+      "safe_remediation": "Verify ownership, attachments and retention needs before removing the retired volume from desired state; snapshot any needed data first. If still needed, benchmark and right-size type/capacity/IOPS rather than deleting a potentially live disk. Quantify costs separately with regional pricing.",
+      "reference_urls": [
+        "https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volume-types.html"
+      ],
+      "match_rule": "Match the configuration defect and resource identity semantically; paraphrases are valid. A generic best-practice suggestion without identifying the defect is not a match."
+    }
+  ],
+  "safe_counterexamples": [
+    {
+      "id": "T2-SAFE-01",
+      "resource_address": "aws_db_instance.records",
+      "must_not_report": "The database is publicly accessible or stores an inline plaintext master password.",
+      "why_safe_for_this_claim": "publicly_accessible=false, encrypted storage, private-CIDR ingress, and managed master-user credentials are explicit. Other database reliability issues still apply.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 70,
+          "location": "main.tf:70",
+          "quote": "publicly_accessible = false"
+        },
+        {
+          "file": "main.tf",
+          "line": 67,
+          "location": "main.tf:67",
+          "quote": "manage_master_user_password = true"
+        }
+      ]
+    },
+    {
+      "id": "T2-SAFE-02",
+      "resource_address": "aws_s3_bucket_policy.evidence",
+      "must_not_report": "The wildcard principal grants public access to evidence, or new S3 objects are unencrypted.",
+      "why_safe_for_this_claim": "This statement is a Deny of insecure transport, not an Allow. Bucket public-access blocks are enabled, and new objects have S3's default encryption.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 151,
+          "location": "main.tf:151",
+          "quote": "\"Effect\": \"Deny\","
+        },
+        {
+          "file": "main.tf",
+          "line": 122,
+          "location": "main.tf:122",
+          "quote": "block_public_policy = true"
+        }
+      ]
+    },
+    {
+      "id": "T2-SAFE-03",
+      "resource_address": "aws_dynamodb_table.sessions",
+      "must_not_report": "TTL is disabled or TTL guarantees deletion precisely when a session expires.",
+      "why_safe_for_this_claim": "TTL is enabled and the application rejects expired sessions independently. Physical TTL deletion is asynchronous; enabled TTL is not a security authorization control.",
+      "evidence": [
+        {
+          "file": "main.tf",
+          "line": 109,
+          "location": "main.tf:109",
+          "quote": "enabled = true"
+        },
+        {
+          "file": "brief.md",
+          "line": 14,
+          "location": "brief.md:14",
+          "quote": "Sessions set expires_at on every item; application checks enforce session expiry"
+        }
+      ]
+    }
+  ],
+  "required_disclosures": []
+}
