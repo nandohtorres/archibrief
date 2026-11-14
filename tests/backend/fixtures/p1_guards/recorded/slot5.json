@@ -1,0 +1,259 @@
+{
+ "slot": 5,
+ "case": "T3a",
+ "review_id": "90f9a3c7-1098-468a-ad89-a0121323e3d2",
+ "note": "Recorded P1 baseline review (2026-11-14), synthetic corpus only. Reduced: no citations or retrieved text.",
+ "review_scope": {
+  "known_y": 50,
+  "x": 50,
+  "sent_count": 50,
+  "categories": {
+   "other": 0,
+   "reviewed": 50,
+   "unsupported": 0,
+   "zero_copy": 0
+  },
+  "model_outcome": "completed"
+ },
+ "model_run": {
+  "emitted": 12,
+  "capped": 0,
+  "accepted": 12,
+  "rejected": {},
+  "input_tokens": 20130,
+  "output_tokens": 6438
+ },
+ "findings": [
+  {
+   "finding_id": "ecb8d191-0007-42f1-abdc-77b99fce91bb",
+   "type": "deterministic-rule-result",
+   "category": "encryption",
+   "concern": "s3_encryption",
+   "finding": "S3 bucket 'evidence' has no server-side encryption configuration",
+   "evidence": "resource \"aws_s3_bucket\" \"evidence\" found with no matching SSE configuration",
+   "risk_impact": "The bucket's encryption is not declared, so it can't be reviewed or kept consistent. S3 has encrypted new objects with SSE-S3 by default since January 2023, so this alone does not mean data is unencrypted; objects written earlier, and any need for a customer-managed KMS key, need checking.",
+   "recommendation": "Attach aws_s3_bucket_server_side_encryption_configuration to declare the intended encryption: SSE-S3, or SSE-KMS where you need to control who can decrypt.",
+   "severity": null
+  },
+  {
+   "finding_id": "fbbda2f0-0781-4f48-b3f9-8a791bbd96e8",
+   "type": "deterministic-rule-result",
+   "category": "availability",
+   "concern": "rds_multi_az",
+   "finding": "RDS instance 'records' is not configured multi_az",
+   "evidence": "resource \"aws_db_instance\" \"records\" has multi_az = false or unset",
+   "risk_impact": "A single AZ failure causes database unavailability.",
+   "recommendation": "Set multi_az = true if the workload's availability requirement warrants it.",
+   "severity": null
+  },
+  {
+   "finding_id": "7eecd5d6-0770-4d80-acab-948cb3ffd2be",
+   "type": "deterministic-rule-result",
+   "category": "iam",
+   "concern": "iam_wildcard",
+   "finding": "IAM policy 'maintenance' grants wildcard Action \"*\" on all resources (full admin)",
+   "evidence": "resource \"aws_iam_policy\" \"maintenance\" allows * with Resource \"*\"",
+   "risk_impact": "Overly broad permissions violate least privilege and widen blast radius on compromise.",
+   "recommendation": "Scope the policy to the specific actions and resource ARNs the workload actually needs.",
+   "severity": null
+  },
+  {
+   "finding_id": "a95c6bb0-3710-4a60-bb6a-65dbd2b8278c",
+   "type": "deterministic-rule-result",
+   "category": "observability",
+   "concern": "cloudtrail_present",
+   "finding": "No aws_cloudtrail resource found in the submitted Terraform",
+   "evidence": "No resource of type aws_cloudtrail present in parsed configuration",
+   "risk_impact": "This code defines no trail. One may be managed elsewhere, such as an organization trail. If none exists, CloudTrail keeps only 90 days of management events in Event history, with no long-term record and no data events (such as S3 object reads) for audit or incident response.",
+   "recommendation": "Confirm whether an organization or account trail already exists. If not, add an aws_cloudtrail resource covering all regions with log file validation enabled.",
+   "severity": null
+  },
+  {
+   "finding_id": "904a6dff-b6c9-4765-b8f3-d0a1f697ee12",
+   "type": "deterministic-rule-result",
+   "category": "exposure",
+   "concern": "ec2_imdsv2",
+   "finding": "EC2 instance 'maintenance' does not require IMDSv2 tokens",
+   "evidence": "resource \"aws_instance\" \"maintenance\" metadata_options.http_tokens is not \"required\"",
+   "risk_impact": "IMDSv1 answers plain HTTP GETs, so a request forgery or open proxy on this server can read its role's temporary credentials.",
+   "recommendation": "Set metadata_options { http_tokens = \"required\" } (or require IMDSv2 account-wide with aws_ec2_instance_metadata_defaults).",
+   "severity": null
+  },
+  {
+   "finding_id": "fad31216-fd14-4021-b9b5-d78bf0dda0e9",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "sqs_dlq_retention",
+   "finding": "Dead-letter queue 'ingest_failed' keeps messages for less time than queue 'ingest'",
+   "evidence": "aws_sqs_queue \"ingest\" keeps messages 345600 s; its dead-letter queue \"ingest_failed\" keeps them 60 s",
+   "risk_impact": "A failed message keeps its original enqueue time, so one that waited in the source queue can expire from the dead-letter queue almost at once: the failure is lost before anyone can look at it.",
+   "recommendation": "Set the dead-letter queue's message_retention_seconds longer than 345600 s (the SQS maximum is 1209600, 14 days).",
+   "severity": null
+  },
+  {
+   "finding_id": "42464628-4135-4443-90cb-1351c7a8146d",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "dynamodb_pitr",
+   "finding": "DynamoDB table 'journal' does not have point-in-time recovery enabled",
+   "evidence": "resource \"aws_dynamodb_table\" \"journal\" at main.tf line 326: point_in_time_recovery is not enabled (Trivy AWS-0024)",
+   "risk_impact": "Accidental writes or deletes cannot be rolled back to a prior point in time.",
+   "recommendation": "Set point_in_time_recovery { enabled = true }.",
+   "severity": null
+  },
+  {
+   "finding_id": "1056c7e5-c2c5-4ced-8435-e7cdc4caa77a",
+   "type": "deterministic-rule-result",
+   "category": "recovery",
+   "concern": "rds_backup_retention",
+   "finding": "RDS instance 'records' keeps backups for one day or less",
+   "evidence": "resource \"aws_db_instance\" \"records\" at main.tf line 310: backup_retention_period is unset or 1 (Trivy AWS-0077)",
+   "risk_impact": "A problem noticed after a day can't be restored from backup.",
+   "recommendation": "Set backup_retention_period to match your recovery needs (for example 7 or more days).",
+   "severity": null
+  },
+  {
+   "finding_id": "f75eada0-e906-45b9-8539-7489ca87129f",
+   "type": "deterministic-rule-result",
+   "category": "exposure",
+   "concern": "sg_admin_ingress",
+   "finding": "Security group 'maintenance' allows SSH or RDP from anywhere",
+   "evidence": "resource \"aws_security_group\" \"maintenance\" at main.tf line 66: ingress from 0.0.0.0/0 or ::/0 reaches SSH (22) or RDP (3389) (Trivy AWS-0107)",
+   "risk_impact": "This group permits SSH or RDP from any internet address if attached to a resource. Actual reachability also depends on routing and listeners.",
+   "recommendation": "Restrict ingress to specific CIDR ranges, a bastion, or use SSM Session Manager.",
+   "severity": null
+  },
+  {
+   "finding_id": "3e304daf-446e-4f2d-b8e3-234b70c3030a",
+   "type": "fact",
+   "category": "exposure",
+   "concern": null,
+   "finding": "The dispatch Lambda function URL accepts unauthenticated calls from any principal, bypassing the JWT authorizer that protects the API Gateway route.",
+   "evidence": "aws_lambda_function_url.dispatch has authorization_type=NONE; aws_lambda_permission.dispatch_url has principal=* and function_url_auth_type=NONE with no conditions; aws_lambda_permission.dispatch_invoke has principal=* with no conditions. The brief states the dispatch image relies on infrastructure authorization and does not authenticate callers itself, and all operations require staff authentication.",
+   "risk_impact": "An unauthenticated internet caller can invoke the dispatch Lambda directly, completely circumventing the staff JWT authorizer attached to the API Gateway route. The workload brief explicitly requires staff authentication on all operations including overrides.",
+   "recommendation": "Delete aws_lambda_function_url.dispatch and both aws_lambda_permission resources that grant principal=* (dispatch_invoke and dispatch_url). All callers should enter through the API Gateway stage where the JWT authorizer is enforced.",
+   "severity": "critical"
+  },
+  {
+   "finding_id": "33537605-9aa9-4200-b1e2-5c27226d9224",
+   "type": "fact",
+   "category": "exposure",
+   "concern": null,
+   "finding": "The API Gateway override route has authorization_type=NONE and no authorizer attached, allowing unauthenticated callers to invoke dispatch overrides through the authenticated API.",
+   "evidence": "aws_apigatewayv2_route.override has authorization_type=NONE and authorizer_id is absent; aws_apigatewayv2_route.read has authorization_type=JWT and refs aws_apigatewayv2_authorizer.staff. The brief states all operations including overrides require staff authentication.",
+   "risk_impact": "Override operations — explicitly required to be staff-only — can be invoked by any caller with network access to the API Gateway stage.",
+   "recommendation": "Add authorization_type = \"JWT\" and authorizer_id = aws_apigatewayv2_authorizer.staff.id to aws_apigatewayv2_route.override, matching the read route.",
+   "severity": "critical"
+  },
+  {
+   "finding_id": "4edeccd2-c26c-4179-9506-26a00e73927f",
+   "type": "fact",
+   "category": "iam",
+   "concern": null,
+   "finding": "The maintenance EC2 instance profile grants full administrator access (Action * on Resource *) while the workload brief limits it to read-only diagnostics.",
+   "evidence": "aws_iam_policy.maintenance has one statement: effect=Allow, sensitive_actions=['* (every action)'], resources='all resources (*)', has_condition=false. This policy is attached to aws_iam_role.maintenance via aws_iam_role_policy_attachment.maintenance. aws_iam_role.maintenance trusts ec2.amazonaws.com. The brief states the maintenance instance only needs read-only diagnostics.",
+   "risk_impact": "A compromised maintenance instance gives an attacker full account administrator access, combined with the existing public SSH exposure (0.0.0.0/0 on port 22) this is an end-to-end account takeover path.",
+   "recommendation": "Rewrite aws_iam_policy.maintenance to allow only the specific read-only API calls needed for diagnostics, scoped to the minimum necessary resources. Remove all write, delete, and administrative actions.",
+   "severity": "critical"
+  },
+  {
+   "finding_id": "c64001d8-1143-40ad-845d-97436699e910",
+   "type": "fact",
+   "category": "exposure",
+   "concern": null,
+   "finding": "The maintenance instance is placed in app_a with a public IP and a route table that sends all traffic to the internet gateway, making it internet-reachable despite the brief's requirement for a private subnet.",
+   "evidence": "aws_instance.maintenance has associate_public_ip_address=true and subnet_id references aws_subnet.app_a. aws_subnet.app_a has default_route.ipv4=aws_internet_gateway (via declared relationships) and map_public_ip_on_launch=false. aws_route_table.app routes 0.0.0.0/0 to aws_internet_gateway.edge. The brief requires the maintenance instance to be in a private application subnet; the edge subnet may be public.",
+   "risk_impact": "The combination of a public IP, an internet-gateway default route in the app subnet, and SSH open to the world gives every internet host a direct SSH attack surface on a machine with full admin IAM permissions.",
+   "recommendation": "Set associate_public_ip_address = false on aws_instance.maintenance, replace the app route table's internet-gateway default route with a NAT gateway default route, or move management access to AWS Systems Manager Session Manager to eliminate public SSH entirely.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "e4cbf4ed-2406-45af-a86e-4c12dbbd5f11",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "The evidence S3 bucket lifecycle rule expires current objects after 1 day and noncurrent versions after 1 day, contradicting the contractual 90-day recovery requirement.",
+   "evidence": "aws_s3_bucket_lifecycle_configuration.evidence has rule[0].expiration.days=1 and rule[0].noncurrent_version_expiration.noncurrent_days=1 with versioning Enabled. Provider region is us-east-2. The brief requires evidence objects and all retained versions to be recoverable for at least 90 days.",
+   "risk_impact": "Evidence required under contract to be recoverable for 90 days is instead destroyed after one day; this is a direct contractual breach and may be unrecoverable.",
+   "recommendation": "Set expiration.days = 90 and noncurrent_version_expiration.noncurrent_days = 90 (or higher) in aws_s3_bucket_lifecycle_configuration.evidence to meet the contractual minimum.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "10f3313f-292d-430a-bac2-c2999999b930",
+   "type": "fact",
+   "category": "exposure",
+   "concern": null,
+   "finding": "The evidence S3 bucket is provisioned in us-east-2 (Ohio), outside the EU, violating the contractual requirement that evidence objects remain in EU AWS Regions.",
+   "evidence": "aws_s3_bucket.evidence and all its associated resources (aws_s3_bucket_versioning, aws_s3_bucket_lifecycle_configuration, aws_s3_bucket_policy, aws_s3_bucket_public_access_block) have provider.region=us-east-2; all other workload resources are in eu-west-1. The brief states evidence objects must stay in EU AWS Regions as a contractual placement requirement.",
+   "risk_impact": "Evidence data is stored in a US AWS Region, directly violating the customer's stated contractual placement obligation requiring EU-only storage.",
+   "recommendation": "Change the provider for aws_s3_bucket.evidence and all its child resources to an EU Region (eu-west-1 or eu-central-1). Migrate any existing data before destroying the us-east-2 bucket.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "9fe4bd74-8896-4e88-abc8-a6b9d9a480fd",
+   "type": "fact",
+   "category": "observability",
+   "concern": null,
+   "finding": "The debug log group retains data indefinitely (retention_in_days=0) instead of the specified 30 days, incurring unnecessary log storage cost and obscuring operational visibility by mixing old and new data.",
+   "evidence": "aws_cloudwatch_log_group.debug has retention_in_days=0 (never expires). The brief requires debug output to be kept for 30 days. aws_lambda_function.dispatch has tracing_config.mode not set (default: PassThrough).",
+   "risk_impact": "Indefinite retention of high-volume debug logs increases storage cost without operational benefit and contradicts the documented 30-day requirement.",
+   "recommendation": "Set retention_in_days = 30 on aws_cloudwatch_log_group.debug to align with the stated 30-day requirement and avoid unbounded log storage growth.",
+   "severity": "low"
+  },
+  {
+   "finding_id": "05fb8850-aa53-45ca-9b44-050904533b86",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "RDS instance 'records' has multi_az=false; without Multi-AZ the cross-AZ availability and 15-minute RTO stated in the brief cannot be met, even though the subnet group spans two AZs.",
+   "evidence": "aws_db_subnet_group.records references subnet_ids[0]=aws_subnet.edge_a and subnet_ids[1]=aws_subnet.app_a — both subnets are in eu-west-1 but edge_a is in AZ eu-west-1a and app_a is in AZ eu-west-1b. aws_db_instance.records has multi_az=false. The brief requires cross-AZ availability with 15-minute RTO.",
+   "risk_impact": "A single-AZ RDS instance cannot meet the 15-minute cross-AZ RTO requirement; an AZ outage would trigger a cold recovery from backup that typically takes much longer.",
+   "recommendation": "Set multi_az = true on aws_db_instance.records. The existing subnet group already spans eu-west-1a and eu-west-1b, so no subnet changes are needed.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "9788081c-a927-442c-aeaa-5f9381909734",
+   "type": "inference",
+   "category": "recovery",
+   "concern": null,
+   "finding": "A 1 TB io2 EBS volume 'scratch' remains provisioned despite the brief stating the scratch importer was retired and no external stack attaches it, incurring unnecessary cost for an idle high-performance volume.",
+   "evidence": "aws_ebs_volume.scratch has type=io2, size=1000 GB, encrypted=true, AZ=eu-west-1b. The brief states the scratch importer was retired and no external stack attaches its regenerable disk. aws_instance.maintenance refs subnet_id=aws_subnet.app_a (AZ eu-west-1b) but no attachment between the maintenance instance and the scratch volume is observed.",
+   "risk_impact": "A large io2 volume that serves no current workload function consumes budget and represents unnecessary attack surface if ever attached.",
+   "recommendation": "Confirm no active workload references aws_ebs_volume.scratch, then remove the resource from Terraform and delete the volume to eliminate ongoing io2 storage charges.",
+   "severity": "medium"
+  },
+  {
+   "finding_id": "40560d93-0f11-435a-894e-4844162b257b",
+   "type": "fact",
+   "category": "recovery",
+   "concern": null,
+   "finding": "The dead-letter queue 'ingest_failed' retains messages for only 60 seconds, making messages invisible before the stated daily inspection window can run.",
+   "evidence": "aws_sqs_queue.ingest has message_retention_seconds=345600 (4 days) and dead_letter_queue=ingest_failed. aws_sqs_queue.ingest_failed has message_retention_seconds=60 (1 minute). The brief states failed standard-queue messages receive daily inspection.",
+   "risk_impact": "Failed ingest messages that require daily human review are deleted after 60 seconds, rendering the inspection process and the CloudWatch alarm on ingest_failures useless for catching processing errors.",
+   "recommendation": "Set message_retention_seconds on aws_sqs_queue.ingest_failed to at least 86400 (one day) to ensure failed messages survive until the daily inspection; consider 345600 or higher to allow multi-day investigation windows.",
+   "severity": "high"
+  },
+  {
+   "finding_id": "a282679b-53fa-4392-9628-098ef01001eb",
+   "type": "fact",
+   "category": "observability",
+   "concern": null,
+   "finding": "Active X-Ray tracing is not enabled on the dispatch Lambda (tracing_config.mode defaults to PassThrough), leaving no distributed trace data for latency and error diagnosis across the Lambda-to-database call chain.",
+   "evidence": "aws_lambda_function.dispatch has tracing_config.mode not set (default: PassThrough). No aws_xray_group or sampling rule resources are present. The workload processes staff-only dispatch and override operations against authoritative PostgreSQL and DynamoDB stores.",
+   "risk_impact": "Without active tracing, diagnosing performance or reliability issues in the dispatch path requires correlating logs manually, slowing incident response.",
+   "recommendation": "Set tracing_config { mode = \"Active\" } in aws_lambda_function.dispatch to capture end-to-end traces through API Gateway, Lambda, and backend data stores.",
+   "severity": "low"
+  },
+  {
+   "finding_id": "b0aa159c-d3cf-4891-a7aa-4d6acadf2e9b",
+   "type": "inference",
+   "category": "availability",
+   "concern": null,
+   "finding": "The VPC uses only two subnets across two Availability Zones (eu-west-1a and eu-west-1b); a concurrent failure or maintenance window affecting both AZs would leave the workload without capacity, and Lambda runs outside the VPC with no AZ pinning observed.",
+   "evidence": "aws_subnet.app_a is in eu-west-1b; aws_subnet.edge_a is in eu-west-1a. No subnets in a third AZ are present in the submitted configuration. aws_lambda_function.dispatch has runs_in_a_vpc=false. The DB subnet group spans only two AZs.",
+   "risk_impact": "A two-AZ deployment reduces but does not eliminate AZ-correlated failure risk; for a standard availability tier this may be acceptable, but it is worth verifying against the 15-minute RTO requirement.",
+   "recommendation": "Consider adding a third subnet in eu-west-1c and including it in aws_db_subnet_group.records to improve fault tolerance; evaluate whether the stated standard availability requirement justifies the added cost.",
+   "severity": "low"
+  }
+ ]
+}
