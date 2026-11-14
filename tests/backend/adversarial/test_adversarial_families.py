@@ -46,6 +46,10 @@ def runs(tmp_path_factory: pytest.TempPathFactory):
 # Coverage gaps still open (FIX_REPORT.md status). Only these stay out of
 # normal CI; every other coverage_gap check passes and now runs, so a
 # regression in a recovered feature fails CI (audit F15).
+# F07-D-03 stays open on purpose: its fixture declares authorization_type NONE
+# with no invoke permission, which AWS does not make callable. The public Lambda
+# URL rule (P1 defect A) reports only URLs whose permissions are declared, so
+# it does not overclaim; whether to add a softer finding is an owner decision.
 UNRESOLVED_GAPS = frozenset({"F04-D-07", "F07-D-03", "F07-D-04", "F07-D-05"})
 
 

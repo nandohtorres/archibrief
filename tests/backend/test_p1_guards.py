@@ -1,8 +1,8 @@
 """P1 regression guards (plan Step 0). See tests/backend/p1_guards.py.
 
-Known defects are strict xfails: the test fails the moment a fix lands, which
-forces the marker (and, for the Lambda URL, the UNRESOLVED_GAPS entry in the
-adversarial suite) to be removed in the same change.
+A known defect is recorded as a strict xfail: the test fails the moment a fix
+lands, which forces the marker to be removed in the same change. None is open
+today (defects A and B are fixed); add one for the next.
 """
 
 from __future__ import annotations
@@ -46,11 +46,9 @@ def replays():
 def _rows(kind: str):
     for case_id, issues in CASE_ISSUES.items():
         for issue_id, issue in issues.items():
-            if kind == "rule" and issue.rule and not issue.rule_gap:
+            if kind == "rule" and issue.rule:
                 yield pytest.param(case_id, issue_id, id=f"{case_id}-{issue_id}")
             if kind == "fact":
-                yield pytest.param(case_id, issue_id, id=f"{case_id}-{issue_id}")
-            if kind == "gap" and issue.rule_gap:
                 yield pytest.param(case_id, issue_id, id=f"{case_id}-{issue_id}")
 
 
@@ -82,18 +80,6 @@ def test_the_model_input_carries_the_fact_behind_each_issue(case_id, issue_id, r
         assert replay.fact(fact.type, fact.name, fact.setting) == fact.value, (
             f"{issue_id}: {fact.type}.{fact.name} {fact.setting}"
         )
-
-
-@needs_trivy
-@pytest.mark.xfail(strict=True, reason="F07-D-03: no deterministic rule for a public Lambda URL")
-@pytest.mark.parametrize(("case_id", "issue_id"), list(_rows("gap")))
-def test_a_rule_reports_the_public_lambda_url(case_id, issue_id, replays):
-    name = CASE_ISSUES[case_id][issue_id].resource
-    assert any(
-        re.search(r"function url", f["finding"], re.IGNORECASE)
-        and name in f["finding"] + f["evidence"]
-        for f in replays(case_id).rules
-    )
 
 
 @needs_trivy

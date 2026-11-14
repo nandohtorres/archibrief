@@ -264,6 +264,17 @@ RECIPES: dict[str, Recipe] = {
         (2, 6),
         "data_breach",
     ),
+    "public_lambda_url": Recipe(
+        "high",
+        "A back door into the application has no lock",
+        "Like a side entrance to the building that skips the front desk and its guard.",
+        "Anyone who finds the address can run the function, even though the main "
+        "entrance asks for a login.",
+        "Remove the extra web address if nobody needs it, or require signed requests.",
+        _FREE,
+        (0.5, 2),
+        "data_breach",
+    ),
     "ec2_imdsv2": Recipe(
         "high",
         "The server hands out its access keys too easily",

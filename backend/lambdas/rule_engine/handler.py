@@ -57,7 +57,7 @@ from backend.shared.trivy_checks import (
     TRUSTED_CHECKS,
 )
 
-RULE_VERSION = "rule_engine@2026-10-30"
+RULE_VERSION = "rule_engine@2026-11-14"
 
 ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}

@@ -233,6 +233,29 @@ def configuration_issues(summary):
                     "Set queue visibility at least as high as the function timeout, then apply AWS retry-tuning guidance separately.",
                 )
             )
+        if (
+            kind == "aws_lambda_function_url"
+            and value(bundle, "public_invocation_permissions") == "both_actions_declared"
+        ):
+            issues.append(
+                ConfigurationIssue(
+                    "public_lambda_url",
+                    "exposure",
+                    ref,
+                    f"Lambda function URL '{name}' accepts unauthenticated calls from anyone",
+                    evidence
+                    + ': authorization_type is NONE and resource policies let Principal "*" '
+                    "invoke the function through its URL",
+                    "Anyone who learns the URL can call the function directly. A gateway, "
+                    "authorizer or CDN in front of the function does not protect this "
+                    "separate endpoint. The declaration does not show the URL is in use or "
+                    "that anyone has called it.",
+                    "If the URL is not needed, remove it and its public permissions. Otherwise "
+                    "set authorization_type to AWS_IAM and authorize only the intended callers "
+                    "with signed requests, keeping a tested authenticated path. Placing the "
+                    "function in a VPC does not restrict a function URL.",
+                )
+            )
         if kind == "aws_s3_bucket_lifecycle_configuration":
             bucket_ref = target(bundle, "bucket")
             versioning = [

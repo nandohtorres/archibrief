@@ -51,13 +51,10 @@ class Issue:
     # one of these words appears.
     resource: str
     keywords: str
-    # Set when a deterministic rule is missing today. Strict xfail: fixing it
-    # must also remove the marker (and the matching UNRESOLVED_GAPS entry).
-    rule_gap: str | None = None
 
 
-def _i(severity, rule, facts, resource, keywords, rule_gap=None) -> Issue:
-    return Issue(severity, rule, tuple(facts), resource, keywords, rule_gap)
+def _i(severity, rule, facts, resource, keywords) -> Issue:
+    return Issue(severity, rule, tuple(facts), resource, keywords)
 
 
 _URL_KW = r"unauthenticated|authorization[_ ]type\W*(?:=|is|of)?\W*NONE|no authentication"
@@ -101,7 +98,6 @@ T1_ISSUES: dict[str, Issue] = {
         ],
         "contractor_export",
         _URL_KW,
-        rule_gap="F07-D-03",
     ),
 }
 
@@ -190,7 +186,6 @@ T3A_ISSUES: dict[str, Issue] = {
         ],
         "dispatch",
         _URL_KW,
-        rule_gap="F07-D-03",
     ),
     "T3A-DATA-01": T2_ISSUES["T2-01"],
     "T3A-DATA-02": T2_ISSUES["T2-02"],
