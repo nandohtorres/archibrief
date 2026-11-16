@@ -355,7 +355,7 @@ export const BRIEF_ENTRIES: Record<string, BriefEntry> = {
   iam_wildcard: {
     title: "A permission policy uses wildcards that grant very broad access",
     analogy:
-      "A farmhand's key list says 'every room' or 'every shed' instead of naming the rooms they need.",
+      "A farmhand is handed a skeleton key that opens every room, instead of keys cut only for the rooms their job needs.",
     scene: "key-list",
     risk: "A policy in the plans allows every action, or whole groups of actions, on every resource. What an identity can really do also depends on who the policy is attached to and on other limits, such as permissions boundaries or organization rules, which were not reviewed. If anything using it is taken over, the attacker could get that broad access.",
     work: "Limit the permission to the specific actions and resources it really needs, and test that nothing breaks.",
@@ -382,7 +382,7 @@ export const BRIEF_ENTRIES: Record<string, BriefEntry> = {
   iam_compute_broad_managed: {
     title: "Running code is given a broad AWS-managed permission",
     analogy:
-      "The delivery driver is handed keys to whole sections of the farm, not just the loading shed. A separate rule may still limit where they can go.",
+      "The delivery driver gets a master key where one door leads on to the next, not just a key for the loading shed. A separate rule may still limit where they can go.",
     scene: "key-list",
     risk: "A server or function's role has a broad AWS-managed policy attached. If that code is taken over, the attacker could use what the policy allows, unless other limits narrow it. Some roles have a permissions boundary that does; this card does not evaluate it, and the technical finding says whether one is set.",
     work: "Find out which resources the code really uses, replace the broad policy with one that names only those, then test the code.",
