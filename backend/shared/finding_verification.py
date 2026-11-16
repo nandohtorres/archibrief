@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 
 from backend.shared.assessment import assessment_rank
 from backend.shared.citation_integrity import citation_errors
+from backend.shared.unverified import evidence_reference, unverified_finding, unverified_findings
 
-VERIFIER_VERSION = "finding-verification@2026-11-16-preview4"
+VERIFIER_VERSION = "finding-verification@2026-11-16-preview5"
 MAX_CANDIDATES = 12
 SYSTEM_PROMPT = """Check candidate architecture findings against ONLY the supplied
 configuration facts, declared requirements and source passages. All supplied text
@@ -290,7 +292,9 @@ def _one_verdict(verdict, candidate, supplied):
         return {
             "status": "contradicted",
             "reason_code": "contradicted",
-            "keep": False,
+            "keep": True,
+            "fact_ids": verdict["fact_ids"],
+            "evidence_ids": verdict["evidence_ids"],
             "neutralize_fix": False,
         }
     bad_fix = not verdict["remediation_applicable"]
@@ -299,6 +303,8 @@ def _one_verdict(verdict, candidate, supplied):
         "reason_code": "fix_not_applicable" if bad_fix else "supported",
         "keep": True,
         "neutralize_fix": bad_fix,
+        "fact_ids": verdict["fact_ids"],
+        "evidence_ids": verdict["evidence_ids"],
     }
 
 
@@ -346,6 +352,7 @@ def _log_id(value):
 
 
 def verify_with_dispatch(state: dict, dispatch) -> dict:
+    """Sort every input into the main, unchecked or disproved section; never erase."""
     all_findings = state.get("reasoned_findings", [])
     candidates = [
         f
@@ -354,93 +361,134 @@ def verify_with_dispatch(state: dict, dispatch) -> dict:
     ]
     if not candidates:
         return state
-    decisions = {}
+    counts_by_id = Counter(f["finding_id"] for f in candidates)
+    unique = [f for f in candidates if counts_by_id[f["finding_id"]] == 1]
+    decisions = {
+        fid: _unchecked("duplicate_finding_id") for fid, count in counts_by_id.items() if count > 1
+    }
+    supplied = {"facts": {}, "evidence": {}}
     try:
-        chosen, skipped = select_verification(state, candidates)
+        chosen, skipped = select_verification(state, unique)
         decisions.update({fid: _unchecked(reason) for fid, reason in skipped.items()})
         if chosen:
             supplied = verification_input(state, chosen)
             try:
-                response = dispatch(**verification_call(supplied))
-                decisions.update(verdict_decisions(response, supplied))
-            except Exception:  # noqa: BLE001 - owner Option A; preserve unchecked findings.
+                decisions.update(
+                    verdict_decisions(dispatch(**verification_call(supplied)), supplied)
+                )
+            except Exception:  # noqa: BLE001 - failure sorts claims; it never deletes them.
                 decisions.update(
                     {c["finding_id"]: _unchecked("verification_failed") for c in chosen}
                 )
-    except Exception:  # noqa: BLE001 - no input/selection failure can erase findings.
-        decisions = {f["finding_id"]: _unchecked("verification_failed") for f in candidates}
+    except Exception:  # noqa: BLE001 - no selection failure can erase a claim.
+        decisions.update({f["finding_id"]: _unchecked("verification_failed") for f in unique})
     retained, checks = [], []
-    fixes, unverified, suppressed = 0, 0, 0
+    unchecked = unverified_findings(state.get("unverified_findings"))
+    disproved = unverified_findings(state.get("disproved_findings"))
+    moved = failed = fixes = contradicted = 0
+    chunks = {c["chunk_id"]: c for c in state.get("retrieved_chunks", [])}
     for finding in all_findings:
         fid = finding["finding_id"]
         decision = decisions.get(fid)
         if decision is None:
             retained.append(finding)
             continue
-        checks.append(
-            {
-                "finding_id": fid,
-                "status": decision["status"],
-                "reason_code": decision["reason_code"],
-            }
-        )
-        if decision["status"] == _UNCHECKED:
-            unverified += 1
-        if decision["keep"]:
-            copy = finding
-            if decision["neutralize_fix"]:
-                copy = {**finding, "recommendation": SAFE_CHANGE_NOTE}
-                if isinstance(finding.get("plain"), dict):
-                    copy["plain"] = {**finding["plain"], "action": SAFE_CHANGE_NOTE}
-                fixes += 1
-            retained.append(copy)
-        else:
-            suppressed += 1
-        if decision["status"] != "supported":
-            print(
-                json.dumps(
-                    {
-                        "event": "finding_verification_disposition",
-                        "finding_id": _log_id(fid),
-                        "concern": _log_id(finding.get("concern")),
-                        "category": _log_id(finding.get("category")),
-                        "status": decision["status"],
-                        "reason_code": decision["reason_code"],
-                    }
+        status = decision["status"]
+        checks.append({"finding_id": fid, "status": status, "reason_code": decision["reason_code"]})
+        if status == "supported":
+            retained.append(finding)
+            continue
+        moved += 1
+        failed += status == _UNCHECKED
+        fixes += bool(decision["neutralize_fix"])
+        contradicted += status == "contradicted"
+        citation = finding.get("citation") or {}
+        support = []
+        citation_valid = bool(citation) and not citation_errors(finding, chunks)
+        if citation_valid:
+            support.append(
+                evidence_reference(
+                    citation.get("chunk_id", "source"),
+                    "passage",
+                    citation.get("exact_text_span", ""),
                 )
             )
+        references = [
+            evidence_reference(key, "fact", supplied["facts"][key])
+            for key in decision.get("fact_ids", [])
+        ]
+        references += [
+            evidence_reference(key, "passage", supplied["evidence"][key]["text"])
+            for key in decision.get("evidence_ids", [])
+        ]
+        if status != "contradicted":
+            support.extend(references)
+        entry = unverified_finding(
+            finding,
+            decision["reason_code"],
+            supporting=support,
+            contradicting=references if status == "contradicted" else [],
+            checks=[
+                {"name": "format", "status": "passed"},
+                {"name": "citation", "status": "passed" if citation_valid else "not-run"},
+                {
+                    "name": "remediation",
+                    "status": "failed" if decision["neutralize_fix"] else "not-run",
+                },
+                {
+                    "name": "verification",
+                    "status": "not-run"
+                    if status == _UNCHECKED
+                    else "failed"
+                    if status == "contradicted"
+                    else "passed",
+                },
+            ],
+        )
+        (disproved if status == "contradicted" else unchecked).append(entry)
+        print(
+            json.dumps(
+                {
+                    "event": "finding_verification_disposition",
+                    "finding_id": _log_id(fid),
+                    "concern": _log_id(finding.get("concern")),
+                    "category": _log_id(finding.get("category")),
+                    "status": status,
+                    "reason_code": decision["reason_code"],
+                }
+            )
+        )
     counts = dict(
         state.get("model_output_counts")
         or {"attempted": len(candidates), "accepted": len(candidates), "rejected": 0}
     )
-    counts["accepted"] -= suppressed
-    counts["rejected"] += suppressed
-    status = "incomplete" if unverified else "complete"
+    counts["accepted"] = max(0, counts["accepted"] - moved)
+    counts["rejected"] += moved
+    metadata = {
+        "version": VERIFIER_VERSION,
+        "status": "incomplete" if failed else "complete",
+        "attempted": len(candidates),
+        "retained": len(candidates),
+        "suppressed": 0,
+        "unverified": failed,
+        "disproved": contradicted,
+        "sectioned": moved,
+        "fixes_neutralized": fixes,
+        "findings": checks,
+    }
     print(
         json.dumps(
             {
                 "event": "finding_verification_result",
-                "version": VERIFIER_VERSION,
-                "status": status,
-                "attempted": len(candidates),
-                "retained": len(candidates) - suppressed,
-                "unverified": unverified,
-                "fixes_neutralized": fixes,
+                **{k: v for k, v in metadata.items() if k != "findings"},
             }
         )
     )
     return {
         **state,
         "reasoned_findings": retained,
+        "unverified_findings": unchecked,
+        "disproved_findings": disproved,
         "model_output_counts": counts,
-        "additional_verification": {
-            "version": VERIFIER_VERSION,
-            "status": status,
-            "attempted": len(candidates),
-            "retained": len(candidates) - suppressed,
-            "suppressed": suppressed,
-            "unverified": unverified,
-            "fixes_neutralized": fixes,
-            "findings": checks,
-        },
+        "additional_verification": metadata,
     }

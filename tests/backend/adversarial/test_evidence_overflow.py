@@ -122,7 +122,9 @@ resource "aws_db_instance" "{name}" {{
         pytest.param(MAX_RESOURCES - 1, "zzz_public", False, True, id="F10-S-79"),
         pytest.param(MAX_RESOURCES, "zzz_public", False, True, id="F10-S-80"),
         pytest.param(MAX_RESOURCES + 1, "zzz_public", True, False, id="F10-S-81"),
-        pytest.param(MAX_RESOURCES + 1, "aaa_public", True, True, id="F10-S-81-renamed"),
+        pytest.param(
+            MAX_RESOURCES + 1, "aaa_public", True, True, id="F10-S-81-renamed"
+        ),
     ],
 )
 def test_summary_bound(
@@ -286,7 +288,9 @@ def test_real_trivy_over_the_result_bound(tmp_path) -> None:
     scan_list = extract_archive(str(archive), str(tmp_path / "scan"))
     scanner = scan_files(str(tmp_path / "scan"), sorted(scan_list), TRIVY)
     assert scanner["status"] == "ok"
-    assert len(scanner["results"]) == MAX_RESULTS, len(scanner["results"])
+    assert len(scanner["results"]) > MAX_RESULTS
+    assert scanner["results_total"] == len(scanner["results"])
+    assert scanner["truncated"] is False
     findings = [f.finding for f in run_rules(parsed, "b", scanner=scanner)]
     disclosed = any("truncat" in k for k in scanner)
     kept_rds = any("ledger" in f and "publicly accessible" in f for f in findings)

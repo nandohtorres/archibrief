@@ -84,6 +84,7 @@ def assemble_evidence_ledger(
     baseline_answers: list[dict[str, Any]] | None = None,
     terraform_resources: dict[str, Any] | None = None,
     unverified: list[dict] | None = None,
+    disproved: list[dict] | None = None,
 ) -> dict[str, Any]:
     by_category: dict[str, list[dict]] = {}
     for f in findings:
@@ -104,6 +105,7 @@ def assemble_evidence_ledger(
         "generated_at": datetime.now(UTC).isoformat(),
         "finding_count": len(findings),
         "unverified_findings": unverified_findings(unverified),
+        "disproved_findings": unverified_findings(disproved),
         "findings_by_category": by_category,
         "findings": [f.model_dump(mode="json") for f in findings],
     }
@@ -135,6 +137,7 @@ def handler(event, context):
         baseline_answers,
         event.get("terraform_resources"),
         event.get("unverified_findings"),
+        event.get("disproved_findings"),
     )
     ledger["analysis_quality"] = public_analysis_quality(event.get("analysis_quality"))
     # The report's diagram (rule_engine/architecture.py), when there is one.

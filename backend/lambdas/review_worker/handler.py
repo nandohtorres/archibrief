@@ -207,6 +207,7 @@ def handler(event: dict, context: object) -> dict:
     # The claim submit_review reserved for this run.
     operation = "initial"
     stage = "admission"
+    claimed = paid_started = False
     try:
         if not paid_work_allowed():
             return _fail_unpaid(table, review_id, "paused", operation)
@@ -223,6 +224,7 @@ def handler(event: dict, context: object) -> dict:
                 ":pending": "pending",
             },
         )
+        claimed = True
         submission = _read_json(s3, review["inputKey"])
         if request_digest(submission) != review["inputDigest"]:
             return _fail_unpaid(table, review_id, "invalid_submission", operation)
@@ -238,6 +240,7 @@ def handler(event: dict, context: object) -> dict:
                 code = "invalid_archive"
             return _fail_unpaid(table, review_id, code, operation, ingest.get("scope_failure"))
         if ingest.get("status") == "blocked":
+            paid_started = True
             # Guardrails, which is billed, has already run.
             return _fail(table, review_id, "input_blocked")
         if ingest.get("status") != "parsed":
@@ -281,6 +284,7 @@ def handler(event: dict, context: object) -> dict:
         model_outcome = "not_invoked"
         budget_reason = None
         runtime_payload = None
+        budget_fallback = False
         if agent_wait is not None:
             try:
                 runtime_payload = prepare_operation(
@@ -303,45 +307,52 @@ def handler(event: dict, context: object) -> dict:
                 envelope = _request_envelope(runtime_payload, reservation)
                 record_request_envelope(runtime_payload, envelope)
             except RequestBudgetExceeded as exc:
-                return _fail_unpaid(table, review_id, exc.code, operation)
+                if exc.code not in {"token_count_unavailable", "analysis_cost_limit_exceeded"}:
+                    return _fail_unpaid(table, review_id, exc.code, operation)
+                budget_fallback = model_unavailable = True
+                budget_reason = exc.code
+                agent = {"status": "complete", "findings": rules["findings"]}
             except AdmissionDenied as exc:
                 return _fail_unpaid(table, review_id, exc.code, operation)
-            # From this point a screen may have billed. Never refund on error.
+            if not budget_fallback:
+                # From this point a screen may have billed. Never refund on error.
+                paid_started = True
+                try:
+                    allowed = screen_review(runtime_payload)
+                except Exception:  # noqa: BLE001 - ambiguous screening fails, never retries or certifies
+                    return _fail(table, review_id, "input_screen_unavailable")
+                state["ingest"]["guardrails_decisions"] = [
+                    {"stage": "pre_retrieval", "allowed": allowed}
+                ]
+                if not allowed:
+                    return _fail(table, review_id, "input_blocked")
+        if not budget_fallback:
             try:
-                allowed = screen_review(runtime_payload)
-            except Exception:  # noqa: BLE001 - ambiguous screening fails, never retries or certifies
-                return _fail(table, review_id, "input_screen_unavailable")
-            state["ingest"]["guardrails_decisions"] = [
-                {"stage": "pre_retrieval", "allowed": allowed}
-            ]
-            if not allowed:
-                return _fail(table, review_id, "input_blocked")
-        try:
-            agent_wait = _agent_read_timeout(context)
-            if agent_wait is None:
-                raise TimeoutError("not enough Lambda time left for the model")
-            model_outcome = "unknown"
-            agent = AgentCoreRuntimeClient(
-                agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
-                read_timeout_seconds=agent_wait,
-            ).invoke(
-                payload=runtime_payload,
-                runtime_session_id=f"archibrief-review-session-{review_id}-0",
-            )
-            if agent.get("status") == "admission_denied":
-                return _fail(table, review_id, "scope_manifest_required")
-            model_outcome = agent.get("model_outcome", "completed")
-            budget_reason = agent.get("budget_reason")
-        except AdmissionDenied as exc:
-            return _fail(table, review_id, exc.code)
-        except Exception as exc:  # noqa: BLE001 - any model failure falls back to the rules
-            # The rule and scanner findings are final before the model
-            # starts, so a model timeout or error still yields a report,
-            # marked as deterministic findings only, instead of nothing.
-            # Never retried: a second attempt would be a second paid call.
-            print(json.dumps({"event": "reasoning_unavailable", "kind": type(exc).__name__}))
-            model_unavailable = True
-            agent = {"status": "complete", "findings": rules["findings"]}
+                agent_wait = _agent_read_timeout(context)
+                if agent_wait is None:
+                    raise TimeoutError("not enough Lambda time left for the model")
+                model_outcome = "unknown"
+                agent = AgentCoreRuntimeClient(
+                    agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
+                    read_timeout_seconds=agent_wait,
+                ).invoke(
+                    payload=runtime_payload,
+                    runtime_session_id=f"archibrief-review-session-{review_id}-0",
+                )
+                if agent.get("status") == "admission_denied":
+                    return _fail(table, review_id, "scope_manifest_required")
+                model_outcome = agent.get("model_outcome", "completed")
+                budget_reason = agent.get("budget_reason")
+            except AdmissionDenied as exc:
+                return _fail(table, review_id, exc.code)
+            except Exception as exc:  # noqa: BLE001 - any model failure falls back to the rules
+                # The rule and scanner findings are final before the model
+                # starts, so a model timeout or error still yields a report,
+                # marked as deterministic findings only, instead of nothing.
+                # Never retried: a second attempt would be a second paid call.
+                print(json.dumps({"event": "reasoning_unavailable", "kind": type(exc).__name__}))
+                model_unavailable = True
+                agent = {"status": "complete", "findings": rules["findings"]}
         if agent.get("status") == "needs_clarification":
             # No field pauses any more (submit_review requires the
             # regulatory answer), so this would be a preflight policy bug.
@@ -351,7 +362,11 @@ def handler(event: dict, context: object) -> dict:
             "validate",
             {
                 "findings": agent["findings"],
-                "unverified_findings": agent.get("unverified_findings", []),
+                "unverified_findings": [
+                    *rules.get("unverified_findings", []),
+                    *agent.get("unverified_findings", []),
+                ],
+                "disproved_findings": agent.get("disproved_findings", []),
             },
         )
         quality = build_analysis_quality(
@@ -392,6 +407,7 @@ def handler(event: dict, context: object) -> dict:
                 "review_id": review_id,
                 "findings": validated["valid_findings"],
                 "unverified_findings": validated.get("unverified_findings", []),
+                "disproved_findings": validated.get("disproved_findings", []),
                 "analysis_quality": quality,
                 "workload_brief": state["workload_brief"],
                 "preflight_fields": agent.get("preflight_fields", {}),
@@ -428,3 +444,12 @@ def handler(event: dict, context: object) -> dict:
             )
         )
         return _fail(table, review_id, "internal_error")
+
+    finally:
+        if claimed and not paid_started:
+            try:
+                release_operation(review_id, operation)
+            except Exception as exc:  # noqa: BLE001 - cleanup must not hide the report result.
+                print(
+                    json.dumps({"event": "reservation_release_failed", "kind": type(exc).__name__})
+                )

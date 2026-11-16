@@ -113,6 +113,7 @@ export function buildReportExport(
   return {
     ...rest,
     unverified_findings: publicUnverified(report.unverified_findings),
+    disproved_findings: publicUnverified(report.disproved_findings),
     findings,
     public_text_policy: {
       version: MONEY_POLICY_VERSION,

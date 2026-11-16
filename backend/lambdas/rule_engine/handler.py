@@ -57,6 +57,7 @@ from backend.shared.trivy_checks import (
     TRIVY_OWNED_CONCERNS,
     TRUSTED_CHECKS,
 )
+from backend.shared.unverified import unverified_finding
 
 RULE_VERSION = "rule_engine@2026-11-16a"
 
@@ -1584,7 +1585,13 @@ def _scanner_unavailable(review_id: str) -> Finding:
     )
 
 
-def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list[Finding]:
+def run_rules(
+    parsed: dict,
+    review_id: str,
+    scanner: dict | None = None,
+    *,
+    unverified: list[dict] | None = None,
+) -> list[Finding]:
     """ArchiBrief's rules, plus Trivy's trusted results when the Scan step ran.
 
     scanner=None means no scan step was involved (unit tests, local runs);
@@ -1605,10 +1612,38 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
             key = result.get("resource_key", "")
             if result.get("scope") == "module" or result.get("module_origin") or "/" in key:
                 module_scan_partial = True
+                if unverified is not None:
+                    check = TRUSTED_CHECKS.get(result.get("check_id"))
+                    unverified.append(
+                        unverified_finding(
+                            {
+                                "finding": "Scan result could not be attributed to a resource instance",
+                                "evidence": f"Check {display_name(result.get('check_id', 'unknown'))} for {display_name(str(key))}",
+                                "category": check.category if check else "observability",
+                                "concern": check.concern if check else None,
+                            },
+                            "unattributed_scan",
+                            checks=[{"name": "attribution", "status": "failed"}],
+                        )
+                    )
                 continue
             body = parsed.get("resources", {}).get(result.get("resource_type"), {}).get(key)
             if not isinstance(body, dict) or not is_created(body, parsed):
                 module_scan_partial = True
+                if unverified is not None:
+                    check = TRUSTED_CHECKS.get(result.get("check_id"))
+                    unverified.append(
+                        unverified_finding(
+                            {
+                                "finding": "Scan result could not be attributed to a resource instance",
+                                "evidence": f"Check {display_name(result.get('check_id', 'unknown'))} for {display_name(str(key))}",
+                                "category": check.category if check else "observability",
+                                "concern": check.concern if check else None,
+                            },
+                            "unattributed_scan",
+                            checks=[{"name": "attribution", "status": "failed"}],
+                        )
+                    )
                 continue
             retained.append(result)
         scanner = {**scanner, "results": retained}
@@ -1653,6 +1688,16 @@ def run_rules(parsed: dict, review_id: str, scanner: dict | None = None) -> list
                 and names.intersection(re.findall(r"'([^']+)'", own.finding))
                 for own in findings
             ):
+                findings.append(finding)
+            elif unverified is not None:
+                unverified.append(
+                    unverified_finding(
+                        finding.model_dump(mode="json"),
+                        "duplicate_finding",
+                        checks=[{"name": "duplicate", "status": "failed"}],
+                    )
+                )
+            else:
                 findings.append(finding)
         if scanner.get("truncated", False):
             findings.append(
@@ -1754,10 +1799,12 @@ def safe_graph(parsed: dict) -> dict | None:
 def handler(event, context):
     parsed = load_parsed(event)
     review_id = event["review_id"]
-    findings = run_rules(parsed, review_id, scanner=event.get("scanner"))
+    unverified = []
+    findings = run_rules(parsed, review_id, scanner=event.get("scanner"), unverified=unverified)
     return {
         "status": "complete",
         "rule_version": RULE_VERSION,
+        "unverified_findings": unverified,
         "findings": [f.model_dump(mode="json") for f in findings],
         "resource_summary": build_resource_summary(parsed),
         # Resources and references only; Finalize places the findings.

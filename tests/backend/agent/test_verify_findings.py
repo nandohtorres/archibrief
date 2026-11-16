@@ -130,12 +130,13 @@ def test_off_does_not_dispatch_and_supported_pass_cannot_rewrite_findings():
 def test_invalid_or_partial_response_retains_original_findings(response):
     value = state(response)
     result = verify_findings_node(value)
-    assert result["reasoned_findings"] == value["reasoned_findings"]
+    assert [f["finding_id"] for f in result["reasoned_findings"]] == ["rule"]
+    assert len(result["unverified_findings"]) == len(value["reasoned_findings"]) - 1
     assert result["additional_verification"]["status"] == "incomplete"
     assert result["model_output_counts"] == {
         "attempted": 1,
-        "accepted": 1,
-        "rejected": 0,
+        "accepted": 0,
+        "rejected": 1,
     }
     assert value["reasoning_client"].calls == 1
 
@@ -152,17 +153,17 @@ def test_detection_and_fix_verdicts_are_independent(change):
     value = state({"verdicts": [verdict(**change)]})
     original = deepcopy(value["reasoned_findings"])
     result = verify_findings_node(value)
-    if change.get("verdict") == "contradicted":
-        assert len(result["reasoned_findings"]) == 1
-        assert result["additional_verification"]["suppressed"] == 1
-    else:
-        assert len(result["reasoned_findings"]) == 2
-        assert result["reasoned_findings"][1]["finding_id"] == original[1]["finding_id"]
-        if change.get("remediation_applicable") is False:
-            assert "Confirm a safe" in result["reasoned_findings"][1]["recommendation"]
-            assert result["additional_verification"]["fixes_neutralized"] == 1
-        else:
-            assert result["reasoned_findings"] == original
+    section = (
+        "disproved_findings"
+        if change.get("verdict") == "contradicted"
+        else "unverified_findings"
+    )
+    assert len(result["reasoned_findings"]) == 1
+    assert result[section][0]["finding_id"] == original[1]["finding_id"]
+    assert result["additional_verification"]["suppressed"] == 0
+    assert "recommendation" not in result[section][0]
+    if section == "disproved_findings":
+        assert result[section][0]["contradicting_evidence"]
 
 
 def test_cross_finding_evidence_and_injection_do_not_change_protocol():
@@ -196,7 +197,7 @@ def test_verifier_exhaustion_preserves_rules_without_a_call():
     value["generation_budget"].deadline = -1
     result = verify_findings_node(value)
     assert result["additional_verification"]["status"] == "incomplete"
-    assert result["model_output_counts"]["accepted"] == 1
+    assert result["model_output_counts"]["accepted"] == 0
     assert value["reasoning_client"].calls == 0
 
 
@@ -254,12 +255,12 @@ def test_bad_verdict_does_not_invalidate_valid_sibling_verdict(capsys):
     value["reasoned_findings"].append(second)
     value["model_output_counts"] = {"attempted": 2, "accepted": 2, "rejected": 0}
     result = verify_findings_node(value)
-    assert [f["finding_id"] for f in result["reasoned_findings"]] == ["rule", "ai"]
+    assert [f["finding_id"] for f in result["reasoned_findings"]] == ["rule"]
     assert result["additional_verification"]["status"] == "incomplete"
     assert result["model_output_counts"] == {
         "attempted": 2,
-        "accepted": 1,
-        "rejected": 1,
+        "accepted": 0,
+        "rejected": 2,
     }
     logs = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     removed = next(row for row in logs if row.get("finding_id") == "ai2")
@@ -275,15 +276,10 @@ def test_safe_detection_with_bad_fix_preserves_detection_and_neutralizes_both_ac
         plain={"action": "Unsafe action", "title": "A real issue"},
     )
     result = verify_findings_node(value)
-    assert (
-        result["reasoned_findings"][1]["finding"]
-        == "A genuine configuration defect in aws_s3_bucket.a"
-    )
-    assert (
-        result["reasoned_findings"][1]["plain"]["action"]
-        == result["reasoned_findings"][1]["recommendation"]
-    )
-    assert "Unsafe action" not in json.dumps(result["reasoned_findings"])
+    entry = result["unverified_findings"][0]
+    assert entry["finding"] == "A genuine configuration defect in aws_s3_bucket.a"
+    assert entry["recommendation_withheld"] is True
+    assert "Unsafe action" not in json.dumps(entry)
     assert value["reasoned_findings"][1]["recommendation"] == "Unsafe action"
 
 
@@ -303,7 +299,8 @@ def test_candidate_limit_is_fail_open_and_never_dispatches():
         extra["finding_id"] = f"extra{i}"
         value["reasoned_findings"].append(extra)
     result = verify_findings_node(value)
-    assert result["reasoned_findings"] == value["reasoned_findings"]
+    assert [f["finding_id"] for f in result["reasoned_findings"]] == ["rule"]
+    assert len(result["unverified_findings"]) == len(value["reasoned_findings"]) - 1
     assert result["additional_verification"]["status"] == "incomplete"
     assert value["reasoning_client"].calls == 0
 

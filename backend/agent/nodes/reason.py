@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
+from collections import Counter
 
 from pydantic import ValidationError
 
@@ -51,7 +52,7 @@ from backend.shared.recommendation_checks import (
 from backend.shared.sanitize import clip, normalize_text
 from backend.shared.stakeholder.catalog import HARMS, RECIPES, SEVERITIES, infer_concern
 from backend.shared.stakeholder.pricing import PRICE_ITEM_KEYS
-from backend.shared.unverified import MAX_UNVERIFIED, unverified_finding
+from backend.shared.unverified import evidence_reference, unverified_finding
 
 # What a model finding's fix may add. Shield Advanced ($3,000/month) is
 # left out: a figure that size only comes from a hand-written recipe.
@@ -876,6 +877,7 @@ def verify_model_findings(
 
     failures: list[str] = []
     findings: list[Finding] = []
+    citations = {}
     for index, item in enumerate(raw_findings):
         if not isinstance(item, dict):
             failures.append(f"finding[{index}]: expected an object")
@@ -897,6 +899,7 @@ def verify_model_findings(
             # rest of the batch
             continue
 
+        citations[index] = citation
         if recommends_vpc_for_function_url(
             " ".join(str(item.get(k) or "") for k in ("finding", "evidence")),
             str(item.get("recommendation") or ""),
@@ -999,9 +1002,52 @@ def verify_model_findings(
             if not match:
                 continue
             index = int(match.group(1))
-            if index not in seen and len(unverified) < MAX_UNVERIFIED:
+            if index not in seen:
                 seen.add(index)
-                unverified.append(unverified_finding(raw_findings[index], rejection_kind(failure)))
+                code = rejection_kind(failure)
+                citation = citations.get(index)
+                support = (
+                    [
+                        evidence_reference(
+                            citation.chunk_id or "source", "passage", citation.exact_text_span
+                        )
+                    ]
+                    if citation
+                    else []
+                )
+                fix_failed = code in {
+                    "wrong_fix",
+                    "unsupported_remediation",
+                    "remediation_contradiction",
+                    "rule_owned_remediation",
+                }
+                checks = [
+                    {
+                        "name": "citation",
+                        "status": "passed"
+                        if index in citations
+                        else "failed"
+                        if code
+                        in {
+                            "chunk_not_retrieved",
+                            "quote_not_in_chunk",
+                            "quote_missing",
+                            "chunk_missing",
+                            "citation_on_uncited_type",
+                        }
+                        else "not-run",
+                    },
+                    {
+                        "name": "format",
+                        "status": "failed"
+                        if code in {"invalid_type", "invalid_fields", "rule_type_from_model"}
+                        else "not-run",
+                    },
+                    {"name": "remediation", "status": "failed" if fix_failed else "not-run"},
+                ]
+                unverified.append(
+                    unverified_finding(raw_findings[index], code, checks=checks, supporting=support)
+                )
     return findings, failures
 
 
@@ -1067,7 +1113,19 @@ def reason_node(state: dict) -> dict:
         review_id=state.get("review_id"),
     )
 
+    emitted = list(raw_findings)
     raw_findings, capped = keep_most_severe(raw_findings)
+    selected = Counter(id(item) for item in raw_findings)
+    overflow = []
+    for item in emitted:
+        if selected[id(item)]:
+            selected[id(item)] -= 1
+        else:
+            overflow.append(
+                unverified_finding(
+                    item, "model_limit", checks=[{"name": "limit", "status": "failed"}]
+                )
+            )
 
     # Verified findings are kept even if others in the batch fail; failed
     # ones are isolated without actionable fixes so the review can show
@@ -1091,7 +1149,17 @@ def reason_node(state: dict) -> dict:
             else []
         ),
     )
-    findings = resolve_rule_findings(rule_findings) + model_findings
+    rules = []
+    for raw in rule_findings:
+        try:
+            rules.append(Finding.model_validate(raw))
+        except (ValidationError, TypeError):
+            unverified.append(
+                unverified_finding(
+                    raw, "invalid_fields", checks=[{"name": "format", "status": "failed"}]
+                )
+            )
+    findings = rules + model_findings
     rejected: dict[str, int] = {}
     for failure in dropped:
         kind = rejection_kind(failure)
@@ -1114,7 +1182,7 @@ def reason_node(state: dict) -> dict:
         **state,
         "reasoned_findings": [f.model_dump(mode="json") for f in findings],
         "dropped_model_findings": dropped,
-        "unverified_findings": unverified,
+        "unverified_findings": [*state.get("unverified_findings", []), *unverified, *overflow],
         "model_output_counts": {
             "attempted": len(raw_findings),
             "accepted": len(model_findings),

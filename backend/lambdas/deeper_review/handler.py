@@ -72,7 +72,7 @@ def handler(event: dict, _context: object) -> dict:
     if not ledger.get("workload_brief"):
         return _response(409, {"error": "original workload brief unavailable"})
     try:
-        eligible_parent(rid, ledger.get("review_scope"))
+        eligible_parent(rid, ledger.get("review_scope"), review=review)
     except AdmissionDenied as exc:
         if exc.code == "admission_unavailable":
             return _response(503, {"error": exc.code})

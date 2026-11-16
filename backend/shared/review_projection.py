@@ -1,7 +1,7 @@
 """Read projection of immutable base evidence plus durable deeper findings.
 
-All report consumers use this assembly after authorization. Invalid children
-are excluded with a visible count; storage read failures fail the request.
+All report consumers use this assembly after authorization. Invalid authorized
+children move to the unchecked section; storage read failures fail the request.
 No mutation of the original S3 ledger is needed.
 """
 
@@ -20,7 +20,7 @@ from backend.shared.clients import DynamoDBClient
 from backend.shared.deeper_jobs import public_job
 from backend.shared.models.finding import Finding
 from backend.shared.retention import review_is_live
-from backend.shared.unverified import MAX_UNVERIFIED, unverified_findings
+from backend.shared.unverified import unverified_finding, unverified_findings
 
 
 def assemble_current_ledger(
@@ -33,6 +33,7 @@ def assemble_current_ledger(
 ) -> dict[str, Any]:
     current = copy.deepcopy(ledger)
     unverified = unverified_findings(current.get("unverified_findings"))
+    disproved = unverified_findings(current.get("disproved_findings"))
     base = current.get("findings") or []
     known = {f["finding_id"] for f in base}
     parents = set(known)
@@ -50,8 +51,10 @@ def assemble_current_ledger(
                 jobs.append(public_job(item, now))
             continue
         if item.get("kind") == "deeper-result":
-            if item.get("reviewId") == review_id and item.get("parent_finding_id") in parents:
+            if item.get("reviewId") == review_id:
                 unverified.extend(unverified_findings(item.get("unverified_findings")))
+                disproved.extend(unverified_findings(item.get("disproved_findings")))
+            if item.get("reviewId") == review_id and item.get("parent_finding_id") in parents:
                 runs[item["parent_finding_id"]] = public_analysis_quality(
                     item.get("analysis_quality")
                 )
@@ -64,18 +67,28 @@ def assemble_current_ledger(
         try:
             finding = Finding.model_validate(item)
         except (ValidationError, TypeError):
+            if item.get("reviewId") == review_id and item.get("review_id") in (None, review_id):
+                unverified.append(
+                    unverified_finding(
+                        item, "invalid_fields", checks=[{"name": "format", "status": "failed"}]
+                    )
+                )
             excluded += 1
             continue
         if (
             item.get("reviewId") != review_id
             or finding.review_id != review_id
             or item.get("findingId") != finding.finding_id
-            or finding.parent_finding_id not in parents
             or finding.depth_level.value != "deep"
         ):
             excluded += 1
             continue
+        if finding.parent_finding_id not in parents:
+            unverified.append(unverified_finding(item, "parent_unverified"))
+            excluded += 1
+            continue
         if finding.finding_id in known:
+            unverified.append(unverified_finding(item, "duplicate_finding"))
             continue
         known.add(finding.finding_id)
         accepted.append(finding.model_dump(mode="json"))
@@ -95,11 +108,13 @@ def assemble_current_ledger(
     }
     if incomplete:
         removed = [finding for finding in accepted if finding["parent_finding_id"] in incomplete]
+        unverified.extend(unverified_finding(f, "incomplete_batch") for f in removed)
         excluded += max(1, len(removed))
         accepted = [
             finding for finding in accepted if finding["parent_finding_id"] not in incomplete
         ]
-    current["unverified_findings"] = unverified[:MAX_UNVERIFIED]
+    current["unverified_findings"] = unverified
+    current["disproved_findings"] = disproved
     current["findings"] = [
         *base,
         *sorted(accepted, key=lambda finding: (finding["created_at"], finding["finding_id"])),
