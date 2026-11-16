@@ -332,7 +332,20 @@ def verdict_decisions(result: object, supplied: dict) -> dict:
             continue
         try:
             decisions[fid] = _one_verdict(items[0], candidates[fid], supplied)
-        except (ValueError, TypeError, KeyError):
+        except (ValueError, TypeError, KeyError) as exc:
+            # Which check failed (fixed strings from _one_verdict); no model text.
+            print(
+                json.dumps(
+                    {
+                        "event": "finding_verification_invalid_verdict",
+                        "finding_id": _log_id(fid),
+                        "check": str(exc)[:60],
+                        "verdict": str(items[0].get("verdict"))[:30]
+                        if isinstance(items[0], dict)
+                        else None,
+                    }
+                )
+            )
             decisions[fid] = _unchecked("invalid_verdict")
     return decisions
 
