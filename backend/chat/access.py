@@ -43,7 +43,19 @@ def transcript_item(item: dict[str, Any]) -> dict[str, Any]:
     saved answers too. The stored item and its metering fields are not
     changed."""
     answer, removed, omitted = public_answer(item.get("answer") or [])
+    unsupported, note_removed, note_omitted = public_answer(
+        [
+            {"text": text[:400], "citations": []}
+            for text in (
+                item.get("unsupported") if isinstance(item.get("unsupported"), list) else []
+            )[:12]
+            if isinstance(text, str)
+        ]
+    )
+    removed += note_removed
+    omitted += note_omitted
     return {
+        "unsupported": [entry["text"] for entry in unsupported],
         "question_id": item["questionKey"].split("#", 1)[1],
         "kind": item.get("kind", "custom"),
         "suggested_id": item.get("suggestedId"),

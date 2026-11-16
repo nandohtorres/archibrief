@@ -18,6 +18,7 @@ from backend.shared.architecture_links import link_findings
 from backend.shared.clients import DynamoDBClient, S3Client
 from backend.shared.models.finding import Finding
 from backend.shared.retention import review_expires_at
+from backend.shared.unverified import unverified_findings
 
 MAX_DYNAMODB_ITEM_BYTES = 400 * 1024
 
@@ -82,6 +83,7 @@ def assemble_evidence_ledger(
     workload_brief: str | None = None,
     baseline_answers: list[dict[str, Any]] | None = None,
     terraform_resources: dict[str, Any] | None = None,
+    unverified: list[dict] | None = None,
 ) -> dict[str, Any]:
     by_category: dict[str, list[dict]] = {}
     for f in findings:
@@ -101,6 +103,7 @@ def assemble_evidence_ledger(
         "terraform_resources": terraform_resources,
         "generated_at": datetime.now(UTC).isoformat(),
         "finding_count": len(findings),
+        "unverified_findings": unverified_findings(unverified),
         "findings_by_category": by_category,
         "findings": [f.model_dump(mode="json") for f in findings],
     }
@@ -131,6 +134,7 @@ def handler(event, context):
         event.get("workload_brief"),
         baseline_answers,
         event.get("terraform_resources"),
+        event.get("unverified_findings"),
     )
     ledger["analysis_quality"] = public_analysis_quality(event.get("analysis_quality"))
     # The report's diagram (rule_engine/architecture.py), when there is one.

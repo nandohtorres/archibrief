@@ -21,7 +21,7 @@ import { formatFindingId, type ReportSource } from "@/lib/workflow";
 import type { ReviewerNote } from "@/lib/demos";
 import { notesForTurn } from "@/lib/report-review";
 import { MONEY_NOTE, QUOTE_OMITTED_NOTE } from "@/lib/money-policy";
-import { publicParagraph } from "@/lib/public-projection";
+import { publicParagraph, publicTurn } from "@/lib/public-projection";
 
 interface ReportQuestionsProps {
   reviewId: string;
@@ -500,6 +500,17 @@ function ChatExchange({
               preview={preview}
             />
           ))}
+          {publicTurn(turn).turn.unsupported?.length ? (
+            <aside className="unable-to-verify" aria-label="Unsupported answer statements">
+              <strong>Unsupported</strong>
+              <p>
+                The reference check could not confirm these statements. Check them before acting.
+              </p>
+              {publicTurn(turn).turn.unsupported?.map((text, index) => (
+                <p key={index}>{text}</p>
+              ))}
+            </aside>
+          ) : null}
         </div>
       </article>
     </>

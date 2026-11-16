@@ -1,3 +1,4 @@
+import { publicUnverified } from "./unverified";
 import type { ChatTurn, FindingType, ReportFinding, ReviewReport } from "./contracts";
 import type { DemoEntry, ReviewerNote } from "./demos";
 import { assessmentFor } from "./assessment";
@@ -105,6 +106,7 @@ export function buildReportExport(
   });
   return {
     ...rest,
+    unverified_findings: publicUnverified(report.unverified_findings),
     findings,
     public_text_policy: {
       version: MONEY_POLICY_VERSION,

@@ -51,6 +51,7 @@ from backend.shared.recommendation_checks import (
 from backend.shared.sanitize import clip, normalize_text
 from backend.shared.stakeholder.catalog import HARMS, RECIPES, SEVERITIES, infer_concern
 from backend.shared.stakeholder.pricing import PRICE_ITEM_KEYS
+from backend.shared.unverified import MAX_UNVERIFIED, unverified_finding
 
 # What a model finding's fix may add. Shield Advanced ($3,000/month) is
 # left out: a figure that size only comes from a hand-written recipe.
@@ -603,6 +604,8 @@ def log_input_size(review_id: str | None, content: dict, user_content: str) -> N
 # Why a model finding failed verification, by the start of its failure
 # message. Logged as counts only: the messages quote model text.
 _REJECTION_KINDS = (
+    ("expected an object", "invalid_fields"),
+    ("invalid citation field type", "invalid_fields"),
     ("is not in the retrieved evidence set", "chunk_not_retrieved"),
     ("exact_quote does not appear", "quote_not_in_chunk"),
     ("requires a non-empty string exact_quote", "quote_missing"),
@@ -850,6 +853,7 @@ def verify_model_findings(
     terraform_resources: dict | None = None,
     depth_level: str = "lightweight",
     authoritative_rule_findings: list[dict] | None = None,
+    unverified: list[dict] | None = None,
 ) -> tuple[list[Finding], list[str]]:
     """Returns (verified findings, failure reasons). An item that fails
     citation or shape verification is excluded, never relaxed.
@@ -988,6 +992,16 @@ def verify_model_findings(
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
             failures.append(f"finding[{index}]: failed to build a valid Finding: {exc}")
 
+    if unverified is not None:
+        seen = set()
+        for failure in failures:
+            match = re.match(r"finding\[(\d+)\]", failure)
+            if not match:
+                continue
+            index = int(match.group(1))
+            if index not in seen and len(unverified) < MAX_UNVERIFIED:
+                seen.add(index)
+                unverified.append(unverified_finding(raw_findings[index], rejection_kind(failure)))
     return findings, failures
 
 
@@ -1056,10 +1070,12 @@ def reason_node(state: dict) -> dict:
     raw_findings, capped = keep_most_severe(raw_findings)
 
     # Verified findings are kept even if others in the batch fail; failed
-    # ones are dropped (never relaxed) and reported so the review can show
+    # ones are isolated without actionable fixes so the review can show
     # its model coverage was incomplete.
+    unverified = []
     model_findings, dropped = verify_model_findings(
         raw_findings=raw_findings,
+        unverified=unverified,
         review_id=state["review_id"],
         model_id=reasoning_client.model_id,
         corpus_version=state.get("corpus_version", "unknown"),
@@ -1098,6 +1114,7 @@ def reason_node(state: dict) -> dict:
         **state,
         "reasoned_findings": [f.model_dump(mode="json") for f in findings],
         "dropped_model_findings": dropped,
+        "unverified_findings": unverified,
         "model_output_counts": {
             "attempted": len(raw_findings),
             "accepted": len(model_findings),

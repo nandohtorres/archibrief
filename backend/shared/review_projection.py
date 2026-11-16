@@ -20,6 +20,7 @@ from backend.shared.clients import DynamoDBClient
 from backend.shared.deeper_jobs import public_job
 from backend.shared.models.finding import Finding
 from backend.shared.retention import review_is_live
+from backend.shared.unverified import MAX_UNVERIFIED, unverified_findings
 
 
 def assemble_current_ledger(
@@ -31,6 +32,7 @@ def assemble_current_ledger(
     children_available: bool = True,
 ) -> dict[str, Any]:
     current = copy.deepcopy(ledger)
+    unverified = unverified_findings(current.get("unverified_findings"))
     base = current.get("findings") or []
     known = {f["finding_id"] for f in base}
     parents = set(known)
@@ -49,6 +51,7 @@ def assemble_current_ledger(
             continue
         if item.get("kind") == "deeper-result":
             if item.get("reviewId") == review_id and item.get("parent_finding_id") in parents:
+                unverified.extend(unverified_findings(item.get("unverified_findings")))
                 runs[item["parent_finding_id"]] = public_analysis_quality(
                     item.get("analysis_quality")
                 )
@@ -96,6 +99,7 @@ def assemble_current_ledger(
         accepted = [
             finding for finding in accepted if finding["parent_finding_id"] not in incomplete
         ]
+    current["unverified_findings"] = unverified[:MAX_UNVERIFIED]
     current["findings"] = [
         *base,
         *sorted(accepted, key=lambda finding: (finding["created_at"], finding["finding_id"])),

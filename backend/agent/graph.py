@@ -73,6 +73,7 @@ class ReviewState(TypedDict, total=False):
     deterministic_rule_version: str | None
     reasoned_findings: list[dict]
     # Model findings excluded by citation/shape verification (reason_node).
+    unverified_findings: list[dict]
     dropped_model_findings: list[str]
     model_output_counts: dict[str, int]
     # How many model findings were left out by the per-review cap.

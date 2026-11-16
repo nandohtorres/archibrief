@@ -18,6 +18,7 @@ import type {
   ReportFinding,
   ReviewReport,
 } from "@/lib/contracts";
+import { UnableToVerify } from "./unable-to-verify";
 import { isReviewReport } from "@/lib/contracts";
 import { isArchitectureGraph, type ArchitectureGraph } from "@/lib/architecture";
 import { fetchReview, getApiBaseUrl, requestDeeperFinding } from "@/lib/api";
@@ -760,6 +761,10 @@ export function ReportWorkspace({
             {status}
           </p>
         )}
+      </div>
+
+      <div className="report-content">
+        <UnableToVerify report={report} />
       </div>
 
       {architecture && (

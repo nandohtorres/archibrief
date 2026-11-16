@@ -347,7 +347,13 @@ def handler(event: dict, context: object) -> dict:
             # regulatory answer), so this would be a preflight policy bug.
             return _fail(table, review_id, "internal_error")
         stage = _progress(table, review_id, "validate")
-        validated = _invoke("validate", {"findings": agent["findings"]})
+        validated = _invoke(
+            "validate",
+            {
+                "findings": agent["findings"],
+                "unverified_findings": agent.get("unverified_findings", []),
+            },
+        )
         quality = build_analysis_quality(
             agent.get("model_output_counts"),
             agent["findings"],
@@ -385,6 +391,7 @@ def handler(event: dict, context: object) -> dict:
             {
                 "review_id": review_id,
                 "findings": validated["valid_findings"],
+                "unverified_findings": validated.get("unverified_findings", []),
                 "analysis_quality": quality,
                 "workload_brief": state["workload_brief"],
                 "preflight_fields": agent.get("preflight_fields", {}),

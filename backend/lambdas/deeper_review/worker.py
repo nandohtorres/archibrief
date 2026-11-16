@@ -32,6 +32,7 @@ from backend.shared.scope_admission import (
     prepare_operation,
     record_request_envelope,
 )
+from backend.shared.unverified import MAX_UNVERIFIED, unverified_finding, unverified_findings
 
 AGENT_READ_TIMEOUT_SECONDS = 300
 # Kept back from the Lambda's remaining time to record the outcome.
@@ -218,7 +219,10 @@ def run_job(event: dict, context: object) -> dict:
         if result.get("budget_reason"):
             return _fail(table, rid, fid, jid, result["budget_reason"])
         raw = result["findings"]
-        valid, _rejected = validate_findings(raw)
+        valid, rejected = validate_findings(raw)
+        unverified = unverified_findings(result.get("unverified_findings"))
+        unverified.extend(unverified_finding(item["raw"], "invalid_fields") for item in rejected)
+        unverified = unverified[:MAX_UNVERIFIED]
         quality = build_analysis_quality(
             result.get("model_output_counts"),
             raw,
@@ -262,6 +266,7 @@ def run_job(event: dict, context: object) -> dict:
                 "reviewId": rid,
                 "findingId": f"RESULT#{fid}",
                 "kind": "deeper-result",
+                "unverified_findings": unverified,
                 "parent_finding_id": fid,
                 "finding_ids": [f.finding_id for f in findings],
                 "analysis_quality": quality,

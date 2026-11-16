@@ -141,7 +141,20 @@ export interface BaselineAnswer {
   policy_version: string;
 }
 
+export interface UnverifiedFinding {
+  finding_id: string;
+  finding: string;
+  evidence: string;
+  resource: string;
+  category: string | null;
+  concern: string | null;
+  reason_code: string;
+  reason: string;
+  recommendation_withheld: true;
+}
+
 export interface ReviewReport {
+  unverified_findings?: UnverifiedFinding[];
   review_scope?: {
     version: "review-scope-public@1";
     known_y: number | null;
@@ -385,6 +398,7 @@ export interface ChatTurn {
   status: ChatStatus;
   refusal_reason: string | null;
   answer: ChatParagraph[];
+  unsupported?: string[];
   asked_at: string | null;
   model_id: string | null;
   prompt_version: string | null;

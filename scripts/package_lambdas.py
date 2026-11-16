@@ -54,6 +54,7 @@ _ZIP_FILE_MODE = (0o100644 & 0xFFFF) << 16  # regular file, rw-r--r--
 LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     "review_worker": {
         "sources": [
+            "backend/shared/unverified.py",
             "backend/agent/__init__.py",
             "backend/agent/nodes/__init__.py",
             "backend/agent/nodes/preflight.py",
@@ -151,6 +152,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "get_review": {
         "sources": [
+            "backend/shared/money_policy.py",
+            "backend/shared/unverified.py",
             "backend/shared/model_request_budget.py",
             "backend/shared/review_limits.py",
             "backend/shared/review_scope.py",
@@ -247,6 +250,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "finalize": {
         "sources": [
+            "backend/shared/unverified.py",
             "backend/shared/model_request_budget.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
@@ -289,6 +293,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "deeper_review": {
         "sources": [
+            "backend/shared/money_policy.py",
+            "backend/shared/unverified.py",
             "backend/agent/__init__.py",
             "backend/agent/nodes/__init__.py",
             "backend/agent/nodes/preflight.py",
@@ -346,6 +352,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # Region: an older one wouldn't know the s3vectors client.
     "ask_question": {
         "sources": [
+            "backend/shared/money_policy.py",
+            "backend/shared/unverified.py",
             "backend/shared/model_request_budget.py",
             "backend/shared/review_limits.py",
             "backend/shared/review_scope.py",
@@ -359,7 +367,6 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/agent/nodes/retrieve.py",
             "backend/chat/__init__.py",
             "backend/chat/access.py",
-            "backend/shared/money_policy.py",
             "backend/chat/answer.py",
             "backend/chat/context.py",
             "backend/chat/observe.py",
@@ -393,6 +400,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # Read-only transcript; no model code bundled.
     "list_questions": {
         "sources": [
+            "backend/shared/money_policy.py",
+            "backend/shared/unverified.py",
             "backend/shared/model_request_budget.py",
             "backend/shared/http.py",
             "backend/shared/public_access.py",
@@ -400,7 +409,6 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/__init__.py",
             "backend/chat/__init__.py",
             "backend/chat/access.py",
-            "backend/shared/money_policy.py",
             "backend/chat/context.py",
             "backend/chat/suggested.py",
             "backend/lambdas/__init__.py",
@@ -437,6 +445,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # tests/backend/test_package_lambdas.py keeps these lists honest.
     "validate": {
         "sources": [
+            "backend/shared/unverified.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/validate/__init__.py",
