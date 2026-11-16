@@ -41,6 +41,14 @@ variable "reasoning_model_id" {
   default = "us.anthropic.claude-sonnet-4-6"
 }
 
+variable "verify_findings" {
+  # P3b: a second model call checks each model finding against the supplied
+  # facts and guidance. Contradicted claims move to Disproved and unchecked
+  # ones to Unable to verify; nothing is deleted. Off unless set.
+  type    = bool
+  default = false
+}
+
 variable "reasoning_max_tokens" {
   # Billed per token produced, not per token allowed. A cut-off answer
   # loses every model finding, and a 119-resource review used 6,446 of
