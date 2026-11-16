@@ -38,6 +38,7 @@ from backend.lambdas.rule_engine.hcl_eval import (
     truthy,
 )
 from backend.lambdas.rule_engine.resource_details import inline_ingress_rules
+from backend.lambdas.rule_engine.resource_relationships import boundary_facts
 from backend.lambdas.rule_engine.resource_summary import (
     build_resource_summary,
     copies_of,
@@ -57,7 +58,7 @@ from backend.shared.trivy_checks import (
     TRUSTED_CHECKS,
 )
 
-RULE_VERSION = "rule_engine@2026-11-14"
+RULE_VERSION = "rule_engine@2026-11-15b"
 
 ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}
@@ -662,7 +663,7 @@ def rule_iam_policy_wildcard_action_resource(parsed: dict, review_id: str) -> li
             continue
         name = display_name(key)
         if "*" in grants:
-            text = f"IAM policy '{name}' grants wildcard Action \"*\" on all resources (full admin)"
+            text = f"IAM policy '{name}' grants wildcard Action \"*\" on all resources"
         elif any("NotResource" in grant for grant in grants):
             text = f"IAM policy '{name}' grants broad permissions using a NotResource complement"
         else:
@@ -670,13 +671,27 @@ def rule_iam_policy_wildcard_action_resource(parsed: dict, review_id: str) -> li
         scope = (
             "NotResource exclusions" if any("NotResource" in g for g in grants) else 'Resource "*"'
         )
+        holder = parsed.get("resources", {}).get(resource_type, {}).get(key, {})
+        if resource_type == "aws_iam_role_policy":
+            role = _referenced_key(holder.get("role"), holder, parsed, "aws_iam_role")
+            holder = parsed.get("resources", {}).get("aws_iam_role", {}).get(role, {})
+        boundary = boundary_facts(holder, parsed) if isinstance(holder, dict) else None
+        boundary_note = (
+            f"; permissions boundary {boundary.get('resource', 'reference unresolved')} "
+            f"({boundary['status']}); its presence does not itself establish narrow access"
+            if boundary
+            else ""
+        )
         findings.append(
             _finding(
                 review_id,
                 FindingCategory.IAM,
                 text,
-                f'resource "{resource_type}" "{name}" allows {", ".join(grants)} with {scope}',
-                "Overly broad permissions violate least privilege and widen blast radius on compromise.",
+                f'resource "{resource_type}" "{name}" allows {", ".join(grants)} with {scope}'
+                + boundary_note,
+                "This policy requests broad permissions. Effective access also depends on "
+                "permissions boundaries, explicit denies and other applicable policies; "
+                "a wildcard identity policy alone does not establish effective administrator access.",
                 "Scope the policy to the specific actions and resource ARNs the workload actually needs.",
                 ["AWS Well-Architected: Security Pillar", "SEC03-BP02", "CIS Controls v8: 5.4"],
             )
@@ -1195,8 +1210,18 @@ def rule_sqs_dlq_retention(parsed: dict, review_id: str) -> list[Finding]:
                 "A failed message keeps its original enqueue time, so one that waited in the "
                 "source queue can expire from the dead-letter queue almost at once: the failure "
                 "is lost before anyone can look at it.",
-                f"Set the dead-letter queue's message_retention_seconds longer than {kept} s "
-                "(the SQS maximum is 1209600, 14 days).",
+                (
+                    f"Set the dead-letter queue's message_retention_seconds to 1209600 "
+                    f"(14 days). A daily inspection window needs at least {kept + 86400} s "
+                    f"(source retention {kept} s plus 86400 s for inspection); this is a "
+                    "minimum planning allowance, not a guaranteed response time."
+                    if kept + 86400 <= 1209600
+                    else "The source retention leaves less than one day of inspection "
+                    "headroom within SQS's 1209600 s (14 day) maximum. Do not claim a "
+                    "longer DLQ setting alone fixes this. Plan a shorter source retention "
+                    "only if its processing needs allow it, or preserve failed messages "
+                    "outside the queue, and test the failure-handling process."
+                ),
                 ["AWS Well-Architected: Reliability Pillar", "REL05-BP04"],
             )
         )
@@ -1275,6 +1300,45 @@ def scanner_findings(scanner: dict, parsed: dict, review_id: str) -> list[Findin
             location += f" line {lines[0]}" if len(lines) == 1 else f" lines {lines[0]}-{lines[-1]}"
         details = "; ".join(dict.fromkeys(c.detail for c in checks))
         title = checks[0].title.format(name=name)
+        risk = checks[0].risk
+        if checks[0].concern == "rds_backup_retention" and scope != "module":
+            body = (
+                parsed.get("resources", {})
+                .get(first.get("resource_type"), {})
+                .get(first.get("resource_key"))
+            )
+            located = isinstance(body, dict)
+            body = body if located else {}
+            omitted = located and "backup_retention_period" not in body
+            retention = resolve(body.get("backup_retention_period"), parsed, module_of(body))
+            if omitted:
+                title = f"RDS instance '{name}' leaves automated-backup retention unspecified"
+                details = "backup_retention_period is not declared (AWS default: 1 day)"
+                risk = (
+                    "This code does not set automated-backup retention; the AWS default "
+                    "is one day. Confirm the intended recovery window and other recovery "
+                    "sources; the live database was not inspected."
+                )
+            elif type(retention) is int and retention == 0:
+                title = f"RDS instance '{name}' declares automated backups disabled"
+                details = "backup_retention_period = 0 (automated backups disabled)"
+                risk = (
+                    "RDS automated backups are disabled in this declaration. Recovery "
+                    "would depend on other backups or replay sources, which this check "
+                    "does not establish."
+                )
+            elif type(retention) is int and retention > 0:
+                title = f"RDS instance '{name}' declares {retention} day(s) of automated backups"
+                details = f"backup_retention_period = {retention}"
+                risk = (
+                    f"The declared automated-backup window is {retention} day(s). "
+                    "Whether it meets recovery needs depends on requirements and other "
+                    "recovery sources; their absence is not established here."
+                )
+            else:
+                title = f"RDS instance '{name}' has a backup-retention scanner finding"
+                details = "backup_retention_period could not be resolved from submitted code"
+                risk = "The scanner reported a backup-retention issue; its actual value needs confirmation."
         evidence = (
             f'resource "{first.get("resource_type")}" "{display_name(first["resource_key"])}" '
             f"at {location}: {details} (Trivy {', '.join(ids)})"
@@ -1291,7 +1355,7 @@ def scanner_findings(scanner: dict, parsed: dict, review_id: str) -> list[Findin
                 FindingCategory(checks[0].category),
                 title,
                 evidence,
-                checks[0].risk,
+                risk,
                 checks[0].recommendation,
                 [*checks[0].framework, *(f"Trivy {i}" for i in ids)],
                 rule_version=version,

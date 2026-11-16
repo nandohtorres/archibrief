@@ -1,6 +1,7 @@
 # Release status
 
-What is live, how a release ships, and what is still open. Updated
+What is live, how a release ships, and what is still open. Live table and
+release steps updated 2026-11-16; the verification section below is from
 2026-10-29. The earlier local-candidate handoff (Codex branches, 2026-10-24)
 is in git history; its branches were merged as PR #29 and later.
 
@@ -12,8 +13,8 @@ go deeper on a finding, ask the report chat and share a read-only link.
 
 | Part | Revision | How it got there |
 |---|---|---|
-| Frontend | `master` after PR #53 | Deployed automatically by `deploy-frontend.yml` after green CI (ADR-0055) |
-| Backend (Lambdas, Step Functions, AgentCore runtime) | `master` after PR #53 | Owner applied the plans on 2026-10-29 and 2026-11-02; live hard tests 1-3 then completed the model step in 76-94 s |
+| Frontend | `8c90443` (PR #67, Stakeholder Brief) | Deployed automatically by `deploy-frontend.yml` after green CI on 2026-11-16 (ADR-0055) |
+| Backend (Lambdas, Step Functions, AgentCore runtime) | `8c90443` (PR #67) | Owner applied the plan on 2026-11-16, before the merge; a follow-up plan showed no changes |
 
 ## Shipping a release
 
@@ -33,6 +34,23 @@ go deeper on a finding, ask the report chat and share a read-only link.
 
   The owner reviews every plan and runs the apply. CI never deploys the
   backend.
+- **Order when both change:** apply the backend first, then merge. The
+  merge deploys the frontend with no approval step after it, so the
+  backend has to be ready before the merge. Old and new halves must work
+  together for the gap between the two (as ADR-0062 §9 required).
+- **Reading the plan** (learned on PR #67): in a fresh worktree, copy the
+  ignored `terraform.tfvars`, `backend/build/trivy-layer.zip` and corpus
+  chunks from the main checkout first. A missing Trivy zip shows as
+  `source_hash -> null` and fails the apply partway. Functions whose code
+  didn't change can still appear as updates when the live zips were built
+  from a checkout with different line endings: download them
+  (`aws lambda get-function`) and compare with `diff -rq
+  --strip-trailing-cr` before applying. IAM policies that list function ARNs
+  show as "known after apply" while those functions update; their content
+  doesn't change. Anything else unexpected: stop.
+- **After the apply:** a fresh plan must show no changes. Then run
+  `node scripts/smoke_live.mjs https://archibrief.dev https://api.archibrief.dev`
+  and check the changed functions' logs for errors before merging.
 
 ## Verification at this revision
 
