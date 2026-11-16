@@ -157,16 +157,16 @@ export const SCENES: Record<SceneKey, Scene> = {
     plans: {
       items: [
         { kind: "building", x: 110, y: 14, label: "farm" },
-        { kind: "tag", x: 14, y: 50, label: "keys: broad" },
+        { kind: "tag", x: 14, y: 50, label: "skeleton key" },
       ],
-      caption: "The key list covers far more than one job needs. Other rules may still limit it.",
+      caption: "One key opens far more rooms than the job needs. Other rules may still limit it.",
     },
     proposed: {
       items: [
         { kind: "building", x: 110, y: 14, label: "farm" },
-        { kind: "tag", x: 14, y: 50, label: "keys: named rooms" },
+        { kind: "tag", x: 14, y: 50, label: "one key per room" },
       ],
-      caption: "The list names only the rooms needed.",
+      caption: "Each room has its own key, held only by the people who work there.",
     },
   },
   "standby-barn": {
