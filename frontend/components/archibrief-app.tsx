@@ -69,6 +69,8 @@ const emptySubmission: SubmissionValues = {
 
 export function ArchiBriefApp() {
   const [screen, setScreen] = useState<AppScreen>("submission");
+  // The <html> attribute (set before paint in app/layout.tsx) is the source
+  // of truth; state mirrors it so the toggle shows the right label.
   const [theme, setTheme] = useState<ThemeChoice>("light");
   const [pendingSection, setPendingSection] = useState<string | null>(null);
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
@@ -103,8 +105,7 @@ export function ArchiBriefApp() {
   const demoNavigation = useRef(0);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("archibrief-theme") as ThemeChoice | null;
-    if (stored === "light" || stored === "dark") setTheme(stored);
+    if (document.documentElement.dataset.theme === "dark") setTheme("dark");
     // The admin key this site used to keep for the tab is retired.
     window.sessionStorage.removeItem("archibrief-admin-key");
   }, []);
@@ -115,10 +116,17 @@ export function ArchiBriefApp() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [screen]);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("archibrief-theme", theme);
-  }, [theme]);
+  // Only a visitor's own choice changes the page and is saved, so mounting
+  // never re-applies (and re-animates) the theme the page already has.
+  const chooseTheme = (choice: ThemeChoice) => {
+    setTheme(choice);
+    document.documentElement.dataset.theme = choice;
+    try {
+      window.localStorage.setItem("archibrief-theme", choice);
+    } catch {
+      // Storage can be blocked (private windows); the choice still applies now.
+    }
+  };
 
   useEffect(() => {
     if (screen !== "progress" || progressMode !== "fixture") return;
@@ -520,7 +528,7 @@ export function ArchiBriefApp() {
         apiConfigured={apiConfigured}
         screen={screen}
         theme={theme}
-        onThemeChange={setTheme}
+        onThemeChange={chooseTheme}
         onPreview={preview}
         onHome={goHome}
         onSection={goToSection}

@@ -1,4 +1,4 @@
-import type { BudgetSummary, FindingType, ReportFinding, ReviewReport } from "./contracts";
+import type { FindingType, ReportFinding } from "./contracts";
 import { assessmentFor, compareAssessments } from "./assessment";
 
 export type AppScreen = "submission" | "preflight" | "progress" | "report" | "failure";
@@ -127,127 +127,9 @@ export function defaultReportName(source: "upload" | "paste", archiveFile: File 
   return fileName || "Untitled review";
 }
 
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
-export interface StakeholderSummary {
-  heading: string;
-  intro: string;
-  startWith: string[];
-  coverageLimits: string[];
-}
-
-function costIntro(budget: BudgetSummary): string {
-  const items = plural(budget.item_count, "item needs", "items need");
-  const effort = `${budget.effort_label} of engineering`;
-  if (budget.free_count === budget.item_count) {
-    return `${items} attention, and every fix is free on the AWS bill. Together they take ${effort}.`;
-  }
-  const monthly = formatMonthly(budget.monthly_recommended, budget.recommended_has_unpriced);
-  const free =
-    budget.free_count > 0
-      ? `${budget.free_count} of them ${budget.free_count === 1 ? "is a free settings change" : "are free settings changes"}; `
-      : "";
-  const cost =
-    budget.monthly_recommended === 0 && budget.recommended_has_unpriced
-      ? "have usage-dependent AWS costs"
-      : `add ${monthly} a month to the AWS bill`;
-  return `${items} attention. ${free ? `${free}the` : "The"} recommended fixes ${cost} and take ${effort}.`;
-}
-
-// The stakeholder view's headline text, built from the real report rather
-// than fixed sample wording. Wording stays factual: counts, the
-// findings' own titles, and which workload answers were not supplied.
-// `titled`: the page already shows a real title (a demo's), so the
-// heading doesn't repeat a name derived from the repository label.
-export function stakeholderSummary(report: ReviewReport, titled = false): StakeholderSummary {
-  const name = titled ? "" : workloadName(report.terraform_repo_ref);
-  const high = report.findings.filter(({ record }) => record.type === "deterministic-rule-result");
-  const review = report.findings.filter(({ record }) =>
-    ["assumption", "inference", "recommendation"].includes(record.type),
-  );
-
-  const toReview = plural(review.length, "item", "items");
-  const findingsIntro =
-    high.length > 0
-      ? `${plural(high.length, "rule result was", "rule results were")} reported by deterministic checks` +
-        (review.length > 0 ? `, plus ${toReview} to review` : "") +
-        ". Review each result against the workload requirements and evidence before acting."
-      : "No rule results were reported by the deterministic checks; this is not a safety guarantee." +
-        (review.length > 0
-          ? ` ${toReview} to review ${review.length === 1 ? "is" : "are"} listed below.`
-          : "");
-
-  const coverageLimits = report.baseline_answers
-    .filter(({ outcome }) => outcome !== "answered")
-    .map(({ label, outcome }) =>
-      outcome === "assumption"
-        ? `${label} was not supplied, so a conservative assumption was used.`
-        : `${label} was not supplied, so conclusions that depend on it are not observable.`,
-    );
-
-  // With a budget, lead with the answer a decision-maker asks first: what
-  // it costs.
-  const budget = report.budget;
-  const intro = budget && budget.item_count > 0 ? costIntro(budget) : findingsIntro;
-
-  return {
-    heading: name ? `What this review means for ${name}` : "What this review means",
-    intro,
-    startWith: report.findings
-      .filter((f) => assessmentFor(f).action === "needed")
-      .sort(compareAssessments)
-      .slice(0, 3)
-      .map(({ record }) => record.finding),
-    coverageLimits,
-  };
-}
-
 export const reportSourceLabels: Record<ReportSource, string> = {
   sample: "Sample review · hypothetical workload",
   demo: "Demo review · real public Terraform, checked by hand",
   live: "Complete · evidence ledger",
   fixture: "Complete · fixture evidence ledger",
 };
-
-// "$0", "$7.59", "$3,000": cents only where they matter.
-export function formatDollars(amount: number): string {
-  if (amount === 0) return "$0";
-  if (amount >= 100) {
-    return `$${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-  }
-  return `$${amount.toFixed(2)}`;
-}
-
-// A fix's monthly cost, with "+ usage" when part of it can't be priced
-// from the code (log volume, table size, an unlisted instance size).
-export function formatMonthly(amount: number, hasUnpriced: boolean): string {
-  if (hasUnpriced) return amount === 0 ? "Usage-based" : `${formatDollars(amount)} + usage`;
-  return formatDollars(amount);
-}
-
-// The budget's one-sentence answer to "what will this cost us?".
-export function budgetHeadline(budget: BudgetSummary): string {
-  const paid = budget.item_count - budget.free_count;
-  const items = plural(budget.item_count, "item needs", "items need");
-  if (budget.item_count === 0) return "Nothing here needs fixing.";
-  if (paid === 0) return `${items} attention, and every fix is free on the AWS bill.`;
-  const free =
-    budget.free_count > 0
-      ? `${budget.free_count} ${budget.free_count === 1 ? "costs" : "cost"} nothing to fix`
-      : "none are free";
-  return `${items} attention: ${free}, the rest change the AWS bill.`;
-}
-
-// Findings in the budget's order (most urgent, cheapest first); findings
-// without a stakeholder card keep their place after them.
-export function orderByBudget(findings: ReportFinding[], budget?: BudgetSummary): ReportFinding[] {
-  if (!budget) return findings;
-  const rank = new Map(budget.rows.map((row, index) => [row.finding_id, index]));
-  return [...findings].sort(
-    (left, right) =>
-      (rank.get(left.record.finding_id) ?? rank.size) -
-      (rank.get(right.record.finding_id) ?? rank.size),
-  );
-}

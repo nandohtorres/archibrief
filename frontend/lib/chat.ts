@@ -1,15 +1,24 @@
-import type {
-  BudgetSummary,
-  ChatCitation,
-  ChatTurn,
-  ReviewReport,
-  StakeholderCard,
-} from "./contracts";
+import type { ChatCitation, ChatTurn, ReportFinding, ReviewReport } from "./contracts";
 import type { DemoEntry, ReviewerNote } from "./demos";
 import { evidenceLabel, notesForTurn, reportSnapshotLabel } from "./report-review";
-import { formatDollars, formatMonthly } from "./workflow";
+import {
+  EVIDENCE_STATE_LABELS,
+  MONEY_NOTE,
+  SAFETY_SENTENCE,
+  SOURCE_LABELS,
+  TIER_EXPLANATIONS,
+  TIER_LABELS,
+  TIER_LEGEND,
+  briefCardFor,
+  briefCoverage,
+  cardTitle,
+  evidenceStateFor,
+  tierFor,
+} from "./stakeholder-brief";
+import { QUOTE_OMITTED_NOTE } from "./money-policy";
+import { publicRecord, publicTurn } from "./public-projection";
 import { assessmentFor, assessmentLabel } from "./assessment";
-import { qualityMessage, scopeMessage } from "./analysis-quality";
+import { declarationScopeMessage, qualityMessage, scopeMessage } from "./analysis-quality";
 
 // Plain messages for the chat API's error codes (backend/lambdas/
 // ask_question ERROR_MESSAGES). The server's own text is never shown, so
@@ -105,7 +114,9 @@ function citationHtml(citation: ChatCitation): string {
     const href = safeHref(citation.source_url);
     const heading = escapeHtml(citation.heading_path || "AWS guidance");
     const link = href ? `<a href="${escapeHtml(href)}">${heading}</a>` : heading;
-    return `<li>${link}: “${escapeHtml(citation.quote)}”</li>`;
+    return citation.quote_omitted
+      ? `<li>${link}: <span class="meta">${escapeHtml(QUOTE_OMITTED_NOTE)}</span></li>`
+      : `<li>${link}: “${escapeHtml(citation.quote)}”</li>`;
   }
   const kind = { finding: "Finding", resource: "Resource", requirement: "Requirement" }[
     citation.kind
@@ -113,49 +124,63 @@ function citationHtml(citation: ChatCitation): string {
   return `<li>${kind}: ${escapeHtml(citationLabel(citation))}</li>`;
 }
 
-// The budget summary as a table, the same figures as the stakeholder view.
-function budgetHtml(budget: BudgetSummary): string {
-  const rows = budget.rows
-    .map(
-      (row) =>
-        `<tr><td>${escapeHtml(row.title)}${row.subject ? ` <span class="meta">${escapeHtml(row.subject)}</span>` : ""}</td><td>${escapeHtml(formatMonthly(row.monthly_known, row.has_unpriced))}</td><td>${escapeHtml(row.effort_label)}</td><td>${escapeHtml(row.verdict_label)}</td></tr>`,
-    )
-    .join("");
-  const optional =
-    budget.monthly_optional > 0
-      ? `, plus ${escapeHtml(formatDollars(budget.monthly_optional))}/month for optional extras`
-      : "";
-  const unpriced = budget.unpriced_items.length
-    ? ` Not included because they depend on usage or size: ${escapeHtml(budget.unpriced_items.join(", "))}.`
-    : "";
-  return `
-<p><strong>${escapeHtml(formatMonthly(budget.monthly_recommended, budget.recommended_has_unpriced))}/month</strong> more on the AWS bill for the recommended fixes${optional}. Engineering time: ${escapeHtml(budget.effort_label)}. Free fixes: ${budget.free_count} of ${budget.item_count}.</p>
-<table><thead><tr><th>Fix</th><th>Monthly cost</th><th>Effort</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table>
-<p class="meta">${unpriced} ${escapeHtml(budget.note)} Effort is summed per finding; overlapping fixes may share work.</p>`;
-}
-
-function stakeholderHtml(card: StakeholderCard): string {
-  const plain = `<p><strong>In plain terms.</strong> ${escapeHtml(card.title)}. ${escapeHtml(card.analogy)} ${escapeHtml(card.what_could_happen)}</p>`;
-  if (!card.fix || !card.inaction) return plain;
-  const lines = card.fix.lines
-    .map((line) =>
-      line.monthly_high === null
-        ? `${line.label}: ${line.basis}`
-        : `${line.label}: ${formatDollars(line.monthly_high)}/month (${line.basis})`,
-    )
-    .join("; ");
+// A finding's Stakeholder Brief text, the same as the on-screen view. No
+// prices; the tier is a qualitative label.
+function briefHtml(finding: ReportFinding): string {
+  const card = briefCardFor(finding);
+  const tier = tierFor(card);
+  const parts: Array<[string, string]> =
+    card.kind === "curated"
+      ? [
+          ["Risk", card.entry.risk],
+          ["Work proposed", card.entry.work],
+          ["Helps prevent", card.entry.prevents],
+          ["Still exposed", card.entry.stillExposed],
+        ]
+      : card.kind === "summary"
+        ? [
+            ["Risk", card.summary],
+            ["Work proposed", card.action],
+          ]
+        : [];
   const source =
-    card.inaction.source_name && safeHref(card.inaction.source_url ?? "")
-      ? ` Source: <a href="${escapeHtml(safeHref(card.inaction.source_url ?? ""))}">${escapeHtml(card.inaction.source_name)}</a>.`
+    card.kind === "curated"
+      ? SOURCE_LABELS.curated
+      : card.kind === "summary"
+        ? `${card.writtenBy === "model" ? "AI-written" : "Hand-written"} plain summary. ${SOURCE_LABELS[card.writtenBy]}`
+        : card.notObservable
+          ? SOURCE_LABELS.notObservable
+          : SOURCE_LABELS.technical;
+  const analogy =
+    card.kind === "curated" && card.entry.analogy
+      ? `<p><strong>In farm terms.</strong> ${escapeHtml(card.entry.analogy)}</p>`
       : "";
-  const method = card.inaction.method ? ` ${escapeHtml(card.inaction.method)}` : "";
-  return `${plain}
-      <p><strong>Cost to fix.</strong> ${escapeHtml(formatMonthly(card.fix.monthly_known, card.fix.has_unpriced))}/month: ${escapeHtml(lines)}. Engineering time: ${escapeHtml(card.fix.effort_label)}. <span class="meta">${escapeHtml(card.verdict_label)}</span></p>
-      <p><strong>Cost of not fixing.</strong> ${escapeHtml(card.inaction.headline)}. ${escapeHtml(card.inaction.detail)}${method}${source} Industry figures are context, not a predicted loss for this system.</p>`;
+  const biggerIf =
+    card.kind === "curated" && card.entry.biggerIf
+      ? ` Bigger if ${escapeHtml(card.entry.biggerIf)}`
+      : "";
+  const commitment = tier
+    ? `${escapeHtml(TIER_LABELS[tier])}. ${escapeHtml(TIER_EXPLANATIONS[tier])}${biggerIf}`
+    : "Unclassified: there is no typical commitment for this kind of finding.";
+  return `<div class="brief">
+      <p><strong>Stakeholder Brief: ${escapeHtml(cardTitle(card))}</strong> <span class="meta">${escapeHtml(source)}</span></p>
+      ${card.kind === "curated" ? `<p class="meta">What the evidence shows: ${escapeHtml(EVIDENCE_STATE_LABELS[evidenceStateFor(card.concern)])} Principle: ${escapeHtml(card.entry.principle)}.</p>` : ""}
+      ${analogy}
+      ${parts.map(([label, text]) => `<p><strong>${label}.</strong> ${escapeHtml(text)}</p>`).join("")}
+      <p><strong>Typical commitment.</strong> ${commitment}</p>
+    </div>`;
 }
 
 function reviewerNoteHtml(note: ReviewerNote): string {
   return `<aside class="reviewer-note"><strong>Reviewer note · ${escapeHtml(note.verdict)}</strong><p>${escapeHtml(note.note)}</p></aside>`;
+}
+
+// A saved answer as the public sees it: cost figures removed (by the server,
+// or here for older saved answers), code syntax kept, priced quotes omitted.
+function answerHtml(turn: ChatTurn): string {
+  const html = turn.answer.map((p) => paragraphHtml(p.text)).join("");
+  const removed = turn.answer.some((p) => p.amounts_removed);
+  return removed ? `${html}<p class="meta">${escapeHtml(MONEY_NOTE)}</p>` : html;
 }
 
 // One self-contained HTML file: inline CSS, no scripts, print-friendly
@@ -170,7 +195,9 @@ export function buildReportHtml(
   const notes = demo?.reviewerNotes ?? [];
   const findings = report.findings
     .map((finding) => {
-      const { record, stakeholder } = finding;
+      const { record, changed } = publicRecord(finding.record);
+      const moneyRemoved = changed.some((field) => !field.startsWith("plain."));
+      const quoteOmitted = changed.includes("citation.exact_text_span (omitted)");
       return `
     <article class="finding">
       <h3>${escapeHtml(record.finding)}</h3>
@@ -183,10 +210,11 @@ export function buildReportHtml(
       <p><strong>Evidence.</strong> ${escapeHtml(record.evidence)}</p>
       <p><strong>Risk.</strong> ${escapeHtml(record.risk_impact)}</p>
       <p><strong>Recommendation.</strong> ${escapeHtml(record.recommendation)}</p>
-      ${stakeholder ? stakeholderHtml(stakeholder) : ""}
+      ${moneyRemoved ? `<p class="meta">${escapeHtml(MONEY_NOTE)}</p>` : ""}
+      ${briefHtml(finding)}
       ${
         record.citation
-          ? `<p class="source"><strong>Source.</strong> ${escapeHtml(record.citation.heading_path)}: “${escapeHtml(record.citation.exact_text_span)}”${
+          ? `<p class="source"><strong>Source.</strong> ${escapeHtml(record.citation.heading_path)}: ${!quoteOmitted ? `“${escapeHtml(record.citation.exact_text_span)}”` : `<span class="meta">${escapeHtml(QUOTE_OMITTED_NOTE)}</span>`}${
               safeHref(record.citation.source_url)
                 ? ` (<a href="${escapeHtml(safeHref(record.citation.source_url))}">${escapeHtml(record.citation.source_url)}</a>)`
                 : ""
@@ -204,12 +232,13 @@ export function buildReportHtml(
     .join("");
   const conversation = transcript.length
     ? transcript
+        .map((saved) => publicTurn(saved).turn)
         .map(
           (turn) => `
     <article class="turn">
       <p class="q"><strong>Q.</strong> ${escapeHtml(turn.question)}</p>
       ${notesForTurn(turn, notes).map(reviewerNoteHtml).join("")}
-      ${turn.answer.map((p) => paragraphHtml(p.text)).join("")}
+      ${answerHtml(turn)}
       ${
         turn.answer.some((p) => p.citations.length)
           ? `<ul class="cites">${turn.answer
@@ -235,6 +264,8 @@ export function buildReportHtml(
   h1, h2, h3 { font-family: system-ui, sans-serif; line-height: 1.25; }
   h1 { font-size: 1.6rem; } h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #c5d0d9; padding-bottom: .3rem; }
   h3 { font-size: 1rem; margin: 0 0 .3rem; }
+  .brief { border-top: 1px dashed #c5d0d9; margin-top: .6rem; padding-top: .4rem; }
+  .reviewer-note { border-left: 4px solid #7f500f; background: #faf1e2; padding: .4rem .8rem; margin: .5rem 0; }
   .finding, .turn { border: 1px solid #c5d0d9; border-radius: 8px; padding: .8rem 1rem; margin: .8rem 0; break-inside: avoid; }
   .meta { color: #43596c; font: 12px/1.4 system-ui, sans-serif; }
   .q { font-family: system-ui, sans-serif; }
@@ -252,6 +283,8 @@ export function buildReportHtml(
 <p class="meta">${escapeHtml(report.terraform_repo_ref)} · ${escapeHtml(report.created_at)} · review ${escapeHtml(report.review_id)}</p>
 <p class="meta">${escapeHtml(reportSnapshotLabel(report.findings))}</p>
 <h2>Analysis quality</h2><p>${escapeHtml(qualityMessage(report.analysis_quality))}</p>
+<h2>Review coverage</h2><p>${escapeHtml(declarationScopeMessage(report.review_scope))}</p>
+<p>${escapeHtml(briefCoverage(report).headline)}</p>
 ${report.analysis_scope ? `<h2>Configuration scope</h2><p>${escapeHtml(scopeMessage(report.analysis_scope))}</p>` : ""}
 ${(report.deeper_jobs ?? []).map((job) => `<p>Deeper review of ${escapeHtml(job.parent_finding_id)}: ${escapeHtml(job.status)}. Saved findings reflect completed work only.</p>`).join("")}
 ${(report.deeper_reviews ?? []).map((run) => `<p>Deeper review of ${escapeHtml(run.parent_finding_id)}: ${escapeHtml(qualityMessage(run.analysis_quality))}</p>`).join("")}
@@ -259,9 +292,9 @@ ${report.report_projection?.excluded_child_count ? "<p>Some saved deeper finding
 ${demo ? `<h2>Demo source and review corrections</h2><p>${escapeHtml(demo.source)} · ${escapeHtml(demo.license)}</p><p>${escapeHtml(demo.disclaimer)}</p>${safeHref(demo.sourceUrl) ? `<p><a href="${escapeHtml(safeHref(demo.sourceUrl))}">Original source</a></p>` : ""}<p>Original generated text is preserved. Reviewer notes correct or qualify it, including saved answers. Annotation format: demo-review@1; historical review date not recorded.</p>${notes.map(reviewerNoteHtml).join("")}` : ""}
 <h2>Requirements used</h2>
 <ul>${baseline || "<li>None recorded.</li>"}</ul>
-${report.findings.some(({ record }) => record.parent_finding_id) && !report.report_projection?.children_available ? "<p>Budget totals and guided explanations cover the original report. Added deeper findings are listed separately below and are not included in those totals.</p>" : ""}
-${report.budget ? `<h2>What it costs to fix</h2>${budgetHtml(report.budget)}` : ""}
+${report.findings.some(({ record }) => record.parent_finding_id) && !report.report_projection?.children_available ? "<p>The Stakeholder Brief covers the original report. Added deeper findings are listed separately below.</p>" : ""}
 <h2>Findings (${report.findings.length})</h2>
+<p class="meta">Each finding has its technical record and its Stakeholder Brief explanation. Commitment labels (${escapeHtml(Object.values(TIER_LABELS).join(", "))}): ${escapeHtml(TIER_LEGEND)} ${escapeHtml(SAFETY_SENTENCE)} No cost estimates are published.</p>
 ${findings}
 <h2>Conversation</h2>
 ${conversation}

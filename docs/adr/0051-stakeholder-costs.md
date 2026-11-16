@@ -1,7 +1,9 @@
 # ADR 0051: The Stakeholder View Prices Fixes From Code, Never the Model
 
 **Status:** Accepted (2026-10-20). Extends ADR-0039 (finding fields) and
-ADR-0049 (resource summary).
+ADR-0049 (resource summary). Presentation superseded by ADR-0062
+(2026-11-15): the view no longer shows prices. The record below is kept as
+written.
 
 ## Context
 

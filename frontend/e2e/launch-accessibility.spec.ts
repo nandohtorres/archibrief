@@ -18,7 +18,7 @@ for (const theme of ["light", "dark"] as const) {
         await page.getByRole("button", { name: "See a real review" }).first().click();
         await expect(page.locator("#report-heading")).toBeVisible();
         if (screen === "guided") {
-          await page.getByRole("tab", { name: /Guided Report/ }).click();
+          await page.getByRole("tab", { name: /^Stakeholder/ }).click();
         }
       }
       await page.evaluate(() => document.fonts.ready);

@@ -37,7 +37,7 @@ import {
 import { ArchitectureView } from "./architecture-view";
 import { type DeeperPanelState } from "./deeper-panel";
 import { FindingDetail } from "./finding-detail";
-import { GuidedReport } from "./guided-report";
+import { StakeholderBrief } from "./stakeholder-brief";
 import { ReportQuestions } from "./report-questions";
 import { AssessmentTag } from "./assessment-tag";
 import { qualityMessage, scopeMessage } from "@/lib/analysis-quality";
@@ -324,7 +324,7 @@ export function ReportWorkspace({
           setFindings(refreshed.findings.map(withEvidenceLabel));
           selectFinding(newFindings[0].record.finding_id);
           setStatus(
-            `Deeper findings saved. The report, guided budget, diagram and chat now use the saved findings. ${qualityMessage(result.analysis_quality)}`,
+            `Deeper findings saved. The report, Stakeholder Brief, diagram and chat now use the saved findings. ${qualityMessage(result.analysis_quality)}`,
           );
           return;
         }
@@ -343,7 +343,7 @@ export function ReportWorkspace({
       });
       selectFinding(newFindings[0].record.finding_id);
       setStatus(
-        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} available below ${formatFindingId(findingId)}. ${qualityMessage(result.analysis_quality)} The guided budget still describes the original report. Download to keep these findings with this session.`,
+        `${newFindings.length} deeper finding${newFindings.length === 1 ? "" : "s"} available below ${formatFindingId(findingId)}. ${qualityMessage(result.analysis_quality)} The Stakeholder Brief still describes the original report. Download to keep these findings with this session.`,
       );
     } catch (error) {
       try {
@@ -530,8 +530,8 @@ export function ReportWorkspace({
         {findings.some(({ record }) => record.parent_finding_id) &&
           !report.report_projection?.children_available && (
             <p className="field-help">
-              The guided budget, diagram and chat context cover the original report. Added deeper
-              findings are shown in the technical view and downloads.
+              The Stakeholder Brief, diagram and chat context cover the original report. Added
+              deeper findings are shown in the technical view and downloads.
             </p>
           )}
       </div>
@@ -572,7 +572,7 @@ export function ReportWorkspace({
               }
             }}
           >
-            Guided Report <span>Stakeholder</span>
+            Stakeholder <span>Plain-language brief</span>
           </button>
         </div>
 
@@ -735,7 +735,7 @@ export function ReportWorkspace({
             aria-labelledby="stakeholder-tab"
             tabIndex={0}
           >
-            <GuidedReport
+            <StakeholderBrief
               report={{ ...report, findings: report.findings.map(withEvidenceLabel) }}
               reviewerNotes={reviewerNotes}
               titled={demo !== null}

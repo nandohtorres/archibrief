@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from backend.shared.money_policy import MONEY_POLICY_VERSION, public_answer
+
 DEFAULT_QUESTIONS_PER_REVIEW = 5
 FINAL_STATUSES = ("answered", "not_determinable", "refused")
 
@@ -35,6 +37,12 @@ def question_is_live(item: dict[str, Any], now: float) -> bool:
 
 
 def transcript_item(item: dict[str, Any]) -> dict[str, Any]:
+    """A stored question as the public sees it. Every chat response (new,
+    replayed, a stored suggested answer) and the transcript reader go
+    through here, so the no-cost-estimates policy (ADR-0062) applies to old
+    saved answers too. The stored item and its metering fields are not
+    changed."""
+    answer, removed, omitted = public_answer(item.get("answer") or [])
     return {
         "question_id": item["questionKey"].split("#", 1)[1],
         "kind": item.get("kind", "custom"),
@@ -42,8 +50,13 @@ def transcript_item(item: dict[str, Any]) -> dict[str, Any]:
         "question": item.get("question", ""),
         "status": item.get("status"),
         "refusal_reason": item.get("refusalReason"),
-        "answer": item.get("answer") or [],
+        "answer": answer,
         "asked_at": item.get("askedAt"),
         "model_id": item.get("modelId"),
         "prompt_version": item.get("promptVersion"),
+        "narrative_policy": {
+            "version": MONEY_POLICY_VERSION,
+            "amounts_removed": removed,
+            "quotes_omitted": omitted,
+        },
     }

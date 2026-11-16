@@ -39,7 +39,7 @@ test("keyboard-only sample, report tabs, filtering, and return to submission", a
   await expect(page.locator("#report-heading")).toBeVisible();
 
   const technical = page.getByRole("tab", { name: /Evidence Dashboard/ });
-  const guided = page.getByRole("tab", { name: /Guided Report/ });
+  const guided = page.getByRole("tab", { name: /^Stakeholder/ });
   await tabTo(page, technical);
   await page.keyboard.press("ArrowRight");
   await expect(guided).toBeFocused();

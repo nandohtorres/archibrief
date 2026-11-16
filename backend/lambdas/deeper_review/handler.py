@@ -17,7 +17,7 @@ from backend.shared.deeper_jobs import JOB_LIFETIME_SECONDS, job_id_for, job_key
 from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.public_access import capability_allowed
-from backend.shared.report import report_findings, stakeholder_view
+from backend.shared.report import report_findings
 from backend.shared.retention import review_expires_at, review_is_live
 
 
@@ -66,7 +66,7 @@ def handler(event: dict, _context: object) -> dict:
                 "reviewId": rid,
                 "parentFindingId": fid,
                 "status": "complete",
-                "findings": report_findings(findings, stakeholder_view(findings, ledger)),
+                "findings": report_findings(findings),
                 "analysis_quality": quality,
             },
         )

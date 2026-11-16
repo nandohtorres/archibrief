@@ -96,8 +96,8 @@ test.describe("demo reviews from saved files", () => {
     await expect(provenance).toContainText("5 findings carry a reviewer note");
 
     // The stakeholder view shows the note on the finding the model got wrong.
-    await page.getByRole("tab", { name: /Guided Report/ }).click();
-    await expect(page.getByText("Reviewer note · wrong")).toHaveCount(1);
+    await page.getByRole("tab", { name: /^Stakeholder/ }).click();
+    await expect(page.getByText("Reviewer correction · wrong")).toHaveCount(1);
 
     // Saved suggested answers read without a model call.
     await page.getByRole("button", { name: "Which issues should I fix first, and why?" }).click();
@@ -120,8 +120,10 @@ test.describe("demo reviews from saved files", () => {
     await page.goto(LIVE_URL);
     await page.getByRole("button", { name: "See a real review" }).first().click();
     await expect(page.locator("#report-heading")).toHaveText("The 2019 bank breach pattern");
-    await page.getByRole("tab", { name: /Guided Report/ }).click();
-    await expect(page.getByRole("heading", { name: "What this review means" })).toBeVisible();
+    await page.getByRole("tab", { name: /^Stakeholder/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Stakeholder Brief", exact: true }),
+    ).toBeVisible();
     expect(apiCalls).toEqual([]);
   });
 

@@ -107,3 +107,24 @@ def test_listing_fails_closed_on_missing_or_malformed_expiry(env):
     status, body = _list()
     assert status == 200
     assert body["questions"] == []
+
+
+def test_the_transcript_reader_removes_prices_from_saved_answers(env):
+    env.questions.put_item(
+        Item={
+            "reviewId": "r1",
+            "questionKey": "Q#legacy",
+            "status": "answered",
+            "question": "What will it cost?",
+            "answer": [{"text": "It costs $5.", "citations": []}],
+            "ttl": int(time.time()) + 100,
+            "createdAt": int(time.time()),
+        }
+    )
+    status, body = _list()
+    assert status == 200
+    (turn,) = body["questions"]
+    assert turn["answer"][0]["text"] == "A cost estimate was removed from this answer."
+    assert turn["narrative_policy"]["amounts_removed"] == 1
+    stored = env.questions.get_item(Key={"reviewId": "r1", "questionKey": "Q#legacy"})["Item"]
+    assert stored["answer"][0]["text"] == "It costs $5."

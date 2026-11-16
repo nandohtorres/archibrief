@@ -1,12 +1,18 @@
-"""Build the stakeholder view (plain terms, costs, budget) for each demo.
+"""Build each demo's Stakeholder Brief sidecar (presentation version 2).
 
 The saved demo reports stay unedited. This writes stakeholder/<id>.json
-next to them, built by the same code a live report uses
-(backend/shared/stakeholder/brief.py): rule findings from the catalog,
-the model's findings from the hand-written text in
-scripts/demo_plain_language.json, and prices from the price table. The
-Terraform's resource summary comes from the demo's archive, so fixes
-are priced at the sizes the code really uses. No model is called.
+next to them with what the frontend's legacy reader needs: each finding's
+assessment (severity, whether action is needed, who assessed it), its
+concern and subject, and, for the model's findings, the plain summary
+written by hand in scripts/demo_plain_language.json. The wording, pictures
+and commitment tiers come from frontend/lib/stakeholder-brief.ts. No
+prices, effort hours or loss figures are written (ADR-0062), and no model
+is called.
+
+Assessments are the same as the version 1 sidecars: rule findings use the
+catalog severity of their concern (the demos were saved before findings
+stored one, and their sidecars were checked by hand), and the model's
+findings use the reviewer's severity.
 
     python scripts/build_demo_stakeholder.py            # rebuild all
     python scripts/build_demo_stakeholder.py --check    # fail if any differ
@@ -16,46 +22,103 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from backend.lambdas.ingest.handler import parse_terraform_files
-from backend.lambdas.rule_engine.resource_summary import build_resource_summary
-from backend.shared.models.finding import Finding, FindingType, PlainLanguage
-from backend.shared.stakeholder.brief import build_stakeholder_view
-from scripts.build_demo_architectures import DEMOS, _extract_tf
+from backend.shared.assessment import CONFIGURATION_ASSESSMENTS
+from backend.shared.models.finding import Finding, FindingType
+from backend.shared.stakeholder.catalog import RECIPES, infer_concern
+from backend.shared.stakeholder.presentation import brief_meta
 
+DEMOS = ROOT / "frontend" / "public" / "demos"
 PLAIN_LANGUAGE = ROOT / "scripts" / "demo_plain_language.json"
+SIDECAR_VERSION = 2
+# Must match PRESENTATION_VERSION in frontend/lib/stakeholder-brief.ts.
+PRESENTATION = "stakeholder-brief@2026-11-15"
+_AMOUNT = re.compile(
+    r"(?:US\$|\$)\s?\d|\bUSD\s?\d|\d\s?(?:USD|dollars?)\b", re.IGNORECASE
+)
+
+
+def _rule_block(finding: Finding) -> dict | None:
+    meta = brief_meta(finding)
+    concern = (meta or {}).get("concern") or infer_concern(finding.finding)
+    if concern in CONFIGURATION_ASSESSMENTS:
+        severity = CONFIGURATION_ASSESSMENTS[concern]
+    elif concern in RECIPES:
+        severity = RECIPES[concern].severity
+    else:
+        return None
+    return {
+        "source": "rule",
+        "concern": concern,
+        "subject": (meta or {}).get("subject"),
+        "severity": severity,
+        "needs_action": True,
+        "title": finding.finding,
+        "what_could_happen": finding.risk_impact,
+        "action": finding.recommendation,
+    }
+
+
+def _reviewer_block(text: dict) -> dict:
+    return {
+        "source": "reviewer",
+        "concern": None,
+        "subject": None,
+        "severity": text["severity"],
+        "needs_action": text["needs_action"],
+        "title": text["title"],
+        "what_could_happen": text["what_could_happen"],
+        "action": text["action"],
+    }
 
 
 def build(demo_id: str, written: dict[str, dict]) -> str:
-    report = json.loads((DEMOS / "reports" / f"{demo_id}.json").read_text(encoding="utf-8"))
-    with tempfile.TemporaryDirectory() as scratch:
-        parsed = parse_terraform_files(_extract_tf(DEMOS / f"{demo_id}.tar", Path(scratch)))
-    findings = []
+    report = json.loads(
+        (DEMOS / "reports" / f"{demo_id}.json").read_text(encoding="utf-8")
+    )
+    blocks = {}
     for entry in report["findings"]:
         finding = Finding.model_validate(entry["record"])
-        text = written.get(finding.finding_id)
-        if finding.type != FindingType.DETERMINISTIC_RULE_RESULT:
+        if finding.type == FindingType.DETERMINISTIC_RULE_RESULT:
+            block = _rule_block(finding)
+        elif finding.type == FindingType.NOT_OBSERVABLE:
+            block = None
+        else:
+            text = written.get(finding.finding_id)
             if text is None:
-                raise ValueError(f"{demo_id}: no plain-language text for {finding.finding_id}")
-            plain = PlainLanguage(written_by="reviewer", **text)
-            finding = finding.model_copy(update={"plain": plain})
-        findings.append(finding)
-    view = build_stakeholder_view(
-        findings, build_resource_summary(vars(parsed)), report["baseline_answers"]
-    )
-    view["review_id"] = report["review_id"]
+                raise ValueError(
+                    f"{demo_id}: no plain-language text for {finding.finding_id}"
+                )
+            block = _reviewer_block(text)
+        if block is not None:
+            blocks[finding.finding_id] = block
+    for block in blocks.values():
+        if block["source"] == "reviewer":
+            for field in ("title", "what_could_happen", "action"):
+                if _AMOUNT.search(block[field]):
+                    raise ValueError(
+                        f"{demo_id}: a dollar amount in reviewer text ({field})"
+                    )
+    view = {
+        "version": SIDECAR_VERSION,
+        "presentation": PRESENTATION,
+        "review_id": report["review_id"],
+        "blocks": blocks,
+    }
     return json.dumps(view, indent=2, sort_keys=True) + "\n"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="fail if a view is out of date")
+    parser.add_argument(
+        "--check", action="store_true", help="fail if a view is out of date"
+    )
     args = parser.parse_args()
 
     index = json.loads((DEMOS / "demos.json").read_text(encoding="utf-8"))
@@ -76,11 +139,7 @@ def main() -> int:
                 stale.append(demo_id)
             continue
         target.write_text(text, encoding="utf-8", newline="\n")
-        budget = json.loads(text)["budget"]
-        print(
-            f"{demo_id}: {budget['item_count']} items, {budget['free_count']} free, "
-            f"${budget['monthly_known']}/month known, {budget['effort_label']}"
-        )
+        print(f"{demo_id}: {len(json.loads(text)['blocks'])} findings")
     if stale:
         print("out of date:", ", ".join(stale))
         return 1
