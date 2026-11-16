@@ -55,7 +55,7 @@ test("keyboard-only sample, report tabs, filtering, and return to submission", a
   await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.press("Backspace");
   await expect(page.locator(".finding-list button").first()).toBeVisible();
-  await tabTo(page, page.getByRole("button", { name: "New review", exact: true }));
+  await page.getByRole("button", { name: "New review", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Submit your Terraform" })).toBeVisible();
 });

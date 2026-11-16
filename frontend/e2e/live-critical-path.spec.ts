@@ -253,7 +253,8 @@ test.describe("live critical path (mocked network)", () => {
     await page.reload();
     await expect(page.locator(".finding-list > li")).toHaveCount(fixtureReport.findings.length + 1);
     const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Export JSON", exact: true }).click();
+    await page.getByRole("button", { name: "Download", exact: true }).click();
+    await page.locator(".download-menu").getByRole("button", { name: "Export JSON" }).click();
     const stream = await (await download).createReadStream();
     let contents = "";
     for await (const chunk of stream!) contents += chunk.toString();

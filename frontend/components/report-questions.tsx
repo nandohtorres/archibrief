@@ -255,6 +255,7 @@ export function ReportQuestions({
             Every answer cites this review&apos;s findings or AWS guidance, or says it can&apos;t
             tell.
           </p>
+          <p className="chat-model-note">Powered by Claude Sonnet 4.6 on Amazon Bedrock.</p>
         </div>
         <span className="concept-label">
           {mode === "live"

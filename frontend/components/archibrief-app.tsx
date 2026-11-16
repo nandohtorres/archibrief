@@ -331,6 +331,7 @@ export function ArchiBriefApp() {
       document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
       return;
     }
+    setRecent(recentReviews());
     setScreen("submission");
     setPendingSection(id);
   }
@@ -591,7 +592,6 @@ export function ArchiBriefApp() {
             demo={demo}
             demoChat={demoChat}
             architecture={demoArchitecture}
-            onNewReview={goHome}
           />
         )}
         {screen === "failure" && (
