@@ -140,6 +140,33 @@ def _budget_client(payload: dict, client: BedrockReasoningClient) -> BedrockReas
     return result
 
 
+def _log_refusal(where: str, exc: Exception, payload: dict, client: Any = None) -> None:
+    """One plain log line for every refused or bounded review; no review text."""
+    import json
+
+    budget = getattr(client, "generation_budget", None)
+    print(
+        json.dumps(
+            {
+                "event": "review_refused",
+                "where": where,
+                "review_id": payload.get("review_id"),
+                "mode": payload.get("mode", "initial"),
+                "type": type(exc).__name__,
+                "code": getattr(exc, "code", None),
+                "cause": type(exc.__cause__).__name__ if exc.__cause__ else None,
+                "cause_message": str(exc.__cause__)[:300] if exc.__cause__ else None,
+                "dispatched": getattr(budget, "dispatched", None),
+                "reserved_generation": getattr(budget, "reserved_generation", None),
+                "reserved_output_tokens": getattr(budget, "reserved_output_tokens", None),
+                "reservation": getattr(budget, "reservation", None),
+                "verification_enabled": getattr(budget, "verification_enabled", None),
+            },
+            default=str,
+        )
+    )
+
+
 def _bounded_result(payload: dict, code: str) -> dict:
     from backend.agent.nodes.preflight import preflight_node
 
@@ -191,8 +218,10 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         result_state = _DEEPER_GRAPH.invoke(initial_state)
     except AdmissionDenied as exc:
+        _log_refusal("graph", exc, payload, reasoning_client)
         return {"status": "admission_denied", "code": exc.code}
     except RequestBudgetExceeded as exc:
+        _log_refusal("graph", exc, payload, reasoning_client)
         return _bounded_result(payload, exc.code)
     return {
         "status": "complete",
@@ -277,8 +306,10 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     try:
         result_state = _GRAPH.invoke(initial_state)
     except AdmissionDenied as exc:
+        _log_refusal("graph", exc, payload, reasoning_client)
         return {"status": "admission_denied", "code": exc.code}
     except RequestBudgetExceeded as exc:
+        _log_refusal("graph", exc, payload, reasoning_client)
         return _bounded_result(payload, exc.code)
 
     if result_state.get("needs_clarification"):

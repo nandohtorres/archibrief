@@ -65,6 +65,18 @@ def prepare_envelope(payload: dict, token_client: object, reservation: int) -> d
         generation_cost_micro_usd(token_bound, fixed["inferenceConfig"]["maxTokens"]) + other
     )
     if cost_bound > reservation:
+        print(
+            json.dumps(
+                {
+                    "event": "envelope_cost_refused",
+                    "fixed_tokens": fixed_tokens,
+                    "evidence_allowance": allowance,
+                    "max_tokens": fixed["inferenceConfig"]["maxTokens"],
+                    "cost_bound": cost_bound,
+                    "reservation": reservation,
+                }
+            )
+        )
         raise RequestBudgetExceeded("analysis_cost_limit_exceeded")
     return {
         "version": POLICY_VERSION,
