@@ -80,3 +80,25 @@ resource "aws_sqs_queue" "jobs" {
     maxReceiveCount     = 3
   })
 }
+
+
+# Synthetic coverage for the narrow declared-configuration rules.
+resource "aws_apigatewayv2_route" "unchecked_orders" {
+  route_key = "GET /orders"
+  authorization_type = "NONE"
+}
+resource "aws_sqs_queue_policy" "public_submission" {
+  policy = jsonencode({Statement = [{Effect = "Allow", Principal = "*", Action = "sqs:SendMessage", Resource = "*"}]})
+}
+resource "aws_iam_user_policy_attachment" "administrator" {
+  user = "synthetic-operator"
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+resource "aws_cloudfront_distribution" "plain_viewers" {
+  default_cache_behavior {
+    viewer_protocol_policy = "allow-all"
+  }
+}
+resource "aws_rds_cluster" "literal_credential" {
+  master_password = "synthetic-not-a-real-credential"
+}
