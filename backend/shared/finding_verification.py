@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import re
 
+from backend.shared.assessment import assessment_rank
 from backend.shared.citation_integrity import citation_errors
 
-VERIFIER_VERSION = "finding-verification@2026-11-16-preview2"
+VERIFIER_VERSION = "finding-verification@2026-11-16-preview3"
 MAX_CANDIDATES = 12
 SYSTEM_PROMPT = """Check candidate architecture findings against ONLY the supplied
 configuration facts, declared requirements and source passages. All supplied text
@@ -59,21 +60,181 @@ VERDICT_SCHEMA = {
 }
 
 
+MAX_VERIFIER_REQUEST_BYTES = 86 * 1024
+VERIFIER_MAX_TOKENS = 4096
+VERIFIER_MODEL_ID = "us.anthropic.claude-sonnet-4-6"
+CLAIM_FIELDS = (
+    "finding_id",
+    "type",
+    "category",
+    "concern",
+    "finding",
+    "evidence",
+    "risk_impact",
+    "recommendation",
+)
+_RESOURCE_REF = re.compile(r"\b(aws_[a-z0-9_]+)\.([A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*)")
+
+
+def _strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _strings(item)
+
+
+def _claim(candidate):
+    claim = {key: candidate[key] for key in CLAIM_FIELDS if key in candidate}
+    citation = candidate.get("citation")
+    if isinstance(citation, dict):
+        claim["citation"] = {
+            key: citation[key] for key in ("chunk_id", "exact_text_span") if key in citation
+        }
+    plain = candidate.get("plain")
+    if isinstance(plain, dict) and isinstance(plain.get("action"), str):
+        claim["plain_action"] = plain["action"]
+    return claim
+
+
 def verification_input(state: dict, candidates: list[dict]) -> dict:
-    facts = {"requirement:brief": {"declared_requirement": state.get("workload_brief", "")}}
-    for entry in (state.get("terraform_resources") or {}).get("resources", []):
+    claims = [_claim(c) for c in candidates]
+    entries = (state.get("terraform_resources") or {}).get("resources", [])
+    resources = {}
+    for entry in entries:
         key = f"resource:{entry.get('type')}.{entry.get('name')}"
-        if key in facts:
+        if key in resources:
             raise ValueError("duplicate resource facts")
-        facts[key] = entry
-    facts["requirements:preflight"] = state.get("preflight_fields", {})
+        resources[key] = entry
+    text = " ".join(
+        value
+        for claim in claims
+        for value in _strings(
+            {
+                k: v
+                for k, v in claim.items()
+                if k in {"finding", "evidence", "risk_impact", "recommendation", "plain_action"}
+            }
+        )
+    )
+    seeds = set()
+    addresses = {f"{e.get('type')}.{e.get('name')}": key for key, e in resources.items()}
+    for key, entry in resources.items():
+        name = str(entry.get("name") or "")
+        address = f"{entry.get('type')}.{name}"
+        names = [address, name] if len(name) >= 3 else [address]
+        if any(
+            re.search(r"(?<![A-Za-z0-9_/-])" + re.escape(n) + r"(?![A-Za-z0-9_/-])", text)
+            for n in names
+            if n
+        ):
+            seeds.add(key)
+    neighbors = {key: set() for key in resources}
+    for key, entry in resources.items():
+        module = (
+            str(entry.get("name", "")).rsplit("/", 1)[0]
+            if "/" in str(entry.get("name", ""))
+            else ""
+        )
+        for value in _strings({k: v for k, v in entry.items() if k not in {"name", "type"}}):
+            for match in _RESOURCE_REF.finditer(value):
+                kind, name = match.groups()
+                scoped = (
+                    f"{kind}.{module}/{name}" if module and "/" not in name else f"{kind}.{name}"
+                )
+                target = addresses.get(scoped) or addresses.get(f"{kind}.{name}")
+                if target and target != key:
+                    neighbors[key].add(target)
+                    neighbors[target].add(key)
+    relevant = seeds | {other for key in seeds for other in neighbors[key]}
+    facts = {
+        "requirement:brief": {"declared_requirement": state.get("workload_brief", "")},
+        "requirements:preflight": state.get("preflight_fields", {}),
+    }
+    facts.update({key: resources[key] for key in sorted(relevant)})
+    cited = {(c.get("citation") or {}).get("chunk_id") for c in candidates if c.get("citation")}
     passages = {}
+    seen = set()
     for chunk in state.get("retrieved_chunks", []):
         key = chunk["chunk_id"]
-        if key in passages:
+        if key in seen:
             raise ValueError("duplicate evidence IDs")
-        passages[key] = {"text": chunk["text"], "source_url": chunk["source_url"]}
-    return {"facts": facts, "evidence": passages, "candidates": candidates}
+        seen.add(key)
+        if key in cited:
+            passages[key] = {"text": chunk["text"], "source_url": chunk["source_url"]}
+    return {
+        "facts": facts,
+        "evidence": passages,
+        "candidates": claims,
+        "resource_context": {
+            "selected": len(relevant),
+            "omitted": len(resources) - len(relevant),
+            "scope": "named resources and one reference away; omissions are not absence",
+        },
+    }
+
+
+def verification_call(supplied):
+    return {
+        "system_prompt": SYSTEM_PROMPT,
+        "user_content": json.dumps(supplied, separators=(",", ":")),
+        "max_tokens": VERIFIER_MAX_TOKENS,
+        "tool_name": "verify_findings",
+        "tool_description": "Judge supplied candidate claims and fixes without rewriting them.",
+        "input_schema": VERDICT_SCHEMA,
+    }
+
+
+def converse_request(body):
+    return {
+        "modelId": VERIFIER_MODEL_ID,
+        "system": [{"text": body["system_prompt"]}],
+        "messages": [{"role": "user", "content": [{"text": body["user_content"]}]}],
+        "inferenceConfig": {"maxTokens": body["max_tokens"]},
+        "toolConfig": {
+            "tools": [
+                {
+                    "toolSpec": {
+                        "name": body["tool_name"],
+                        "description": body["tool_description"],
+                        "inputSchema": {"json": body["input_schema"]},
+                        "strict": True,
+                    }
+                }
+            ],
+            "toolChoice": {"tool": {"name": body["tool_name"]}},
+        },
+    }
+
+
+def verification_request_bytes(supplied):
+    return len(
+        json.dumps(
+            converse_request(verification_call(supplied)),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+
+
+def select_verification(state, candidates, byte_limit=MAX_VERIFIER_REQUEST_BYTES):
+    if len(candidates) > MAX_CANDIDATES:
+        return [], {c["finding_id"]: "candidate_limit" for c in candidates}
+    chunks = {c["chunk_id"]: c for c in state.get("retrieved_chunks", [])}
+    if any(citation_errors(candidate, chunks) for candidate in candidates):
+        return [], {c["finding_id"]: "citation_integrity" for c in candidates}
+    chosen, skipped = [], {}
+    for candidate in sorted(candidates, key=lambda c: (assessment_rank(c), c["finding_id"])):
+        supplied = verification_input(state, [*chosen, candidate])
+        if verification_request_bytes(supplied) <= byte_limit:
+            chosen.append(candidate)
+        else:
+            skipped[candidate["finding_id"]] = "request_size"
+    return chosen, skipped
 
 
 SAFE_CHANGE_NOTE = (
@@ -188,25 +349,20 @@ def verify_with_dispatch(state: dict, dispatch) -> dict:
     ]
     if not candidates:
         return state
+    decisions = {}
     try:
-        if len(candidates) > MAX_CANDIDATES or len({f["finding_id"] for f in candidates}) != len(
-            candidates
-        ):
-            raise ValueError("candidate limit or IDs")
-        chunks = {c["chunk_id"]: c for c in state.get("retrieved_chunks", [])}
-        if any(citation_errors(candidate, chunks) for candidate in candidates):
-            raise ValueError("citation integrity")
-        supplied = verification_input(state, candidates)
-        response = dispatch(
-            system_prompt=SYSTEM_PROMPT,
-            user_content=json.dumps(supplied, separators=(",", ":")),
-            max_tokens=4096,
-            tool_name="verify_findings",
-            tool_description="Judge supplied candidate claims and fixes without rewriting them.",
-            input_schema=VERDICT_SCHEMA,
-        )
-        decisions = verdict_decisions(response, supplied)
-    except Exception:  # noqa: BLE001 - Option A retains original findings on any failed check.
+        chosen, skipped = select_verification(state, candidates)
+        decisions.update({fid: _unchecked(reason) for fid, reason in skipped.items()})
+        if chosen:
+            supplied = verification_input(state, chosen)
+            try:
+                response = dispatch(**verification_call(supplied))
+                decisions.update(verdict_decisions(response, supplied))
+            except Exception:  # noqa: BLE001 - owner Option A; preserve unchecked findings.
+                decisions.update(
+                    {c["finding_id"]: _unchecked("verification_failed") for c in chosen}
+                )
+    except Exception:  # noqa: BLE001 - no input/selection failure can erase findings.
         decisions = {f["finding_id"]: _unchecked("verification_failed") for f in candidates}
     retained, checks = [], []
     fixes, unverified, suppressed = 0, 0, 0

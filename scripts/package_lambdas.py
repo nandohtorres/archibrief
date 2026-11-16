@@ -59,6 +59,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/agent/nodes/preflight.py",
             "backend/agent/nodes/reason.py",
             "backend/shared/finding_verification.py",
+            "backend/shared/assessment.py",
             "backend/shared/citation_integrity.py",
             "backend/agent/request_budget.py",
             "backend/shared/citations.py",

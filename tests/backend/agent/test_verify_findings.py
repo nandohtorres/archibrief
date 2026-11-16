@@ -90,6 +90,7 @@ def state(response=None):
                 "finding_id": "ai",
                 "type": "inference",
                 "model_id": "test",
+                "finding": "aws_s3_bucket.a needs protection",
                 "citation": citation,
             },
         ],
@@ -269,12 +270,15 @@ def test_bad_verdict_does_not_invalidate_valid_sibling_verdict(capsys):
 def test_safe_detection_with_bad_fix_preserves_detection_and_neutralizes_both_actions():
     value = state({"verdicts": [verdict(remediation_applicable=False)]})
     value["reasoned_findings"][1].update(
-        finding="A genuine configuration defect",
+        finding="A genuine configuration defect in aws_s3_bucket.a",
         recommendation="Unsafe action",
         plain={"action": "Unsafe action", "title": "A real issue"},
     )
     result = verify_findings_node(value)
-    assert result["reasoned_findings"][1]["finding"] == "A genuine configuration defect"
+    assert (
+        result["reasoned_findings"][1]["finding"]
+        == "A genuine configuration defect in aws_s3_bucket.a"
+    )
     assert (
         result["reasoned_findings"][1]["plain"]["action"]
         == result["reasoned_findings"][1]["recommendation"]
@@ -302,3 +306,26 @@ def test_candidate_limit_is_fail_open_and_never_dispatches():
     assert result["reasoned_findings"] == value["reasoned_findings"]
     assert result["additional_verification"]["status"] == "incomplete"
     assert value["reasoning_client"].calls == 0
+
+
+def test_verifier_size_matches_the_product_complete_request_measurement():
+    from backend.shared.finding_verification import (
+        verification_call,
+        verification_request_bytes,
+    )
+    from backend.shared.model_request_budget import request_utf8_bytes
+
+    value = state()
+    value["workload_brief"] += " Ω"
+    supplied = verification_input(value, value["reasoned_findings"][1:])
+    body = verification_call(supplied)
+    product = structured_request(
+        MODEL_ID,
+        body["system_prompt"],
+        body["user_content"],
+        body["max_tokens"],
+        body["tool_name"],
+        body["tool_description"],
+        body["input_schema"],
+    )
+    assert request_utf8_bytes(product) == verification_request_bytes(supplied)
