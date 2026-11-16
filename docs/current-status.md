@@ -62,7 +62,7 @@ Counts are candidate-specific, overlap and must not be added into a product-wide
 
 ## Next work, in order
 
-1. Claude reviews the two build tasks at the frozen SHAs. The deterministic rule commit can take the independent release path; compare against deployed backend d9b5772 / merge 613ab0c, not stale local master.
+1. Claude approved the five-rule candidate and prepared a release branch; its release awaits Fernando's approval. The P3b candidate remains a separate review. The deterministic rule commit can take the independent release path; compare against deployed backend d9b5772 / merge 613ab0c, not stale local master.
 2. Implement the owner-requested **Unable to verify** follow-up from Task 0 in a separately coordinated change in Claude's generic R1 handoff. It was not included in the owner's Task 1 then Task 2 build instruction. Keeping rejected candidates in a separate, excluded-from-totals section requires a distinct schema/report/chat/frontend change and explicit reconciliation with the frozen verifier dispositions. Do not describe it as already built or silently change the current contradiction policy.
 3. Complete P2's real admission/cost evidence and independent release validation. Keep P3b off until these prerequisites and rollout approval are satisfied.
 4. Claude prepares/runs the approved R2 paired replay on the same saved findings, with off/on controls and per-finding dispositions. About $1.60 was proposed in the generic handoff, not newly authorized. If generation allocation changes, retain the matched reduced-token generator-only control.
@@ -71,9 +71,14 @@ Counts are candidate-specific, overlap and must not be added into a product-wide
 
 ## Evidence and navigation
 
-- Generic R1 results and outstanding Task 0: [Claude's handoff](../../archibrief-launch/handoffs/2026-11-16-claude-r1-results-codex-next.md).
-- Exact builds: [P3b contract handoff](../../archibrief-launch/handoffs/2026-11-16-p3b-verdict-contract-fix.md), [five-rule handoff](../../archibrief-launch/handoffs/2026-11-16-deterministic-accuracy-rules.md).
-- [Decision log](../../archibrief-launch/PILOT-DECISION-LOG.md), [scorecard specification](../../archibrief-launch/evaluations/SCORECARD.md), [scorecard command](../../archibrief-launch/evaluations/SCORECARD-COMMAND-2026-11-16.md), [evaluation plan](../../archibrief-launch/P3B-EVALUATION-PLAN-2026-11-16.md).
-- [Citation review](../../archibrief-launch/CITATION-REVIEW-2026-11-16.md), [P2 progress and access blocker](../../archibrief-launch/P2-IMPLEMENTATION-PROGRESS-2026-11-15.md), [release checklist](../../archibrief-launch/ACCURACY-RELEASE-DEPLOY-CHECKLIST-2026-11-16.md).
+- [Evaluation evidence](evaluation.md) records the published measurements and their limits.
+- [Release readiness](release-readiness.md) distinguishes release checkpoints from local candidates.
+- [Architecture](architecture.md) describes the delivered review and Stakeholder Brief.
+- [Decision records](adr/README.md) preserve the rationale for product decisions.
+- [Project history](project-history.md) records release sequencing and accuracy progress.
 
-Dated reviews, captured SHAs, scorecard rows and old journals are evidence snapshots. Forward pointers supersede stale present-tense status without rewriting those records. No sealed artifacts or scorecard JSON were opened during this documentation audit.
+Internal review handoffs, scorecard tooling and approval records are maintained separately from this public repository. Dated reviews and captured SHAs remain historical evidence, not the current release state.
+
+## Documentation publication hold
+
+Hold this documentation candidate until the deterministic-rules release merges. Claude will supply the actual PR number and merge SHA. Then update the five-rule row above, the release-readiness table and the README checkpoint to released, using those identifiers. Until that evidence arrives, do not claim these rules are released. The release candidate has passed independent review; this is a publication hold, not a request to repeat the already-fixed rule-version test.

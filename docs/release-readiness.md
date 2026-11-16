@@ -1,6 +1,6 @@
 # Release status
 
-> **2026-11-16 checkpoint:** PR #67's brief and PR #68's first accuracy repairs are released per the owner/Claude handoffs; local git verifies merge 613ab0c. Latest rules 091ee10, P3b 1a75227 and owner tools 0721c82 remain local candidates. Codex builds/freezes; Claude independently reviews/releases/evaluates. Do not treat historical pass counts below as release checks for those new SHAs. See [current status](current-status.md).
+> **2026-11-16 checkpoint:** The brief and first accuracy repairs are released. Additional rules have passed review but are awaiting release; the second verification check remains off. See [current status](current-status.md).
 
 What is live, how a release ships, and what is still open. Live table and
 release steps updated 2026-11-16; the verification section below is from
@@ -15,9 +15,9 @@ go deeper on a finding, ask the report chat and share a read-only link.
 
 | Checkpoint                                 | Revision                                          | Evidence                                                                            |
 | ------------------------------------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Stakeholder Brief release                  | 8c90443 (#67)                                     | Owner supplied Claude's backend-first rollout and production smoke results          |
-| Most recent production accuracy evaluation | 613ab0c (#68), backend d9b5772, P3b off           | Claude's generic R1 handoff; merge exists locally                                   |
-| New rule/verifier candidates               | Rules 091ee10; integration 1a75227; tools 0721c82 | Local commits and offline checks only; independent review and release checks remain |
+| Stakeholder Brief release                  | 8c90443 (#67)                                     | Recorded backend-first rollout and production smoke results          |
+| Most recent production accuracy evaluation | 613ab0c (#68), backend d9b5772, P3b off           | Recorded R1 evaluation; merge exists locally                                   |
+| New rule/verifier candidates               | Rules 091ee10; integration 1a75227; tools 0721c82 | Rules approved, awaiting release; verifier remains a local candidate |
 
 This documentation pass did not query AWS, deployment logs or the live site. The
 production rows are attributed release/evaluation checkpoints, not a new drift
