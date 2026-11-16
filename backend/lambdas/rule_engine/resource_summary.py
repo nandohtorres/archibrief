@@ -43,6 +43,11 @@ from backend.lambdas.rule_engine.resource_details import (
     omitted_detail_items,
     resource_details,
 )
+from backend.lambdas.rule_engine.resource_relationships import (
+    boundary_facts,
+    key_usage,
+    lambda_invocation_paths,
+)
 from backend.shared.configuration_checks import enrich_observations
 from backend.shared.review_scope import SUMMARY_RESOURCE_TYPE
 from backend.shared.terraform_observations import ObservationBudget, ResourceObservations
@@ -723,6 +728,8 @@ def build_resource_summary(parsed: dict) -> dict:
     "note": str}."""
     entries: list[dict] = []
     observation_budget = ObservationBudget()
+    kms_usage = key_usage(parsed)
+    invocation_paths = lambda_invocation_paths(parsed)
     kept, total = _kept_resources(parsed)
     for resource_type, key, body in kept:
         module = module_of(body)
@@ -752,6 +759,12 @@ def build_resource_summary(parsed: dict) -> dict:
             details = resource_details(resource_type, body, parsed, module)
             if details:
                 entry["details"] = details
+            if (resource_type, key) in kms_usage:
+                entry.setdefault("details", {})["kms_usage"] = kms_usage[(resource_type, key)]
+            if resource_type == "aws_iam_role" and (boundary := boundary_facts(body, parsed)):
+                entry.setdefault("details", {})["permissions_boundary"] = boundary
+            if resource_type == "aws_lambda_function" and key in invocation_paths:
+                entry.setdefault("details", {})["invocation_paths"] = invocation_paths[key]
         if resource_type == "aws_backup_plan" and isinstance(body, dict):
             entry["rules"] = _backup_rules(body, parsed, module)
             raw_rules = body.get("rule", [])

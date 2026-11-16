@@ -40,7 +40,13 @@ from backend.shared.models.finding import (
     FixComponent,
     PlainLanguage,
 )
-from backend.shared.recommendation_checks import recommends_vpc_for_function_url
+from backend.shared.recommendation_checks import (
+    REMEDIATION_POLICY_VERSION,
+    context_remediation_reasons,
+    recommends_vpc_for_function_url,
+    repair_ebs_capacity_advice,
+    unsupported_operation_reasons,
+)
 from backend.shared.sanitize import clip, normalize_text
 from backend.shared.stakeholder.catalog import HARMS, RECIPES, SEVERITIES, infer_concern
 from backend.shared.stakeholder.pricing import PRICE_ITEM_KEYS
@@ -53,7 +59,10 @@ _MODEL_MAX_QUANTITY = 4
 # Bump whenever the model-facing contract changes (tool schema, input
 # fields, prompt rules), so a persisted finding can be traced to the exact
 # prompt that produced it (ADR-0039).
-PROMPT_VERSION = "reason_prompt@2026-10-30"
+# Prompt prose/schema are unchanged; the model-facing facts now include explicit
+# boundary, key-consumer and invocation-path context. Keep this input revision
+# distinct from the frozen P1 generator baseline.
+PROMPT_VERSION = "reason_prompt@2026-11-15-facts"
 
 _TOOL_NAME = "emit_findings"
 # The most model findings a review keeps. Uncapped, a large submission
@@ -602,6 +611,9 @@ _REJECTION_KINDS = (
     ("invalid or missing finding type", "invalid_type"),
     ("failed to build a valid Finding", "invalid_fields"),
     ("recommendation does not fix the stated problem", "wrong_fix"),
+    ("unsupported remediation operation", "unsupported_remediation"),
+    ("contradicts remediation facts", "remediation_contradiction"),
+    ("rule-owned remediation", "rule_owned_remediation"),
 )
 
 
@@ -836,6 +848,7 @@ def verify_model_findings(
     parent_finding_id: str | None = None,
     terraform_resources: dict | None = None,
     depth_level: str = "lightweight",
+    authoritative_rule_findings: list[dict] | None = None,
 ) -> tuple[list[Finding], list[str]]:
     """Returns (verified findings, failure reasons). An item that fails
     citation or shape verification is excluded, never relaxed.
@@ -889,6 +902,48 @@ def verify_model_findings(
             )
             continue
 
+        # Invalid plain text is already discarded, so it must not suppress a
+        # safe core finding. Check only text that would actually be retained.
+        plain = verify_plain(item.get("plain"), declared_sizes)
+        policy_item = {**item, "plain": plain.model_dump(mode="json") if plain else None}
+        operation_errors = unsupported_operation_reasons(policy_item)
+        context_errors = context_remediation_reasons(
+            policy_item, terraform_resources, authoritative_rule_findings
+        )
+        adjusted = False
+        repaired = (
+            repair_ebs_capacity_advice(policy_item, operation_errors)
+            if not context_errors
+            else None
+        )
+        if (
+            repaired
+            and not unsupported_operation_reasons(repaired)
+            and not context_remediation_reasons(
+                repaired, terraform_resources, authoritative_rule_findings
+            )
+        ):
+            item = {**item, "recommendation": repaired["recommendation"]}
+            if plain:
+                plain = plain.model_copy(update={"action": repaired["plain"]["action"]})
+            operation_errors = []
+            adjusted = True
+        if operation_errors:
+            failures.append(
+                f"finding[{index}]: unsupported remediation operation "
+                + ", ".join(operation_errors)
+            )
+            continue
+
+        if context_errors:
+            kind = (
+                "rule-owned remediation"
+                if context_errors == ["dlq_retention_owned_by_rule"]
+                else "contradicts remediation facts"
+            )
+            failures.append(f"finding[{index}]: {kind} " + ", ".join(context_errors))
+            continue
+
         try:
             findings.append(
                 Finding(
@@ -915,9 +970,20 @@ def verify_model_findings(
                     retrieved_chunk_ids=retrieved_chunk_ids,
                     deterministic_rule_version=deterministic_rule_version,
                     parent_finding_id=parent_finding_id,
-                    plain=verify_plain(item.get("plain"), declared_sizes),
+                    plain=plain,
                 )
             )
+            if adjusted:
+                print(
+                    json.dumps(
+                        {
+                            "event": "model_remediation_adjusted",
+                            "review_id": review_id,
+                            "policy_version": REMEDIATION_POLICY_VERSION,
+                            "kind": "ebs_capacity_guidance",
+                        }
+                    )
+                )
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
             failures.append(f"finding[{index}]: failed to build a valid Finding: {exc}")
 
@@ -994,6 +1060,12 @@ def reason_node(state: dict) -> dict:
         parent_finding_id=state.get("parent_finding_id"),
         terraform_resources=state.get("terraform_resources"),
         depth_level="deep" if deep_mode else "lightweight",
+        authoritative_rule_findings=rule_findings
+        + (
+            [state["parent_finding"]]
+            if deep_mode and isinstance(state.get("parent_finding"), dict)
+            else []
+        ),
     )
     findings = resolve_rule_findings(rule_findings) + model_findings
     rejected: dict[str, int] = {}
@@ -1004,6 +1076,7 @@ def reason_node(state: dict) -> dict:
         json.dumps(
             {
                 "event": "reasoning_result",
+                "remediation_policy_version": REMEDIATION_POLICY_VERSION,
                 "review_id": state.get("review_id"),
                 "emitted": len(raw_findings) + capped,
                 "capped": capped,

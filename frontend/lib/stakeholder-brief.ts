@@ -271,10 +271,11 @@ export const BRIEF_ENTRIES: Record<string, BriefEntry> = {
     analogy:
       "Failed orders go into a tray for checking, but the tray throws them out sooner than the order book keeps orders, counted from when each order first came in.",
     scene: "failed-tray",
-    risk: "The queue that holds failed jobs keeps them for less time than the main queue, using AWS's default where a period is left out. A job that failed after waiting could expire soon after it moves there and never be investigated.",
-    work: "Make the failed-jobs queue keep messages longer than the main queue, within AWS's 14-day limit. If the main queue already keeps them for close to 14 days, keep failed jobs another way or change the retry process. Make sure someone watches it.",
+    risk: "The failed-jobs queue may not leave enough time to investigate after a job moves there. For standard queues, time already spent in the main queue counts toward expiry too.",
+    work: "Allow time to investigate after the main queue's retention period; the current check allows one day. Increase failed-job retention if this fits within AWS's 14-day limit. If it cannot fit, preserve failed jobs another way or redesign the retry process, and assign someone to monitor it.",
     prevents: "Failed jobs disappearing before anyone can investigate or retry them.",
-    stillExposed: "Failures nobody looks at. A holding tray is not an archive or an alert.",
+    stillExposed:
+      "Failures nobody looks at, or investigations taking longer than the allowance. A holding tray is not an archive or an alert.",
     tier: "light",
     principle: "Availability",
   },
