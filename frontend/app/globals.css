@@ -4163,3 +4163,9 @@ h4 {
 .required-mark {
   color: var(--critical);
 }
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}

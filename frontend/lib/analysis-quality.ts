@@ -2,7 +2,7 @@ import type { AnalysisQuality, ReviewReport } from "./contracts";
 
 export function declarationScopeMessage(scope?: ReviewReport["review_scope"]): string {
   if (!scope || scope.version !== "review-scope-public@1" || scope.known_y === null) {
-    return "Resource declaration coverage was not recorded for this report. Start a new review to establish its scope.";
+    return "Resource declaration coverage was not recorded for this report; it predates scope recording.";
   }
   const total = `${scope.known_y}${scope.count_complete ? "" : " known"} resource declarations`;
   const reviewed =

@@ -16,7 +16,7 @@ test.describe("Stakeholder Brief", () => {
       panel.getByRole("heading", { name: "Stakeholder Brief", exact: true }),
     ).toBeVisible();
     await expect(panel).toContainText("not a new review");
-    await expect(panel).toContainText("no recorded review scope");
+    await expect(panel).toContainText("saved before ArchiBrief recorded review scope");
     await expect(panel).toContainText(
       "Typical overall commitment, not a quote or a verified estimate.",
     );

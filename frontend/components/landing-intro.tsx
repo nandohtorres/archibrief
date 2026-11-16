@@ -118,7 +118,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
         <div className="landing-samples">
           <article className="landing-sample">
             <span className="landing-label">For engineers</span>
-            <h3>The evidence dashboard</h3>
+            <h3>The Evidence Dashboard</h3>
             <p>
               Each finding with the resource it&apos;s about, the AWS guidance it cites, how sure it
               is, and the exact change to make.
@@ -126,7 +126,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
           </article>
           <article className="landing-sample">
             <span className="landing-label">For everyone else</span>
-            <h3>The guided report</h3>
+            <h3>The Stakeholder Brief</h3>
             <p className="landing-quote">
               &ldquo;Your proxy can be tricked into handing over its AWS credentials, and those
               credentials can read every bucket. That&apos;s the pattern behind the 2019 Capital One
