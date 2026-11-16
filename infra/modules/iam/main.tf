@@ -190,6 +190,7 @@ data "aws_iam_policy_document" "runtime_permissions_boundary" {
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",
       "bedrock:GetInferenceProfile",
+      "bedrock:CountTokens",
     ]
     resources = [
       "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-5",

@@ -11,9 +11,10 @@ verify. The rules, all fail-closed:
   matcher, and the stored quote is the source's own span, never the
   model's); a finding-source quote appears in that finding's stored span;
   a resource is in the summary; a requirement is in the baseline answers.
-- A paragraph left with no verified citation is dropped. If nothing is
-  left, the answer becomes a fixed "not determinable" text. Same policy as
-  verify_model_findings: drop individually, never relax.
+- A paragraph left with no verified citation is excluded from the answer
+  and kept as a bounded, cleaned Unsupported note. If no cited paragraph
+  remains, the answer is a fixed not-determinable text. Notes are not grounding
+  or conversation history and do not retain invalid citations.
 - Hygiene: URLs and markdown links removed, ref codes in prose replaced
   by the finding's short text, one code block of at most 20 lines, 1,800
   characters in total.
@@ -102,6 +103,7 @@ class VerifiedAnswer:
     citations_total: int = 0
     citations_dropped: int = 0
     canary_hit: bool = False
+    unsupported: list[str] = field(default_factory=list)
     cited_text: list[str] = field(default_factory=list)  # for the grounding check
 
 
@@ -273,6 +275,8 @@ def verify_answer(
 
     total = dropped = 0
     code_budget = [1]
+    unsupported: list[str] = []
+    unsupported_room = 1200
     kept: list[dict[str, Any]] = []
     cited_text: list[str] = []
     for paragraph in raw.get("paragraphs", [])[:MAX_PARAGRAPHS]:
@@ -287,7 +291,13 @@ def verify_answer(
                 continue
             citations.append(resolved)
         text = _clean_text(paragraph["text"], ctx, code_budget, set(chunks))
-        if not citations or not text:
+        if not text:
+            continue
+        if not citations:
+            if unsupported_room > 0:
+                note = _clip_paragraph(text, min(400, unsupported_room))
+                unsupported.append(note)
+                unsupported_room -= len(note)
             continue
         kept.append({"text": text, "citations": citations})
         for c in citations:
@@ -296,11 +306,12 @@ def verify_answer(
     # Checked again on the cleaned text: cleaning removes invisible
     # characters, which could have hidden a split-up canary from the raw
     # check.
-    if _leaks(canary, " ".join(p["text"] for p in kept)):
+    if _leaks(canary, " ".join([*(p["text"] for p in kept), *unsupported])):
         return _canary_refusal()
 
     if not kept:
         answer = _not_determinable(missing or ("not_in_review" if status == "answered" else None))
+        answer.unsupported = unsupported
         answer.citations_total, answer.citations_dropped = total, dropped
         return answer
 
@@ -331,6 +342,7 @@ def verify_answer(
         status=status,
         refusal_reason=None,
         paragraphs=capped,
+        unsupported=unsupported,
         citations_total=total,
         citations_dropped=dropped,
         cited_text=[t for t in cited_text if t],

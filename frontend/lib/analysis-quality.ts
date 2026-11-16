@@ -1,4 +1,12 @@
-import type { AnalysisQuality, ReviewReport } from "./contracts";
+import type { AnalysisQuality, ReviewReport, ReportFinding } from "./contracts";
+
+export function independentCheckLabel(finding: ReportFinding): string {
+  return finding.independent_check === "not-independently-checked"
+    ? "Not independently checked"
+    : finding.independent_check === "fix-needs-confirmation"
+      ? "Detection retained; confirm the safe change before modifying this resource."
+      : "";
+}
 
 export function declarationScopeMessage(scope?: ReviewReport["review_scope"]): string {
   if (!scope || scope.version !== "review-scope-public@1" || scope.known_y === null) {
@@ -45,6 +53,12 @@ export function scopeMessage(scope: NonNullable<ReviewReport["analysis_scope"]>)
 }
 
 export function qualityMessage(quality?: AnalysisQuality): string {
+  if (quality?.reason_codes?.includes("additional_verification_incomplete")) {
+    return "Additional verification checks were incomplete. Findings without a usable verdict were retained and labelled Not independently checked; other valid verdicts still apply.";
+  }
+  if (quality?.reason_codes?.includes("request_budget_exceeded")) {
+    return "AI generation was skipped because its input budget or token count could not be confirmed. No answer-generation call was made; earlier screening or retrieval may have run. Only deterministic findings are retained.";
+  }
   const descriptions: Record<AnalysisQuality["outcome"], string> = {
     complete:
       "Output checks completed without rejected findings. This does not establish correctness or complete architecture coverage.",
@@ -68,8 +82,15 @@ export function qualityMessage(quality?: AnalysisQuality): string {
   const capped = quality?.reason_codes?.includes("model_findings_capped")
     ? " The AI proposed more findings than a report keeps; the least severe were left out."
     : "";
+  const evidenceLimited = quality?.reason_codes?.includes("evidence_budget_limited")
+    ? " Some retrieved source passages were excluded to stay within the analysis budget; retained passages were kept whole."
+    : "";
   return (
     message +
+    (quality?.reason_codes?.includes("additional_verification_checks")
+      ? " Additional verification checks ran; agreement does not establish correctness."
+      : "") +
+    evidenceLimited +
     capped +
     (model
       ? ` Model output checks: ${model.accepted} of ${model.attempted} retained, ${model.rejected} rejected.`

@@ -19,6 +19,7 @@ from backend.shared.kill_switch import paid_work_allowed
 from backend.shared.public_access import capability_allowed
 from backend.shared.report import report_findings
 from backend.shared.retention import review_expires_at, review_is_live
+from backend.shared.scope_admission import MANIFEST_MESSAGE, eligible_parent
 
 
 def _response(status_code: int, body: dict) -> dict:
@@ -47,8 +48,6 @@ def handler(event: dict, _context: object) -> dict:
     )
     if not any(f.get("finding_id") == fid for f in ledger.get("findings", [])):
         return _response(404, {"error": "finding not found"})
-    if not ledger.get("workload_brief"):
-        return _response(409, {"error": "original workload brief unavailable"})
     table = DynamoDBClient(table_name=os.environ["FINDINGS_TABLE_NAME"])
     findings, quality, complete = existing_result(table, rid, fid)
     if complete:
@@ -70,6 +69,14 @@ def handler(event: dict, _context: object) -> dict:
                 "analysis_quality": quality,
             },
         )
+    if not ledger.get("workload_brief"):
+        return _response(409, {"error": "original workload brief unavailable"})
+    try:
+        eligible_parent(rid, ledger.get("review_scope"))
+    except AdmissionDenied as exc:
+        if exc.code == "admission_unavailable":
+            return _response(503, {"error": exc.code})
+        return _response(409, {"error": exc.code, "message": MANIFEST_MESSAGE})
     key = job_key(rid, fid)
     job = table.get_item(key, consistent=True)
     if job and public_job(job)["status"] == "failed":

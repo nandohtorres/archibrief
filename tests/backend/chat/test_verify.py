@@ -383,3 +383,56 @@ def test_a_long_partial_answer_keeps_its_partial_note(ctx):
     assert result.paragraphs[-1]["citations"] == []
     joined = sum(len(p["text"]) + 1 for p in result.paragraphs) - 1
     assert joined <= MAX_ANSWER_CHARS
+
+
+def test_unsupported_statement_is_separate_from_answer_and_history(ctx):
+    from backend.chat.prompt import history_for_prompt
+
+    result = verify_answer(
+        _answer(
+            [
+                {
+                    "text": "Cited statement",
+                    "citations": [{"ref": "F1", "exact_quote": ""}],
+                },
+                {
+                    "text": "UNSUPPORTED_ONLY [link](https://invalid.example)",
+                    "citations": [{"ref": "F999", "exact_quote": ""}],
+                },
+            ]
+        ),
+        ctx,
+        CHUNKS,
+        CANARY,
+    )
+    assert result.status == "answered"
+    assert "UNSUPPORTED_ONLY" not in str(result.paragraphs)
+    assert result.unsupported and "UNSUPPORTED_ONLY" in result.unsupported[0]
+    assert "https://" not in result.unsupported[0]
+    assert "UNSUPPORTED_ONLY" not in str(
+        history_for_prompt(
+            [
+                {
+                    "status": result.status,
+                    "answer": result.paragraphs,
+                    "unsupported": result.unsupported,
+                }
+            ]
+        )
+    )
+
+
+def test_uncited_answer_becomes_fixed_answer_with_bounded_unsupported_note(ctx):
+    result = verify_answer(
+        _answer([{"text": "UNSUPPORTED " * 5000, "citations": []}]), ctx, CHUNKS, CANARY
+    )
+    assert result.status == "not_determinable" and result.unsupported
+    assert sum(map(len, result.unsupported)) <= 1200
+    assert "UNSUPPORTED" not in str(result.paragraphs)
+
+
+def test_canary_never_survives_in_unsupported_notes(ctx):
+    result = verify_answer(
+        _answer([{"text": CANARY, "citations": []}]), ctx, CHUNKS, CANARY
+    )
+    assert result.canary_hit and not result.unsupported

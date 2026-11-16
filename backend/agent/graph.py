@@ -20,15 +20,23 @@ from langgraph.graph import END, StateGraph
 from backend.agent.nodes.preflight import preflight_node
 from backend.agent.nodes.reason import reason_node
 from backend.agent.nodes.retrieve import retrieve_node
+from backend.agent.nodes.verify_findings import verify_findings_node
 from backend.shared.clients import (
     BedrockEmbeddingClient,
     BedrockReasoningClient,
     GuardrailsClient,
     S3VectorsClient,
 )
+from backend.shared.model_request_budget import GenerationBudget
+from backend.shared.scope_admission import PaidScopeContext
 
 
 class ReviewState(TypedDict, total=False):
+    verification_enabled: bool
+    additional_verification: dict[str, Any]
+    paid_scope_context: PaidScopeContext
+    generation_budget: GenerationBudget
+    retrieval_omitted_count: int
     review_id: str
     workload_brief: str
     baseline_answers: dict[str, str]
@@ -65,6 +73,7 @@ class ReviewState(TypedDict, total=False):
     deterministic_rule_version: str | None
     reasoned_findings: list[dict]
     # Model findings excluded by citation/shape verification (reason_node).
+    unverified_findings: list[dict]
     dropped_model_findings: list[str]
     model_output_counts: dict[str, int]
     # How many model findings were left out by the per-review cap.
@@ -88,13 +97,15 @@ def build_graph() -> StateGraph:
     graph.add_node("preflight", preflight_node)
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("reason", reason_node)
+    graph.add_node("verify_findings", verify_findings_node)
 
     graph.set_entry_point("preflight")
     graph.add_conditional_edges(
         "preflight", route_after_preflight, {"retrieve": "retrieve", END: END}
     )
     graph.add_edge("retrieve", "reason")
-    graph.add_edge("reason", END)
+    graph.add_edge("reason", "verify_findings")
+    graph.add_edge("verify_findings", END)
 
     return graph
 

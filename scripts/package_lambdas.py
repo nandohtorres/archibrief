@@ -54,6 +54,28 @@ _ZIP_FILE_MODE = (0o100644 & 0xFFFF) << 16  # regular file, rw-r--r--
 LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     "review_worker": {
         "sources": [
+            "backend/shared/unverified.py",
+            "backend/agent/__init__.py",
+            "backend/agent/nodes/__init__.py",
+            "backend/agent/nodes/preflight.py",
+            "backend/agent/nodes/reason.py",
+            "backend/shared/finding_verification.py",
+            "backend/shared/assessment.py",
+            "backend/shared/citation_integrity.py",
+            "backend/agent/request_budget.py",
+            "backend/shared/citations.py",
+            "backend/shared/model_observations.py",
+            "backend/shared/models/__init__.py",
+            "backend/shared/models/finding.py",
+            "backend/shared/recommendation_checks.py",
+            "backend/shared/review_screen.py",
+            "backend/shared/sanitize.py",
+            "backend/shared/stakeholder/__init__.py",
+            "backend/shared/stakeholder/catalog.py",
+            "backend/shared/stakeholder/pricing.py",
+            "backend/shared/model_request_budget.py",
+            "backend/shared/review_limits.py",
+            "backend/shared/scope_admission.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/review_worker/__init__.py",
@@ -67,10 +89,11 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/shared/kill_switch.py",
             "backend/shared/review_scope.py",
         ],
-        "packages": ["boto3"],
+        "packages": ["boto3", "pydantic>=2.0"],
     },
     "submit_review": {
         "sources": [
+            "backend/shared/model_request_budget.py",
             "backend/shared/baseline.py",
             "backend/shared/http.py",
             "backend/__init__.py",
@@ -88,6 +111,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "create_upload": {
         "sources": [
+            "backend/shared/model_request_budget.py",
             "backend/shared/http.py",
             "backend/shared/uploads.py",
             "backend/shared/retention.py",
@@ -128,6 +152,12 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "get_review": {
         "sources": [
+            "backend/shared/money_policy.py",
+            "backend/shared/unverified.py",
+            "backend/shared/model_request_budget.py",
+            "backend/shared/review_limits.py",
+            "backend/shared/review_scope.py",
+            "backend/shared/scope_projection.py",
             "backend/shared/http.py",
             "backend/shared/public_access.py",
             "backend/shared/admission.py",
@@ -158,6 +188,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "rule_engine": {
         "sources": [
+            "backend/lambdas/rule_engine/resource_relationships.py",
+            "backend/shared/model_request_budget.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/rule_engine/__init__.py",
@@ -191,6 +223,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # its version is pinned by lambda_constraints.txt.
     "scan": {
         "sources": [
+            "backend/shared/model_request_budget.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/scan/__init__.py",
@@ -205,6 +238,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "audit": {
         "sources": [
+            "backend/shared/model_request_budget.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/audit/__init__.py",
@@ -217,6 +251,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "finalize": {
         "sources": [
+            "backend/shared/unverified.py",
+            "backend/shared/model_request_budget.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/finalize/__init__.py",
@@ -240,6 +276,8 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "ingest": {
         "sources": [
+            "backend/shared/model_request_budget.py",
+            "backend/shared/review_limits.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/ingest/__init__.py",
@@ -256,6 +294,25 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     },
     "deeper_review": {
         "sources": [
+            "backend/shared/money_policy.py",
+            "backend/shared/unverified.py",
+            "backend/agent/__init__.py",
+            "backend/agent/nodes/__init__.py",
+            "backend/agent/nodes/preflight.py",
+            "backend/agent/nodes/reason.py",
+            "backend/shared/finding_verification.py",
+            "backend/shared/citation_integrity.py",
+            "backend/agent/request_budget.py",
+            "backend/shared/citations.py",
+            "backend/shared/model_observations.py",
+            "backend/shared/recommendation_checks.py",
+            "backend/shared/review_screen.py",
+            "backend/shared/sanitize.py",
+            "backend/shared/model_request_budget.py",
+            "backend/shared/review_limits.py",
+            "backend/shared/review_scope.py",
+            "backend/shared/scope_admission.py",
+            "backend/shared/scope_projection.py",
             "backend/shared/http.py",
             "backend/shared/public_access.py",
             "backend/shared/admission.py",
@@ -296,6 +353,12 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # Region: an older one wouldn't know the s3vectors client.
     "ask_question": {
         "sources": [
+            "backend/shared/money_policy.py",
+            "backend/shared/unverified.py",
+            "backend/shared/model_request_budget.py",
+            "backend/shared/review_limits.py",
+            "backend/shared/review_scope.py",
+            "backend/shared/scope_admission.py",
             "backend/shared/http.py",
             "backend/shared/public_access.py",
             "backend/shared/admission.py",
@@ -305,7 +368,6 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
             "backend/agent/nodes/retrieve.py",
             "backend/chat/__init__.py",
             "backend/chat/access.py",
-            "backend/shared/money_policy.py",
             "backend/chat/answer.py",
             "backend/chat/context.py",
             "backend/chat/observe.py",
@@ -339,13 +401,15 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # Read-only transcript; no model code bundled.
     "list_questions": {
         "sources": [
+            "backend/shared/money_policy.py",
+            "backend/shared/unverified.py",
+            "backend/shared/model_request_budget.py",
             "backend/shared/http.py",
             "backend/shared/public_access.py",
             "backend/shared/admission.py",
             "backend/__init__.py",
             "backend/chat/__init__.py",
             "backend/chat/access.py",
-            "backend/shared/money_policy.py",
             "backend/chat/context.py",
             "backend/chat/suggested.py",
             "backend/lambdas/__init__.py",
@@ -382,6 +446,7 @@ LAMBDA_SPECS: dict[str, dict[str, list[str]]] = {
     # tests/backend/test_package_lambdas.py keeps these lists honest.
     "validate": {
         "sources": [
+            "backend/shared/unverified.py",
             "backend/__init__.py",
             "backend/lambdas/__init__.py",
             "backend/lambdas/validate/__init__.py",

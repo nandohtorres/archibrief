@@ -81,13 +81,28 @@ export function formatFindingId(findingId: string): string {
 export const REVIEW_DEADLINE_MS = 8 * 60 * 1000;
 
 const FAILURE_MESSAGES: Record<string, string> = {
+  analysis_input_limit_exceeded:
+    "This configuration's analysis input exceeds the pilot budget. Try one smaller root with its local modules. No paid AI analysis was started.",
+  analysis_cost_limit_exceeded:
+    "This configuration cannot fit within the pilot's analysis allowance. Try one smaller root with its local modules. No paid AI analysis was started.",
+  token_count_unavailable:
+    "We couldn't confirm the analysis input budget. Please try again later. No paid AI analysis was started.",
+  input_screen_unavailable:
+    "The safety checks could not finish, so this report was not published. Please try again later.",
+  analysis_budget_unavailable:
+    "The analysis budget could not be confirmed, so this report was not published. Please start a new review.",
   invalid_archive:
     "We couldn't read that archive. Upload a .tar or .tar.gz containing your .tf files and try again.",
   malformed_configuration:
     "This configuration declares the same resource or module twice. Make each name unique within its module and start a new review. No AI analysis was started.",
+  resource_limit_exceeded:
+    "This upload exceeds the pilot limit of 50 resource declarations. Upload one smaller root or environment with its local modules. Keep related files together. No paid AI analysis was started.",
+  scope_manifest_required:
+    "We couldn't establish a usable resource inventory at the archive root. Upload one Terraform root with its local modules and start a new review. No paid AI analysis was started.",
   input_blocked:
     "Your workload brief was flagged by our safety checks. Rephrase it as a plain description of the system and try again.",
   paused: "Reviews are temporarily paused. Please try again later.",
+  admission_unavailable: "Review admission could not be checked. Please try again later.",
   timed_out: "The review took too long to finish. Please try again in a few minutes.",
   clarification_expired:
     "This review expired while waiting for your answers. Please start a new review.",
@@ -101,7 +116,20 @@ const FAILURE_MESSAGES: Record<string, string> = {
 // Maps the backend's public failure code (mark_review_failed) to copy for
 // the user. Unknown or missing codes get a generic message - never raw
 // error text.
-export function failureMessageFor(code: string | undefined): string {
+export function failureMessageFor(
+  code: string | undefined,
+  scopeFailure?: { known_y: number; count_complete: boolean },
+): string {
+  if (
+    code === "resource_limit_exceeded" &&
+    scopeFailure &&
+    Number.isInteger(scopeFailure.known_y) &&
+    scopeFailure.known_y > 50 &&
+    scopeFailure.known_y <= 1000 &&
+    typeof scopeFailure.count_complete === "boolean"
+  ) {
+    return `We counted ${scopeFailure.known_y}${scopeFailure.count_complete ? "" : " known"} resource declarations in this upload. The pilot reviews up to 50 at a time. Upload one smaller root or environment with its local modules. Keep related files together. No paid AI analysis was started.${scopeFailure.count_complete ? "" : " Some declarations could not be counted, so the total may be larger."}`;
+  }
   return (
     (code && FAILURE_MESSAGES[code]) ??
     "Something went wrong on our side while running this review. Please try again."

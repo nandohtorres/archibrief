@@ -26,6 +26,7 @@ import {
 } from "@/lib/stakeholder-brief";
 import { confidenceLabel, formatFindingId, workloadName } from "@/lib/workflow";
 import { BriefScene } from "./brief-scene";
+import { independentCheckLabel } from "@/lib/analysis-quality";
 
 interface StakeholderBriefProps {
   report: ReviewReport;
@@ -145,6 +146,7 @@ function BriefFinding({
         <i aria-hidden="true">›</i>
       </summary>
       <div className="brief-row-body">
+        {independentCheckLabel(finding) && <p>{independentCheckLabel(finding)}</p>}
         {reviewerNote && (
           <aside className="reviewer-note" aria-label="Reviewer correction">
             <strong>Reviewer correction · {reviewerNote.verdict}</strong>

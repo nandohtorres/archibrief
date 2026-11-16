@@ -4164,6 +4164,30 @@ h4 {
   color: var(--critical);
 }
 
+.unable-to-verify {
+  padding: var(--space-3);
+  border: 1px solid var(--unknown);
+  border-radius: var(--radius-m);
+  background: var(--unknown-bg);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.unable-to-verify summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.unable-to-verify li {
+  margin-block: var(--space-3);
+}
+.unverified-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-s);
+  color: var(--unknown);
+  font-size: 0.85rem;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--text-muted);

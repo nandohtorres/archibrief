@@ -34,6 +34,7 @@ from backend.shared.archive import (  # noqa: F401  (re-exported for callers/tes
 )
 from backend.shared.clients import GuardrailsClient, S3Client
 from backend.shared.hcl_eval import ResolutionBudgetExceeded, is_created, resolve
+from backend.shared.review_limits import scope_rejection_code
 from backend.shared.review_scope import (
     MAX_ADDRESS_LENGTH,
     MAX_DECLARATIONS,
@@ -630,7 +631,10 @@ def _evaluate_modules(
 def _resolve_guardrails_client(
     event: dict, guardrails_client: GuardrailsClient | None
 ) -> GuardrailsClient | None:
-    """Injected client wins (tests); otherwise build one from config.
+    """Legacy helper retained for callers/tests; ingestion never calls it.
+
+    Input screening now runs in the trusted worker after request admission.
+    Injected client wins; otherwise build one from config.
 
     Checks the event payload first, then falls back to the Lambda's own
     `GUARDRAIL_ID`/`GUARDRAIL_VERSION` environment variables set by
@@ -742,24 +746,23 @@ def _ingest(
             rejection.update(code=exc.code, detail=exc.detail)
         return rejection
 
-    # Guardrails runs inline here and again before Reason (ADR-0033) — see
-    # backend/agent/nodes/reason.py's module docstring. Only the workload
-    # brief (free-text, attacker-controlled) is checked; the parsed HCL
-    # itself is never natural-language content passed to a prompt-attack
-    # classifier.
-    guardrails_decisions: list[dict] = []
-    client = _resolve_guardrails_client(event, guardrails_client)
-    if client is not None:
-        _log_stage(review_id, "guardrails")
-        allowed = client.check(workload_brief, source="INPUT")
-        _log_stage(review_id, "guardrails_done", allowed=allowed)
-        guardrails_decisions.append({"stage": "ingest", "allowed": allowed})
-        if not allowed:
-            return {
-                "status": "blocked",
-                "reason": "Guardrails blocked the workload brief at ingest",
-                "guardrails_decisions": guardrails_decisions,
+    # Count declarations before the first billed call; the retained resource
+    # dictionary loses zero-copy/unsupported declarations and is not admission.
+    scope_failure = scope_rejection_code(parsed.review_scope)
+    if scope_failure:
+        code = scope_failure
+        _log_stage(review_id, "rejected", code=code)
+        rejection = {"status": "rejected", "code": code}
+        if code == "resource_limit_exceeded":
+            rejection["scope_failure"] = {
+                "known_y": parsed.review_scope["known_y"],
+                "count_complete": parsed.review_scope["count_complete"],
             }
+        return rejection
+
+    # Safe parsing is free of inference. The trusted worker now admits the
+    # complete request envelope and screens text before paid retrieval.
+    guardrails_decisions: list[dict] = []
 
     parsed_payload = {
         "resources": parsed.resources,

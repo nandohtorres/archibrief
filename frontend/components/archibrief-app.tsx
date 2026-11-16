@@ -175,7 +175,8 @@ export function ArchiBriefApp() {
         }
         if (result.status === "failed") {
           clearActiveReview();
-          setFailureMessage(failureMessageFor((result as ReviewStatusPointer).failureCode));
+          const pointer = result as ReviewStatusPointer;
+          setFailureMessage(failureMessageFor(pointer.failureCode, pointer.scopeFailure));
           setScreen("failure");
           return;
         }

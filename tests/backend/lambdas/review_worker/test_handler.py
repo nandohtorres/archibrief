@@ -7,11 +7,11 @@ import pytest
 
 from backend.lambdas.finalize.handler import handler as finalize
 from backend.lambdas.review_worker import handler as worker
-from tests.backend import visitor
 from tests.backend.lambdas.submit_review.test_handler import (  # noqa: F401 - shared moto fixture
     _submit,
     env,
 )
+from tests.backend.p0_scope_fixtures import declaration, pending_scope
 
 
 @pytest.fixture
@@ -20,6 +20,22 @@ def prepared(env, monkeypatch):  # noqa: F811 - pytest consumes the imported fix
     assert _submit(body)["statusCode"] == 202
     monkeypatch.setattr(worker, "paid_work_allowed", lambda: True)
     monkeypatch.setenv("AGENTCORE_RUNTIME_ARN", "test-runtime")
+    from backend.agent.request_budget import prepare_envelope
+    from backend.shared.review_screen import screen_review
+
+    counter = SimpleNamespace(count_tokens=lambda **kwargs: {"inputTokens": 1000})
+    monkeypatch.setattr(
+        worker,
+        "_request_envelope",
+        lambda payload, reservation: prepare_envelope(payload, counter, reservation),
+    )
+    monkeypatch.setattr(
+        worker,
+        "screen_review",
+        lambda payload: screen_review(
+            payload, SimpleNamespace(check=lambda *args, **kwargs: True)
+        ),
+    )
     calls = []
     replies = [{"status": "complete", "findings": [], "preflight_fields": {}}]
 
@@ -36,6 +52,8 @@ def prepared(env, monkeypatch):  # noqa: F811 - pytest consumes the imported fix
                 "findings": [],
                 "rule_version": "test",
                 "resource_summary": {},
+                "review_scope": pending_scope([declaration()]),
+                "summary_members": [["aws_s3_bucket", "main"]],
             },
             "validate": lambda: {"valid_findings": []},
             "audit": lambda: {"status": "recorded"},
@@ -76,6 +94,13 @@ def test_rejected_output_remains_visible_after_worker_finalize_and_report_read(
     review_id, s3, _calls, replies, _agent_calls = prepared
     replies[0].update(
         findings=[{"private": "REJECTED-CONTENT-CANARY"}],
+        unverified_findings=[
+            {
+                "finding": "RETAINED-UNVERIFIED-CLAIM",
+                "reason_code": "wrong_fix",
+                "recommendation": "WITHHELD-FIX-CANARY",
+            }
+        ],
         model_output_counts={"attempted": 3, "accepted": 1, "rejected": 2},
     )
     original = worker._invoke
@@ -98,6 +123,10 @@ def test_rejected_output_remains_visible_after_worker_finalize_and_report_read(
     assert quality["model_verification"]["rejected"] == 2
     assert quality["schema_validation"]["rejected"] == 1
     assert build_review_context(ledger).review_data["analysis_quality"] == quality
+    assert report["unverified_findings"][0]["finding"] == "RETAINED-UNVERIFIED-CLAIM"
+    assert len(report["unverified_findings"]) == 2
+    assert "WITHHELD-FIX-CANARY" not in json.dumps(report)
+    assert "RETAINED-UNVERIFIED-CLAIM" not in build_review_context(ledger).cached_text()
     assert "REJECTED-CONTENT-CANARY" not in json.dumps(report)
 
 
@@ -114,9 +143,11 @@ def test_a_preflight_pause_fails_instead_of_waiting(prepared):
         },
     )
     assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
-    review = boto3.resource("dynamodb").Table("reviews").get_item(
-        Key={"reviewId": review_id}
-    )["Item"]
+    review = (
+        boto3.resource("dynamodb")
+        .Table("reviews")
+        .get_item(Key={"reviewId": review_id})["Item"]
+    )
     assert review["failureCode"] == "internal_error"
 
 
@@ -155,6 +186,47 @@ def test_rejected_archive_fails_and_releases_the_reservation(prepared, monkeypat
     )
 
 
+@pytest.mark.parametrize("code", ["resource_limit_exceeded", "scope_manifest_required"])
+def test_scope_rejection_preserves_code_and_releases_before_scan_or_agent(
+    prepared, monkeypatch, code
+):
+    review_id, _s3, _calls, _replies, agent_calls = prepared
+    stages = []
+
+    def reject(name, payload):
+        stages.append(name)
+        return {
+            "status": "rejected",
+            "code": code,
+            "scope_failure": {
+                "known_y": 84,
+                "count_complete": False,
+                "private": "CANARY",
+            },
+        }
+
+    monkeypatch.setattr(worker, "_invoke", reject)
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    assert stages == ["ingest"]
+    assert agent_calls == []
+    review = (
+        boto3.resource("dynamodb")
+        .Table("reviews")
+        .get_item(Key={"reviewId": review_id})["Item"]
+    )
+    assert review["failureCode"] == code
+    if code == "resource_limit_exceeded":
+        assert review["scopeFailure"] == {"known_y": 84, "count_complete": False}
+    else:
+        assert "scopeFailure" not in review
+    assert "CANARY" not in json.dumps(review, default=str)
+    counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    assert (
+        next(r for r in counters if r["counterKey"].endswith("#initial"))["released"]
+        is True
+    )
+
+
 def test_failure_after_the_model_call_keeps_the_reservation(prepared, monkeypatch):
     review_id, *_ = prepared
     original = worker._invoke
@@ -185,12 +257,15 @@ def test_resume_phase_is_rejected(prepared):
         worker.handler({"review_id": review_id, "phase": "resume"}, None)
     with pytest.raises(ValueError, match="workflow envelope"):
         worker.handler(
-            {"review_id": review_id, "phase": "resume", "resume_key": "jobs/x.json"}, None
+            {"review_id": review_id, "phase": "resume", "resume_key": "jobs/x.json"},
+            None,
         )
     assert calls == []
 
 
-def test_a_model_failure_still_publishes_the_rule_findings(prepared, monkeypatch, capsys):
+def test_a_model_failure_still_publishes_the_rule_findings(
+    prepared, monkeypatch, capsys
+):
     from botocore.exceptions import ClientError
 
     from backend.shared.report import build_review_report
@@ -202,12 +277,23 @@ def test_a_model_failure_still_publishes_the_rule_findings(prepared, monkeypatch
     def stage(name, payload):
         if name == "rule_engine":
             calls.append((name, payload))
-            return {"findings": [rule_finding], "rule_version": "test", "resource_summary": {}}
+            return {
+                "findings": [rule_finding],
+                "rule_version": "test",
+                "resource_summary": {},
+                "review_scope": pending_scope([declaration()]),
+                "summary_members": [["aws_s3_bucket", "main"]],
+            }
         return original(name, payload)
 
     def invoke(**kwargs):
         raise ClientError(
-            {"Error": {"Code": "RuntimeClientError", "Message": "PRIVATE-CONTENT-CANARY"}},
+            {
+                "Error": {
+                    "Code": "RuntimeClientError",
+                    "Message": "PRIVATE-CONTENT-CANARY",
+                }
+            },
             "InvokeAgentRuntime",
         )
 
@@ -220,9 +306,14 @@ def test_a_model_failure_still_publishes_the_rule_findings(prepared, monkeypatch
     assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
     out = capsys.readouterr().out
     assert "PRIVATE-CONTENT-CANARY" not in out
-    logged = json.loads(next(line for line in out.splitlines() if "reasoning_unavailable" in line))
+    logged = json.loads(
+        next(line for line in out.splitlines() if "reasoning_unavailable" in line)
+    )
     assert logged == {"event": "reasoning_unavailable", "kind": "ClientError"}
-    assert dict(calls)["validate"] == {"findings": [rule_finding]}
+    assert dict(calls)["validate"] == {
+        "findings": [rule_finding],
+        "unverified_findings": [],
+    }
     ledger = json.loads(
         s3.get_object(
             Bucket="reports", Key=f"reports/{review_id}/evidence-ledger.json"
@@ -230,7 +321,11 @@ def test_a_model_failure_still_publishes_the_rule_findings(prepared, monkeypatch
     )
     quality = build_review_report({"reviewId": review_id}, ledger)["analysis_quality"]
     assert "model_unavailable" in quality["reason_codes"]
-    assert quality["model_verification"] == {"attempted": 0, "accepted": 0, "rejected": 0}
+    assert quality["model_verification"] == {
+        "attempted": 0,
+        "accepted": 0,
+        "rejected": 0,
+    }
 
 
 def test_agent_wait_fits_the_time_the_lambda_has_left():
@@ -239,9 +334,15 @@ def test_agent_wait_fits_the_time_the_lambda_has_left():
 
     assert worker._agent_read_timeout(None) == worker.AGENT_READ_TIMEOUT_SECONDS
     assert worker._agent_read_timeout(context(880)) == worker.AGENT_READ_TIMEOUT_SECONDS
-    assert worker._agent_read_timeout(context(500)) == 500 - worker.POST_AGENT_RESERVE_SECONDS
+    assert (
+        worker._agent_read_timeout(context(500))
+        == 500 - worker.POST_AGENT_RESERVE_SECONDS
+    )
     # Not enough left for a model call: no wait, the rule findings publish.
-    assert worker._agent_read_timeout(context(worker.POST_AGENT_RESERVE_SECONDS + 100)) is None
+    assert (
+        worker._agent_read_timeout(context(worker.POST_AGENT_RESERVE_SECONDS + 100))
+        is None
+    )
     assert (
         worker._agent_read_timeout(
             context(worker.POST_AGENT_RESERVE_SECONDS + worker.MIN_AGENT_SECONDS)
@@ -273,7 +374,7 @@ GRAPH = {
 def test_diagram_is_saved_for_the_progress_screen_before_the_model_runs(
     prepared, monkeypatch
 ):
-    review_id, s3, _calls, _replies, agent_calls = prepared
+    review_id, s3, _calls, _replies, _agent_calls = prepared
     original = worker._invoke
     seen_before_model = []
 
@@ -322,3 +423,71 @@ def test_a_failed_diagram_preview_does_not_fail_the_review(
     )
     assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
     assert "preview_diagram_failed" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "count,code",
+    [
+        (1000000, "analysis_cost_limit_exceeded"),
+        (PermissionError("synthetic-denied"), "token_count_unavailable"),
+        (True, "token_count_unavailable"),
+    ],
+)
+def test_preflight_count_failure_stops_before_paid_screen_and_runtime(
+    prepared, monkeypatch, count, code
+):
+    from backend.agent.request_budget import prepare_envelope
+
+    review_id, _s3, calls, _replies, agent_calls = prepared
+    paid = []
+
+    def count_tokens(**kwargs):
+        if isinstance(count, Exception):
+            raise count
+        return {"inputTokens": count}
+
+    monkeypatch.setattr(
+        worker,
+        "_request_envelope",
+        lambda payload, reservation: prepare_envelope(
+            payload, SimpleNamespace(count_tokens=count_tokens), reservation
+        ),
+    )
+    monkeypatch.setattr(worker, "screen_review", lambda payload: paid.append("screen"))
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    assert paid == [] and agent_calls == []
+    assert not {"validate", "audit", "finalize"}.intersection(name for name, _ in calls)
+    table = boto3.resource("dynamodb").Table("reviews")
+    assert table.get_item(Key={"reviewId": review_id})["Item"]["failureCode"] == code
+    rows = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    receipt = next(row for row in rows if row["counterKey"].endswith("#initial"))
+    assert receipt["released"] is True
+
+
+def test_preflight_count_admits_before_paid_screen_and_runtime(prepared, monkeypatch):
+    from backend.agent.request_budget import prepare_envelope
+
+    review_id, _s3, _calls, _replies, agent_calls = prepared
+    order = []
+
+    def count_tokens(**kwargs):
+        order.append("count")
+        return {"inputTokens": 1000}
+
+    monkeypatch.setattr(
+        worker,
+        "_request_envelope",
+        lambda payload, reservation: prepare_envelope(
+            payload, SimpleNamespace(count_tokens=count_tokens), reservation
+        ),
+    )
+    original_screen = worker.screen_review
+
+    def screen(payload):
+        order.append("screen")
+        assert order == ["count", "screen"]
+        return original_screen(payload)
+
+    monkeypatch.setattr(worker, "screen_review", screen)
+    assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
+    assert order == ["count", "screen"] and len(agent_calls) == 1

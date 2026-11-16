@@ -10,10 +10,6 @@
 
 locals {
   lambda_environment = {
-    ingest = {
-      GUARDRAIL_ID      = var.guardrail_id
-      GUARDRAIL_VERSION = var.guardrail_version
-    }
     audit = {
       # Table name is the last segment of arn:aws:dynamodb:<region>:<acct>:table/<name>.
       AUDIT_TABLE_NAME = element(split("/", var.audit_table_arn), 1)
@@ -31,7 +27,7 @@ locals {
   # enough to time out on small inputs that parse in milliseconds locally.
   #
   # Ingest and RuleEngine get the most: Ingest downloads the archive,
-  # calls Guardrails and parses HCL; RuleEngine also parses HCL (hcl_eval
+  # parses HCL; RuleEngine also parses HCL (hcl_eval
   # resolves jsonencode() policies with hcl2.loads), and the first call in
   # a process builds lark's parser, which takes over a second. Validate is
   # pure in-memory compute; Audit and Finalize each make one or two
@@ -136,28 +132,9 @@ moved {
   to   = aws_iam_role_policy.finalize_data_access
 }
 
-# Ingest calls Guardrails inline (ADR-0033) using the GUARDRAIL_ID and
-# GUARDRAIL_VERSION environment variables above. Always created, not
-# conditioned on guardrail_id: on a fresh account the guardrail ID is
-# unknown until apply, and Terraform can't plan a count from an unknown
-# value.
+# The worker screens text after deterministic scope/request admission.
+# Ingest has no Bedrock permissions and performs only safe static parsing.
 data "aws_caller_identity" "current" {}
-
-data "aws_iam_policy_document" "ingest_guardrails_apply" {
-  statement {
-    effect  = "Allow"
-    actions = ["bedrock:ApplyGuardrail"]
-    resources = [
-      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:guardrail/${var.guardrail_id}",
-    ]
-  }
-}
-
-resource "aws_iam_role_policy" "ingest_guardrails_apply" {
-  name   = "${var.name_prefix}-ingest-guardrails-apply"
-  role   = aws_iam_role.lambda["ingest"].id
-  policy = data.aws_iam_policy_document.ingest_guardrails_apply.json
-}
 
 # Ingest downloads the client's uploaded archive from S3 (ADR-0045;
 # _resolve_archive_path in backend/lambdas/ingest/handler.py). Scoped to

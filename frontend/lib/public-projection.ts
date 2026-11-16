@@ -63,7 +63,15 @@ export function publicTurn(turn: ChatTurn): { turn: ChatTurn; removed: number; o
     omitted += cleaned.omitted;
     return cleaned.paragraph;
   });
-  return { turn: { ...turn, answer }, removed, omitted };
+  const unsupported = (Array.isArray(turn.unsupported) ? turn.unsupported : [])
+    .filter((text): text is string => typeof text === "string")
+    .slice(0, 12)
+    .map((text) => {
+      const cleaned = narrativeWithoutMoney(text.slice(0, 400));
+      removed += cleaned.removed;
+      return cleaned.text;
+    });
+  return { turn: { ...turn, answer, unsupported }, removed, omitted };
 }
 
 const NARRATIVE_FIELDS = ["finding", "risk_impact", "recommendation"] as const;

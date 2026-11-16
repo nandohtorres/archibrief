@@ -58,6 +58,10 @@ async function readJson(response: Response): Promise<unknown> {
         "We couldn't confirm the deeper job started. Retry Go deeper to recover the same request.",
       deeper_job_failed:
         "Deeper analysis could not finish. Your original report and saved findings remain available.",
+      scope_manifest_required:
+        "This report has no usable scope manifest. Start a new review to request deeper analysis. Saved results are still available.",
+      resource_limit_exceeded:
+        "This report exceeds the 50-declaration pilot limit. Start a new review with one smaller root to request deeper analysis. Saved results are still available.",
       reviews_paused: "Reviews are temporarily paused. Please try again later.",
       operation_conflict: "This reservation belongs to a different submission. Start a new review.",
     };

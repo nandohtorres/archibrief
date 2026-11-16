@@ -587,6 +587,7 @@ def _answer_fields(answer: VerifiedAnswer) -> dict[str, Any]:
         "status": answer.status,
         "refusalReason": answer.refusal_reason,
         "answer": answer.paragraphs,
+        "unsupported": answer.unsupported,
     }
 
 
@@ -691,6 +692,7 @@ def handler(event: dict, context: object) -> dict:
                 "status": stored["status"],
                 "refusalReason": stored.get("refusalReason"),
                 "answer": stored.get("answer") or [],
+                "unsupported": stored.get("unsupported") or [],
                 "modelId": stored.get("modelId"),
                 "promptVersion": stored.get("promptVersion"),
             }

@@ -25,19 +25,26 @@ AgentCore patterns.
 
 from __future__ import annotations
 
+import copy
 import os
+import time
 from typing import Any
 
+import boto3
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from botocore.config import Config
 
 from backend.agent.graph import ReviewState, compiled_deeper_graph, compiled_graph
 from backend.corpus.lexical_index import build_lexical_corpus_index_from_disk
+from backend.shared.admission import AdmissionDenied
 from backend.shared.clients import (
     BedrockEmbeddingClient,
     BedrockReasoningClient,
     GuardrailsClient,
     S3VectorsClient,
 )
+from backend.shared.model_request_budget import GenerationBudget, RequestBudgetExceeded
+from backend.shared.scope_admission import authorize_payload, checked_request_envelope
 
 _REGION = os.environ.get("AWS_REGION", "us-east-1")
 _VECTOR_BUCKET_NAME = os.environ.get("ARCHIBRIEF_VECTOR_BUCKET", "archibrief-dev-kb")
@@ -49,6 +56,15 @@ _GUARDRAIL_VERSION = os.environ.get("ARCHIBRIEF_GUARDRAIL_VERSION", "1")
 # change; the default matches the other call sites.
 _MODEL_ID = os.environ.get("ARCHIBRIEF_REASONING_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
 _MAX_TOKENS = int(os.environ.get("ARCHIBRIEF_REASONING_MAX_TOKENS", "12288"))
+_TOKEN_COUNTER = boto3.client(
+    "bedrock-runtime",
+    region_name=_REGION,
+    config=Config(
+        connect_timeout=2,
+        read_timeout=15,
+        retries={"total_max_attempts": 1},
+    ),
+)
 
 app = BedrockAgentCoreApp()
 
@@ -65,7 +81,10 @@ _GRAPH = compiled_graph()
 _DEEPER_GRAPH = compiled_deeper_graph()
 _EMBEDDING_CLIENT = BedrockEmbeddingClient(region_name=_REGION, no_retries=True)
 _VECTORS_CLIENT = S3VectorsClient(
-    bucket_name=_VECTOR_BUCKET_NAME, index_name=_VECTOR_INDEX_NAME, region_name=_REGION
+    bucket_name=_VECTOR_BUCKET_NAME,
+    index_name=_VECTOR_INDEX_NAME,
+    region_name=_REGION,
+    no_retries=True,
 )
 _LEXICAL_CORPUS_INDEX = build_lexical_corpus_index_from_disk()
 _GUARDRAILS_CLIENT = GuardrailsClient(
@@ -104,6 +123,38 @@ _DEEPER_REASONING_CLIENT = BedrockReasoningClient(
 )
 
 
+def _budget_client(payload: dict, client: BedrockReasoningClient) -> BedrockReasoningClient:
+    row = checked_request_envelope(payload)
+    result = copy.copy(client)
+    result.token_counter = _TOKEN_COUNTER
+    remaining = min(400, float(row["analysis_deadline"]) - time.time())
+    result.generation_budget = GenerationBudget(
+        payload["review_scope_ref"]["operation"],
+        int(row["cost"]),
+        time.monotonic() + remaining,
+        verification_enabled=(
+            payload.get("mode") != "deeper"
+            and os.environ.get("ARCHIBRIEF_VERIFY_FINDINGS", "false") == "true"
+        ),
+    )
+    return result
+
+
+def _bounded_result(payload: dict, code: str) -> dict:
+    from backend.agent.nodes.preflight import preflight_node
+
+    fields = {} if payload.get("mode") == "deeper" else preflight_node(payload)
+    return {
+        "status": "complete",
+        "findings": payload.get("rule_findings", []),
+        "model_outcome": "not_invoked",
+        "budget_reason": code,
+        "model_output_counts": {"attempted": 0, "accepted": 0, "rejected": 0},
+        "preflight_fields": fields.get("preflight_fields", {}),
+        "defaults_version": fields.get("defaults_version"),
+    }
+
+
 def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
     """Go-deeper pass: Retrieve -> Reason(deep) only, scoped to one
     finding. Called by deeper_review.handler (behind
@@ -111,7 +162,14 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
     outer Step Functions state machine. PreflightGate is not rerun;
     the original settled requirements and resource observations are reused.
     """
+    try:
+        admission = authorize_payload(payload)
+        reasoning_client = _budget_client(payload, _DEEPER_REASONING_CLIENT)
+    except AdmissionDenied as exc:
+        return {"status": "admission_denied", "code": exc.code}
     initial_state: ReviewState = {
+        "paid_scope_context": admission,
+        "generation_budget": reasoning_client.generation_budget,
         "review_id": payload["review_id"],
         "workload_brief": payload["workload_brief"],
         "retrieval_query": payload["retrieval_query"],
@@ -122,21 +180,28 @@ def _invoke_deeper(payload: dict[str, Any]) -> dict[str, Any]:
         "vectors_client": _VECTORS_CLIENT,
         "lexical_corpus_index": _LEXICAL_CORPUS_INDEX,
         "guardrails_client": _GUARDRAILS_CLIENT,
-        "reasoning_client": _DEEPER_REASONING_CLIENT,
-        "max_tokens": payload.get("max_tokens", _MAX_TOKENS),
+        "reasoning_client": reasoning_client,
+        "max_tokens": min(_MAX_TOKENS, 4096),
         "corpus_version": payload.get("corpus_version", "unknown"),
         "deterministic_rule_version": payload.get("deterministic_rule_version"),
         "deep_mode": True,
         "parent_finding_id": payload["parent_finding_id"],
         "parent_finding": payload.get("parent_finding"),
     }
-    result_state = _DEEPER_GRAPH.invoke(initial_state)
+    try:
+        result_state = _DEEPER_GRAPH.invoke(initial_state)
+    except AdmissionDenied as exc:
+        return {"status": "admission_denied", "code": exc.code}
+    except RequestBudgetExceeded as exc:
+        return _bounded_result(payload, exc.code)
     return {
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
         "dropped_model_findings": result_state.get("dropped_model_findings", []),
+        "unverified_findings": result_state.get("unverified_findings", []),
         "model_output_counts": result_state.get("model_output_counts"),
         "model_findings_capped": result_state.get("model_findings_capped", 0),
+        "retrieval_omitted_count": result_state.get("retrieval_omitted_count", 0),
     }
 
 
@@ -172,10 +237,21 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     size limit; nothing downstream of this entrypoint needs the raw
     chunks, only the findings they produced).
     """
+    try:
+        admission = authorize_payload(payload)
+    except AdmissionDenied as exc:
+        return {"status": "admission_denied", "code": exc.code}
     if payload.get("mode") == "deeper":
         return _invoke_deeper(payload)
 
+    try:
+        reasoning_client = _budget_client(payload, _REASONING_CLIENT)
+    except AdmissionDenied as exc:
+        return {"status": "admission_denied", "code": exc.code}
+
     initial_state: ReviewState = {
+        "paid_scope_context": admission,
+        "generation_budget": reasoning_client.generation_budget,
         "review_id": payload["review_id"],
         "workload_brief": payload["workload_brief"],
         "baseline_answers": payload.get("baseline_answers", {}),
@@ -186,8 +262,9 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
         "vectors_client": _VECTORS_CLIENT,
         "lexical_corpus_index": _LEXICAL_CORPUS_INDEX,
         "guardrails_client": _GUARDRAILS_CLIENT,
-        "reasoning_client": _REASONING_CLIENT,
-        "max_tokens": payload.get("max_tokens", _MAX_TOKENS),
+        "reasoning_client": reasoning_client,
+        "max_tokens": min(_MAX_TOKENS, 12288),
+        "verification_enabled": reasoning_client.generation_budget.verification_enabled,
         "corpus_version": payload.get("corpus_version", "unknown"),
         "deterministic_rule_version": payload.get("deterministic_rule_version"),
     }
@@ -196,7 +273,12 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
     # thread_id isn't required for correctness — context.session_id (set
     # by the Step Functions RuntimeSessionId parameter) is available for
     # request correlation/logging if needed.
-    result_state = _GRAPH.invoke(initial_state)
+    try:
+        result_state = _GRAPH.invoke(initial_state)
+    except AdmissionDenied as exc:
+        return {"status": "admission_denied", "code": exc.code}
+    except RequestBudgetExceeded as exc:
+        return _bounded_result(payload, exc.code)
 
     if result_state.get("needs_clarification"):
         return {
@@ -209,9 +291,12 @@ def invoke(payload: dict[str, Any], context: Any) -> dict[str, Any]:
         "status": "complete",
         "findings": result_state.get("reasoned_findings", []),
         "dropped_model_findings": result_state.get("dropped_model_findings", []),
+        "unverified_findings": result_state.get("unverified_findings", []),
         "model_output_counts": result_state.get("model_output_counts"),
         "model_findings_capped": result_state.get("model_findings_capped", 0),
+        "retrieval_omitted_count": result_state.get("retrieval_omitted_count", 0),
         # Returned on the success path too, so Finalize can persist
+        "additional_verification": result_state.get("additional_verification"),
         # per-field preflight outcomes for a completed review.
         "preflight_fields": result_state.get("preflight_fields", {}),
         "defaults_version": result_state.get("defaults_version"),

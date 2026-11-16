@@ -6,9 +6,13 @@ import json
 import os
 import time
 
+import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
+from backend.agent.request_budget import prepare_envelope
 from backend.lambdas.validate.handler import validate_findings
+from backend.shared.admission import AdmissionDenied
 from backend.shared.analysis_quality import build_analysis_quality, public_analysis_quality
 from backend.shared.clients import (
     AgentCoreRuntimeClient,
@@ -18,8 +22,17 @@ from backend.shared.clients import (
 )
 from backend.shared.deeper_jobs import job_id_for, job_key, public_job
 from backend.shared.kill_switch import paid_work_allowed
+from backend.shared.model_request_budget import RequestBudgetExceeded
 from backend.shared.models.finding import DepthLevel, Finding
 from backend.shared.retention import review_expires_at, review_is_live
+from backend.shared.review_screen import screen_review
+from backend.shared.scope_admission import (
+    eligible_parent,
+    operation_reservation,
+    prepare_operation,
+    record_request_envelope,
+)
+from backend.shared.unverified import MAX_UNVERIFIED, unverified_finding, unverified_findings
 
 AGENT_READ_TIMEOUT_SECONDS = 300
 # Kept back from the Lambda's remaining time to record the outcome.
@@ -27,6 +40,21 @@ POST_AGENT_RESERVE_SECONDS = 20
 # Below this, a deeper model call can't finish, so the job fails cleanly
 # instead of letting the Lambda time out mid-call.
 MIN_AGENT_SECONDS = 90
+
+
+def _request_envelope(payload: dict, reservation: int) -> dict:
+    return prepare_envelope(
+        payload,
+        boto3.client(
+            "bedrock-runtime",
+            config=Config(
+                connect_timeout=2,
+                read_timeout=15,
+                retries={"total_max_attempts": 1},
+            ),
+        ),
+        reservation,
+    )
 
 
 def agent_read_timeout(context: object) -> int | None:
@@ -141,15 +169,16 @@ def run_job(event: dict, context: object) -> dict:
         parent = next((f for f in ledger.get("findings", []) if f.get("finding_id") == fid), None)
         if parent is None or not ledger.get("workload_brief"):
             return _fail(table, rid, fid, jid, "invalid_context")
+        eligible_parent(rid, ledger.get("review_scope"))
         agent_wait = agent_read_timeout(context)
         if agent_wait is None:
             return _fail(table, rid, fid, jid, "timed_out")
-        result = AgentCoreRuntimeClient(
-            agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
-            read_timeout_seconds=agent_wait,
-        ).invoke(
-            payload={
+        payload = prepare_operation(
+            review,
+            ledger["review_scope"],
+            {
                 "mode": "deeper",
+                "analysis_seconds": min(240, agent_wait - 10),
                 "review_id": rid,
                 "parent_finding_id": fid,
                 "parent_finding": parent,
@@ -168,16 +197,40 @@ def run_job(event: dict, context: object) -> dict:
                 "corpus_version": parent.get("corpus_version", "unknown"),
                 "deterministic_rule_version": parent.get("deterministic_rule_version"),
             },
+            operation=f"deeper:{fid}",
+            job_id=jid,
+        )
+        envelope = _request_envelope(payload, operation_reservation(payload))
+        record_request_envelope(payload, envelope)
+        if not screen_review(payload):
+            return _fail(table, rid, fid, jid, "input_blocked")
+        agent_wait = agent_read_timeout(context)
+        if agent_wait is None:
+            return _fail(table, rid, fid, jid, "timed_out")
+        result = AgentCoreRuntimeClient(
+            agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
+            read_timeout_seconds=agent_wait,
+        ).invoke(
+            payload=payload,
             runtime_session_id=f"archibrief-deeper-review-session-{jid}",
         )
+        if result.get("status") == "admission_denied":
+            return _fail(table, rid, fid, jid, "scope_manifest_required")
+        if result.get("budget_reason"):
+            return _fail(table, rid, fid, jid, result["budget_reason"])
         raw = result["findings"]
-        valid, _rejected = validate_findings(raw)
+        valid, rejected = validate_findings(raw)
+        unverified = unverified_findings(result.get("unverified_findings"))
+        unverified.extend(unverified_finding(item["raw"], "invalid_fields") for item in rejected)
+        unverified = unverified[:MAX_UNVERIFIED]
         quality = build_analysis_quality(
             result.get("model_output_counts"),
             raw,
             [f.model_dump(mode="json") for f in valid],
             model_findings_capped=bool(result.get("model_findings_capped")),
         )
+        if result.get("retrieval_omitted_count"):
+            quality["reason_codes"].append("evidence_budget_limited")
         findings = [
             f.model_copy(
                 update={"review_id": rid, "parent_finding_id": fid, "depth_level": DepthLevel.DEEP}
@@ -213,6 +266,7 @@ def run_job(event: dict, context: object) -> dict:
                 "reviewId": rid,
                 "findingId": f"RESULT#{fid}",
                 "kind": "deeper-result",
+                "unverified_findings": unverified,
                 "parent_finding_id": fid,
                 "finding_ids": [f.finding_id for f in findings],
                 "analysis_quality": quality,
@@ -241,6 +295,10 @@ def run_job(event: dict, context: object) -> dict:
         )
         DynamoDBTransactionClient().transact_write(actions)
         return {"status": "complete"}
+    except AdmissionDenied as exc:
+        return _fail(table, rid, fid, jid, exc.code)
+    except RequestBudgetExceeded as exc:
+        return _fail(table, rid, fid, jid, exc.code)
     except Exception as exc:  # noqa: BLE001 - no payloads/errors in durable history
         failure = {"event": "deeper_job_failed", "kind": type(exc).__name__}
         if isinstance(exc, ClientError):

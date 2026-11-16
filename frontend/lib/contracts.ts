@@ -122,6 +122,7 @@ export interface BriefMeta {
 }
 
 export interface ReportFinding {
+  independent_check?: "supported" | "not-independently-checked" | "fix-needs-confirmation";
   record: Finding;
   presentation: FindingPresentation;
   // Independent of evidence type and evidence confidence. Absent in old reports.
@@ -140,7 +141,20 @@ export interface BaselineAnswer {
   policy_version: string;
 }
 
+export interface UnverifiedFinding {
+  finding_id: string;
+  finding: string;
+  evidence: string;
+  resource: string;
+  category: string | null;
+  concern: string | null;
+  reason_code: string;
+  reason: string;
+  recommendation_withheld: true;
+}
+
 export interface ReviewReport {
+  unverified_findings?: UnverifiedFinding[];
   review_scope?: {
     version: "review-scope-public@1";
     known_y: number | null;
@@ -247,6 +261,7 @@ export interface ReviewStatusPointer {
   // Set when the pipeline fails (backend/lambdas/mark_review_failed): a
   // short public code, mapped to friendly copy by failureMessageFor().
   failureCode?: string;
+  scopeFailure?: { known_y: number; count_complete: boolean };
   failedAt?: string;
 }
 
@@ -383,6 +398,7 @@ export interface ChatTurn {
   status: ChatStatus;
   refusal_reason: string | null;
   answer: ChatParagraph[];
+  unsupported?: string[];
   asked_at: string | null;
   model_id: string | null;
   prompt_version: string | null;

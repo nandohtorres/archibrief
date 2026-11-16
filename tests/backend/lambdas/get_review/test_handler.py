@@ -74,6 +74,19 @@ def test_returns_pending_pointer_subset_for_incomplete_review(monkeypatch):
     assert "clarificationTaskToken" not in body
 
 
+def test_scope_failure_exposes_only_validated_counts(monkeypatch):
+    _setup(monkeypatch, {"r1": {
+        "reviewId": "r1", "status": "failed", "ttl": int(time.time()) + 86400,
+        "failureCode": "resource_limit_exceeded",
+        "scopeFailure": {"known_y": 84, "count_complete": False, "raw": "SECRET"},
+    }})
+    body = json.loads(handler(_event("r1"), None)["body"])
+    assert body["scopeFailure"] == {"known_y": 84, "count_complete": False}
+    assert "SECRET" not in json.dumps(body)
+    _FakeDynamoDBClient.ITEMS["r1"]["scopeFailure"]["known_y"] = "SECRET"
+    assert "scopeFailure" not in json.loads(handler(_event("r1"), None)["body"])
+
+
 def test_returns_full_review_report_for_complete_review(monkeypatch):
     ledger = {
         "workload_brief": "a 3-tier app",

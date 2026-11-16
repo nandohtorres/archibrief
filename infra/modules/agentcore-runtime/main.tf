@@ -91,6 +91,25 @@ resource "aws_iam_role" "agentcore_execution" {
 # boundary and deploy-role-policy.example.json; keep them in sync.
 data "aws_iam_policy_document" "agentcore_execution" {
   statement {
+    sid     = "CountReviewTokens"
+    actions = ["bedrock:CountTokens"]
+    resources = [
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+    ]
+  }
+  statement {
+    sid       = "ReadAdmittedOperations"
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem"]
+    resources = [var.usage_counters_table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["operation#*"]
+    }
+  }
+  statement {
     sid       = "ApplyGuardrail"
     effect    = "Allow"
     actions   = ["bedrock:ApplyGuardrail"]
@@ -178,6 +197,7 @@ resource "aws_bedrockagentcore_agent_runtime" "review" {
   # defaults, which exist only so the module imports in tests. An empty
   # guardrail ID, for example, fails later with a confusing error.
   environment_variables = {
+    USAGE_COUNTERS_TABLE_NAME       = var.usage_counters_table_name
     ARCHIBRIEF_GUARDRAIL_ID         = var.guardrail_id
     ARCHIBRIEF_GUARDRAIL_VERSION    = var.guardrail_version
     ARCHIBRIEF_VECTOR_BUCKET        = var.vector_bucket_name
