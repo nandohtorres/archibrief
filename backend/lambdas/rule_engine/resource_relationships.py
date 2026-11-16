@@ -132,7 +132,7 @@ def key_usage(parsed: dict) -> dict[tuple[str, str], dict]:
 
 
 def lambda_invocation_paths(parsed: dict) -> dict[str, dict]:
-    """Known declared URL, event-source-mapping and SNS paths, not runtime usage.
+    """Declared sync/polled and service-async paths, not runtime usage.
 
     A function permission is not an invoker. Uninspected/external sources stay
     unknown, never a claim that asynchronous invocation cannot occur.
@@ -144,10 +144,20 @@ def lambda_invocation_paths(parsed: dict) -> dict[str, dict]:
         if isinstance(body, dict) and is_created(body, parsed)
     }
     paths = {name: [] for name in functions}
+
+    def add(kind, name, body, value, mode):
+        ref = _reference(value, parsed, body)
+        if ref and ref[0] == "aws_lambda_function" and ref[1] in paths:
+            path = {"resource": f"{kind}.{display_name(name)}", "mode": mode}
+            if path not in paths[ref[1]]:
+                paths[ref[1]].append(path)
+
     for kind, attribute, mode in (
         ("aws_lambda_function_url", "function_name", "synchronous_function_url"),
+        ("aws_apigatewayv2_integration", "integration_uri", "synchronous_api_gateway"),
         ("aws_lambda_event_source_mapping", "function_name", "polled_event_source"),
         ("aws_sns_topic_subscription", "endpoint", "asynchronous_sns"),
+        ("aws_cloudwatch_event_target", "arn", "asynchronous_eventbridge"),
     ):
         for name, body in resources.get(kind, {}).items():
             if not isinstance(body, dict) or not is_created(body, parsed):
@@ -157,10 +167,23 @@ def lambda_invocation_paths(parsed: dict) -> dict[str, dict]:
                 and resolve(body.get("protocol"), parsed, module_of(body)) != "lambda"
             ):
                 continue
-            ref = _reference(body.get(attribute), parsed, body)
-            if not ref or ref[0] != "aws_lambda_function" or ref[1] not in paths:
-                continue
-            paths[ref[1]].append({"resource": f"{kind}.{display_name(name)}", "mode": mode})
+            add(kind, name, body, body.get(attribute), mode)
+    for name, body in resources.get("aws_s3_bucket_notification", {}).items():
+        if not isinstance(body, dict) or not is_created(body, parsed):
+            continue
+        blocks = body.get("lambda_function", [])
+        blocks = [blocks] if isinstance(blocks, dict) else blocks
+        if not isinstance(blocks, list):
+            continue
+        for block in blocks:
+            if isinstance(block, dict):
+                add(
+                    "aws_s3_bucket_notification",
+                    name,
+                    body,
+                    block.get("lambda_function_arn"),
+                    "asynchronous_s3",
+                )
     return {
         name: {
             "declared_paths": sorted(found, key=lambda p: p["resource"])[:MAX_REFERENCES],
@@ -168,6 +191,10 @@ def lambda_invocation_paths(parsed: dict) -> dict[str, dict]:
             "declared_paths_omitted": max(0, len(found) - MAX_REFERENCES),
             "asynchronous_invoker": "declared_sns_subscription"
             if any(p["mode"] == "asynchronous_sns" for p in found)
+            else "declared_s3_notification"
+            if any(p["mode"] == "asynchronous_s3" for p in found)
+            else "declared_eventbridge_target"
+            if any(p["mode"] == "asynchronous_eventbridge" for p in found)
             else "not_established",
             "external_invokers": "not_observed",
             "function_dlq_scope": "asynchronous_invocations_only",

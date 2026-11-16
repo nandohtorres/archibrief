@@ -319,6 +319,121 @@ def test_unsupported_invoker_does_not_fabricate_an_async_source():
     )
 
 
+@pytest.mark.parametrize("module", ["", "lane"])
+@pytest.mark.parametrize("source", ["s3", "eventbridge", "sns"])
+def test_service_async_sources_preserve_function_dlq_advice(source, module):
+    name = f"{module}/worker" if module else "worker"
+    tag = {MODULE_FIELD: module} if module else {}
+    reference = "${aws_lambda_function.worker.arn}"
+    resources = {"aws_lambda_function": {name: dict(tag)}}
+    if source == "s3":
+        resources["aws_s3_bucket_notification"] = {
+            "notify": {**tag, "lambda_function": [{"lambda_function_arn": reference}]}
+        }
+    elif source == "eventbridge":
+        resources["aws_cloudwatch_event_target"] = {"target": {**tag, "arn": reference}}
+    else:
+        resources["aws_sns_topic_subscription"] = {
+            "subscription": {**tag, "protocol": "lambda", "endpoint": reference}
+        }
+    parsed = {"resources": resources}
+    paths = lambda_invocation_paths(parsed)[name]
+    assert paths["declared_paths"][0]["mode"] == f"asynchronous_{source}"
+    assert paths["asynchronous_invoker"] != "not_established"
+    assert (
+        context_remediation_reasons(
+            {
+                "finding": f"Lambda {name} needs failure handling",
+                "recommendation": f"Add dead_letter_config to {name}.",
+            },
+            build_resource_summary(parsed),
+            [],
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize("sync", ["url", "api", "mapping", "none"])
+@pytest.mark.parametrize("mixed", [False, True])
+def test_dlq_rejection_requires_positive_sync_or_polled_evidence_without_async(
+    sync, mixed
+):
+    resources = {"aws_lambda_function": {"worker": {}}}
+    reference = "${aws_lambda_function.worker.arn}"
+    if sync == "url":
+        resources["aws_lambda_function_url"] = {"url": {"function_name": reference}}
+    elif sync == "api":
+        resources["aws_apigatewayv2_integration"] = {
+            "integration": {"integration_uri": reference}
+        }
+    elif sync == "mapping":
+        resources["aws_lambda_event_source_mapping"] = {
+            "mapping": {"function_name": reference}
+        }
+    if mixed:
+        resources["aws_cloudwatch_event_target"] = {"async": {"arn": reference}}
+    item = {
+        "finding": "Lambda worker needs failure handling",
+        "recommendation": "Add destination_config to worker.",
+    }
+    reasons = context_remediation_reasons(
+        item, build_resource_summary({"resources": resources}), []
+    )
+    assert ("function_dlq_async_path_not_established" in reasons) is (
+        sync != "none" and not mixed
+    )
+
+
+def test_s3_path_after_summary_path_cap_still_prevents_false_rejection():
+    reference = "${aws_lambda_function.worker.arn}"
+    parsed = {
+        "resources": {
+            "aws_lambda_function": {"worker": {}},
+            "aws_lambda_function_url": {
+                f"url{i}": {"function_name": reference} for i in range(20)
+            },
+            "aws_s3_bucket_notification": {
+                "late": {"lambda_function": [{"lambda_function_arn": reference}]}
+            },
+        }
+    }
+    paths = lambda_invocation_paths(parsed)["worker"]
+    assert paths["declared_paths_omitted"] > 0
+    assert paths["asynchronous_invoker"] == "declared_s3_notification"
+    assert (
+        context_remediation_reasons(
+            {
+                "finding": "Lambda worker needs a DLQ",
+                "recommendation": "Add dead_letter_config to worker.",
+            },
+            build_resource_summary(parsed),
+            [],
+        )
+        == []
+    )
+
+
+def test_zero_copy_async_source_is_not_a_declared_async_invoker():
+    parsed = {
+        "resources": {
+            "aws_lambda_function": {"worker": {}},
+            "aws_lambda_function_url": {
+                "url": {"function_name": "${aws_lambda_function.worker.arn}"}
+            },
+            "aws_cloudwatch_event_target": {
+                "unused": {"count": 0, "arn": "${aws_lambda_function.worker.arn}"}
+            },
+        }
+    }
+    item = {
+        "finding": "Lambda worker needs a DLQ",
+        "recommendation": "Add dead_letter_config to worker.",
+    }
+    assert context_remediation_reasons(item, build_resource_summary(parsed), []) == [
+        "function_dlq_async_path_not_established"
+    ]
+
+
 def test_known_key_usage_and_a_correct_rebuttal_are_not_rejected():
     assert (
         context_remediation_reasons(

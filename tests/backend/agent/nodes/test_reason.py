@@ -834,7 +834,7 @@ def test_reasoning_logs_sizes_and_rejection_kinds_never_text(capsys):
     result = next(e for e in logged if e["event"] == "reasoning_result")
     assert result == {
         "event": "reasoning_result",
-        "remediation_policy_version": "remediation_checks@2026-11-15b",
+        "remediation_policy_version": "remediation_checks@2026-11-16a",
         "review_id": "r1",
         "emitted": 2,
         "capped": 0,
