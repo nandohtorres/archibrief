@@ -1,5 +1,7 @@
 # ADR 0061: Small-Workload Accuracy Pilot (50 Resource Declarations)
 
+> **Implementation checkpoint, 2026-11-16:** The proposal below remains the original design rationale, not proof that every pilot gate passed. P2 admission validation remains incomplete; P3b is default off. Accuracy repairs can ship independently. Current owner failure policy is Option A (fail open), with detection/remediation judged separately. See [current status and evaluation gates](../current-status.md).
+
 **Status:** Proposed (direction accepted 2026-11-10; implementation details
 under precision review). Extends ADR-0027 (untrusted ingestion), ADR-0049
 and ADR-0056 (resource summary), ADR-0059 (bounded model input). It adds a
