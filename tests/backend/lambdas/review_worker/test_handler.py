@@ -313,6 +313,7 @@ def test_a_model_failure_still_publishes_the_rule_findings(
     assert dict(calls)["validate"] == {
         "findings": [rule_finding],
         "unverified_findings": [],
+        "disproved_findings": [],
     }
     ledger = json.loads(
         s3.get_object(
@@ -454,11 +455,13 @@ def test_preflight_count_failure_stops_before_paid_screen_and_runtime(
         ),
     )
     monkeypatch.setattr(worker, "screen_review", lambda payload: paid.append("screen"))
-    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
     assert paid == [] and agent_calls == []
-    assert not {"validate", "audit", "finalize"}.intersection(name for name, _ in calls)
+    assert {"validate", "audit", "finalize"}.issubset(name for name, _ in calls)
     table = boto3.resource("dynamodb").Table("reviews")
-    assert table.get_item(Key={"reviewId": review_id})["Item"]["failureCode"] == code
+    assert table.get_item(Key={"reviewId": review_id})["Item"]["status"] == "complete"
+    quality = dict(calls)["finalize"]["analysis_quality"]
+    assert "model_unavailable" in quality["reason_codes"]
     rows = boto3.resource("dynamodb").Table("counters").scan()["Items"]
     receipt = next(row for row in rows if row["counterKey"].endswith("#initial"))
     assert receipt["released"] is True
@@ -491,3 +494,34 @@ def test_preflight_count_admits_before_paid_screen_and_runtime(prepared, monkeyp
     monkeypatch.setattr(worker, "screen_review", screen)
     assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
     assert order == ["count", "screen"] and len(agent_calls) == 1
+
+
+def test_record_envelope_storage_failure_releases_unpaid_reservation(
+    prepared, monkeypatch
+):
+    review_id, _s3, _calls, _replies, agent_calls = prepared
+
+    def fail(*args):
+        raise RuntimeError("synthetic storage failure")
+
+    monkeypatch.setattr(worker, "record_request_envelope", fail)
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    assert agent_calls == []
+    rows = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    assert (
+        next(r for r in rows if r["counterKey"].endswith("#initial"))["released"]
+        is True
+    )
+
+
+def test_ambiguous_screen_timeout_keeps_the_full_reservation(prepared, monkeypatch):
+    review_id, _s3, _calls, _replies, agent_calls = prepared
+
+    def timeout(payload):
+        raise TimeoutError("synthetic dispatched screening timeout")
+
+    monkeypatch.setattr(worker, "screen_review", timeout)
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    assert agent_calls == []
+    rows = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    assert not any(row.get("released") for row in rows)

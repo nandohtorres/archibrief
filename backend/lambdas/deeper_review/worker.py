@@ -12,7 +12,7 @@ from botocore.exceptions import ClientError
 
 from backend.agent.request_budget import prepare_envelope
 from backend.lambdas.validate.handler import validate_findings
-from backend.shared.admission import AdmissionDenied
+from backend.shared.admission import AdmissionDenied, release_operation
 from backend.shared.analysis_quality import build_analysis_quality, public_analysis_quality
 from backend.shared.clients import (
     AgentCoreRuntimeClient,
@@ -32,7 +32,7 @@ from backend.shared.scope_admission import (
     prepare_operation,
     record_request_envelope,
 )
-from backend.shared.unverified import MAX_UNVERIFIED, unverified_finding, unverified_findings
+from backend.shared.unverified import unverified_finding, unverified_findings
 
 AGENT_READ_TIMEOUT_SECONDS = 300
 # Kept back from the Lambda's remaining time to record the outcome.
@@ -157,6 +157,7 @@ def run_job(event: dict, context: object) -> dict:
         if exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return {"status": "in_progress"}
         raise
+    paid_started = False
     try:
         review = DynamoDBClient(table_name=os.environ["REVIEWS_TABLE_NAME"]).get_item(
             {"reviewId": rid}, consistent=True
@@ -169,13 +170,13 @@ def run_job(event: dict, context: object) -> dict:
         parent = next((f for f in ledger.get("findings", []) if f.get("finding_id") == fid), None)
         if parent is None or not ledger.get("workload_brief"):
             return _fail(table, rid, fid, jid, "invalid_context")
-        eligible_parent(rid, ledger.get("review_scope"))
+        eligible_parent(rid, ledger.get("review_scope"), review=review)
         agent_wait = agent_read_timeout(context)
         if agent_wait is None:
             return _fail(table, rid, fid, jid, "timed_out")
         payload = prepare_operation(
             review,
-            ledger["review_scope"],
+            ledger.get("review_scope"),
             {
                 "mode": "deeper",
                 "analysis_seconds": min(240, agent_wait - 10),
@@ -202,6 +203,7 @@ def run_job(event: dict, context: object) -> dict:
         )
         envelope = _request_envelope(payload, operation_reservation(payload))
         record_request_envelope(payload, envelope)
+        paid_started = True
         if not screen_review(payload):
             return _fail(table, rid, fid, jid, "input_blocked")
         agent_wait = agent_read_timeout(context)
@@ -221,8 +223,14 @@ def run_job(event: dict, context: object) -> dict:
         raw = result["findings"]
         valid, rejected = validate_findings(raw)
         unverified = unverified_findings(result.get("unverified_findings"))
-        unverified.extend(unverified_finding(item["raw"], "invalid_fields") for item in rejected)
-        unverified = unverified[:MAX_UNVERIFIED]
+        unverified.extend(
+            unverified_finding(
+                item["raw"],
+                item.get("reason_code", "invalid_fields"),
+                checks=[{"name": "format", "status": "failed"}],
+            )
+            for item in rejected
+        )
         quality = build_analysis_quality(
             result.get("model_output_counts"),
             raw,
@@ -237,16 +245,27 @@ def run_job(event: dict, context: object) -> dict:
             )
             for f in valid
         ]
-        if (
-            len(findings) > 98
-            or len({f.finding_id for f in findings}) != len(findings)
-            or any(
-                f.finding_id in {p["finding_id"] for p in ledger["findings"]}
-                or f.finding_id.startswith(("JOB#", "RESULT#"))
-                for f in findings
+        # A transaction has room for 98 children plus its result marker and job.
+        # Preserve overflow and colliding IDs without overwriting existing rows.
+        publishable = []
+        parent_ids = {p["finding_id"] for p in ledger["findings"]}
+        for finding in findings:
+            collision = finding.finding_id in parent_ids or finding.finding_id.startswith(
+                ("JOB#", "RESULT#")
             )
-        ):
-            return _fail(table, rid, fid, jid, "invalid_output")
+            if collision or len(publishable) >= 98:
+                unverified.append(
+                    unverified_finding(
+                        finding.model_dump(mode="json"),
+                        "duplicate_finding" if collision else "model_limit",
+                        checks=[
+                            {"name": "duplicate" if collision else "limit", "status": "failed"}
+                        ],
+                    )
+                )
+            else:
+                publishable.append(finding)
+        findings = publishable
         now = int(time.time())
         if min(review_expires_at(review), int(job["deadline"])) <= now:
             return _fail(table, rid, fid, jid, "timed_out")
@@ -267,6 +286,7 @@ def run_job(event: dict, context: object) -> dict:
                 "findingId": f"RESULT#{fid}",
                 "kind": "deeper-result",
                 "unverified_findings": unverified,
+                "disproved_findings": unverified_findings(result.get("disproved_findings")),
                 "parent_finding_id": fid,
                 "finding_ids": [f.finding_id for f in findings],
                 "analysis_quality": quality,
@@ -306,3 +326,12 @@ def run_job(event: dict, context: object) -> dict:
             failure["code"] = exc.response["Error"]["Code"]
         print(json.dumps(failure))
         return _fail(table, rid, fid, jid, "analysis_failed")
+
+    finally:
+        if not paid_started:
+            try:
+                release_operation(rid, f"deeper:{fid}")
+            except Exception as exc:  # noqa: BLE001 - preserve the original job result.
+                print(
+                    json.dumps({"event": "reservation_release_failed", "kind": type(exc).__name__})
+                )

@@ -1,4 +1,4 @@
-import { publicUnverified, UNVERIFIED_NOTE } from "./unverified";
+import { publicUnverified, UNVERIFIED_NOTE, checkTally } from "./unverified";
 import type { ChatCitation, ChatTurn, ReportFinding, ReviewReport } from "./contracts";
 import type { DemoEntry, ReviewerNote } from "./demos";
 import { evidenceLabel, notesForTurn, reportSnapshotLabel } from "./report-review";
@@ -192,6 +192,12 @@ function answerHtml(turn: ChatTurn): string {
   return removed ? `${html}<p class="meta">${escapeHtml(MONEY_NOTE)}</p>` : html;
 }
 
+function sectionHtml(title: string, value: unknown, note: string, failed = false): string {
+  const items = publicUnverified(value);
+  if (!items.length && !failed) return "";
+  return `<section><h2>${escapeHtml(title)}</h2><p>${escapeHtml(note)}</p>${failed ? "<p>The AI analysis failed or timed out, or could not start.</p>" : ""}${items.map((item) => `<article><h3>${escapeHtml(item.finding)}</h3><p>${escapeHtml(item.resource)}</p><p>${escapeHtml(checkTally(item))}</p><p>${escapeHtml(item.reason)}</p><p>${escapeHtml(item.evidence)}</p>${item.submitted_quote ? `<p>Submitted quote (not confirmed): ${escapeHtml(item.submitted_quote)}</p>` : ""}${(item.supporting_evidence ?? []).map((ref) => `<blockquote>Cited supporting ${escapeHtml(ref.kind)}${ref.truncated ? " (excerpt)" : ""}: ${escapeHtml(ref.text)}</blockquote>`).join("")}${(item.contradicting_evidence ?? []).map((ref) => `<blockquote>Contradicting ${escapeHtml(ref.kind)}${ref.truncated ? " (excerpt)" : ""}: ${escapeHtml(ref.text)}</blockquote>`).join("")}<p>Recommendation withheld.</p></article>`).join("")}</section>`;
+}
+
 // One self-contained HTML file: inline CSS, no scripts, print-friendly
 // (ADR-0050 §10). Every value is escaped; model text is never inserted as
 // HTML.
@@ -306,19 +312,8 @@ ${report.findings.some(({ record }) => record.parent_finding_id) && !report.repo
 <h2>Findings (${report.findings.length})</h2>
 <p class="meta">Each finding has its technical record and its Stakeholder Brief explanation. Commitment labels (${escapeHtml(Object.values(TIER_LABELS).join(", "))}): ${escapeHtml(TIER_LEGEND)} ${escapeHtml(SAFETY_SENTENCE)} No cost estimates are published.</p>
 ${findings}
-${
-  publicUnverified(report.unverified_findings).length ||
-  report.analysis_quality?.reason_codes.includes("model_unavailable")
-    ? `<section><h2>Unable to verify</h2><p>${escapeHtml(UNVERIFIED_NOTE)}</p>${report.analysis_quality?.reason_codes.includes("model_unavailable") ? "<p>The AI analysis failed or timed out.</p>" : ""}${publicUnverified(
-        report.unverified_findings,
-      )
-        .map(
-          (item) =>
-            `<article><strong>Unverified claim</strong><h3>${escapeHtml(item.finding)}</h3><p>${escapeHtml(item.resource)}</p><p>${escapeHtml(item.reason)}</p><p>${escapeHtml(item.evidence)}</p><p>Recommendation withheld.</p></article>`,
-        )
-        .join("")}</section>`
-    : ""
-}
+${sectionHtml("Unable to verify", report.unverified_findings, UNVERIFIED_NOTE, !!report.analysis_quality?.reason_codes.includes("model_unavailable"))}
+${sectionHtml("Disproved", report.disproved_findings, "These claims are contradicted by the supplied facts or guidance and are excluded from findings totals, the brief and chat grounding.")}
 <h2>Conversation</h2>
 ${conversation}
 <footer>

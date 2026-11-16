@@ -143,24 +143,35 @@ def test_results_are_module_scoped_and_unsafe_names_dropped(tmp_path):
     assert [r["resource_key"] for r in results] == ["b/logs", "a/inner"]
 
 
-@pytest.mark.parametrize("address, key", [
-    ("module.edge_lab", "edge_lab"),
-    ("module.outer[0].module.inner[0]", "outer/inner"),
-    ('module.outer["a.b"].module.inner["x.y"]', "outer/inner"),
-])
-def test_module_only_cause_is_reported_at_module_scope_without_a_phantom_resource(tmp_path, address, key):
+@pytest.mark.parametrize(
+    "address, key",
+    [
+        ("module.edge_lab", "edge_lab"),
+        ("module.outer[0].module.inner[0]", "outer/inner"),
+        ('module.outer["a.b"].module.inner["x.y"]', "outer/inner"),
+    ],
+)
+def test_module_only_cause_is_reported_at_module_scope_without_a_phantom_resource(
+    tmp_path, address, key
+):
     from backend.lambdas.rule_engine.handler import run_rules
 
     files = [_write(tmp_path / "main.tf", "")]
-    results = trusted_results(_report("main.tf", [_item("AWS-0107", address)]), str(tmp_path), files)
+    results = trusted_results(
+        _report("main.tf", [_item("AWS-0107", address)]), str(tmp_path), files
+    )
     assert results[0]["scope"] == "module"
     assert results[0]["resource_key"] == key
-    findings = run_rules({"resources": {}}, "module-cause", {"status": "ok", "results": results})
+    findings = run_rules(
+        {"resources": {}}, "module-cause", {"status": "ok", "results": results}
+    )
     relevant = [f for f in findings if key in f.finding]
     assert relevant
     assert all('resource "module"' not in f.evidence for f in relevant)
     assert any("attribution" in f.evidence for f in relevant)
-    assert any(f.type.value == "not-observable" and "attribut" in f.finding for f in findings)
+    assert any(
+        f.type.value == "not-observable" and "attribut" in f.finding for f in findings
+    )
 
 
 def test_counted_and_for_each_resources_keep_their_results(tmp_path):
@@ -187,40 +198,47 @@ def test_counted_and_for_each_resources_keep_their_results(tmp_path):
     assert [r["resource_key"] for r in results] == ["prod", "prod", "logs"]
 
 
-def test_results_are_capped(tmp_path, monkeypatch):
+def test_results_over_the_legacy_cap_are_preserved(tmp_path, monkeypatch):
     monkeypatch.setattr(scan, "MAX_RESULTS", 3)
     files = [_write(tmp_path / "main.tf", "")]
     report = _report(
         "main.tf", [_item("AWS-0090", f"aws_s3_bucket.b{i}") for i in range(10)]
     )
 
-    assert len(trusted_results(report, str(tmp_path), files)) == 3
+    assert len(trusted_results(report, str(tmp_path), files)) == 10
 
 
-def test_partial_scan_discloses_totals_and_falls_back_for_omitted_concerns(tmp_path, monkeypatch):
+def test_complete_scan_keeps_all_results_and_late_resource_concerns(
+    tmp_path, monkeypatch
+):
     from backend.lambdas.rule_engine.handler import run_rules
 
     monkeypatch.setattr(scan, "MAX_RESULTS", 3)
     files = [_write(tmp_path / "main.tf", "")]
-    report = _report("main.tf", [
-        *[_item("AWS-0090", f"aws_s3_bucket.b{i}") for i in range(4)],
-        _item("AWS-0180", "aws_db_instance.ledger"),
-    ])
+    report = _report(
+        "main.tf",
+        [
+            *[_item("AWS-0090", f"aws_s3_bucket.b{i}") for i in range(4)],
+            _item("AWS-0180", "aws_db_instance.ledger"),
+        ],
+    )
     monkeypatch.setattr(scan, "run_trivy", lambda *_a, **_k: report)
     result = scan.scan_files(str(tmp_path), files, trivy_path=__file__)
-    assert result["truncated"] is True
+    assert result["truncated"] is False
     assert result["results_total"] == 5
-    assert len(result["results"]) == 3
-    parsed = {"resources": {
-        "aws_db_instance": {"ledger": {"publicly_accessible": True}},
-        "aws_security_group": {"admin": {"ingress": [{
-            "from_port": 22, "to_port": 22, "cidr_blocks": ["0.0.0.0/0"]
-        }]}},
-    }}
+    assert len(result["results"]) == 5
+    parsed = {
+        "resources": {
+            "aws_db_instance": {"ledger": {"publicly_accessible": True}},
+        }
+    }
     findings = run_rules(parsed, "partial", scanner=result)
-    assert any("ledger" in f.finding and "publicly accessible" in f.finding for f in findings)
-    assert any("admin" in f.finding and "22" in f.finding for f in findings)
-    assert any(f.type.value == "not-observable" and "truncat" in f.finding for f in findings)
+    assert any(
+        "ledger" in f.finding and "publicly accessible" in f.finding for f in findings
+    )
+    assert not any(
+        f.type.value == "not-observable" and "truncat" in f.finding for f in findings
+    )
 
 
 def test_missing_binary_reports_unavailable(tmp_path):
@@ -330,7 +348,10 @@ IGNORE_COMMENTS = [
 
 
 def test_ignore_directives_are_defused_without_moving_lines(tmp_path):
-    text = "\n".join(f'{c}\nresource "aws_sns_topic" "t{i}" {{}}' for i, c in enumerate(IGNORE_COMMENTS))
+    text = "\n".join(
+        f'{c}\nresource "aws_sns_topic" "t{i}" {{}}'
+        for i, c in enumerate(IGNORE_COMMENTS)
+    )
     path = _write(tmp_path / "main.tf", text)
     tfvars = _write(tmp_path / "terraform.tfvars", 'note = "trivy:ignore:*"\n')
 

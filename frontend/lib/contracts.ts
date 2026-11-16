@@ -151,10 +151,16 @@ export interface UnverifiedFinding {
   reason_code: string;
   reason: string;
   recommendation_withheld: true;
+  disposition?: "disproved" | "unable-to-verify";
+  checks?: Array<{ name: string; status: "passed" | "failed" | "not-run" }>;
+  supporting_evidence?: Array<{ id: string; kind: string; text: string; truncated: boolean }>;
+  contradicting_evidence?: Array<{ id: string; kind: string; text: string; truncated: boolean }>;
+  submitted_quote?: string;
 }
 
 export interface ReviewReport {
   unverified_findings?: UnverifiedFinding[];
+  disproved_findings?: UnverifiedFinding[];
   review_scope?: {
     version: "review-scope-public@1";
     known_y: number | null;

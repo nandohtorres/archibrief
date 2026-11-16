@@ -4193,3 +4193,12 @@ textarea::placeholder {
   color: var(--text-muted);
   opacity: 1;
 }
+
+.disproved-findings {
+  border-color: var(--critical);
+  background: var(--critical-bg);
+  margin-top: var(--space-3);
+}
+.disproved-findings .unverified-badge {
+  color: var(--critical);
+}

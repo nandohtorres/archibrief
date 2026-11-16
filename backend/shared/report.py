@@ -17,7 +17,7 @@ from backend.shared.models.finding import Finding, FindingType
 from backend.shared.money_policy import code_without_money, field_without_money
 from backend.shared.scope_projection import public_review_scope
 from backend.shared.stakeholder.presentation import brief_meta
-from backend.shared.unverified import unverified_findings
+from backend.shared.unverified import unverified_finding, unverified_findings
 
 # Heuristic mapping that matches frontend/lib/fixtures.ts's fixtureReport
 # (deterministic-rule-result -> high, fact -> confirmed, assumption ->
@@ -60,7 +60,31 @@ def report_findings(findings: list[Finding]) -> list[dict[str, Any]]:
 
 
 def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> dict[str, Any]:
-    findings = [Finding.model_validate(f) for f in ledger.get("findings", [])]
+    from pydantic import ValidationError
+
+    ledger = dict(ledger)
+    failed = unverified_findings(ledger.get("unverified_findings"))
+    findings = []
+    seen = set()
+    for raw in ledger.get("findings", []):
+        try:
+            finding = Finding.model_validate(raw)
+            if finding.finding_id in seen:
+                failed.append(
+                    unverified_finding(
+                        raw, "duplicate_finding", checks=[{"name": "duplicate", "status": "failed"}]
+                    )
+                )
+            else:
+                seen.add(finding.finding_id)
+                findings.append(finding)
+        except (ValidationError, TypeError):
+            failed.append(
+                unverified_finding(
+                    raw, "invalid_fields", checks=[{"name": "format", "status": "failed"}]
+                )
+            )
+    ledger["unverified_findings"] = failed
 
     report = {
         "review_id": review_item["reviewId"],
@@ -81,20 +105,30 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
         "cost_estimate_tier": review_item.get("costEstimateTier", "medium"),
         "baseline_answers": ledger.get("baseline_answers", []),
         "findings": report_findings(findings),
-        "unverified_findings": [
-            {
-                **entry,
-                **{
-                    key: (
-                        code_without_money(entry[key])
-                        if key == "evidence"
-                        else field_without_money(entry[key])
-                    )[0]
-                    for key in ("finding", "evidence", "resource")
-                },
-            }
-            for entry in unverified_findings(ledger.get("unverified_findings"))
-        ],
+        **{
+            key: [
+                {
+                    **entry,
+                    **{
+                        field: (
+                            code_without_money(entry[field])
+                            if field == "evidence"
+                            else field_without_money(entry[field])
+                        )[0]
+                        for field in ("finding", "evidence", "resource", "submitted_quote")
+                    },
+                    **{
+                        side: [
+                            {**ref, "text": field_without_money(ref["text"])[0]}
+                            for ref in entry[side]
+                        ]
+                        for side in ("supporting_evidence", "contradicting_evidence")
+                    },
+                }
+                for entry in unverified_findings(ledger.get(key))
+            ]
+            for key in ("unverified_findings", "disproved_findings")
+        },
     }
     checks = (report["analysis_quality"].get("additional_verification") or {}).get("findings", [])
     by_id = {entry["finding_id"]: entry["status"] for entry in checks}
