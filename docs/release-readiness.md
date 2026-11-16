@@ -1,5 +1,7 @@
 # Release status
 
+> **2026-11-16 checkpoint:** The brief and first accuracy repairs are released. Five additional configuration checks shipped in [PR #69](https://github.com/nandohtorres/archibrief/pull/69), merge `9483635`. Admission, verification and rejected-claim disclosure are combined in the next local candidate, with verification off by default. See [current status](current-status.md).
+
 What is live, how a release ships, and what is still open. Live table and
 release steps updated 2026-11-16; the verification section below is from
 2026-10-29. The earlier local-candidate handoff (Codex branches, 2026-10-24)
@@ -11,10 +13,16 @@ is in git history; its branches were merged as PR #29 and later.
 submit Terraform within the daily limits, open the three hand-checked demos,
 go deeper on a finding, ask the report chat and share a read-only link.
 
-| Part | Revision | How it got there |
-|---|---|---|
-| Frontend | `8c90443` (PR #67, Stakeholder Brief) | Deployed automatically by `deploy-frontend.yml` after green CI on 2026-11-16 (ADR-0055) |
-| Backend (Lambdas, Step Functions, AgentCore runtime) | `8c90443` (PR #67) | Owner applied the plan on 2026-11-16, before the merge; a follow-up plan showed no changes |
+| Checkpoint                                 | Revision                                          | Evidence                                                                            |
+| ------------------------------------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Stakeholder Brief release                  | 8c90443 (#67)                                     | Recorded backend-first rollout and production smoke results          |
+| Most recent production accuracy evaluation | 613ab0c (#68), backend d9b5772, P3b off           | Recorded R1 evaluation; merge exists locally                                   |
+| Five deterministic rules | 9483635 (#69) | Released; merged into the local combined candidate |
+| Combined admission / verification / disclosure | Local candidate above 82e398f and 9483635 | Independent review and release checks remain; verification default OFF |
+
+This documentation pass did not query AWS, deployment logs or the live site. The
+production rows are attributed release/evaluation checkpoints, not a new drift
+or deployment certification. See [current status](current-status.md).
 
 ## Shipping a release
 

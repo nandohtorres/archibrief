@@ -11,6 +11,8 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 ## Status
 
+**Accuracy checkpoint:** Five additional configuration checks shipped in [PR #69](https://github.com/nandohtorres/archibrief/pull/69) (`9483635`). Further accuracy and review-disclosure changes are being tested; see [progress and remaining work](docs/current-status.md).
+
 **Live and open to the public.** Anyone can submit Terraform for a review, within a few free reviews a day (each one calls a paid model), and there are three finished demo reviews to open first. The demos cover real public Terraform: a security firm's breach lab, a Medicare data platform, and FEC databases. They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
 
 **Reviews are shareable.** Each review has its own URL. The last five reviews from a browser are listed under "Previous Reviews" until they expire after seven days, and "Share link" makes a read-only link whose key stays in the URL fragment, so it never reaches the server logs. While a review runs, the progress screen shows the architecture diagram as soon as the rules have mapped it, before the model finishes.
@@ -37,7 +39,7 @@ Designed and built by Fernando Torres. I defined the architecture, threat model,
 
 The frontend exposes progress with an early architecture diagram, findings, a stakeholder view of the same evidence, per-finding “go deeper,” report chat, and an HTML report download that includes the conversation. See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [evaluation](docs/evaluation.md), and [Trivy comparison](docs/comparison.md).
 
-The [engineering case study](docs/case-study.md) explains the tradeoffs, a reporting failure found during review, and what adversarial testing broke. The [decision records](docs/adr/README.md) (60 ADRs) give the reasoning behind each architectural choice.
+The [engineering case study](docs/case-study.md) explains the tradeoffs, a reporting failure found during review, and what adversarial testing broke. The [decision records](docs/adr/README.md) give the reasoning behind each architectural choice.
 
 ## What the receipts establish—and their limits
 
@@ -116,8 +118,8 @@ Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo
 | **Landing.** Know what's wrong with your AWS design, and why it matters. | **Real demos.** Three reviews of real public Terraform, checked by hand. |
 | ![Architecture diagram drawn from the code](docs/screenshots/03-diagram.png) | ![A finding with a reviewer note](docs/screenshots/04-reviewer-note.png) |
 | **Diagram.** Drawn from the code without a model; each finding sits on the resource it names. | **Evidence.** Each finding shows its evidence, confidence and source; the hand check's note marks one the model got wrong. |
-| ![Guided report: what each fix costs, in plain language](docs/screenshots/05-stakeholder.png) | ![Report chat with cited answers](docs/screenshots/06-chat.png) |
-| **Guided report.** The same evidence in plain language, for the person who has to say yes, with what each fix costs per month and what not fixing could cost. | **Chat.** Answers cite this review's findings or AWS guidance. |
+| ![Historical guided report screenshot, before the Stakeholder Brief redesign](docs/screenshots/05-stakeholder.png) | ![Report chat with cited answers](docs/screenshots/06-chat.png) |
+| **Historical guided report.** This screenshot predates #67. The current Stakeholder Brief uses Risk, Work proposed, Helps prevent and Still exposed, with commitment tiers instead of price estimates. | **Chat.** Answers cite this review's findings or AWS guidance. |
 | ![Phone layout, dark theme](docs/screenshots/07-phone.png) | |
 | **Phone, dark theme.** | |
 
