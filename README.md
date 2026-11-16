@@ -11,7 +11,7 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 ## Status
 
-**Accuracy checkpoint (2026-11-16):** The Stakeholder Brief shipped in #67 and the first accuracy repairs in #68. R1 reduced wrong claims and unsafe fixes, but Critical/High recall fell; accuracy work is still open. Five additional deterministic rules and a default-off verifier follow-up are frozen locally for independent review, not deployed or newly evaluated. See [current status and next gates](docs/current-status.md).
+**Accuracy checkpoint:** Recent repairs reduced wrong claims and unsafe fixes, but some serious issues are still missed. Further accuracy checks are under review; see [progress and remaining work](docs/current-status.md).
 
 **Live and open to the public.** Anyone can submit Terraform for a review, within a few free reviews a day (each one calls a paid model), and there are three finished demo reviews to open first. The demos cover real public Terraform: a security firm's breach lab, a Medicare data platform, and FEC databases. They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
 

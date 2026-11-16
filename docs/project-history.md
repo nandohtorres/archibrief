@@ -180,7 +180,7 @@ and runs the live version alongside the candidate on the same day.
 ## 2026-11-16: accuracy repairs measured; recall remains open
 
 After the split brief release, the first accuracy repair batch shipped in PR #68
-(merge 613ab0c; backend d9b5772 in Claude's R1 handoff). R1 reduced development
+(merge 613ab0c; backend d9b5772 in the recorded R1 evaluation). R1 reduced development
 false claims from 5.2 to 3.2 per review and unsafe fixes from 1.0 to zero. It also
 lost Critical/High recall: development 31/31 to 28/31; held-out R0 10/12 to R1 8/12.
 The cohorts are separate. This is progress on claim/fix quality, not completion
@@ -190,7 +190,7 @@ The next builds add five narrow deterministic checks for explicit high-risk
 settings and repair the default-off verifier's contradiction/remediation contract.
 Their exact frozen SHAs, test results and remaining gates are in
 [current status](current-status.md). They have not been given a new accuracy score.
-Codex builds and freezes local commits; Claude independently reviews, releases
-with owner approvals and evaluates. Paired replay keeps the saved generator
+Implementation, independent review, approved release and evaluation are separate
+steps. Paired replay keeps the saved generator
 findings constant, while sealed cases stay hidden from the tuning session.
 P2 validation and the budget/recall gates still precede enabling P3b.

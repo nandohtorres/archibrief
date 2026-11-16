@@ -2,7 +2,7 @@
 
 ## Current accuracy checkpoint (2026-11-16)
 
-Claude's R1 aggregate review of the first accuracy release reports development Critical/High 28/31 (baseline 31/31), false claims 3.2/review (5.2), and unsafe fixes 0 (1.0). Held-out Critical/High was 8/12 (R0 10/12); cohorts are separate and must not be pooled. The recall shortfall remains open. New rule/verifier candidates have offline behavior tests only, not a new accuracy score. [Current status](current-status.md) records exact SHAs, provenance, limitations and evaluation gates. Historical results below retain their original dates.
+The R1 aggregate review of the first accuracy release reports development Critical/High 28/31 (baseline 31/31), false claims 3.2/review (5.2), and unsafe fixes 0 (1.0). Held-out Critical/High was 8/12 (R0 10/12); cohorts are separate and must not be pooled. The recall shortfall remains open. New rule/verifier candidates have offline behavior tests only, not a new accuracy score. [Current status](current-status.md) records exact SHAs, provenance, limitations and evaluation gates. Historical results below retain their original dates.
 
 The test suites are measured locally with no AWS calls or paid model runs,
 and CI runs them on every pull request. The [live hard tests](#live-hard-tests)
