@@ -307,6 +307,19 @@ def handler(event: dict, context: object) -> dict:
                 envelope = _request_envelope(runtime_payload, reservation)
                 record_request_envelope(runtime_payload, envelope)
             except RequestBudgetExceeded as exc:
+                print(
+                    json.dumps(
+                        {
+                            "event": "review_budget_refused",
+                            "review_id": review_id,
+                            "code": exc.code,
+                            "cause": type(exc.__cause__).__name__ if exc.__cause__ else None,
+                            "cause_message": str(exc.__cause__)[:300] if exc.__cause__ else None,
+                            "reservation": locals().get("reservation"),
+                        },
+                        default=str,
+                    )
+                )
                 if exc.code not in {"token_count_unavailable", "analysis_cost_limit_exceeded"}:
                     return _fail_unpaid(table, review_id, exc.code, operation)
                 budget_fallback = model_unavailable = True

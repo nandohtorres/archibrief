@@ -94,7 +94,7 @@ module "agentcore_runtime" {
   guardrail_version         = module.guardrails.guardrail_version
   vector_bucket_name        = module.s3_vectors.vector_bucket_name
   vector_index_name         = module.s3_vectors.index_name
-  verify_findings           = true
+  verify_findings           = false
   tags                      = var.tags
 }
 
