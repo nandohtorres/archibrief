@@ -128,7 +128,7 @@ flowchart LR
    for any reason the review continues without it and says the scanner
    didn't run (ADR-0048).
 6. **RuleEngine** — deterministic checks against the parsed Terraform,
-   independent of any model call: Trivy's 17 trusted checks when Scan
+   independent of any model call: Trivy's 18 trusted checks when Scan
    ran, plus ArchiBrief's own rules for what Trivy misses (and for
    everything, if Scan didn't run). It also builds a sanitized resource
    summary (allowlisted settings, documented defaults, values restricted
@@ -175,38 +175,31 @@ flowchart LR
    last four turns), and the server keeps only what it can verify
    against the review. See `docs/chat.md`.
 
-### The stakeholder view: plain terms and what fixing costs
+### The Stakeholder Brief: risk, proposed work and remaining exposure
 
-The guided report explains each finding for a non-engineer and puts a
-price on it, so the person approving the work can see what a fix costs
-and what not fixing could cost. `backend/shared/stakeholder/` builds it
-when a report is read (`backend/shared/report.py`), so a price update
-also reaches older reports:
+ADR-0062 supersedes ADR-0051's price-oriented presentation. Findings appear in
+severity order and expand to Risk, Work proposed, Helps prevent and Still exposed.
+Commitment tiers are Light, Moderate, Major or Needs scoping; they are not dollar
+estimates. Titles and harm statements must distinguish an explicit setting from
+something merely not shown in the submitted files.
 
-- **Rule findings** carry their `concern` (for example `rds_multi_az`).
-  `catalog.py` has hand-written text for each concern: a plain title, an
-  everyday comparison, what could happen, the fix, what the fix adds and
-  roughly how long it takes. Older reports without a concern are matched
-  by their fixed rule titles.
-- **Model findings** carry a `plain` block written by Reason. The model
-  can only name items from the price table, plus an instance size the
-  Terraform really uses. Validation drops a `plain` block that states a
-  dollar amount, and keeps the finding.
-- **Prices** come only from `pricing.py`: dated us-east-1 on-demand list
-  prices. Anything that depends on usage (logs, table size) or on a size
-  the table doesn't list is shown as unpriced. It is never guessed.
-- **Cost of not fixing** cites a published figure (IBM Cost of a Data
-  Breach 2026, Sophos State of Ransomware 2026), or explains how to
-  estimate it. Downtime uses the review's own availability target.
-- **Budget summary** (ADR-0051): totals, free-fix count, effort, and a verdict per
-  fix (Fix today, Quick win, Worth the money, When budget allows), shown
-  at the top and bottom of the view.
+- Rule findings carry a concern and subject through
+  `backend/shared/stakeholder/presentation.py`. The frontend's
+  `lib/stakeholder-brief.ts` owns curated wording and tiers. Farm comparisons and
+  scenes appear only where a curated rule concern has one.
+- Model/reviewer plain-language summaries remain labelled by source and do not
+  acquire a rule analogy. Unknown concerns use the technical summary fallback.
+  Reviewer corrections remain beside their finding, including downloads.
+- `backend/shared/money_policy.py` and the matching frontend policy remove price
+  amounts from public chat answers (including cached answers) and downloads.
+  Storage/evidence and legitimate Terraform references are preserved. Filtering
+  output does not mean the chat model was instructed never to generate prices.
+- Report metadata and assessments remain separate from display wording. Older
+  reports and saved demo sidecars still load. Legacy pricing/recipe modules remain
+  in the source for compatibility; their presence does not mean prices are shown.
 
-The demos' saved reports predate the `plain` block. Their explanations
-are written by hand in `scripts/demo_plain_language.json`, and
-`scripts/build_demo_stakeholder.py` builds `public/demos/stakeholder/`
-from them. A test fails if those files fall out of date with the price
-table or catalog.
+See [current status](current-status.md) for the released brief, locally frozen
+accuracy candidates, P2/P3b prerequisites and the limits of their evaluation.
 
 `GET /demo` invokes a Lambda serving a precomputed reference report, without
 starting a new review or model call. The three real demos load static frontend
@@ -234,7 +227,7 @@ Deeper HTTP admission dispatches its own Standard job, whose worker calls the sh
 the stored resource summary, settled requirements, and bounded parent evidence
 and alternatives. Children and their completion marker commit together in
 DynamoDB. Report GET and chat use the same projection of original S3 evidence
-plus live, validated children. The report rebuilds diagram and budget from that
+plus live, validated children. The report rebuilds the diagram and public presentation from that
 projection, and the browser refreshes it after a deeper result is saved.
 The S3 ledger stays unchanged. Output quality is recorded independently of job
 completion; all-rejected deeper results are retained for free idempotent replay.

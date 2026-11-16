@@ -1,5 +1,7 @@
 # ArchiBrief — Architecture Decision Records
 
+> **Status, 2026-11-16:** ADR-0062 (Stakeholder Brief) shipped in #67. ADR-0061 is built but not live yet. See [current status](../current-status.md).
+
 One short, atomic file per real decision — Context / Decision /
 Consequences / Status, following the standard ADR format (Michael
 Nygard's original convention; see

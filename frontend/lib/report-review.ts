@@ -33,8 +33,14 @@ export function withEvidenceLabel(finding: ReportFinding): ReportFinding {
 
 export function reportSnapshotLabel(findings: ReportFinding[]): string {
   function versions(field: "deterministic_rule_version" | "corpus_version" | "prompt_version") {
-    const values = [...new Set(findings.map(({ record }) => record[field]).filter(Boolean))].sort();
-    return values.length ? values.join(", ") : "not recorded";
+    const recorded = [...new Set(findings.map(({ record }) => record[field]).filter(Boolean))]
+      .map(String)
+      .filter((value) => value !== "unknown");
+    // "rule_engine@x+trivy@y" already names "rule_engine@x"; list each engine once.
+    const values = recorded.filter(
+      (value) => !recorded.some((other) => other !== value && other.startsWith(`${value}+`)),
+    );
+    return values.length ? values.sort().join(", ") : "not recorded";
   }
   return `Snapshot · rules ${versions("deterministic_rule_version")} · corpus ${versions("corpus_version")} · prompt ${versions("prompt_version")} · static review only`;
 }

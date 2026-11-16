@@ -101,7 +101,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
           <ul className="landing-badges">
             <li>Never touches your AWS account</li>
             <li>Evidence shown with each finding</li>
-            <li>AI mistakes shown, not hidden</li>
+            <li>Reviewer notes on AI mistakes</li>
           </ul>
         </div>
       </div>
@@ -118,7 +118,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
         <div className="landing-samples">
           <article className="landing-sample">
             <span className="landing-label">For engineers</span>
-            <h3>The evidence dashboard</h3>
+            <h3>The Evidence Dashboard</h3>
             <p>
               Each finding with the resource it&apos;s about, the AWS guidance it cites, how sure it
               is, and the exact change to make.
@@ -126,7 +126,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
           </article>
           <article className="landing-sample">
             <span className="landing-label">For everyone else</span>
-            <h3>The guided report</h3>
+            <h3>The Stakeholder Brief</h3>
             <p className="landing-quote">
               &ldquo;Your proxy can be tricked into handing over its AWS credentials, and those
               credentials can read every bucket. That&apos;s the pattern behind the 2019 Capital One
@@ -138,7 +138,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
             <h3>Diagram and questions</h3>
             <p>
               A diagram drawn from your code with each finding pinned where it applies. Ask
-              follow-ups and push back; every answer cites the review.
+              follow-ups and push back; answers cite the review.
             </p>
           </article>
         </div>
@@ -196,7 +196,7 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
                   security best-practice docs.
                 </p>
                 <p className="landing-step-note">
-                  Anything outside the submitted code is marked as a gap, never assumed.
+                  Anything outside the submitted code is reported as a gap, not a pass.
                 </p>
               </div>
               <div className="landing-artifact" aria-label="Example check results">
@@ -235,8 +235,8 @@ export function LandingIntro({ sampleLoading, onOpenSample, demos }: LandingIntr
               <div>
                 <h3>You get a review with receipts</h3>
                 <p>
-                  A model weighs every result against your brief. Each citation is checked word for
-                  word against the AWS text before anything is published.
+                  A model weighs the results against your brief. Each quoted passage is matched
+                  against the retrieved AWS text before anything is published.
                 </p>
                 <p className="landing-step-note">
                   Each finding: what it&apos;s about, the guidance it relies on, how sure it is, and

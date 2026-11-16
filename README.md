@@ -11,6 +11,8 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 ## Status
 
+**Accuracy checkpoint (2026-11-16):** The first accuracy repairs (PR #68) cut false claims from 5.2 to 3.2 per review and unsafe fixes from 1.0 to 0 on the development cases, but Critical/High recall fell (31/31 to 28/31; held-out 10/12 to 8/12). PR #69 added five deterministic rules for explicit high-risk settings; they are live but not yet re-measured. See [current status](docs/current-status.md).
+
 **Live and open to the public.** Anyone can submit Terraform for a review, within a few free reviews a day (each one calls a paid model), and there are three finished demo reviews to open first. The demos cover real public Terraform: a security firm's breach lab, a Medicare data platform, and FEC databases. They load from saved files, so opening one starts no model run. Each finding was checked by hand against the code, and the ones the model got wrong carry a visible reviewer note ([docs/demos.md](docs/demos.md)).
 
 **Reviews are shareable.** Each review has its own URL. The last five reviews from a browser are listed under "Previous Reviews" until they expire after seven days, and "Share link" makes a read-only link whose key stays in the URL fragment, so it never reaches the server logs. While a review runs, the progress screen shows the architecture diagram as soon as the rules have mapped it, before the model finishes.
@@ -19,9 +21,9 @@ ArchiBrief combines static Terraform checks with a workload brief and retrieved 
 
 **How public use is bounded:** a Cloudflare Turnstile check before each upload, AWS WAF in front of the API, and spending limits reserved in DynamoDB before every paid call: a monthly ceiling, plus daily limits globally, per visitor and per review. At 90% of the monthly AWS budget a kill switch turns itself on ([public access design](docs/public-access-implementation.md)). Not yet done: the paid chat evaluation.
 
-**Tested like an adversary.** Besides the unit and trap suites, three larger Terraform submissions with planted issues, decoys and lying briefs were run through the live site and scored by hand. They found a model blind to nested configuration, a timeout on large reviews, a polite brief that steered the review, and a summary cap that cut resources alphabetically; each prompted a recorded fix, though coverage gaps and some brief influence remain. After the fixes, all three complete the AI step in 76–94 s (about $0.20 each); the 119-resource test still misses its EU data-residency breach and four critical issues in resource types the model can't see yet ([live hard tests](docs/evaluation.md#live-hard-tests), [case study](docs/case-study.md#testing-it-like-an-adversary), [timeout incident write-up](docs/incidents/2026-10-29-review-timeouts.md)).
+**Tested like an adversary.** Besides the unit and trap suites, three larger Terraform submissions with planted issues, decoys and lying briefs were run through the live site and scored by hand. They found a model blind to nested configuration, a timeout on large reviews, a polite brief that steered the review, and a summary cap that cut resources alphabetically; each prompted a recorded fix, though coverage gaps and some brief influence remain. After the fixes, all three complete the AI step in 76–94 s; the 119-resource test still misses its EU data-residency breach and four critical issues in resource types the model can't see yet ([live hard tests](docs/evaluation.md#live-hard-tests), [case study](docs/case-study.md#testing-it-like-an-adversary), [timeout incident write-up](docs/incidents/2026-10-29-review-timeouts.md)).
 
-**Next: a small-workload accuracy pilot.** Reviews will focus on small AWS workloads, up to 50 resource declarations per review, with what each review covered recorded internally, accuracy measured against answer keys, and the visible "reviewed X of Y" shipped together with the enforced limit ([ADR-0061](docs/adr/0061-small-workload-accuracy-pilot.md), proposed). How the project got here: [project history](docs/project-history.md).
+**Next: an independent verifier pass.** A second model call checks each AI finding against its cited AWS passage and the declared configuration, and findings that fail a check move to a separate "Unable to verify" section instead of being dropped. It ships switched off and is switched on only if a paired evaluation shows no lost serious catches ([current status](docs/current-status.md)). How the project got here: [project history](docs/project-history.md).
 
 ## Who built it
 
@@ -37,7 +39,7 @@ Designed and built by Fernando Torres. I defined the architecture, threat model,
 
 The frontend exposes progress with an early architecture diagram, findings, a stakeholder view of the same evidence, per-finding “go deeper,” report chat, and an HTML report download that includes the conversation. See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [evaluation](docs/evaluation.md), and [Trivy comparison](docs/comparison.md).
 
-The [engineering case study](docs/case-study.md) explains the tradeoffs, a reporting failure found during review, and what adversarial testing broke. The [decision records](docs/adr/README.md) (60 ADRs) give the reasoning behind each architectural choice.
+The [engineering case study](docs/case-study.md) explains the tradeoffs, a reporting failure found during review, and what adversarial testing broke. The [decision records](docs/adr/README.md) give the reasoning behind each architectural choice.
 
 ## What the receipts establish—and their limits
 
@@ -116,8 +118,8 @@ Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo
 | **Landing.** Know what's wrong with your AWS design, and why it matters. | **Real demos.** Three reviews of real public Terraform, checked by hand. |
 | ![Architecture diagram drawn from the code](docs/screenshots/03-diagram.png) | ![A finding with a reviewer note](docs/screenshots/04-reviewer-note.png) |
 | **Diagram.** Drawn from the code without a model; each finding sits on the resource it names. | **Evidence.** Each finding shows its evidence, confidence and source; the hand check's note marks one the model got wrong. |
-| ![Guided report: what each fix costs, in plain language](docs/screenshots/05-stakeholder.png) | ![Report chat with cited answers](docs/screenshots/06-chat.png) |
-| **Guided report.** The same evidence in plain language, for the person who has to say yes, with what each fix costs per month and what not fixing could cost. | **Chat.** Answers cite this review's findings or AWS guidance. |
+| ![Historical guided report screenshot, before the Stakeholder Brief redesign](docs/screenshots/05-stakeholder.png) | ![Report chat with cited answers](docs/screenshots/06-chat.png) |
+| **Historical guided report.** This screenshot predates #67. The current Stakeholder Brief uses Risk, Work proposed, Helps prevent and Still exposed, with commitment tiers instead of price estimates. | **Chat.** Answers cite this review's findings or AWS guidance. |
 | ![Phone layout, dark theme](docs/screenshots/07-phone.png) | |
 | **Phone, dark theme.** | |
 

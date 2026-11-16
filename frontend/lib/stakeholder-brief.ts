@@ -867,7 +867,7 @@ export function briefCoverage(report: ReviewReport): BriefCoverage {
     ? `ArchiBrief read the submitted Terraform and workload brief, not the live AWS account. ${
         scope.count_complete ? "" : "Its count of the system's parts is partial. "
       }Coverage details are below.`
-    : "ArchiBrief read the submitted Terraform and workload brief, not the live AWS account. This report has no recorded review scope, so it cannot show what was left out. Do not read it as complete coverage.";
+    : "ArchiBrief read the submitted Terraform and workload brief, not the live AWS account. This report was saved before ArchiBrief recorded review scope, so it covers only the findings listed and cannot show what was left out. Do not read it as complete coverage.";
   const details = [declarationScopeMessage(scope), qualityMessage(report.analysis_quality)];
   if (report.analysis_scope) details.push(scopeMessage(report.analysis_scope));
   for (const answer of report.baseline_answers) {

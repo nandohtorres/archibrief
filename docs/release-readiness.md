@@ -1,5 +1,7 @@
 # Release status
 
+> **2026-11-16 checkpoint:** The Stakeholder Brief (#67), first accuracy repairs (#68) and five deterministic rules (#69) are live. The independent verifier is not live yet. See [current status](current-status.md).
+
 What is live, how a release ships, and what is still open. Live table and
 release steps updated 2026-11-16; the verification section below is from
 2026-10-29. The earlier local-candidate handoff (Codex branches, 2026-10-24)
@@ -11,10 +13,12 @@ is in git history; its branches were merged as PR #29 and later.
 submit Terraform within the daily limits, open the three hand-checked demos,
 go deeper on a finding, ask the report chat and share a read-only link.
 
-| Part | Revision | How it got there |
-|---|---|---|
-| Frontend | `8c90443` (PR #67, Stakeholder Brief) | Deployed automatically by `deploy-frontend.yml` after green CI on 2026-11-16 (ADR-0055) |
-| Backend (Lambdas, Step Functions, AgentCore runtime) | `8c90443` (PR #67) | Owner applied the plan on 2026-11-16, before the merge; a follow-up plan showed no changes |
+| Checkpoint                                 | Revision                                          | Evidence                                                                            |
+| ------------------------------------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Stakeholder Brief release                  | 8c90443 (#67)                                     | Recorded backend-first rollout and production smoke results          |
+| First accuracy repairs                     | 613ab0c (#68)                                     | Backend applied before merge; measured in R1 ([current status](current-status.md)) |
+| Five deterministic rules (live now)        | 9483635 (#69), `rule_engine@2026-11-16a`          | Backend applied before merge; post-apply plan showed no changes; frontend deployed after green CI; live smoke passed |
+
 
 ## Shipping a release
 

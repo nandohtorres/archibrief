@@ -1,5 +1,7 @@
 # ADR 0061: Small-Workload Accuracy Pilot (50 Resource Declarations)
 
+> **Status, 2026-11-16:** This is the original design rationale. The review-size and cost admission it proposes is built but not live yet; it ships together with the independent verifier, switched off at first. See [current status](../current-status.md).
+
 **Status:** Proposed (direction accepted 2026-11-10; implementation details
 under precision review). Extends ADR-0027 (untrusted ingestion), ADR-0049
 and ADR-0056 (resource summary), ADR-0059 (bounded model input). It adds a

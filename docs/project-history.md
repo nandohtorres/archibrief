@@ -175,3 +175,20 @@ Next is the accuracy work, measured with a fixed scorecard: the baseline is
 issue caught, at about $0.15 and 48 seconds a review. Each round reruns the
 same development cases, adds new cases kept from the agent tuning the rules,
 and runs the live version alongside the candidate on the same day.
+
+
+## 2026-11-16: accuracy repairs measured; recall remains open
+
+After the split brief release, the first accuracy repair batch shipped in PR #68
+(merge 613ab0c; backend d9b5772 in the recorded R1 evaluation). R1 reduced development
+false claims from 5.2 to 3.2 per review and unsafe fixes from 1.0 to zero. It also
+lost Critical/High recall: development 31/31 to 28/31; held-out R0 10/12 to R1 8/12.
+The cohorts are separate. This is progress on claim/fix quality, not completion
+of the accuracy goal.
+
+PR #69 (merge 9483635) then added five narrow deterministic rules for explicit
+high-risk settings, because every rule-covered held-out issue was caught in both
+rounds while the lost ones had been caught only by the model. The rules are live
+but not yet re-measured. Next is an independent verifier pass and an "Unable to
+verify" section, shipped switched off and enabled only if a paired evaluation
+shows no lost Critical/High catches ([current status](current-status.md)).
