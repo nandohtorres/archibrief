@@ -12,11 +12,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 REQUEST_MEASUREMENT_VERSION = "converse-request-json@1"
-POLICY_VERSION = "review-request-budget@2026-11-15"
+POLICY_VERSION = "review-request-budget@2026-11-16"
 MAX_REQUEST_BYTES = 86 * 1024
 MAX_EVIDENCE_BYTES = 42 * 1024
 DEEPER_EVIDENCE_BYTES = 20 * 1024
 MODEL_ID = "us.anthropic.claude-sonnet-4-6"
+COUNT_MODEL_ID = "anthropic.claude-sonnet-4-6"
 
 
 class RequestBudgetExceeded(ValueError):
@@ -57,7 +58,9 @@ def count_input_tokens(client: Any, request: dict) -> int:
         raise RequestBudgetExceeded("unsupported_budget_model")
     try:
         result = client.count_tokens(
-            modelId=request["modelId"],
+            # CountTokens targets the underlying foundation model, not the
+            # cross-region inference profile used by Converse generation.
+            modelId=COUNT_MODEL_ID,
             input={"converse": {k: request[k] for k in ("system", "messages", "toolConfig")}},
         )
     except Exception as exc:

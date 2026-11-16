@@ -24,13 +24,17 @@ import { runLoggedCommand } from "./build-log.mjs";
 const FRONTEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const variant = process.argv[2];
+const portBase = Number(process.env.ARCHIBRIEF_E2E_PORT_BASE ?? 4310);
+if (!Number.isInteger(portBase) || portBase < 1024 || portBase > 65533) {
+  throw new Error("ARCHIBRIEF_E2E_PORT_BASE must be an integer from 1024 to 65533");
+}
 const variants = {
-  fixture: { outDir: "out-fixture", port: 4310, apiBaseUrl: "" },
+  fixture: { outDir: "out-fixture", port: portBase, apiBaseUrl: "" },
   // Same-origin as the static site itself, so fetches never leave the
   // page's own origin - only Playwright's page.route() interception in
   // live-admin-path.spec.ts ever answers them.
-  live: { outDir: "out-live", port: 4311, apiBaseUrl: "/mock-api" },
-  public: { outDir: "out-public", port: 4312, apiBaseUrl: "/mock-api" },
+  live: { outDir: "out-live", port: portBase + 1, apiBaseUrl: "/mock-api" },
+  public: { outDir: "out-public", port: portBase + 2, apiBaseUrl: "/mock-api" },
 };
 
 const config = variants[variant];

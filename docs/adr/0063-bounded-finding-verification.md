@@ -1,5 +1,7 @@
 # ADR-0063: bounded finding-verification experiment
 
+> **Combined-candidate checkpoint (2026-11-16):** This preview is included with admission/cost checks and rejected-claim disclosure, default OFF. Request compaction keeps claim fields, mentioned resources plus one reference step, and cited passages within the unchanged 86 KiB bound. Contradiction can be established by supplied facts or evidence; supported cited detections still require their passage. Failed checks keep findings unchecked. See [current status](../current-status.md) for the current protocol and evaluation/release gates. The earlier implementation snapshot below preserves its original version label.
+
 Status: implemented locally as a default-off preview, not accepted for enabled
 production use. No live evaluation authorized. See pilot P3b and the launch
 notes' paid-evaluation proposal.

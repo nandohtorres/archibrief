@@ -5,9 +5,14 @@ import { defineConfig } from "@playwright/test";
 // builds its own variant and serves it; see e2e/dev-server.mjs for why
 // build+serve are one self-contained script per variant rather than a
 // separate build step.
-export const FIXTURE_URL = "http://127.0.0.1:4310";
-export const LIVE_URL = "http://127.0.0.1:4311";
-export const PUBLIC_URL = "http://127.0.0.1:4312";
+// Separate worktrees can run checks concurrently without reusing each other's site.
+const PORT_BASE = Number(process.env.ARCHIBRIEF_E2E_PORT_BASE ?? 4310);
+if (!Number.isInteger(PORT_BASE) || PORT_BASE < 1024 || PORT_BASE > 65533) {
+  throw new Error("ARCHIBRIEF_E2E_PORT_BASE must be an integer from 1024 to 65533");
+}
+export const FIXTURE_URL = `http://127.0.0.1:${PORT_BASE}`;
+export const LIVE_URL = `http://127.0.0.1:${PORT_BASE + 1}`;
+export const PUBLIC_URL = `http://127.0.0.1:${PORT_BASE + 2}`;
 
 export default defineConfig({
   testDir: "./e2e",

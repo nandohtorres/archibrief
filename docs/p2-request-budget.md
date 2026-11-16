@@ -1,6 +1,6 @@
 # P2 pilot request admission
 
-Policy: `review-request-budget@2026-11-15`. Implemented locally; **release validation
+Policy: `review-request-budget@2026-11-16`. Implemented locally; **release validation
 is incomplete**. No infrastructure was applied and no generation evaluation was
 run as part of this implementation.
 
@@ -131,3 +131,31 @@ after the scoped permission update, then check cost and false-rejection results.
 AWS references: [CountTokens overview](https://docs.aws.amazon.com/bedrock/latest/userguide/count-tokens.html),
 [API input contract](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_CountTokens.html),
 [Sonnet 4.6 model card](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-4-6.html).
+
+
+## Combined-candidate token-count compatibility (2026-11-16)
+
+The cost gate is in the worker before paid screening/retrieval, then repeats on
+the complete generation request immediately before dispatch. CountTokens now
+uses foundation model ID `anthropic.claude-sonnet-4-6`; generation still uses
+`us.anthropic.claude-sonnet-4-6`. System/messages/tool schema are identical to
+those passed for generation. The request policy version is bumped so a stale
+preflight envelope is not treated as admission under the new counter target.
+Missing counts, malformed counts or an unaffordable conservative bound block
+paid work and release an unspent receipt. Tests use fake counters and SDK-shape
+contracts; real free-count acceptance and effective IAM still need release validation.
+
+The required action for the free validation identity is `bedrock:CountTokens` on
+`arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6`.
+Retain existing inference permissions; this is not permission to generate.
+The candidate's Terraform already grants the count action to initial/deeper
+workers and AgentCore and allows it in their permissions boundary. An Identity
+Center permission-set update for the deployment profile is a separate administrator
+step, not a substitute for those runtime-role policies. No permissions were
+changed live by this build.
+
+The [CountTokens API contract](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_CountTokens.html)
+specifies a foundation model identifier; the
+[Sonnet 4.6 model card](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-4-6.html)
+marks token counting supported. This correction follows that documented target;
+it does not claim a successful real call or that IAM was the only previous failure.

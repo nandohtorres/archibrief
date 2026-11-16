@@ -7,12 +7,11 @@ import pytest
 
 from backend.lambdas.finalize.handler import handler as finalize
 from backend.lambdas.review_worker import handler as worker
-from tests.backend import visitor
-from tests.backend.p0_scope_fixtures import pending_scope, declaration
 from tests.backend.lambdas.submit_review.test_handler import (  # noqa: F401 - shared moto fixture
     _submit,
     env,
 )
+from tests.backend.p0_scope_fixtures import declaration, pending_scope
 
 
 @pytest.fixture
@@ -375,7 +374,7 @@ GRAPH = {
 def test_diagram_is_saved_for_the_progress_screen_before_the_model_runs(
     prepared, monkeypatch
 ):
-    review_id, s3, _calls, _replies, agent_calls = prepared
+    review_id, s3, _calls, _replies, _agent_calls = prepared
     original = worker._invoke
     seen_before_model = []
 
@@ -424,3 +423,71 @@ def test_a_failed_diagram_preview_does_not_fail_the_review(
     )
     assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
     assert "preview_diagram_failed" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "count,code",
+    [
+        (1000000, "analysis_cost_limit_exceeded"),
+        (PermissionError("synthetic-denied"), "token_count_unavailable"),
+        (True, "token_count_unavailable"),
+    ],
+)
+def test_preflight_count_failure_stops_before_paid_screen_and_runtime(
+    prepared, monkeypatch, count, code
+):
+    from backend.agent.request_budget import prepare_envelope
+
+    review_id, _s3, calls, _replies, agent_calls = prepared
+    paid = []
+
+    def count_tokens(**kwargs):
+        if isinstance(count, Exception):
+            raise count
+        return {"inputTokens": count}
+
+    monkeypatch.setattr(
+        worker,
+        "_request_envelope",
+        lambda payload, reservation: prepare_envelope(
+            payload, SimpleNamespace(count_tokens=count_tokens), reservation
+        ),
+    )
+    monkeypatch.setattr(worker, "screen_review", lambda payload: paid.append("screen"))
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    assert paid == [] and agent_calls == []
+    assert not {"validate", "audit", "finalize"}.intersection(name for name, _ in calls)
+    table = boto3.resource("dynamodb").Table("reviews")
+    assert table.get_item(Key={"reviewId": review_id})["Item"]["failureCode"] == code
+    rows = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    receipt = next(row for row in rows if row["counterKey"].endswith("#initial"))
+    assert receipt["released"] is True
+
+
+def test_preflight_count_admits_before_paid_screen_and_runtime(prepared, monkeypatch):
+    from backend.agent.request_budget import prepare_envelope
+
+    review_id, _s3, _calls, _replies, agent_calls = prepared
+    order = []
+
+    def count_tokens(**kwargs):
+        order.append("count")
+        return {"inputTokens": 1000}
+
+    monkeypatch.setattr(
+        worker,
+        "_request_envelope",
+        lambda payload, reservation: prepare_envelope(
+            payload, SimpleNamespace(count_tokens=count_tokens), reservation
+        ),
+    )
+    original_screen = worker.screen_review
+
+    def screen(payload):
+        order.append("screen")
+        assert order == ["count", "screen"]
+        return original_screen(payload)
+
+    monkeypatch.setattr(worker, "screen_review", screen)
+    assert worker.handler({"review_id": review_id}, None) == {"status": "complete"}
+    assert order == ["count", "screen"] and len(agent_calls) == 1
