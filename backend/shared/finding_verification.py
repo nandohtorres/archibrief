@@ -351,6 +351,25 @@ def _log_id(value):
     )
 
 
+def _log_error(stage: str, exc: Exception, state: dict, supplied: dict) -> dict:
+    """Record why the check did not finish: type, code and budget counters only, no review text."""
+    budget = state.get("generation_budget")
+    error = {
+        "stage": stage,
+        "type": type(exc).__name__,
+        "code": str(getattr(exc, "code", "") or "")[:80] or None,
+        "cause": type(exc.__cause__).__name__ if exc.__cause__ else None,
+        "message": None if getattr(exc, "code", None) else str(exc)[:200],
+        "dispatched": getattr(budget, "dispatched", None),
+        "reserved_generation": getattr(budget, "reserved_generation", None),
+        "reserved_output_tokens": getattr(budget, "reserved_output_tokens", None),
+        "reservation": getattr(budget, "reservation", None),
+        "supplied_bytes": len(json.dumps(supplied, separators=(",", ":")).encode("utf-8")),
+    }
+    print(json.dumps({"event": "finding_verification_error", **error}, default=str))
+    return error
+
+
 def verify_with_dispatch(state: dict, dispatch) -> dict:
     """Sort every input into the main, unchecked or disproved section; never erase."""
     all_findings = state.get("reasoned_findings", [])
@@ -367,6 +386,7 @@ def verify_with_dispatch(state: dict, dispatch) -> dict:
         fid: _unchecked("duplicate_finding_id") for fid, count in counts_by_id.items() if count > 1
     }
     supplied = {"facts": {}, "evidence": {}}
+    error = None
     try:
         chosen, skipped = select_verification(state, unique)
         decisions.update({fid: _unchecked(reason) for fid, reason in skipped.items()})
@@ -376,11 +396,13 @@ def verify_with_dispatch(state: dict, dispatch) -> dict:
                 decisions.update(
                     verdict_decisions(dispatch(**verification_call(supplied)), supplied)
                 )
-            except Exception:  # noqa: BLE001 - failure sorts claims; it never deletes them.
+            except Exception as exc:  # noqa: BLE001 - failure sorts claims; it never deletes them.
+                error = _log_error("dispatch", exc, state, supplied)
                 decisions.update(
                     {c["finding_id"]: _unchecked("verification_failed") for c in chosen}
                 )
-    except Exception:  # noqa: BLE001 - no selection failure can erase a claim.
+    except Exception as exc:  # noqa: BLE001 - no selection failure can erase a claim.
+        error = _log_error("select", exc, state, supplied)
         decisions.update({f["finding_id"]: _unchecked("verification_failed") for f in unique})
     retained, checks = [], []
     unchecked = unverified_findings(state.get("unverified_findings"))
@@ -476,6 +498,8 @@ def verify_with_dispatch(state: dict, dispatch) -> dict:
         "fixes_neutralized": fixes,
         "findings": checks,
     }
+    if error:
+        metadata["error"] = error
     print(
         json.dumps(
             {
