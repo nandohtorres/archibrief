@@ -7,6 +7,31 @@ from backend.shared.report import build_review_report
 from backend.shared.review_projection import assemble_current_ledger
 
 
+def test_public_report_labels_unverified_finding_without_changing_its_claim():
+    record = _record("model", type="not-observable", model_id="test", concern=None)
+    quality = build_analysis_quality(stage_counts(1, 1), [record], [record])
+    quality["additional_verification"] = {
+        "status": "incomplete",
+        "version": "preview2",
+        "findings": [
+            {
+                "finding_id": "model",
+                "status": "not-independently-checked",
+                "private_reason": "not public",
+            }
+        ],
+    }
+    result = build_review_report(
+        {"reviewId": "r1"}, {"findings": [record], "analysis_quality": quality}
+    )
+    assert result["findings"][0]["independent_check"] == "not-independently-checked"
+    assert result["findings"][0]["record"]["finding"] == record["finding"]
+    assert (
+        "private_reason"
+        not in result["analysis_quality"]["additional_verification"]["findings"][0]
+    )
+
+
 def _record(fid="base", **overrides):
     return Finding.model_validate(
         {

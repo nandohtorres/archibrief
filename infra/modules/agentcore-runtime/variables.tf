@@ -53,3 +53,11 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "usage_counters_table_name" {
+  type = string
+}
+
+variable "usage_counters_table_arn" {
+  type = string
+}

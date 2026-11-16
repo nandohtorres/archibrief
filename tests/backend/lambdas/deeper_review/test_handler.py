@@ -14,6 +14,9 @@ from backend.lambdas.deeper_review import worker
 from backend.lambdas.get_review.handler import handler as get_review
 from backend.shared.deeper_jobs import job_id_for, job_key
 from tests.backend import visitor
+from tests.backend.p0_scope_fixtures import completed_scope, pending_scope, declaration
+from backend.shared.scope_admission import prepare_operation
+from backend.shared.admission import reserve_operation, request_digest
 
 RAW = {
     "finding_id": "child",
@@ -43,6 +46,7 @@ BASE = {
     "parent_finding_id": None,
 }
 LEDGER = {
+    "review_scope": completed_scope(),
     "workload_brief": "PRIVATE WORKLOAD",
     "findings": [BASE],
     "terraform_resources": {
@@ -100,9 +104,15 @@ def env(monkeypatch):
                 "status": "complete",
                 "ttl": int(time.time()) + 86400,
                 "reportS3Key": "reports/r1/evidence-ledger.json",
+                "archiveSha256": "a" * 64,
+                "archiveVersionId": "test-version",
+                "inputDigest": request_digest({"fixture": "initial"}),
                 **visitor.review_fields(),
             }
         )
+        review = tables["reviews"].get_item(Key={"reviewId": "r1"})["Item"]
+        reserve_operation(review, "initial", {"fixture": "initial"}, 400000)
+        prepare_operation(review, pending_scope([declaration()]), {"review_id": "r1"}, operation="initial", job_id="r1")
         s3 = boto3.client("s3", region_name="us-east-1")
         s3.create_bucket(Bucket="reports")
         s3.put_object(
@@ -148,6 +158,11 @@ def env(monkeypatch):
         monkeypatch.setattr(worker, "AgentCoreRuntimeClient", client)
         monkeypatch.setattr(worker, "paid_work_allowed", lambda: True)
         monkeypatch.setattr(api, "paid_work_allowed", lambda: True)
+        from backend.agent.request_budget import prepare_envelope
+        from backend.shared.review_screen import screen_review
+        counter = SimpleNamespace(count_tokens=lambda **kwargs: {"inputTokens": 1000})
+        monkeypatch.setattr(worker, "_request_envelope", lambda payload, reservation: prepare_envelope(payload, counter, reservation))
+        monkeypatch.setattr(worker, "screen_review", lambda payload: screen_review(payload, SimpleNamespace(check=lambda *args, **kwargs: True)))
         yield state
 
 
@@ -184,6 +199,35 @@ def test_http_returns_202_without_calling_the_model_and_dispatches_only_ids(env)
         "job_id": job_id_for("r1", "base"),
     }
     assert "PRIVATE" not in json.dumps(payload)
+
+
+def test_legacy_report_cannot_reserve_or_enqueue_new_deeper_work(env):
+    ledger = {k: v for k, v in LEDGER.items() if k != "review_scope"}
+    env.s3.put_object(Bucket="reports", Key="reports/r1/evidence-ledger.json", Body=json.dumps(ledger).encode())
+    before = env.tables["counters"].scan()["Items"]
+    response = api.handler(event(), None)
+    assert response["statusCode"] == 409
+    assert json.loads(response["body"])["error"] == "scope_manifest_required"
+    assert env.tables["counters"].scan()["Items"] == before
+    assert env.sfn.list_executions(stateMachineArn=env.arn)["executions"] == []
+    assert env.calls == []
+
+
+def test_stale_queued_job_rechecks_parent_scope_before_runtime(env):
+    assert api.handler(event(), None)["statusCode"] == 202
+    env.s3.put_object(Bucket="reports", Key="reports/r1/evidence-ledger.json", Body=json.dumps({k: v for k, v in LEDGER.items() if k != "review_scope"}).encode())
+    assert run() == {"status": "failed"}
+    assert job(env)["failure_code"] == "scope_manifest_required"
+    assert env.calls == []
+
+
+def test_cached_deeper_result_survives_legacy_scope_and_missing_admission(env):
+    assert api.handler(event(), None)["statusCode"] == 202
+    assert run() == {"status": "complete"}
+    env.s3.put_object(Bucket="reports", Key="reports/r1/evidence-ledger.json", Body=json.dumps({k: v for k, v in LEDGER.items() if k != "review_scope"}).encode())
+    env.tables["counters"].delete_item(Key={"counterKey": "operation#r1#initial"})
+    assert api.handler(event(), None)["statusCode"] == 200
+    assert len(env.calls) == 1
 
 
 def test_repeated_admission_reuses_execution_and_reservation(env):
@@ -246,7 +290,7 @@ def test_invalid_write_capability_does_not_reserve_or_dispatch(env):
     request = event()
     request["headers"]["x-review-write-token"] = "x" * 43
     assert api.handler(request, None)["statusCode"] == 404
-    assert env.tables["counters"].scan()["Items"] == []
+    assert not any(row["counterKey"].startswith("operation#r1#deeper:") for row in env.tables["counters"].scan()["Items"])
 
 
 def test_worker_persists_result_and_quality_once_and_report_reload_keeps_it(env):
@@ -397,7 +441,7 @@ def test_invalid_scope_never_dispatches(env, rid, fid, status):
 def test_paused_admission_does_not_reserve_or_dispatch(env, monkeypatch):
     monkeypatch.setattr(api, "paid_work_allowed", lambda: False)
     assert api.handler(event(), None)["statusCode"] == 503
-    assert env.tables["counters"].scan()["Items"] == []
+    assert not any(row["counterKey"].startswith("operation#r1#deeper:") for row in env.tables["counters"].scan()["Items"])
 
 
 def test_worker_rechecks_pause_before_paid_call(env, monkeypatch):

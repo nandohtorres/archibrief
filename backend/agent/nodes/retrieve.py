@@ -20,6 +20,7 @@ import re
 from dataclasses import dataclass
 
 from backend.shared.clients import BedrockEmbeddingClient, S3VectorsClient
+from backend.shared.model_request_budget import GenerationBudget
 
 # The [A-Z]{2,}\d{1,3}-[A-Z]{2,}\d{1,3} branch matches Well-Architected
 # best-practice IDs like "SEC01-BP01" or "COST01-BP01", which have digits
@@ -91,8 +92,13 @@ def vector_search(
     embedding_client: BedrockEmbeddingClient,
     vectors_client: S3VectorsClient,
     top_k: int = 8,
+    budget: GenerationBudget | None = None,
 ) -> list[RetrievedChunk]:
+    if budget is not None:
+        budget.check_deadline()
     query_vector = embedding_client.embed(query_text)
+    if budget is not None:
+        budget.check_deadline()
     matches = vectors_client.query_vectors(query_vector=query_vector, top_k=top_k)
 
     results = []
@@ -309,9 +315,15 @@ def topic_queries(terraform_resources: object) -> list[str]:
 
 
 def retrieve_node(state: dict) -> dict:
+    from backend.shared.scope_admission import check_paid_scope
+
     query_text = state["retrieval_query"]
     embedding_client: BedrockEmbeddingClient = state["embedding_client"]
     vectors_client: S3VectorsClient = state["vectors_client"]
+    check_paid_scope(state, embedding_client, vectors_client)
+    budget = state.get("generation_budget")
+    if budget is not None:
+        budget.check_deadline()
     corpus_index: dict[str, list[dict]] = state.get("lexical_corpus_index", {})
 
     lexical_terms = extract_lexical_terms(query_text)
@@ -322,16 +334,31 @@ def retrieve_node(state: dict) -> dict:
         embedding_client,
         vectors_client,
         top_k=DEEPER_TOP_K if deep_mode else BRIEF_TOP_K,
+        budget=budget,
     )
     # "Go deeper" already searches with a finding-specific query.
     if not deep_mode:
         for topic in topic_queries(state.get("terraform_resources")):
+            if budget is not None:
+                budget.check_deadline()
             vector_results += vector_search(
-                topic, embedding_client, vectors_client, top_k=TOPIC_TOP_K
+                topic, embedding_client, vectors_client, top_k=TOPIC_TOP_K, budget=budget
             )
     merged = merge_results(vector_results, lexical_results)
+    omitted = 0
+    if budget is not None:
+        from backend.shared.model_request_budget import evidence_bytes, evidence_limit
+
+        kept = []
+        for chunk in merged:
+            if evidence_bytes([c.__dict__ for c in [*kept, chunk]]) <= evidence_limit(deep_mode):
+                kept.append(chunk)
+            else:
+                omitted += 1
+        merged = kept
 
     return {
         **state,
         "retrieved_chunks": [chunk.__dict__ for chunk in merged],
+        "retrieval_omitted_count": omitted,
     }

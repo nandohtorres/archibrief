@@ -44,6 +44,7 @@ _EVENTS = {
     "reasoning_call",
     "reasoning_call_failed",
     "reasoning_result",
+    "finding_verification_result",
 }
 
 
@@ -55,6 +56,8 @@ class ReviewRun:
     outcome: str = "no model call"
     invocation_seconds: float | None = None
     input_chars: int | None = None
+    request_utf8_bytes: int | None = None
+    request_measurement_version: str | None = None
     resources_sent: int | None = None
     resources_truncated: bool = False
     evidence_passages: int | None = None
@@ -69,6 +72,7 @@ class ReviewRun:
     rejected: dict[str, int] = field(default_factory=dict)
     crash: str | None = None
     cost_usd: float | None = None
+    p3b: dict | None = None
 
 
 def _json(message: str) -> dict | None:
@@ -105,6 +109,72 @@ def summarize_stream(
         name = data.get("event") if data else None
         if name not in _EVENTS:
             continue
+        if name == "finding_verification_result":
+            run.p3b = run.p3b or {
+                "verification_calls": 0,
+                "added_cost_usd": None,
+                "added_seconds": None,
+            }
+            run.p3b.update(
+                {
+                    "version": data.get("version"),
+                    "status": data.get("status"),
+                    "findings_removed": (data.get("attempted") or 0)
+                    - (data.get("retained") or 0),
+                    "findings_changed": data.get("fixes_neutralized", 0),
+                }
+            )
+            run.accepted = data.get("retained")
+            if data.get("status") == "incomplete":
+                run.outcome = "verification incomplete"
+            continue
+        if data.get("call_kind") == "verification" and name in {
+            "reasoning_call",
+            "reasoning_call_failed",
+        }:
+            run.p3b = run.p3b or {
+                "verification_calls": 0,
+                "added_cost_usd": None,
+                "added_seconds": None,
+            }
+            run.p3b["verification_calls"] += 1
+            elapsed = data.get("elapsed_ms") or data.get("latency_ms")
+            run.p3b["added_seconds"] = elapsed / 1000 if elapsed is not None else None
+            if run.model_seconds is not None and elapsed is not None:
+                run.model_seconds += elapsed / 1000
+            if name == "reasoning_call_failed" or any(
+                type(data.get(k)) is not int for k in ("input_tokens", "output_tokens")
+            ):
+                run.cost_usd = None
+                run.input_tokens = run.output_tokens = None
+            else:
+                cost = (
+                    model_cost_micro_usd(
+                        model_id,
+                        {
+                            "inputTokens": data["input_tokens"],
+                            "outputTokens": data["output_tokens"],
+                        },
+                    )
+                    / 1_000_000
+                )
+                run.p3b["added_cost_usd"] = cost
+                if run.cost_usd is not None:
+                    run.cost_usd += cost
+                run.input_tokens = (
+                    (run.input_tokens + data["input_tokens"])
+                    if run.input_tokens is not None
+                    else None
+                )
+                run.output_tokens = (
+                    (run.output_tokens + data["output_tokens"])
+                    if run.output_tokens is not None
+                    else None
+                )
+            continue
+        if name in ("reasoning_call", "reasoning_call_failed"):
+            run.request_utf8_bytes = data.get("request_utf8_bytes")
+            run.request_measurement_version = data.get("request_measurement_version")
         if name == "reasoning_input":
             run.input_chars = data.get("chars")
             run.resources_sent = data.get("resources_sent")

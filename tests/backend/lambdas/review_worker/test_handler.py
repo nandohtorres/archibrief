@@ -8,6 +8,7 @@ import pytest
 from backend.lambdas.finalize.handler import handler as finalize
 from backend.lambdas.review_worker import handler as worker
 from tests.backend import visitor
+from tests.backend.p0_scope_fixtures import pending_scope, declaration
 from tests.backend.lambdas.submit_review.test_handler import (  # noqa: F401 - shared moto fixture
     _submit,
     env,
@@ -20,6 +21,11 @@ def prepared(env, monkeypatch):  # noqa: F811 - pytest consumes the imported fix
     assert _submit(body)["statusCode"] == 202
     monkeypatch.setattr(worker, "paid_work_allowed", lambda: True)
     monkeypatch.setenv("AGENTCORE_RUNTIME_ARN", "test-runtime")
+    from backend.agent.request_budget import prepare_envelope
+    from backend.shared.review_screen import screen_review
+    counter = SimpleNamespace(count_tokens=lambda **kwargs: {"inputTokens": 1000})
+    monkeypatch.setattr(worker, "_request_envelope", lambda payload, reservation: prepare_envelope(payload, counter, reservation))
+    monkeypatch.setattr(worker, "screen_review", lambda payload: screen_review(payload, SimpleNamespace(check=lambda *args, **kwargs: True)))
     calls = []
     replies = [{"status": "complete", "findings": [], "preflight_fields": {}}]
 
@@ -36,6 +42,8 @@ def prepared(env, monkeypatch):  # noqa: F811 - pytest consumes the imported fix
                 "findings": [],
                 "rule_version": "test",
                 "resource_summary": {},
+                "review_scope": pending_scope([declaration()]),
+                "summary_members": [["aws_s3_bucket", "main"]],
             },
             "validate": lambda: {"valid_findings": []},
             "audit": lambda: {"status": "recorded"},
@@ -155,6 +163,33 @@ def test_rejected_archive_fails_and_releases_the_reservation(prepared, monkeypat
     )
 
 
+@pytest.mark.parametrize("code", ["resource_limit_exceeded", "scope_manifest_required"])
+def test_scope_rejection_preserves_code_and_releases_before_scan_or_agent(prepared, monkeypatch, code):
+    review_id, _s3, _calls, _replies, agent_calls = prepared
+    stages = []
+
+    def reject(name, payload):
+        stages.append(name)
+        return {
+            "status": "rejected", "code": code,
+            "scope_failure": {"known_y": 84, "count_complete": False, "private": "CANARY"},
+        }
+
+    monkeypatch.setattr(worker, "_invoke", reject)
+    assert worker.handler({"review_id": review_id}, None) == {"status": "failed"}
+    assert stages == ["ingest"]
+    assert agent_calls == []
+    review = boto3.resource("dynamodb").Table("reviews").get_item(Key={"reviewId": review_id})["Item"]
+    assert review["failureCode"] == code
+    if code == "resource_limit_exceeded":
+        assert review["scopeFailure"] == {"known_y": 84, "count_complete": False}
+    else:
+        assert "scopeFailure" not in review
+    assert "CANARY" not in json.dumps(review, default=str)
+    counters = boto3.resource("dynamodb").Table("counters").scan()["Items"]
+    assert next(r for r in counters if r["counterKey"].endswith("#initial"))["released"] is True
+
+
 def test_failure_after_the_model_call_keeps_the_reservation(prepared, monkeypatch):
     review_id, *_ = prepared
     original = worker._invoke
@@ -202,7 +237,11 @@ def test_a_model_failure_still_publishes_the_rule_findings(prepared, monkeypatch
     def stage(name, payload):
         if name == "rule_engine":
             calls.append((name, payload))
-            return {"findings": [rule_finding], "rule_version": "test", "resource_summary": {}}
+            return {
+                "findings": [rule_finding], "rule_version": "test", "resource_summary": {},
+                "review_scope": pending_scope([declaration()]),
+                "summary_members": [["aws_s3_bucket", "main"]],
+            }
         return original(name, payload)
 
     def invoke(**kwargs):

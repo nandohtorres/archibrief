@@ -19,6 +19,17 @@ resource "aws_iam_role_policy_attachment" "review_worker_logs" {
 
 data "aws_iam_policy_document" "review_worker" {
   statement {
+    actions   = ["bedrock:ApplyGuardrail"]
+    resources = ["arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:guardrail/${var.guardrail_id}"]
+  }
+  statement {
+    actions = ["bedrock:CountTokens"]
+    resources = [
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+    ]
+  }
+  statement {
     actions   = ["lambda:InvokeFunction"]
     resources = [for fn in aws_lambda_function.this : fn.arn]
   }
@@ -70,6 +81,8 @@ resource "aws_lambda_function" "review_worker" {
       USAGE_COUNTERS_TABLE_NAME  = var.usage_counters_table_name
       KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
       AGENTCORE_RUNTIME_ARN      = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
+      GUARDRAIL_ID               = var.guardrail_id
+      GUARDRAIL_VERSION          = var.guardrail_version
     }, { for name, fn in aws_lambda_function.this : "${upper(name)}_FUNCTION_NAME" => fn.function_name })
   }
 

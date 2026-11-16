@@ -201,7 +201,7 @@ def test_handler_skips_guardrails_when_not_configured(tmp_path):
     assert result["guardrails_decisions"] == []
 
 
-def test_handler_allows_when_injected_guardrail_passes(tmp_path):
+def test_parse_does_not_dispatch_an_injected_guardrail(tmp_path):
     archive_path = str(tmp_path / "good.tar")
     _make_archive(archive_path, {"main.tf": b'resource "aws_s3_bucket" "x" {}'})
     fake = _FakeGuardrailsClient(allow=True, calls=[])
@@ -213,11 +213,11 @@ def test_handler_allows_when_injected_guardrail_passes(tmp_path):
     )
 
     assert result["status"] == "parsed"
-    assert result["guardrails_decisions"] == [{"stage": "ingest", "allowed": True}]
-    assert fake.calls == [("a normal workload brief", "INPUT")]
+    assert result["guardrails_decisions"] == []
+    assert fake.calls == []
 
 
-def test_handler_blocks_when_injected_guardrail_rejects(tmp_path):
+def test_parse_remains_free_even_with_a_rejecting_guardrail(tmp_path):
     archive_path = str(tmp_path / "good.tar")
     _make_archive(archive_path, {"main.tf": b'resource "aws_s3_bucket" "x" {}'})
     fake = _FakeGuardrailsClient(allow=False, calls=[])
@@ -228,8 +228,9 @@ def test_handler_blocks_when_injected_guardrail_rejects(tmp_path):
         guardrails_client=fake,
     )
 
-    assert result["status"] == "blocked"
-    assert result["guardrails_decisions"] == [{"stage": "ingest", "allowed": False}]
+    assert result["status"] == "parsed"
+    assert result["guardrails_decisions"] == []
+    assert fake.calls == []
 
 
 def test_handler_falls_back_to_env_vars_for_guardrail_config(tmp_path, monkeypatch):
@@ -422,8 +423,6 @@ def test_stage_logs_are_structured_and_carry_the_review_id(tmp_path, capsys):
         "resolve_archive",
         "extract",
         "parse_hcl",
-        "guardrails",
-        "guardrails_done",
     ]
     assert all(line["review_id"] == "r-9" for line in lines)
     assert "secret brief text" not in json.dumps(lines)

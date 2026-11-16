@@ -336,6 +336,35 @@ def record(journal: dict, slot: int, review_id: str) -> dict:
     return {**journal, "slots": slots}
 
 
+def settle(journal: dict, slot: int, reason: str, runs: dict[str, dict]) -> dict:
+    """Owner override for a submitted review that never reached the model and
+    so left no ledger or model-call log (for example the input guardrail
+    blocked the brief at Ingest). Costs only OTHER_BILLED_USD, never zero. It
+    refuses a review that has a log record: real spend is never overridden."""
+    entry = journal["slots"].get(str(slot))
+    if entry is None:
+        raise PlanError(f"slot {slot} has not been recorded")
+    if entry.get("settlement"):
+        raise PlanError(f"slot {slot} is already settled")
+    if entry["review_id"] in runs:
+        raise PlanError(
+            "that review has log records; its cost is measured, not settled"
+        )
+    if len(reason.strip()) < 40:
+        raise PlanError(
+            "give the full reason (at least 40 characters); it is kept in the journal"
+        )
+    entry = {
+        **entry,
+        "settlement": {
+            "reason": reason.strip(),
+            "cost_usd": OTHER_BILLED_USD,
+            "settled_at": _now(),
+        },
+    }
+    return {**journal, "slots": {**journal["slots"], str(slot): entry}}
+
+
 # -------------------------------------------------------------------- gate
 
 
@@ -356,6 +385,9 @@ def gate(journal: dict, runs: dict[str, dict]) -> dict:
     pending: list[int] = []
     for n, entry in sorted(journal["slots"].items(), key=lambda item: int(item[0])):
         run = runs.get(entry["review_id"])
+        if run is None and entry.get("settlement"):
+            spent += entry["settlement"]["cost_usd"]
+            continue
         cost, known = slot_cost(run)
         spent += cost
         if run is None:
@@ -468,8 +500,52 @@ def _ratio(hit: int, total: int) -> float | None:
     return round(hit / total, 3) if total else None
 
 
+def _validate_judgments(
+    journal: dict, worksheet: dict, ledgers: dict, corpus: Path
+) -> None:
+    """Rebuild denominators from frozen oracles and saved outputs, not judge edits."""
+    cases = case_by_id(load_manifest(corpus))
+    oracles = {cid: load_oracle(corpus, case) for cid, case in cases.items()}
+    if set(ledgers) - set(journal["slots"]):
+        raise PlanError("ledger has an unrecorded slot")
+    expected = build_worksheet(journal, ledgers, oracles)
+    for section, identity, fixed in (
+        ("issues", "issue_id", ("case", "severity", "must_find")),
+        ("findings", "finding_id", ("type",)),
+    ):
+        rows = worksheet[section]
+        expected_rows = {(r["slot"], r[identity]): r for r in expected[section]}
+        actual_rows = {(r["slot"], r[identity]): r for r in rows}
+        if len(actual_rows) != len(rows) or actual_rows.keys() != expected_rows.keys():
+            raise PlanError(
+                f"{section}: missing, duplicate or unexpected judgment rows"
+            )
+        for key, row in actual_rows.items():
+            if any(row.get(field) != expected_rows[key][field] for field in fixed):
+                raise PlanError(f"{section}: edited oracle or ledger metadata")
+    finding_ids = {(f["slot"], f["finding_id"]) for f in worksheet["findings"]}
+    for row in worksheet["issues"]:
+        if (
+            row["caught_by"] != "missed"
+            and (row["slot"], row["caught_by"]) not in finding_ids
+        ):
+            raise PlanError(
+                "caught_by must identify a finding from the same slot or be missed"
+            )
+    for row in worksheet["findings"]:
+        if row["verdict"] not in {"valid", "false_claim", "duplicate", "out_of_oracle"}:
+            raise PlanError("unknown finding verdict")
+        if not isinstance(row["unsafe_fix"], bool):
+            raise PlanError("unsafe_fix must be a boolean")
+
+
 def score(
-    journal: dict, worksheet: dict, ledgers: dict[str, dict], runs: dict[str, dict]
+    journal: dict,
+    worksheet: dict,
+    ledgers: dict[str, dict],
+    runs: dict[str, dict],
+    *,
+    corpus: Path = CORPUS,
 ) -> dict:
     """The baseline report. Refuses a partly judged worksheet: a partial
     evaluation is never reported as a result."""
@@ -486,6 +562,7 @@ def score(
             f"judging incomplete: {len(open_issues)} issues and "
             f"{len(open_findings)} findings have no verdict"
         )
+    _validate_judgments(journal, worksheet, ledgers, corpus)
     slots: list[dict] = []
     for n, entry in sorted(journal["slots"].items(), key=lambda item: int(item[0])):
         run = runs.get(entry["review_id"]) or {}
@@ -499,12 +576,41 @@ def score(
         ]
         scope = (ledger or {}).get("review_scope") or {}
         cost, cost_known = slot_cost(run or None)
+        settlement = entry.get("settlement") if not run else None
+        if settlement:
+            cost = settlement["cost_usd"]
+        rule_versions = sorted(
+            {
+                f["deterministic_rule_version"]
+                for f in (ledger or {}).get("findings", [])
+                if f.get("deterministic_rule_version")
+            }
+        )
         slots.append(
             {
                 "slot": int(n),
                 "case": entry["case"],
                 "held_out": entry["case"] in HELD_OUT,
-                "completed": ledger is not None,
+                "rule_versions": rule_versions,
+                "rule_engine_versions": sorted(
+                    {v.split("+trivy@", 1)[0] for v in rule_versions}
+                ),
+                "settlement": settlement,
+                "completed": ledger is not None
+                and (run.get("p3b") or {}).get("status") != "incomplete"
+                and not set(
+                    ((ledger or {}).get("analysis_quality") or {}).get(
+                        "reason_codes", []
+                    )
+                ).intersection(
+                    {
+                        "model_unavailable",
+                        "request_budget_exceeded",
+                        "additional_verification_incomplete",
+                    }
+                ),
+                "code_revision": run.get("code_revision"),
+                "model_id": run.get("model_id") or PRODUCTION_MODEL_ID,
                 "model_outcome": scope.get("model_outcome"),
                 "critical_high_caught": sum(
                     r["caught_by"] != "missed" for r in crit_high
@@ -525,18 +631,40 @@ def score(
                     "accepted": run.get("accepted"),
                     "rejected": run.get("rejected"),
                     "input_tokens": run.get("input_tokens"),
+                    "request_utf8_bytes": run.get("request_utf8_bytes"),
+                    "request_measurement_version": run.get(
+                        "request_measurement_version"
+                    ),
                     "output_tokens": run.get("output_tokens"),
                     "seconds": run.get("model_seconds"),
                 },
                 "cost_usd": round(cost, 4),
                 "cost_known": cost_known,
+                "p3b": run.get("p3b"),
+                "end_to_end_seconds": end_to_end_seconds(
+                    entry.get("submitted_at"), (ledger or {}).get("generated_at")
+                ),
             }
         )
     summary: dict[str, dict] = {}
-    for split, members in (
+    groups = [
         ("development", [s for s in slots if not s["held_out"]]),
         ("held_out", [s for s in slots if s["held_out"]]),
-    ):
+    ]
+    for version in sorted({v for s in slots for v in s["rule_engine_versions"]}):
+        for split, held_out in (("development", False), ("held_out", True)):
+            groups.append(
+                (
+                    f"{version}/{split}",
+                    [
+                        s
+                        for s in slots
+                        if s["rule_engine_versions"] == [version]
+                        and s["held_out"] == held_out
+                    ],
+                )
+            )
+    for split, members in groups:
         caught = sum(s["critical_high_caught"] for s in members)
         total = sum(s["critical_high_total"] for s in members)
         summary[split] = {
@@ -553,7 +681,15 @@ def score(
     dev_recall = summary["development"]["critical_high_recall"]
     return {
         "plan_hash": journal["plan_hash"],
+        "judging_complete": True,
         "slots": slots,
+        "comparability": {
+            "mixed_rule_versions": len(
+                {v for s in slots for v in s["rule_engine_versions"]}
+            )
+            > 1,
+            "note": "Summaries span all slots; compare accuracy only within the same rule version. Settled costs remain estimates, not measured model usage.",
+        },
         "summary": summary,
         "spent_usd": round(sum(s["cost_usd"] for s in slots), 4),
         "checkpoint": {
@@ -565,11 +701,34 @@ def score(
             "zero_false_claims": all(s["false_claims"] == 0 for s in slots),
             "zero_unsafe_fixes": all(s["unsafe_fixes"] == 0 for s in slots),
         },
+        "unverified_release_gates": [
+            "zero_fabricated_citations",
+            "zero_fabricated_fact_ids",
+        ],
         "generated_at": _now(),
     }
 
 
 # --------------------------------------------------------------------- AWS
+
+
+def end_to_end_seconds(
+    submitted_at: str | None, completed_at: str | None
+) -> float | None:
+    """Do not substitute runtime/model time or the later recording timestamp."""
+    if not submitted_at or not completed_at:
+        return None
+    try:
+        start, end = (
+            datetime.fromisoformat(submitted_at),
+            datetime.fromisoformat(completed_at),
+        )
+        if start.tzinfo is None or end.tzinfo is None:
+            return None
+        seconds = (end - start).total_seconds()
+        return seconds if seconds >= 0 else None
+    except ValueError:
+        return None
 
 
 def _session(profile: str, region: str):  # pragma: no cover - AWS
@@ -628,13 +787,62 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI and AW
     record_cmd = sub.add_parser("record")
     record_cmd.add_argument("--slot", type=int, required=True)
     record_cmd.add_argument("--review-id", required=True)
+    record_cmd.add_argument(
+        "--submitted-at",
+        help="Actual ISO-8601 submission time with timezone; never the later recording time",
+    )
+    settle_cmd = sub.add_parser("settle")
+    settle_cmd.add_argument("--slot", type=int, required=True)
+    settle_cmd.add_argument("--reason", required=True)
     sub.add_parser("collect")
     sub.add_parser("worksheet")
     sub.add_parser("score")
+    scorecard_cmd = sub.add_parser(
+        "scorecard",
+        help="Append numeric rows from a finished local report; no AWS calls",
+    )
+    scorecard_cmd.add_argument("--report", type=Path, required=True)
+    scorecard_cmd.add_argument(
+        "--scorecard",
+        type=Path,
+        default=ROOT.parent / "archibrief-launch/evaluations/scorecard.json",
+    )
+    scorecard_cmd.add_argument("--round-id", required=True)
+    scorecard_cmd.add_argument("--case-set", required=True)
+    scorecard_cmd.add_argument(
+        "--role", choices=("candidate", "control", "baseline", "history"), required=True
+    )
+    scorecard_cmd.add_argument(
+        "--code-revision",
+        help="Required fallback when the report did not record revisions",
+    )
+    scorecard_cmd.add_argument("--label")
+    scorecard_cmd.add_argument("--cases", nargs="+")
+    scorecard_cmd.add_argument("--register-case-set", action="store_true")
     args = parser.parse_args(argv)
 
     plan_path, journal_path = OUT / "plan.json", OUT / "journal.json"
     try:
+        if args.command == "scorecard":
+            from scripts.evaluation_scorecard import append_scorecard
+
+            rows = append_scorecard(
+                args.scorecard,
+                _read_json(args.report),
+                round_id=args.round_id,
+                case_set=args.case_set,
+                role=args.role,
+                code_revision=args.code_revision,
+                label=args.label,
+                cases=args.cases,
+                register_case_set=args.register_case_set,
+            )
+            print(
+                json.dumps(
+                    {"appended": [row["id"] for row in rows], "aws_calls": 0}, indent=2
+                )
+            )
+            return 0
         if args.command == "plan":
             manifest = load_manifest()
             cases = case_by_id(manifest)
@@ -673,13 +881,28 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI and AW
             print("approved; run gate before every submission")
         elif args.command == "record":
             journal = record(_read_json(journal_path), args.slot, args.review_id)
+            if args.submitted_at:
+                if end_to_end_seconds(args.submitted_at, _now()) is None:
+                    raise PlanError(
+                        "submitted-at must be a past ISO-8601 timestamp with timezone"
+                    )
+                journal["slots"][str(args.slot)]["submitted_at"] = args.submitted_at
             _write_json(journal_path, journal)
             print(f"slot {args.slot} recorded as {SCHEDULE[args.slot - 1]}")
         else:
             journal = _read_json(journal_path)
-            session = _session(args.profile, args.region)
-            ids = {e["review_id"] for e in journal["slots"].values()}
-            runs = fetch_runs(session, ids, _since_ms(journal)) if ids else {}
+            runs = {}
+            if args.command in ("settle", "gate", "collect"):
+                session = _session(args.profile, args.region)
+                ids = {e["review_id"] for e in journal["slots"].values()}
+                runs = fetch_runs(session, ids, _since_ms(journal)) if ids else {}
+            if args.command == "settle":
+                journal = settle(journal, args.slot, args.reason, runs)
+                _write_json(journal_path, journal)
+                print(
+                    f"slot {args.slot} settled at ${OTHER_BILLED_USD:.2f}; reason recorded"
+                )
+                return 0
             if args.command == "gate":
                 result = gate(journal, runs)
                 print(json.dumps(result, indent=2))
@@ -725,7 +948,7 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI and AW
                 )
                 _write_json(OUT / "report.json", report)
                 print(json.dumps(report["summary"], indent=2))
-    except PlanError as exc:
+    except (PlanError, ValueError, OSError, TypeError, KeyError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     return 0

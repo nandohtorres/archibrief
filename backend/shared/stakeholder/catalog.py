@@ -484,6 +484,14 @@ _LEGACY_TITLES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
         ),
         (r"^SNS topic '.*' is not encrypted$", "sns_encryption"),
         (r"^RDS instance '.*' keeps backups for one day or less$", "rds_backup_retention"),
+        (
+            (
+                r"^RDS instance '.*' (?:leaves automated-backup retention unspecified|"
+                r"declares automated backups disabled|declares \d+ day\(s\) of automated backups|"
+                r"has a backup-retention scanner finding)$"
+            ),
+            "rds_backup_retention",
+        ),
         (r"^RDS instance '.*' has no deletion protection$", "rds_deletion_protection"),
         (r"^API Gateway stage '.*' has no access logging$", "apigw_access_logging"),
         (r"^CloudFront distribution '.*' has no access logging$", "cloudfront_logging"),

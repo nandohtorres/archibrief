@@ -40,7 +40,7 @@ import { FindingDetail } from "./finding-detail";
 import { StakeholderBrief } from "./stakeholder-brief";
 import { ReportQuestions } from "./report-questions";
 import { AssessmentTag } from "./assessment-tag";
-import { qualityMessage, scopeMessage } from "@/lib/analysis-quality";
+import { declarationScopeMessage, qualityMessage, scopeMessage } from "@/lib/analysis-quality";
 
 interface ReportWorkspaceProps {
   report: ReviewReport;
@@ -499,6 +499,10 @@ export function ReportWorkspace({
         <aside className="scope-note" aria-label="Analysis quality">
           <strong>Analysis quality</strong>
           <p>{qualityMessage(report.analysis_quality)}</p>
+          <p>
+            <strong>Review coverage. </strong>
+            {declarationScopeMessage(report.review_scope)}
+          </p>
           {report.analysis_scope && (
             <p>
               <strong>Configuration scope. </strong>
@@ -663,6 +667,12 @@ export function ReportWorkspace({
                       >
                         <span className="finding-list-main">
                           <strong>{finding.record.finding}</strong>
+                          {finding.independent_check === "not-independently-checked" && (
+                            <small>Not independently checked</small>
+                          )}
+                          {finding.independent_check === "fix-needs-confirmation" && (
+                            <small>Confirm the safe change</small>
+                          )}
                           {finding.record.parent_finding_id && (
                             <span className="finding-list-deeper">
                               ↳ From deeper analysis of{" "}

@@ -16,6 +16,10 @@ REASONS = {
     "quality_not_recorded",
     "model_unavailable",
     "model_findings_capped",
+    "request_budget_exceeded",
+    "evidence_budget_limited",
+    "additional_verification_checks",
+    "additional_verification_incomplete",
 }
 
 
@@ -107,7 +111,7 @@ def public_analysis_quality(value: Any) -> dict[str, Any]:
     if validation is None or (model is None and value["outcome"] not in {"unknown", "partial"}):
         return unknown
     reasons = value.get("reason_codes")
-    return {
+    public = {
         "version": 1,
         "outcome": value["outcome"],
         "model_verification": model,
@@ -118,6 +122,25 @@ def public_analysis_quality(value: Any) -> dict[str, Any]:
             if isinstance(code, str) and code in REASONS
         ],
     }
+    extra = value.get("additional_verification")
+    if isinstance(extra, dict) and extra.get("status") in {"complete", "incomplete"}:
+        checks = []
+        for entry in extra.get("findings", []) if isinstance(extra.get("findings"), list) else []:
+            if (
+                isinstance(entry, dict)
+                and isinstance(entry.get("finding_id"), str)
+                and len(entry["finding_id"]) <= 128
+                and entry.get("status")
+                in {
+                    "supported",
+                    "contradicted",
+                    "not-independently-checked",
+                    "fix-needs-confirmation",
+                }
+            ):
+                checks.append({"finding_id": entry["finding_id"], "status": entry["status"]})
+        public["additional_verification"] = {"status": extra["status"], "findings": checks[:128]}
+    return public
 
 
 def public_analysis_scope(value: Any) -> dict[str, Any] | None:

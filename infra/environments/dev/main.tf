@@ -84,15 +84,17 @@ module "kill_switch" {
 }
 
 module "agentcore_runtime" {
-  source                   = "../../modules/agentcore-runtime"
-  name_prefix              = "${var.name_prefix}-${var.environment}"
-  agent_runtime_zip_path   = var.agentcore_runtime_zip_path
-  permissions_boundary_arn = module.iam.runtime_permissions_boundary_arn
-  guardrail_id             = module.guardrails.guardrail_id
-  guardrail_version        = module.guardrails.guardrail_version
-  vector_bucket_name       = module.s3_vectors.vector_bucket_name
-  vector_index_name        = module.s3_vectors.index_name
-  tags                     = var.tags
+  usage_counters_table_name = module.dynamodb.usage_counters_table_name
+  usage_counters_table_arn  = "arn:aws:dynamodb:${var.region}:${var.aws_account_id}:table/${module.dynamodb.usage_counters_table_name}"
+  source                    = "../../modules/agentcore-runtime"
+  name_prefix               = "${var.name_prefix}-${var.environment}"
+  agent_runtime_zip_path    = var.agentcore_runtime_zip_path
+  permissions_boundary_arn  = module.iam.runtime_permissions_boundary_arn
+  guardrail_id              = module.guardrails.guardrail_id
+  guardrail_version         = module.guardrails.guardrail_version
+  vector_bucket_name        = module.s3_vectors.vector_bucket_name
+  vector_index_name         = module.s3_vectors.index_name
+  tags                      = var.tags
 }
 
 module "step_functions_lambda" {
@@ -132,6 +134,8 @@ module "frontend_hosting" {
 }
 
 module "api_gateway" {
+  review_guardrail_id             = module.guardrails.guardrail_id
+  review_guardrail_version        = module.guardrails.guardrail_version
   verified_public_api_id          = var.verified_public_api_id
   public_edge_enabled             = var.public_edge_enabled
   public_access_enabled           = var.public_access_enabled

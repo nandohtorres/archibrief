@@ -29,6 +29,7 @@ from pydantic import ValidationError
 
 from backend.shared.citations import build_tolerant_pattern as _build_tolerant_pattern
 from backend.shared.clients import BedrockReasoningClient, GuardrailsClient, ToolCallMissing
+from backend.shared.finding_verification import MAX_CANDIDATES
 from backend.shared.model_observations import MODEL_FORMAT_NOTE, compact_for_model
 from backend.shared.models.finding import (
     AlternativeConsidered,
@@ -40,7 +41,13 @@ from backend.shared.models.finding import (
     FixComponent,
     PlainLanguage,
 )
-from backend.shared.recommendation_checks import recommends_vpc_for_function_url
+from backend.shared.recommendation_checks import (
+    REMEDIATION_POLICY_VERSION,
+    context_remediation_reasons,
+    recommends_vpc_for_function_url,
+    repair_ebs_capacity_advice,
+    unsupported_operation_reasons,
+)
 from backend.shared.sanitize import clip, normalize_text
 from backend.shared.stakeholder.catalog import HARMS, RECIPES, SEVERITIES, infer_concern
 from backend.shared.stakeholder.pricing import PRICE_ITEM_KEYS
@@ -53,7 +60,10 @@ _MODEL_MAX_QUANTITY = 4
 # Bump whenever the model-facing contract changes (tool schema, input
 # fields, prompt rules), so a persisted finding can be traced to the exact
 # prompt that produced it (ADR-0039).
-PROMPT_VERSION = "reason_prompt@2026-10-30"
+# Prompt prose/schema are unchanged; the model-facing facts now include explicit
+# boundary, key-consumer and invocation-path context. Keep this input revision
+# distinct from the frozen P1 generator baseline.
+PROMPT_VERSION = "reason_prompt@2026-11-15-facts"
 
 _TOOL_NAME = "emit_findings"
 # The most model findings a review keeps. Uncapped, a large submission
@@ -61,7 +71,7 @@ _TOOL_NAME = "emit_findings"
 # the response well under max_tokens. Bedrock's strict tool schema can't
 # express maxItems, so the prompt asks and reason_node keeps the most
 # severe when the model sends more.
-MAX_MODEL_FINDINGS = 12
+MAX_MODEL_FINDINGS = MAX_CANDIDATES
 _SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 SYSTEM_PROMPT = """You are ArchiBrief's evidence-grounded reasoning stage.
@@ -602,6 +612,9 @@ _REJECTION_KINDS = (
     ("invalid or missing finding type", "invalid_type"),
     ("failed to build a valid Finding", "invalid_fields"),
     ("recommendation does not fix the stated problem", "wrong_fix"),
+    ("unsupported remediation operation", "unsupported_remediation"),
+    ("contradicts remediation facts", "remediation_contradiction"),
+    ("rule-owned remediation", "rule_owned_remediation"),
 )
 
 
@@ -836,6 +849,7 @@ def verify_model_findings(
     parent_finding_id: str | None = None,
     terraform_resources: dict | None = None,
     depth_level: str = "lightweight",
+    authoritative_rule_findings: list[dict] | None = None,
 ) -> tuple[list[Finding], list[str]]:
     """Returns (verified findings, failure reasons). An item that fails
     citation or shape verification is excluded, never relaxed.
@@ -889,6 +903,48 @@ def verify_model_findings(
             )
             continue
 
+        # Invalid plain text is already discarded, so it must not suppress a
+        # safe core finding. Check only text that would actually be retained.
+        plain = verify_plain(item.get("plain"), declared_sizes)
+        policy_item = {**item, "plain": plain.model_dump(mode="json") if plain else None}
+        operation_errors = unsupported_operation_reasons(policy_item)
+        context_errors = context_remediation_reasons(
+            policy_item, terraform_resources, authoritative_rule_findings
+        )
+        adjusted = False
+        repaired = (
+            repair_ebs_capacity_advice(policy_item, operation_errors)
+            if not context_errors
+            else None
+        )
+        if (
+            repaired
+            and not unsupported_operation_reasons(repaired)
+            and not context_remediation_reasons(
+                repaired, terraform_resources, authoritative_rule_findings
+            )
+        ):
+            item = {**item, "recommendation": repaired["recommendation"]}
+            if plain:
+                plain = plain.model_copy(update={"action": repaired["plain"]["action"]})
+            operation_errors = []
+            adjusted = True
+        if operation_errors:
+            failures.append(
+                f"finding[{index}]: unsupported remediation operation "
+                + ", ".join(operation_errors)
+            )
+            continue
+
+        if context_errors:
+            kind = (
+                "rule-owned remediation"
+                if context_errors == ["dlq_retention_owned_by_rule"]
+                else "contradicts remediation facts"
+            )
+            failures.append(f"finding[{index}]: {kind} " + ", ".join(context_errors))
+            continue
+
         try:
             findings.append(
                 Finding(
@@ -915,9 +971,20 @@ def verify_model_findings(
                     retrieved_chunk_ids=retrieved_chunk_ids,
                     deterministic_rule_version=deterministic_rule_version,
                     parent_finding_id=parent_finding_id,
-                    plain=verify_plain(item.get("plain"), declared_sizes),
+                    plain=plain,
                 )
             )
+            if adjusted:
+                print(
+                    json.dumps(
+                        {
+                            "event": "model_remediation_adjusted",
+                            "review_id": review_id,
+                            "policy_version": REMEDIATION_POLICY_VERSION,
+                            "kind": "ebs_capacity_guidance",
+                        }
+                    )
+                )
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
             failures.append(f"finding[{index}]: failed to build a valid Finding: {exc}")
 
@@ -946,8 +1013,13 @@ def resolve_rule_findings(rule_findings: list[dict]) -> list[Finding]:
 
 
 def reason_node(state: dict) -> dict:
+    from backend.shared.scope_admission import check_paid_scope
+
     guardrails: GuardrailsClient = state["guardrails_client"]
     reasoning_client: BedrockReasoningClient = state["reasoning_client"]
+    check_paid_scope(state, guardrails, reasoning_client)
+    if state.get("generation_budget") is not None:
+        state["generation_budget"].check_deadline()
 
     workload_brief = state["workload_brief"]
     # User-typed clarification answers reach the prompt too, so they get the
@@ -971,7 +1043,9 @@ def reason_node(state: dict) -> dict:
         workload_brief=workload_brief,
         rule_findings=rule_findings,
         retrieved_chunks=retrieved_chunks,
-        max_tokens=state.get("max_tokens", 4096),
+        max_tokens=min(state.get("max_tokens", 4096), 8192)
+        if state.get("verification_enabled") is True
+        else state.get("max_tokens", 4096),
         deep_mode=deep_mode,
         preflight_fields=state.get("preflight_fields"),
         terraform_resources=state.get("terraform_resources"),
@@ -994,6 +1068,12 @@ def reason_node(state: dict) -> dict:
         parent_finding_id=state.get("parent_finding_id"),
         terraform_resources=state.get("terraform_resources"),
         depth_level="deep" if deep_mode else "lightweight",
+        authoritative_rule_findings=rule_findings
+        + (
+            [state["parent_finding"]]
+            if deep_mode and isinstance(state.get("parent_finding"), dict)
+            else []
+        ),
     )
     findings = resolve_rule_findings(rule_findings) + model_findings
     rejected: dict[str, int] = {}
@@ -1004,6 +1084,7 @@ def reason_node(state: dict) -> dict:
         json.dumps(
             {
                 "event": "reasoning_result",
+                "remediation_policy_version": REMEDIATION_POLICY_VERSION,
                 "review_id": state.get("review_id"),
                 "emitted": len(raw_findings) + capped,
                 "capped": capped,

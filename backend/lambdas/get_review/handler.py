@@ -23,6 +23,7 @@ from backend.shared.http import JSON_HEADERS, api_handler
 from backend.shared.public_access import capability_allowed
 from backend.shared.report import build_review_report
 from backend.shared.retention import review_is_live
+from backend.shared.review_limits import public_scope_failure
 from backend.shared.review_projection import current_ledger
 
 _PENDING_ALLOWED_FIELDS = (
@@ -80,6 +81,10 @@ def handler(event: dict, _context: object) -> dict:
     report_s3_key = item.get("reportS3Key")
     if item.get("status") != "complete" or not report_s3_key:
         public_item = {k: item[k] for k in _PENDING_ALLOWED_FIELDS if k in item}
+        if item.get("failureCode") == "resource_limit_exceeded":
+            scope_failure = public_scope_failure(item.get("scopeFailure"))
+            if scope_failure is not None:
+                public_item["scopeFailure"] = scope_failure
         preview = _preview_architecture(item, review_id)
         if preview is not None:
             public_item["architecture"] = preview

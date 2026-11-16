@@ -263,3 +263,10 @@ variable "lambda_log_retention_days" {
   type        = number
   default     = 30
 }
+variable "review_guardrail_id" {
+  type = string
+}
+
+variable "review_guardrail_version" {
+  type = string
+}

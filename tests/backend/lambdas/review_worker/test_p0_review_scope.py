@@ -142,7 +142,7 @@ def test_f_postfail_after_invoke_preserves_unknown_delivery(
 
 
 @pytest.mark.parametrize("bad_scope", ["missing", None, {}, {"version": "wrong"}])
-def test_f_handoff_missing_or_invalid_scope_logs_one_drop_and_completes(
+def test_missing_or_invalid_scope_blocks_paid_runtime_in_p2(
     scoped_worker, capsys, bad_scope
 ):
     case = scoped_worker
@@ -150,15 +150,9 @@ def test_f_handoff_missing_or_invalid_scope_logs_one_drop_and_completes(
         del case.rules["review_scope"]
     else:
         case.rules["review_scope"] = bad_scope
-    payload = _run(case)
-    assert "review_scope" not in payload
-    events = [
-        json.loads(line)
-        for line in capsys.readouterr().out.splitlines()
-        if line.startswith("{")
-    ]
-    assert sum(event.get("event") == "review_scope_dropped" for event in events) == 1
-    assert len(case.agent_calls) == 1
+    assert worker.handler({"review_id": case.review_id}, None) == {"status": "failed"}
+    assert case.agent_calls == []
+    assert all(name != "finalize" for name, _ in case.calls)
 
 
 @pytest.mark.parametrize("detail", ["duplicate_resource", "duplicate_module_call"])
@@ -202,6 +196,9 @@ def test_agentcore_payload_and_invocation_count_match_3293c1b(
     if not with_scope:
         case.rules.pop("review_scope")
         case.rules.pop("summary_members")
+        assert worker.handler({"review_id": case.review_id}, None) == {"status": "failed"}
+        assert case.agent_calls == []
+        return
     _run(case)
     submission = next(payload for name, payload in case.calls if name == "ingest")
     expected_payload = {
@@ -212,6 +209,8 @@ def test_agentcore_payload_and_invocation_count_match_3293c1b(
         "rule_findings": case.rules["findings"],
         "deterministic_rule_version": case.rules["rule_version"],
         "terraform_resources": case.rules["resource_summary"],
+        "review_scope_ref": {"operation": "initial", "job_id": case.review_id},
+        "analysis_seconds": 400,
     }
     assert case.agent_calls == [
         {
@@ -220,5 +219,5 @@ def test_agentcore_payload_and_invocation_count_match_3293c1b(
         }
     ]
     assert [name for name, _ in case.calls].count("rule_engine") == 1
-    assert "review_scope" not in json.dumps(case.agent_calls)
+    assert "declarations" not in json.dumps(case.agent_calls)
     assert "summary_members" not in json.dumps(case.agent_calls)

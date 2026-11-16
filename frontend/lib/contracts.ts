@@ -122,6 +122,7 @@ export interface BriefMeta {
 }
 
 export interface ReportFinding {
+  independent_check?: "supported" | "not-independently-checked" | "fix-needs-confirmation";
   record: Finding;
   presentation: FindingPresentation;
   // Independent of evidence type and evidence confidence. Absent in old reports.
@@ -247,6 +248,7 @@ export interface ReviewStatusPointer {
   // Set when the pipeline fails (backend/lambdas/mark_review_failed): a
   // short public code, mapped to friendly copy by failureMessageFor().
   failureCode?: string;
+  scopeFailure?: { known_y: number; count_complete: boolean };
   failedAt?: string;
 }
 

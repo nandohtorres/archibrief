@@ -185,6 +185,32 @@ def test_gate_waits_while_a_submitted_review_is_not_in_the_logs(tmp_path):
     assert result["spent_usd"] == ev.RESERVATION_USD
 
 
+def test_settling_a_blocked_review_reopens_the_gate_without_zero_cost(tmp_path):
+    journal, _ = _approved_journal(tmp_path)
+    journal = ev.record(journal, 1, IDS[0])
+    reason = "Input guardrail blocked the brief at Ingest; the model was never called."
+    settled = ev.settle(journal, 1, reason, {})
+    result = ev.gate(settled, {})
+    assert result["pending_slots"] == []
+    assert result["spent_usd"] == pytest.approx(ev.OTHER_BILLED_USD)
+    assert result["spent_usd"] > 0
+    assert settled["slots"]["1"]["settlement"]["reason"] == reason
+
+
+def test_settle_refuses_a_measured_review_a_short_reason_and_a_repeat(tmp_path):
+    journal, _ = _approved_journal(tmp_path)
+    journal = ev.record(journal, 1, IDS[0])
+    reason = "Input guardrail blocked the brief at Ingest; the model was never called."
+    with pytest.raises(ev.PlanError, match="measured"):
+        ev.settle(journal, 1, reason, {IDS[0]: _run()})
+    with pytest.raises(ev.PlanError, match="reason"):
+        ev.settle(journal, 1, "blocked", {})
+    with pytest.raises(ev.PlanError, match="not been recorded"):
+        ev.settle(journal, 2, reason, {})
+    with pytest.raises(ev.PlanError, match="already settled"):
+        ev.settle(ev.settle(journal, 1, reason, {}), 1, reason, {})
+
+
 def test_unknown_cost_keeps_the_whole_reservation_never_zero(tmp_path):
     journal, _ = _approved_journal(tmp_path)
     journal = ev.record(journal, 1, IDS[0])
@@ -288,13 +314,47 @@ def test_score_refuses_a_partly_judged_worksheet(tmp_path):
     journal, sheet, ledgers = _judged(tmp_path)
     sheet["findings"][0]["verdict"] = None
     with pytest.raises(ev.PlanError, match="judging incomplete"):
-        ev.score(journal, sheet, ledgers, {})
+        ev.score(journal, sheet, ledgers, {}, corpus=tmp_path)
+
+
+def test_score_preserves_settlement_without_claiming_measured_cost(tmp_path):
+    journal, sheet, ledgers = _judged(tmp_path)
+    journal = ev.record(journal, 2, IDS[1])
+    journal = ev.settle(
+        journal, 2, "Input guardrail blocked the brief before any model invocation.", {}
+    )
+    report = ev.score(journal, sheet, ledgers, {IDS[0]: _run(0.2)}, corpus=tmp_path)
+    blocked = report["slots"][1]
+    assert blocked["cost_usd"] == ev.OTHER_BILLED_USD
+    assert blocked["cost_known"] is False
+    assert blocked["completed"] is False
+    assert blocked["settlement"]["reason"]
+    assert report["spent_usd"] == ev.gate(journal, {IDS[0]: _run(0.2)})["spent_usd"]
+
+
+def test_score_discloses_mixed_rule_versions(tmp_path):
+    journal, sheet, ledgers = _judged(tmp_path)
+    ledgers["1"]["findings"][0]["deterministic_rule_version"] = "old"
+    journal = ev.record(journal, 2, IDS[1])
+    ledgers["2"] = _ledger()
+    ledgers["2"]["findings"] = [{**_finding("f2", "logs bucket"), "deterministic_rule_version": "new"}]
+    manifest = ev.load_manifest(tmp_path)
+    oracles = {cid: ev.load_oracle(tmp_path, case) for cid, case in ev.case_by_id(manifest).items()}
+    sheet = ev.build_worksheet(journal, ledgers, oracles)
+    for row in sheet["issues"]:
+        row["caught_by"] = "missed"
+    for row in sheet["findings"]:
+        row.update(verdict="valid", unsafe_fix=False)
+    report = ev.score(journal, sheet, ledgers, {}, corpus=tmp_path)
+    assert report["comparability"]["mixed_rule_versions"] is True
+    assert report["slots"][0]["rule_versions"] == ["old"]
+    assert report["slots"][1]["rule_versions"] == ["new"]
 
 
 def test_score_reports_recall_cost_and_counts(tmp_path):
     journal, sheet, ledgers = _judged(tmp_path)
     runs = {IDS[0]: _run(0.2, emitted=14, capped=2, accepted=11, rejected={"quote": 1})}
-    report = ev.score(journal, sheet, ledgers, runs)
+    report = ev.score(journal, sheet, ledgers, runs, corpus=tmp_path)
     slot = report["slots"][0]
     assert (slot["critical_high_caught"], slot["critical_high_total"]) == (1, 1)
     assert (slot["all_caught"], slot["all_total"]) == (1, 2)
@@ -308,11 +368,59 @@ def test_score_reports_recall_cost_and_counts(tmp_path):
     assert report["checkpoint"]["below"] is False
 
 
+def test_scanner_suffix_does_not_split_a_rule_engine_arm(tmp_path):
+    journal, sheet, ledgers = _judged(tmp_path)
+    ledgers["1"]["findings"][0]["deterministic_rule_version"] = "rules@1"
+    ledgers["1"]["findings"].append({
+        **_finding("f2", "scanner check"),
+        "deterministic_rule_version": "rules@1+trivy@0.76.0",
+    })
+    sheet["findings"].append({
+        "slot": 1, "finding_id": "f2", "type": "model",
+        "verdict": "valid", "unsafe_fix": False,
+    })
+    report = ev.score(journal, sheet, ledgers, {}, corpus=tmp_path)
+    assert report["summary"]["rules@1/development"]["reviews"] == 1
+    assert report["comparability"]["mixed_rule_versions"] is False
+    assert len(report["slots"][0]["rule_versions"]) == 2
+
+
+@pytest.mark.parametrize("section", ["issues", "findings"])
+@pytest.mark.parametrize("change", ["drop", "duplicate", "foreign"])
+def test_score_refuses_changed_judgment_denominators(tmp_path, section, change):
+    journal, sheet, ledgers = _judged(tmp_path)
+    if change == "drop":
+        sheet[section].pop()
+    elif change == "duplicate":
+        sheet[section].append(dict(sheet[section][0]))
+    else:
+        sheet[section][0]["slot"] = 12
+    with pytest.raises(ev.PlanError, match="judgment rows"):
+        ev.score(journal, sheet, ledgers, {}, corpus=tmp_path)
+
+
+@pytest.mark.parametrize(
+    "section,key,value,message",
+    [
+        ("issues", "severity", "Low", "metadata"),
+        ("issues", "must_find", False, "metadata"),
+        ("issues", "caught_by", "invented-id", "caught_by"),
+        ("findings", "verdict", "looks fine", "verdict"),
+        ("findings", "unsafe_fix", "false", "boolean"),
+    ],
+)
+def test_score_refuses_invalid_judgments(tmp_path, section, key, value, message):
+    journal, sheet, ledgers = _judged(tmp_path)
+    sheet[section][0][key] = value
+    with pytest.raises(ev.PlanError, match=message):
+        ev.score(journal, sheet, ledgers, {}, corpus=tmp_path)
+
+
 def test_score_flags_misses_false_claims_and_unsafe_fixes(tmp_path):
     journal, sheet, ledgers = _judged(
         tmp_path, caught_high="missed", verdict="false_claim", unsafe=True
     )
-    report = ev.score(journal, sheet, ledgers, {})
+    report = ev.score(journal, sheet, ledgers, {}, corpus=tmp_path)
     assert report["summary"]["development"]["critical_high_recall"] == 0.0
     assert report["checkpoint"]["below"] is True
     assert report["release_gates"] == {

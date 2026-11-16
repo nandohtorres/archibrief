@@ -14,6 +14,7 @@ from typing import Any
 from backend.shared.analysis_quality import public_analysis_quality, public_analysis_scope
 from backend.shared.assessment import finding_assessment
 from backend.shared.models.finding import Finding, FindingType
+from backend.shared.scope_projection import public_review_scope
 from backend.shared.stakeholder.presentation import brief_meta
 
 # Heuristic mapping that matches frontend/lib/fixtures.ts's fixtureReport
@@ -67,6 +68,7 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
         "owner_id": "admin",
         "status": "complete",
         "analysis_quality": public_analysis_quality(ledger.get("analysis_quality")),
+        "review_scope": public_review_scope(ledger.get("review_scope")),
         # terraformRepoRef is persisted by IdempotencyGate's PutItem
         # (infra/modules/step-functions-lambda/main.tf); costEstimateTier is
         # computed by finalize.handler.compute_cost_estimate_tier, a
@@ -78,6 +80,12 @@ def build_review_report(review_item: dict[str, Any], ledger: dict[str, Any]) -> 
         "baseline_answers": ledger.get("baseline_answers", []),
         "findings": report_findings(findings),
     }
+    checks = (report["analysis_quality"].get("additional_verification") or {}).get("findings", [])
+    by_id = {entry["finding_id"]: entry["status"] for entry in checks}
+    for finding in report["findings"]:
+        status = by_id.get(finding["record"]["finding_id"])
+        if status in {"supported", "not-independently-checked", "fix-needs-confirmation"}:
+            finding["independent_check"] = status
     summary = ledger.get("terraform_resources")
     scope = (
         public_analysis_scope(summary.get("analysis_coverage"))

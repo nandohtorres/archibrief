@@ -23,6 +23,12 @@ function elapsed(startedAt: number, now: number): string {
 }
 
 function failureText(code?: string | null): string {
+  if (code?.startsWith("analysis_") || code === "token_count_unavailable")
+    return "The deeper analysis could not fit or confirm its input budget. No new answer was generated; earlier screening or retrieval may have run.";
+  if (code === "scope_manifest_required")
+    return "This report has no usable scope manifest. Start a new review to request deeper analysis.";
+  if (code === "resource_limit_exceeded")
+    return "This report exceeds the 50-declaration pilot limit. Start a new review with one smaller root.";
   if (code === "timed_out") return "It ran out of time before finishing.";
   if (code === "paused") return "New analysis is paused right now.";
   return "The analysis didn't produce a usable result.";

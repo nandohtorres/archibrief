@@ -18,7 +18,12 @@ import {
 import { QUOTE_OMITTED_NOTE } from "./money-policy";
 import { publicRecord, publicTurn } from "./public-projection";
 import { assessmentFor, assessmentLabel } from "./assessment";
-import { declarationScopeMessage, qualityMessage, scopeMessage } from "./analysis-quality";
+import {
+  declarationScopeMessage,
+  independentCheckLabel,
+  qualityMessage,
+  scopeMessage,
+} from "./analysis-quality";
 
 // Plain messages for the chat API's error codes (backend/lambdas/
 // ask_question ERROR_MESSAGES). The server's own text is never shown, so
@@ -201,6 +206,7 @@ export function buildReportHtml(
       return `
     <article class="finding">
       <h3>${escapeHtml(record.finding)}</h3>
+      ${independentCheckLabel(finding) ? `<p>${escapeHtml(independentCheckLabel(finding))}</p>` : ""}
       <p class="meta">${escapeHtml(assessmentLabel(finding))} · assessment source: ${escapeHtml(assessmentFor(finding).source)}</p>
       <p class="meta">${escapeHtml(evidenceLabel(record.type))} · ${escapeHtml(record.category)} · ${escapeHtml(record.type)} · evidence confidence ${Math.round(record.confidence * 100)}% (heuristic, not correctness probability)</p>
       ${notes

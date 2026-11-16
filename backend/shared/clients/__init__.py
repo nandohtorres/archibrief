@@ -17,8 +17,16 @@ from typing import Any
 
 import boto3
 from boto3.dynamodb.types import TypeSerializer
+from botocore.client import BaseClient
 from botocore.config import Config
 from botocore.exceptions import ClientError
+
+from backend.shared.model_request_budget import (
+    REQUEST_MEASUREMENT_VERSION,
+    GenerationBudget,
+    request_utf8_bytes,
+    structured_request,
+)
 
 
 def _dynamodb_safe(value: Any) -> Any:
@@ -295,6 +303,8 @@ class BedrockReasoningClient:
     read_timeout_seconds: float | None = None
     no_retries: bool = False
     connect_timeout_seconds: float | None = None
+    generation_budget: GenerationBudget | None = None
+    token_counter: Any = None
 
     def __post_init__(self) -> None:
         self._client = boto3.client(
@@ -358,28 +368,34 @@ class BedrockReasoningClient:
         code. AWS doesn't list exactly which models honor it; if a model
         rejects `strict` with a 400, make it conditional per model.
         """
-        request = {
-            "modelId": self.model_id,
-            "system": [{"text": system_prompt}],
-            "messages": [{"role": "user", "content": [{"text": user_content}]}],
-            "inferenceConfig": {"maxTokens": max_tokens},
-            "toolConfig": {
-                "tools": [
-                    {
-                        "toolSpec": {
-                            "name": tool_name,
-                            "description": tool_description,
-                            "inputSchema": {"json": input_schema},
-                            "strict": True,
-                        }
-                    }
-                ],
-                "toolChoice": {"tool": {"name": tool_name}},
-            },
+        request = structured_request(
+            self.model_id,
+            system_prompt,
+            user_content,
+            max_tokens,
+            tool_name,
+            tool_description,
+            input_schema,
+        )
+        if self.generation_budget is not None:
+            self.generation_budget.admit(request, self.token_counter or self._client)
+        converse_client = self._client
+        if self.generation_budget is not None and isinstance(self._client, BaseClient):
+            left = self.generation_budget.deadline - self.generation_budget.clock()
+            self.generation_budget.check_deadline()
+            converse_client = boto3.client(
+                "bedrock-runtime",
+                region_name=self.region_name,
+                **_timeouts(min(self.read_timeout_seconds or 400, max(1, left)), 2, True),
+            )
+        request_measurement = {
+            "request_utf8_bytes": request_utf8_bytes(request),
+            "request_measurement_version": REQUEST_MEASUREMENT_VERSION,
+            "call_kind": "verification" if tool_name == "verify_findings" else "generation",
         }
         started = time.monotonic()
         try:
-            response = self._client.converse(**request)
+            response = converse_client.converse(**request)
         except Exception as exc:
             # A timeout or service error leaves no usage to log, so record
             # how long it ran: otherwise failures are invisible in the
@@ -388,6 +404,7 @@ class BedrockReasoningClient:
                 json.dumps(
                     {
                         "event": "reasoning_call_failed",
+                        **request_measurement,
                         "kind": type(exc).__name__,
                         "elapsed_ms": int((time.monotonic() - started) * 1000),
                         "max_tokens": max_tokens,
@@ -402,6 +419,7 @@ class BedrockReasoningClient:
             json.dumps(
                 {
                     "event": "reasoning_call",
+                    **request_measurement,
                     "stop_reason": response.get("stopReason"),
                     "input_tokens": usage.get("inputTokens"),
                     "output_tokens": usage.get("outputTokens"),

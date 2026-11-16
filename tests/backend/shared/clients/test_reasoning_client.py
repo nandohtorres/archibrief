@@ -5,7 +5,6 @@ import pytest
 from backend.shared.clients import (
     BedrockReasoningClient,
     ModelOutputTruncated,
-    ToolCallMissing,
 )
 
 
@@ -14,6 +13,7 @@ class _Converse:
         self.response = response
 
     def converse(self, **_kwargs):
+        self.request = _kwargs
         return self.response
 
 
@@ -55,12 +55,18 @@ def test_structured_call_logs_sizes_and_timing_only(capsys):
             }
         },
     }
-    assert _call(_client(response)) == {"findings": []}
+    client = _client(response)
+    assert _call(client) == {"findings": []}
     logged = _logged(capsys)
     logged_elapsed = logged["elapsed_ms"]
     assert isinstance(logged_elapsed, int) and logged_elapsed >= 0
     assert logged == {
         "event": "reasoning_call",
+        "call_kind": "generation",
+        "request_utf8_bytes": len(json.dumps(
+            client._client.request, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")),
+        "request_measurement_version": "converse-request-json@1",
         "stop_reason": "tool_use",
         "input_tokens": 1200,
         "output_tokens": 5400,
@@ -96,3 +102,5 @@ def test_failed_call_logs_how_long_it_ran(capsys):
     assert logged["kind"] == "TimeoutError"
     assert logged["max_tokens"] == 8192
     assert isinstance(logged["elapsed_ms"], int)
+    assert logged["request_utf8_bytes"] > len("PRIVATE-CONTENT")
+    assert logged["request_measurement_version"] == "converse-request-json@1"

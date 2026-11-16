@@ -14,19 +14,28 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-from backend.shared.admission import release_operation, request_digest
+from backend.agent.request_budget import prepare_envelope
+from backend.shared.admission import AdmissionDenied, release_operation, request_digest
 from backend.shared.analysis_quality import build_analysis_quality
 from backend.shared.architecture_links import link_findings
 from backend.shared.clients import AgentCoreRuntimeClient, DynamoDBClient, S3Client
 from backend.shared.kill_switch import paid_work_allowed
+from backend.shared.model_request_budget import RequestBudgetExceeded
 from backend.shared.retention import review_is_live
+from backend.shared.review_limits import public_scope_failure
 from backend.shared.review_scope import finalize_scope, validate_scope
+from backend.shared.review_screen import screen_review
+from backend.shared.scope_admission import (
+    operation_reservation,
+    prepare_operation,
+    record_request_envelope,
+)
 
 
 def _invoke(stage: str, payload: dict) -> dict:
-    # No stage calls the model, so transient throttling or service errors are
-    # retried. Audit is not: each run writes a new row. AgentCore is not either.
-    attempts = 1 if stage == "audit" else 3
+    # Ingest stores parsed input; Audit writes a new row each time.
+    # Other stages are deterministic. Paid screening runs here, without retry.
+    attempts = 1 if stage in {"ingest", "audit"} else 3
     response = boto3.client(
         "lambda",
         config=Config(
@@ -49,6 +58,18 @@ def _invoke(stage: str, payload: dict) -> dict:
 
 def _write_json(s3: S3Client, key: str, payload: dict) -> None:
     s3.put_object(key, json.dumps(payload).encode())
+
+
+def _request_envelope(payload: dict, reservation: int) -> dict:
+    client = boto3.client(
+        "bedrock-runtime",
+        config=Config(
+            connect_timeout=2,
+            read_timeout=15,
+            retries={"total_max_attempts": 1},
+        ),
+    )
+    return prepare_envelope(payload, client, reservation)
 
 
 def _read_json(s3: S3Client, key: str) -> dict:
@@ -89,20 +110,28 @@ def _save_preview_diagram(
         print(json.dumps({"event": "preview_diagram_failed", "kind": type(exc).__name__}))
 
 
-def _fail(table: DynamoDBClient, review_id: str, code: str) -> dict:
+def _fail(table: DynamoDBClient, review_id: str, code: str, scope_failure: object = None) -> dict:
+    detail = public_scope_failure(scope_failure) if code == "resource_limit_exceeded" else None
+    update = "SET #s = :failed, failureCode = :code"
+    values = {":failed": "failed", ":code": code, ":complete": "complete"}
+    if detail is not None:
+        update += ", scopeFailure = :scope"
+        values[":scope"] = detail
     table.update_item(
         Key={"reviewId": review_id},
-        UpdateExpression="SET #s = :failed, failureCode = :code",
+        UpdateExpression=update,
         ConditionExpression="attribute_exists(reviewId) AND #s <> :complete",
         ExpressionAttributeNames={"#s": "status"},
-        ExpressionAttributeValues={":failed": "failed", ":code": code, ":complete": "complete"},
+        ExpressionAttributeValues=values,
     )
     return {"status": "failed"}
 
 
-def _fail_unpaid(table: DynamoDBClient, review_id: str, code: str, operation: str) -> dict:
+def _fail_unpaid(
+    table: DynamoDBClient, review_id: str, code: str, operation: str, scope_failure: object = None
+) -> dict:
     """Fail a review before any billed call (model or Guardrails) and give back its reservation."""
-    result = _fail(table, review_id, code)
+    result = _fail(table, review_id, code, scope_failure)
     try:
         release_operation(review_id, operation)
     except Exception:  # noqa: BLE001 - the review is already marked failed
@@ -200,12 +229,14 @@ def handler(event: dict, context: object) -> dict:
         stage = _progress(table, review_id, "ingest")
         ingest = _invoke("ingest", {**submission, "report_bucket": bucket})
         if ingest.get("status") == "rejected":
-            code = (
-                "malformed_configuration"
-                if ingest.get("code") == "malformed_configuration"
-                else "invalid_archive"
-            )
-            return _fail_unpaid(table, review_id, code, operation)
+            code = ingest.get("code")
+            if code not in {
+                "malformed_configuration",
+                "resource_limit_exceeded",
+                "scope_manifest_required",
+            }:
+                code = "invalid_archive"
+            return _fail_unpaid(table, review_id, code, operation, ingest.get("scope_failure"))
         if ingest.get("status") == "blocked":
             # Guardrails, which is billed, has already run.
             return _fail(table, review_id, "input_blocked")
@@ -248,7 +279,45 @@ def handler(event: dict, context: object) -> dict:
         # Set to "unknown" before invoking: once the call starts, a failure
         # does not prove nothing was sent.
         model_outcome = "not_invoked"
+        budget_reason = None
+        runtime_payload = None
+        if agent_wait is not None:
+            try:
+                runtime_payload = prepare_operation(
+                    review,
+                    rules.get("review_scope"),
+                    {
+                        "review_id": review_id,
+                        "workload_brief": state["workload_brief"],
+                        "baseline_answers": state["baseline_answers"],
+                        "retrieval_query": state["submission"]["retrieval_query"],
+                        "rule_findings": rules["findings"],
+                        "deterministic_rule_version": rules["rule_version"],
+                        "terraform_resources": rules.get("resource_summary", {}),
+                        "analysis_seconds": min(400, agent_wait - 10),
+                    },
+                    operation="initial",
+                    job_id=review_id,
+                )
+                reservation = operation_reservation(runtime_payload)
+                envelope = _request_envelope(runtime_payload, reservation)
+                record_request_envelope(runtime_payload, envelope)
+            except RequestBudgetExceeded as exc:
+                return _fail_unpaid(table, review_id, exc.code, operation)
+            except AdmissionDenied as exc:
+                return _fail_unpaid(table, review_id, exc.code, operation)
+            # From this point a screen may have billed. Never refund on error.
+            try:
+                allowed = screen_review(runtime_payload)
+            except Exception:  # noqa: BLE001 - ambiguous screening fails, never retries or certifies
+                return _fail(table, review_id, "input_screen_unavailable")
+            state["ingest"]["guardrails_decisions"] = [
+                {"stage": "pre_retrieval", "allowed": allowed}
+            ]
+            if not allowed:
+                return _fail(table, review_id, "input_blocked")
         try:
+            agent_wait = _agent_read_timeout(context)
             if agent_wait is None:
                 raise TimeoutError("not enough Lambda time left for the model")
             model_outcome = "unknown"
@@ -256,24 +325,20 @@ def handler(event: dict, context: object) -> dict:
                 agent_runtime_arn=os.environ["AGENTCORE_RUNTIME_ARN"],
                 read_timeout_seconds=agent_wait,
             ).invoke(
-                payload={
-                    "review_id": review_id,
-                    "workload_brief": state["workload_brief"],
-                    "baseline_answers": state["baseline_answers"],
-                    "retrieval_query": state["submission"]["retrieval_query"],
-                    "rule_findings": rules["findings"],
-                    "deterministic_rule_version": rules["rule_version"],
-                    "terraform_resources": rules.get("resource_summary", {}),
-                },
+                payload=runtime_payload,
                 runtime_session_id=f"archibrief-review-session-{review_id}-0",
             )
-            model_outcome = "completed"
+            if agent.get("status") == "admission_denied":
+                return _fail(table, review_id, "scope_manifest_required")
+            model_outcome = agent.get("model_outcome", "completed")
+            budget_reason = agent.get("budget_reason")
+        except AdmissionDenied as exc:
+            return _fail(table, review_id, exc.code)
         except Exception as exc:  # noqa: BLE001 - any model failure falls back to the rules
             # The rule and scanner findings are final before the model
             # starts, so a model timeout or error still yields a report,
             # marked as deterministic findings only, instead of nothing.
             # Never retried: a second attempt would be a second paid call.
-            # Guardrails already passed the brief at Ingest.
             print(json.dumps({"event": "reasoning_unavailable", "kind": type(exc).__name__}))
             model_unavailable = True
             agent = {"status": "complete", "findings": rules["findings"]}
@@ -290,6 +355,18 @@ def handler(event: dict, context: object) -> dict:
             model_unavailable=model_unavailable,
             model_findings_capped=bool(agent.get("model_findings_capped")),
         )
+        if budget_reason:
+            quality["reason_codes"].append("request_budget_exceeded")
+        if agent.get("retrieval_omitted_count"):
+            quality["reason_codes"].append("evidence_budget_limited")
+        verification = agent.get("additional_verification")
+        if isinstance(verification, dict):
+            quality["additional_verification"] = verification
+            quality["reason_codes"].append(
+                "additional_verification_checks"
+                if verification.get("status") == "complete"
+                else "additional_verification_incomplete"
+            )
         stage = _progress(table, review_id, "audit")
         _invoke(
             "audit",

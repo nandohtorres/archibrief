@@ -15,6 +15,26 @@ resource "aws_iam_role_policy_attachment" "deeper_worker_logs" {
 
 data "aws_iam_policy_document" "deeper_worker" {
   statement {
+    actions   = ["bedrock:ApplyGuardrail"]
+    resources = ["arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:guardrail/${var.review_guardrail_id}"]
+  }
+  statement {
+    actions = ["bedrock:CountTokens"]
+    resources = [
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+    ]
+  }
+  statement {
+    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
+    resources = [var.usage_counters_table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["operation#*"]
+    }
+  }
+  statement {
     actions   = ["dynamodb:GetItem"]
     resources = [var.reviews_table_arn]
   }
@@ -57,9 +77,12 @@ resource "aws_lambda_function" "deeper_worker" {
     variables = {
       REVIEWS_TABLE_NAME         = var.reviews_table_name
       FINDINGS_TABLE_NAME        = var.findings_table_name
+      USAGE_COUNTERS_TABLE_NAME  = var.usage_counters_table_name
       REPORTS_BUCKET_NAME        = var.reports_bucket_name
       KILL_SWITCH_PARAMETER_NAME = var.kill_switch_parameter_name
       AGENTCORE_RUNTIME_ARN      = coalesce(var.agentcore_runtime_arn, "arn:aws:bedrock-agentcore:us-east-1:000000000000:runtime/not-yet-deployed")
+      GUARDRAIL_ID               = var.review_guardrail_id
+      GUARDRAIL_VERSION          = var.review_guardrail_version
     }
   }
   tags = var.tags

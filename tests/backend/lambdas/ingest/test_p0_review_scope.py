@@ -37,15 +37,32 @@ def _completed(parsed):
     )
 
 
+def _parse(tmp_path, files):
+    paths = []
+    for name, text in files.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        paths.append(str(path))
+    return asdict(ingest.parse_terraform_files(paths, archive_root=str(tmp_path)))
+
+
 @pytest.mark.parametrize(
     "n", [0, 1, 49, 50, 51], ids=["F00", "F01", "F49", "F50", "F51"]
 )
-def test_f00_f01_f49_f50_f51_root_counts_without_enforcing_fifty(tmp_path, n):
+def test_f00_f01_f49_f50_f51_inventory_then_pilot_admission(tmp_path, n):
     source = 'provider "aws" { region = "us-east-1" }\n'
     source += "\n".join(f'resource "aws_s3_bucket" "b{i}" {{}}' for i in range(n))
     result, guard = _run(tmp_path, {"main.tf": source})
+    if n > 50:
+        assert result["code"] == "resource_limit_exceeded"
+        assert result["scope_failure"]["known_y"] == n
+        assert guard.calls == []
+        parsed = _parse(tmp_path / "parser", {"main.tf": source})
+        assert parsed["review_scope"]["known_y"] == n
+        return
     assert result["status"] == "parsed"
-    assert len(guard.calls) == 1
+    assert guard.calls == []
     pending = result["review_scope"]
     assert pending["status"] == "pending"
     assert pending["known_y"] == n
@@ -121,7 +138,7 @@ def test_f_dup_uncalled_does_not_reject_or_count_uncalled_directory(tmp_path):
         },
     )
     assert result["status"] == "parsed"
-    assert len(guard.calls) == 1
+    assert guard.calls == []
     assert result["review_scope"]["known_y"] == 1
     assert result["review_scope"]["module_gaps"] == []
 
@@ -308,9 +325,11 @@ def test_f_clone_child_and_f_stop_disabled_account_for_unentered_calls(
 def test_f_root_nested_only_archive_preserves_legacy_parse_but_has_unknown_count(
     tmp_path,
 ):
-    result, _ = _run(tmp_path, {"unit/main.tf": 'resource "aws_s3_bucket" "main" {}'})
-    assert result["status"] == "parsed"
-    assert result["resource_count"] == 1
+    files = {"unit/main.tf": 'resource "aws_s3_bucket" "main" {}'}
+    rejected, guard = _run(tmp_path, files)
+    assert rejected["code"] == "scope_manifest_required"
+    assert guard.calls == []
+    result = _parse(tmp_path / "parser", files)
     assert result["review_scope"]["state"] == "unknown_root"
     assert result["review_scope"]["known_y"] is None
     assert result["review_scope"]["declarations"] == []
@@ -388,13 +407,12 @@ def test_unknown_module_inputs_and_provider_mapping_are_not_unreadable_modules(
 
 
 @pytest.mark.parametrize("size,complete", [(1000, True), (1001, False)])
-def test_inventory_bound_records_lower_bound_without_rejecting(
+def test_parser_inventory_bound_still_records_lower_bound(
     tmp_path, size, complete
 ):
     source = "\n".join(f'resource "aws_s3_bucket" "b{i}" {{}}' for i in range(size))
-    result, _ = _run(tmp_path, {"main.tf": source})
+    result = _parse(tmp_path, {"main.tf": source})
     scope = result["review_scope"]
-    assert result["status"] == "parsed"
     assert scope["known_y"] == len(scope["declarations"]) == 1000
     assert scope["count_complete"] is complete
 
@@ -495,7 +513,7 @@ def test_depth_stop_records_unread_module_as_gap(tmp_path):
 
 
 def test_module_expansion_limit_records_each_unentered_call(tmp_path):
-    result, _ = _run(
+    result = _parse(
         tmp_path,
         {
             "main.tf": "\n".join(

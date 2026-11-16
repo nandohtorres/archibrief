@@ -83,6 +83,29 @@ describe("citationGap", () => {
 });
 
 describe("failureMessageFor", () => {
+  it("explains pilot rejection and distinguishes lower-bound counts", () => {
+    const exact = failureMessageFor("resource_limit_exceeded", {
+      known_y: 84,
+      count_complete: true,
+    });
+    const partial = failureMessageFor("resource_limit_exceeded", {
+      known_y: 84,
+      count_complete: false,
+    });
+    expect(exact).toContain("84 resource declarations");
+    expect(partial).toContain("84 known resource declarations");
+    expect(partial).toContain("total may be larger");
+    expect(exact).toContain("No paid AI analysis was started");
+    expect(failureMessageFor("scope_manifest_required")).toContain(
+      "archive root",
+    );
+    expect(
+      failureMessageFor("resource_limit_exceeded", {
+        known_y: NaN,
+        count_complete: true,
+      }),
+    ).toBe(failureMessageFor("resource_limit_exceeded"));
+  });
   it.each([
     "invalid_archive",
     "input_blocked",
