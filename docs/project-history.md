@@ -186,11 +186,9 @@ lost Critical/High recall: development 31/31 to 28/31; held-out R0 10/12 to R1 8
 The cohorts are separate. This is progress on claim/fix quality, not completion
 of the accuracy goal.
 
-The next builds add five narrow deterministic checks for explicit high-risk
-settings and repair the default-off verifier's contradiction/remediation contract.
-Their exact frozen SHAs, test results and remaining gates are in
-[current status](current-status.md). They have not been given a new accuracy score.
-Implementation, independent review, approved release and evaluation are separate
-steps. Paired replay keeps the saved generator
-findings constant, while sealed cases stay hidden from the tuning session.
-P2 validation and the budget/recall gates still precede enabling P3b.
+PR #69 (merge 9483635) then added five narrow deterministic rules for explicit
+high-risk settings, because every rule-covered held-out issue was caught in both
+rounds while the lost ones had been caught only by the model. The rules are live
+but not yet re-measured. Next is an independent verifier pass and an "Unable to
+verify" section, shipped switched off and enabled only if a paired evaluation
+shows no lost Critical/High catches ([current status](current-status.md)).

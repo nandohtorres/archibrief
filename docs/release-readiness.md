@@ -1,6 +1,6 @@
 # Release status
 
-> **2026-11-16 checkpoint:** The brief and first accuracy repairs are released. Additional rules have passed review but are awaiting release; the second verification check remains off. See [current status](current-status.md).
+> **2026-11-16 checkpoint:** The Stakeholder Brief (#67), first accuracy repairs (#68) and five deterministic rules (#69) are live. The independent verifier is not live yet. See [current status](current-status.md).
 
 What is live, how a release ships, and what is still open. Live table and
 release steps updated 2026-11-16; the verification section below is from
@@ -16,12 +16,9 @@ go deeper on a finding, ask the report chat and share a read-only link.
 | Checkpoint                                 | Revision                                          | Evidence                                                                            |
 | ------------------------------------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | Stakeholder Brief release                  | 8c90443 (#67)                                     | Recorded backend-first rollout and production smoke results          |
-| Most recent production accuracy evaluation | 613ab0c (#68), backend d9b5772, P3b off           | Recorded R1 evaluation; merge exists locally                                   |
-| New rule/verifier candidates               | Rules 091ee10; integration 1a75227; tools 0721c82 | Rules approved, awaiting release; verifier remains a local candidate |
+| First accuracy repairs                     | 613ab0c (#68)                                     | Backend applied before merge; measured in R1 ([current status](current-status.md)) |
+| Five deterministic rules (live now)        | 9483635 (#69), `rule_engine@2026-11-16a`          | Backend applied before merge; post-apply plan showed no changes; frontend deployed after green CI; live smoke passed |
 
-This documentation pass did not query AWS, deployment logs or the live site. The
-production rows are attributed release/evaluation checkpoints, not a new drift
-or deployment certification. See [current status](current-status.md).
 
 ## Shipping a release
 
