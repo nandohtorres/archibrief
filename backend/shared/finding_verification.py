@@ -34,8 +34,9 @@ VERDICT_SCHEMA = {
     "required": ["verdicts"],
     "properties": {
         "verdicts": {
+            # Bedrock strict tool schemas reject maxItems/minLength/maxLength
+            # (CountTokens returns ValidationException); code enforces them.
             "type": "array",
-            "maxItems": MAX_CANDIDATES,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
@@ -56,7 +57,7 @@ VERDICT_SCHEMA = {
                     "fact_ids": {"type": "array", "items": {"type": "string"}},
                     "evidence_ids": {"type": "array", "items": {"type": "string"}},
                     "remediation_applicable": {"type": "boolean"},
-                    "reason": {"type": "string", "minLength": 1, "maxLength": 800},
+                    "reason": {"type": "string"},
                 },
             },
         }
