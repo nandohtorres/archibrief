@@ -20,6 +20,8 @@ import {
 import { formatFindingId, type ReportSource } from "@/lib/workflow";
 import type { ReviewerNote } from "@/lib/demos";
 import { notesForTurn } from "@/lib/report-review";
+import { MONEY_NOTE, QUOTE_OMITTED_NOTE } from "@/lib/money-policy";
+import { publicParagraph } from "@/lib/public-projection";
 
 interface ReportQuestionsProps {
   reviewId: string;
@@ -514,7 +516,10 @@ function AnswerParagraph({
   preview: boolean;
 }) {
   // Text only, never HTML. The server keeps at most one short code block.
-  const parts = paragraph.text.split("```");
+  // Cost figures are not shown (ADR-0062), whether the server removed them
+  // already or this is an older saved answer. Code syntax is kept.
+  const { paragraph: shown } = publicParagraph(paragraph);
+  const parts = shown.text.split("```");
   return (
     <div className="chat-paragraph">
       {parts.map((part, index) =>
@@ -526,9 +531,10 @@ function AnswerParagraph({
           <p key={index}>{part.trim()}</p>
         ) : null,
       )}
-      {paragraph.citations.length > 0 && (
+      {Boolean(shown.amounts_removed) && <p className="brief-money-note">{MONEY_NOTE}</p>}
+      {shown.citations.length > 0 && (
         <ul className="chat-citations" aria-label="Citations">
-          {paragraph.citations.map((citation, index) => (
+          {shown.citations.map((citation, index) => (
             <li key={index}>
               <Citation citation={citation} onOpenFinding={onOpenFinding} preview={preview} />
             </li>
@@ -575,7 +581,11 @@ function Citation({
     return (
       <details className="citation-source">
         <summary>{citationLabel(citation)}</summary>
-        <blockquote>{citation.quote}</blockquote>
+        {citation.quote_omitted ? (
+          <p className="brief-money-note">{QUOTE_OMITTED_NOTE}</p>
+        ) : (
+          <blockquote>{citation.quote}</blockquote>
+        )}
         {href && (
           <a href={href} target="_blank" rel="noopener noreferrer">
             Open the AWS source

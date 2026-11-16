@@ -1,0 +1,23 @@
+{
+  "_comment": "Conformance cases for the no-monetary-estimates policy. Read by tests/frontend/money-policy.test.ts and tests/backend/shared/test_money_policy.py; both implementations must give these exact outputs.",
+  "cases": [
+    { "name": "monthly rate", "mode": "field", "input": "Costs about $32/month.", "expected": "Costs about [amount removed].", "removed": 1 },
+    { "name": "thousands and decimals per year", "mode": "field", "input": "Roughly $1,200.50 per year", "expected": "Roughly [amount removed]", "removed": 1 },
+    { "name": "range with dash", "mode": "field", "input": "Expect $40-60 a month", "expected": "Expect [amount removed]", "removed": 1 },
+    { "name": "range with to", "mode": "field", "input": "between $40 to $60", "expected": "between [amount removed]", "removed": 1 },
+    { "name": "USD prefix and suffix", "mode": "field", "input": "USD 40 or 40 USD or 40 dollars", "expected": "[amount removed] or [amount removed] or [amount removed]", "removed": 3 },
+    { "name": "US dollar sign with scale", "mode": "field", "input": "US$5k upfront", "expected": "[amount removed] upfront", "removed": 1 },
+    { "name": "legacy per-GB price", "mode": "field", "input": "Transfer is $0.045 per GB.", "expected": "Transfer is [amount removed].", "removed": 1 },
+    { "name": "decimal with scale", "mode": "field", "input": "A $12.5k migration", "expected": "A [amount removed] migration", "removed": 1 },
+    { "name": "terraform and shell syntax untouched", "mode": "field", "input": "name = \"${var.env}-db\" and $HOME", "expected": "name = \"${var.env}-db\" and $HOME", "removed": 0 },
+    { "name": "no amount", "mode": "field", "input": "Turn on Multi-AZ.", "expected": "Turn on Multi-AZ.", "removed": 0 },
+    { "name": "drops the sentence with the price", "mode": "narrative", "input": "Multi-AZ adds a standby. It costs about $150 a month. Test a failover.", "expected": "Multi-AZ adds a standby. Test a failover.", "removed": 1 },
+    { "name": "whole answer was a price", "mode": "narrative", "input": "It costs $5.", "expected": "A cost estimate was removed from this answer.", "removed": 1 },
+    { "name": "list line with a price is dropped", "mode": "narrative", "input": "Options:\n- One NAT gateway: $32/month.\n- VPC endpoints for S3.", "expected": "Options:\n- VPC endpoints for S3.", "removed": 1 },
+    { "name": "price in a code fence comment", "mode": "narrative", "input": "Set this:\n```hcl\n# about $32.85/month\nmulti_az = true\n```", "expected": "Set this:\n```hcl\n# about [amount removed]\nmulti_az = true\n```", "removed": 1 },
+    { "name": "shell and terraform in a fence untouched", "mode": "narrative", "input": "Run:\n```bash\necho $1 $HOME ${var.x}\nawk '{print $1,$2}'\n```", "expected": "Run:\n```bash\necho $1 $HOME ${var.x}\nawk '{print $1,$2}'\n```", "removed": 0 },
+    { "name": "USD in a fence", "mode": "narrative", "input": "```\n# 40 USD a month\n```", "expected": "```\n# [amount removed] a month\n```", "removed": 1 },
+    { "name": "code keeps positional variables", "mode": "code", "input": "resource \"aws_instance\" \"web\" user_data = \"echo $1 ${var.name}\"", "expected": "resource \"aws_instance\" \"web\" user_data = \"echo $1 ${var.name}\"", "removed": 0 },
+    { "name": "code removes a stated price", "mode": "code", "input": "instance_class = \"db.m5.large\" # $0.171/hr", "expected": "instance_class = \"db.m5.large\" # [amount removed]", "removed": 1 }
+  ]
+}

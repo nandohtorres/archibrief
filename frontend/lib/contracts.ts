@@ -91,84 +91,34 @@ export interface FindingAssessment {
   action: "needed" | "none" | "unknown";
   source: "rule" | "model" | "reviewer" | "unassessed";
 }
-export type Verdict = "fix-today" | "quick-win" | "worth-the-money" | "when-budget-allows";
-
-// backend/shared/stakeholder/brief.py. Every dollar figure comes from
-// the backend's dated price table, never from the model.
-export interface PricedLine {
-  label: string;
-  monthly_low: number;
-  // null: depends on usage, or on a size the price table doesn't list.
-  monthly_high: number | null;
-  basis: string;
-  source_url: string;
-}
-
-export interface FixCost {
-  monthly_known: number;
-  has_unpriced: boolean;
-  lines: PricedLine[];
-  effort_hours_low: number;
-  effort_hours_high: number;
-  effort_label: string;
-  caveat: string | null;
-}
-
-export interface CostOfInaction {
-  headline: string;
-  detail: string;
-  source_name: string | null;
-  source_url: string | null;
-  // How to estimate it, when there's no published figure to cite.
-  method: string | null;
-}
-
+// A block from an older stakeholder view: a live report saved by an older
+// backend (ReportFinding.stakeholder) or a demo sidecar. Only the fields
+// the Stakeholder Brief reads are typed. Older blocks also carry an
+// analogy, price lines, effort hours and cost-of-inaction text; those are
+// never shown (ADR-0062).
 export interface StakeholderCard {
-  // "rule": the catalog's hand-written text; "model": written by the
-  // model; "reviewer": written by hand for a demo.
+  // "rule": the old catalog's text; "model": written by the model;
+  // "reviewer": written by hand for a demo.
   source: "rule" | "model" | "reviewer";
   concern: string | null;
   subject: string | null;
   severity: Severity;
   title: string;
-  analogy: string;
   what_could_happen: string;
   action: string;
   needs_action: boolean;
-  verdict: Verdict | null;
-  verdict_label: string | null;
-  fix: FixCost | null;
-  inaction: CostOfInaction | null;
 }
 
-export interface BudgetRow {
-  finding_id: string;
-  title: string;
+// Presentation facts the backend adds to a rule finding
+// (backend/shared/stakeholder/presentation.py). No text and no money:
+// the Stakeholder Brief's wording lives in lib/stakeholder-brief.ts.
+export interface BriefMeta {
+  version: 2;
+  concern: string | null;
+  // "recorded": the finding's stored concern; "title": inferred from the
+  // rule title for reviews saved before concerns were stored.
+  concern_source: "recorded" | "title" | null;
   subject: string | null;
-  severity: Severity;
-  verdict: Verdict;
-  verdict_label: string;
-  monthly_known: number;
-  has_unpriced: boolean;
-  effort_label: string;
-}
-
-export interface BudgetSummary {
-  item_count: number;
-  free_count: number;
-  monthly_known: number;
-  monthly_recommended: number;
-  recommended_has_unpriced: boolean;
-  monthly_optional: number;
-  unpriced_items: string[];
-  effort_hours_low: number;
-  effort_hours_high: number;
-  effort_label: string;
-  verdict_counts: Record<Verdict, number>;
-  rows: BudgetRow[];
-  prices_as_of: string;
-  price_region: string;
-  note: string;
 }
 
 export interface ReportFinding {
@@ -176,8 +126,9 @@ export interface ReportFinding {
   presentation: FindingPresentation;
   // Independent of evidence type and evidence confidence. Absent in old reports.
   assessment?: FindingAssessment;
-  // The plain-language card. Absent for findings with nothing to say in
-  // plain terms, and for reviews saved before the stakeholder view.
+  // Rule-finding presentation facts from a current backend.
+  brief?: BriefMeta;
+  // A block from an older backend or a demo sidecar (legacy reader).
   stakeholder?: StakeholderCard;
 }
 
@@ -190,6 +141,18 @@ export interface BaselineAnswer {
 }
 
 export interface ReviewReport {
+  review_scope?: {
+    version: "review-scope-public@1";
+    known_y: number | null;
+    x: number | null;
+    count_complete: boolean;
+    model_outcome: "completed" | "not_invoked" | "unknown";
+    categories: { reviewed: number; zero_copy: number; unsupported: number; other: number } | null;
+    module_gaps: Array<{ address: string; labels: string[] }>;
+    gaps_complete: boolean;
+    warnings: string[];
+    other_reasons?: Array<{ label: string; count: number }>;
+  };
   review_id: string;
   owner_id: string;
   status: "complete";
@@ -216,8 +179,9 @@ export interface ReviewReport {
   };
   deeper_reviews?: Array<{ parent_finding_id: string; analysis_quality: AnalysisQuality }>;
   deeper_jobs?: DeeperJob[];
-  // Totals across every finding that needs action. Absent on older reviews.
-  budget?: BudgetSummary;
+  // Price totals from older backends. Kept in the stored report, never
+  // read or shown (ADR-0062).
+  budget?: unknown;
   // The diagram built from the code (lib/architecture.ts). Older reviews
   // have none. Checked with isArchitectureGraph before use.
   architecture?: unknown;
@@ -394,6 +358,8 @@ export type ChatCitation =
       finding_id?: string;
       chunk_id?: string;
       quote: string;
+      // Set when the quote states a price and is not shown (ADR-0062).
+      quote_omitted?: "monetary-amount";
       source_url: string;
       heading_path: string;
     }
@@ -403,6 +369,8 @@ export type ChatCitation =
 export interface ChatParagraph {
   text: string;
   citations: ChatCitation[];
+  // Cost figures the server removed from this paragraph (ADR-0062).
+  amounts_removed?: number;
 }
 
 export type ChatStatus = "answered" | "not_determinable" | "refused";
@@ -418,6 +386,9 @@ export interface ChatTurn {
   asked_at: string | null;
   model_id: string | null;
   prompt_version: string | null;
+  // The public-text policy a current server applied. Absent from older
+  // servers; the frontend applies the same policy either way.
+  narrative_policy?: { version: string; amounts_removed: number; quotes_omitted: number };
 }
 
 export interface AskQuestionRequest {
@@ -487,41 +458,73 @@ export function isQuestionsTranscript(value: unknown): value is QuestionsTranscr
   );
 }
 
-// A demo's stakeholder view (public/demos/stakeholder/<id>.json, built by
-// scripts/build_demo_stakeholder.py), kept apart from the saved report.
+// A demo's presentation sidecar (public/demos/stakeholder/<id>.json, built
+// by scripts/build_demo_stakeholder.py), kept apart from the saved report.
+// Version 2 holds only assessment and plain-summary fields. Version 1
+// files (no `version`) also carry prices and a budget; the reader keeps
+// their assessment fields and ignores the rest.
 export interface StakeholderView {
   review_id: string;
+  version: 1 | 2;
+  presentation: string | null;
   blocks: Record<string, StakeholderCard>;
-  budget: BudgetSummary;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const severityValues: readonly string[] = ["critical", "high", "medium", "low"];
+
 export function isStakeholderCard(value: unknown): value is StakeholderCard {
   if (!isRecord(value)) return false;
-  const textFields = ["title", "analogy", "what_could_happen", "action"];
+  const textFields = ["title", "what_could_happen", "action"];
   if (!textFields.every((field) => typeof value[field] === "string")) return false;
-  if (typeof value.needs_action !== "boolean") return false;
-  return value.needs_action ? isRecord(value.fix) && isRecord(value.inaction) : true;
+  if (!["rule", "model", "reviewer"].includes(value.source as string)) return false;
+  if (typeof value.severity !== "string" || !severityValues.includes(value.severity)) return false;
+  return typeof value.needs_action === "boolean";
 }
 
-export function isStakeholderView(value: unknown): value is StakeholderView {
-  if (!isRecord(value) || typeof value.review_id !== "string") return false;
-  if (!isRecord(value.blocks) || !Object.values(value.blocks).every(isStakeholderCard)) {
-    return false;
+function cardOf(value: Record<string, unknown>): StakeholderCard {
+  const text = (key: string) => (typeof value[key] === "string" ? (value[key] as string) : null);
+  return {
+    source: value.source as StakeholderCard["source"],
+    concern: text("concern"),
+    subject: text("subject"),
+    severity: value.severity as Severity,
+    title: value.title as string,
+    what_could_happen: value.what_could_happen as string,
+    action: value.action as string,
+    needs_action: value.needs_action as boolean,
+  };
+}
+
+// Reads a version 1 or 2 sidecar. Returns null for anything else, so the
+// demo opens with the findings' own text instead.
+export function readStakeholderView(value: unknown): StakeholderView | null {
+  if (!isRecord(value) || typeof value.review_id !== "string" || !isRecord(value.blocks)) {
+    return null;
   }
-  const budget = value.budget;
-  return isRecord(budget) && Array.isArray(budget.rows) && typeof budget.monthly_known === "number";
+  const version = value.version === undefined ? 1 : value.version;
+  if (version !== 1 && version !== 2) return null;
+  const blocks: Record<string, StakeholderCard> = {};
+  for (const [id, block] of Object.entries(value.blocks)) {
+    if (!isStakeholderCard(block)) return null;
+    blocks[id] = cardOf(block as unknown as Record<string, unknown>);
+  }
+  return {
+    review_id: value.review_id,
+    version,
+    presentation: typeof value.presentation === "string" ? value.presentation : null,
+    blocks,
+  };
 }
 
-// Puts a stakeholder view's cards and budget onto the report they were
-// built from.
+// Puts a sidecar's blocks onto the report they were built from. A v1
+// budget is not copied.
 export function withStakeholderView(report: ReviewReport, view: StakeholderView): ReviewReport {
   return {
     ...report,
-    budget: view.budget,
     findings: report.findings.map((finding) => {
       const card = view.blocks[finding.record.finding_id];
       return card ? { ...finding, stakeholder: card } : finding;

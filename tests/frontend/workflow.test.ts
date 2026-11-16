@@ -7,7 +7,6 @@ import {
   failureMessageFor,
   filterAndSortFindings,
   formatFindingId,
-  stakeholderSummary,
 } from "../../frontend/lib/workflow";
 
 describe("finding workspace behavior", () => {
@@ -106,104 +105,6 @@ describe("failureMessageFor", () => {
 
   it("allows longer than the slowest backend stage before giving up", () => {
     expect(REVIEW_DEADLINE_MS).toBeGreaterThan(300_000);
-  });
-});
-
-describe("stakeholder summary", () => {
-  const finding = (
-    priority: "high" | "review" | "confirmed" | "unknown",
-    title: string,
-  ) => ({
-    ...fixtureReport.findings[0],
-    record: {
-      ...fixtureReport.findings[0].record,
-      finding_id: title,
-      finding: title,
-      type:
-        priority === "high"
-          ? ("deterministic-rule-result" as const)
-          : priority === "review"
-            ? ("inference" as const)
-            : ("fact" as const),
-    },
-    assessment:
-      priority === "high"
-        ? {
-            version: 1 as const,
-            severity: "high" as const,
-            action: "needed" as const,
-            source: "rule" as const,
-          }
-        : undefined,
-    presentation: { priority, short_label: priority },
-  });
-
-  it("names the submitted workload instead of the sample's", () => {
-    const summary = stakeholderSummary({
-      ...fixtureReport,
-      terraform_repo_ref: "github.com/acme/billing-service@abc123",
-    });
-    expect(summary.heading).toBe("What this review means for billing-service");
-    expect(summary.heading).not.toContain("payments-api");
-  });
-
-  it("counts real findings and starts with the high-risk ones", () => {
-    const summary = stakeholderSummary({
-      ...fixtureReport,
-      findings: [
-        finding("high", "Database is public"),
-        finding("high", "Storage is not encrypted"),
-        finding("review", "Consider IAM auth"),
-        finding("confirmed", "Multi-AZ enabled"),
-      ],
-    });
-    expect(summary.intro).toMatch(/^2 rule results were reported/);
-    expect(summary.intro).toContain("plus 1 item to review");
-    expect(summary.startWith).toEqual([
-      "Database is public",
-      "Storage is not encrypted",
-    ]);
-  });
-
-  it("says plainly when there is nothing high-risk", () => {
-    const summary = stakeholderSummary({ ...fixtureReport, findings: [] });
-    expect(summary.intro).toBe(
-      "No rule results were reported by the deterministic checks; this is not a safety guarantee.",
-    );
-    expect(summary.startWith).toEqual([]);
-  });
-
-  it("lists workload answers that weren't supplied", () => {
-    const summary = stakeholderSummary({
-      ...fixtureReport,
-      baseline_answers: [
-        {
-          field: "a",
-          label: "Traffic",
-          outcome: "answered",
-          value: "low",
-          policy_version: "1",
-        },
-        {
-          field: "b",
-          label: "Data residency",
-          outcome: "not-observable",
-          value: "",
-          policy_version: "1",
-        },
-        {
-          field: "c",
-          label: "Availability",
-          outcome: "assumption",
-          value: "std",
-          policy_version: "1",
-        },
-      ],
-    });
-    expect(summary.coverageLimits).toEqual([
-      "Data residency was not supplied, so conclusions that depend on it are not observable.",
-      "Availability was not supplied, so a conservative assumption was used.",
-    ]);
   });
 });
 

@@ -913,3 +913,65 @@ def test_a_budget_change_applies_the_same_day(env, monkeypatch):
     monkeypatch.setenv("CHAT_DAILY_BUDGET_MICRO_USD", "1000000")
     assert _call(_ask())[0] == 200
     assert len(env.reasoning.calls) == 2
+
+
+# --- No cost estimates in public answers (ADR-0062) -------------------------
+
+
+def test_a_new_answer_and_its_replay_carry_no_price_but_storage_keeps_it(env):
+    env.reasoning.answers = [
+        _good_answer("Narrow the role first. It costs about $40 a month to log it.")
+    ]
+    request = _ask()
+    status, first = _call(request)
+    assert status == 200
+    assert first["answer"][0]["text"] == "Narrow the role first."
+    assert first["answer"][0]["amounts_removed"] == 1
+    assert first["narrative_policy"]["amounts_removed"] == 1
+    assert _call(request)[1] == first
+    stored = env.questions.get_item(
+        Key={"reviewId": "r1", "questionKey": f"Q#{request['client_request_id']}"}
+    )["Item"]
+    assert stored["answer"][0]["text"].endswith("$40 a month to log it.")
+
+
+def test_an_old_stored_suggestion_is_served_without_its_price(env):
+    env.questions.put_item(
+        Item={
+            "reviewId": "r1",
+            "questionKey": "S#s3",
+            "status": "answered",
+            "answer": [
+                {
+                    "text": "Use a narrower role.\n```\n# about $32.85/month\nmulti_az = true\n```",
+                    "citations": [
+                        {
+                            "kind": "source",
+                            "quote": "Billed at $0.342 per hour.",
+                            "source_url": "https://docs.aws.amazon.com/x",
+                            "heading_path": "Pricing",
+                        }
+                    ],
+                }
+            ],
+            "createdAt": 1,
+            "ttl": int(time.time()) + 3600,
+        }
+    )
+    for _ in range(2):  # served from storage, then a repeat click (replay)
+        status, response = _call(
+            {"client_request_id": str(uuid.uuid4()), "suggested_id": "s3"}
+        )
+        assert status == 200
+        paragraph = response["answer"][0]
+        assert "$" not in paragraph["text"].replace("${", "")
+        assert "# about [amount removed]\nmulti_az = true" in paragraph["text"]
+        assert paragraph["citations"][0]["quote"] == ""
+        assert paragraph["citations"][0]["quote_omitted"] == "monetary-amount"
+        assert paragraph["citations"][0]["source_url"] == "https://docs.aws.amazon.com/x"
+        assert response["narrative_policy"] == {
+            "version": "no-monetary-estimates@2026-11-15",
+            "amounts_removed": 1,
+            "quotes_omitted": 1,
+        }
+    assert env.reasoning.calls == []

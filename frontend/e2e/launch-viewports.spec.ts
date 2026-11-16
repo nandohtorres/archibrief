@@ -26,7 +26,7 @@ for (const viewport of [
     await assertFits();
     await page.getByRole("button", { name: "Export JSON", exact: true }).scrollIntoViewIfNeeded();
     await expect(page.getByRole("button", { name: "Export JSON", exact: true })).toBeInViewport();
-    await page.getByRole("tab", { name: /Guided Report/ }).click();
+    await page.getByRole("tab", { name: /^Stakeholder/ }).click();
     await expect(page.locator("#stakeholder-panel")).toBeVisible();
     await assertFits();
   });

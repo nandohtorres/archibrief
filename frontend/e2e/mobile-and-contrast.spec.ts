@@ -55,7 +55,7 @@ const screens: Array<{ name: string; open: (page: Page) => Promise<void> }> = [
     name: "report (guided)",
     open: async (page) => {
       await openReport(page);
-      await page.getByRole("tab", { name: /Guided Report/ }).click();
+      await page.getByRole("tab", { name: /^Stakeholder/ }).click();
     },
   },
 ];
@@ -152,6 +152,27 @@ test.describe("phone layout at 390px", () => {
     ];
     expect(Math.abs(first!.y - second!.y), "summary numbers sit two per row").toBeLessThan(2);
   });
+});
+
+test("a saved dark theme is applied before paint, so nothing animates from light", async ({
+  page,
+}) => {
+  // Regression: the page used to paint light and switch after hydration.
+  // With reduced motion every element then got a colour transition, and the
+  // demo strip heading was measured as light text on a dark box (axe 1.08).
+  await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
+  await page.addInitScript(() => window.localStorage.setItem("archibrief-theme", "dark"));
+  await page.goto(FIXTURE_URL);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("button", { name: /^Theme:/ })).toHaveAccessibleName(/^Theme: Dark/);
+  await page.waitForLoadState("networkidle");
+  const state = await page.evaluate(() => ({
+    transitions: document.getAnimations().filter((animation) => animation instanceof CSSTransition)
+      .length,
+    heading: getComputedStyle(document.getElementById("demo-strip-heading")!).color,
+  }));
+  expect(state.transitions).toBe(0);
+  expect(state.heading).toBe("rgb(226, 226, 226)");
 });
 
 test("the theme button starts light, even on a dark device, and toggles dark and back", async ({

@@ -1,7 +1,7 @@
 import { isArchitectureGraph, type ArchitectureGraph } from "./architecture";
 import {
   isChatTurn,
-  isStakeholderView,
+  readStakeholderView,
   withStakeholderView,
   type DemoChat,
   type ReviewReport,
@@ -124,9 +124,9 @@ export async function fetchDemo(entry: DemoEntry): Promise<LoadedDemo> {
   // findings' own text.
   let report = saved;
   try {
-    const candidate = await getJson(`stakeholder/${entry.id}.json`);
-    if (isStakeholderView(candidate) && candidate.review_id === saved.review_id) {
-      report = withStakeholderView(saved, candidate);
+    const view = readStakeholderView(await getJson(`stakeholder/${entry.id}.json`));
+    if (view && view.review_id === saved.review_id) {
+      report = withStakeholderView(saved, view);
     }
   } catch {
     report = saved;

@@ -71,6 +71,14 @@ export const metadata: Metadata = {
   },
 };
 
+// Applies a saved theme before the first paint. Without it the page painted
+// light and switched after hydration: a flash for dark-theme visitors, and
+// with reduced motion the switch started colour transitions on every element
+// (axe then measured frozen light text on the dark demo strip). The site
+// starts light for everyone without a saved choice (decided 2026-10-21).
+// The CSP allows inline scripts ('unsafe-inline', frontend-hosting module).
+const THEME_BEFORE_PAINT = `try{var t=localStorage.getItem("archibrief-theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch(e){}`;
+
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html
@@ -79,6 +87,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       className={`${plexSans.variable} ${plexMono.variable} ${sourceSerif.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BEFORE_PAINT }} />
+      </head>
       <body>{children}</body>
     </html>
   );

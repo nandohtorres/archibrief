@@ -124,7 +124,7 @@ test.describe("live critical path (mocked network)", () => {
     await expect(page.locator(".finding-list > li")).toHaveCount(fixtureReport.findings.length + 1);
     await expect(page.getByRole("button", { name: "Go deeper", exact: true })).toHaveCount(0);
     await expect(
-      page.getByText(/guided budget, diagram and chat context cover the original report/),
+      page.getByText(/Stakeholder Brief, diagram and chat context cover the original report/),
     ).toBeVisible();
     // Back on the parent, its results show inline instead of a second run.
     await page.locator(".finding-list button").first().click();
@@ -248,7 +248,7 @@ test.describe("live critical path (mocked network)", () => {
       page.getByRole("button", { name: "Go deeper", exact: true }),
       "a finished run replaces the button with its inline results",
     ).toHaveCount(0);
-    await page.getByRole("tab", { name: /Guided Report/ }).click();
+    await page.getByRole("tab", { name: /^Stakeholder/ }).click();
     await expect(page.getByText("Durable deeper bucket assessment", { exact: true })).toBeVisible();
     await page.reload();
     await expect(page.locator(".finding-list > li")).toHaveCount(fixtureReport.findings.length + 1);

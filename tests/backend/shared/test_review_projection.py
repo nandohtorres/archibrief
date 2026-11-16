@@ -79,7 +79,7 @@ def test_incomplete_batch_is_not_published_as_a_complete_saved_run():
     assert current["report_projection"]["excluded_child_count"] > 0
 
 
-def test_report_budget_diagram_and_chat_project_the_same_children():
+def test_report_diagram_and_chat_project_the_same_children():
     graph = {
         "version": 1,
         "nodes": [
@@ -102,7 +102,8 @@ def test_report_budget_diagram_and_chat_project_the_same_children():
         now=100,
     )
     report = build_review_report({"reviewId": "r1"}, ledger)
-    assert {row["finding_id"] for row in report["budget"]["rows"]} == {"base", "child"}
+    assert {e["record"]["finding_id"] for e in report["findings"]} == {"base", "child"}
+    assert "budget" not in report
     assert set(report["architecture"]["nodes"][0]["findings"]) == {"base", "child"}
     ctx = build_review_context(ledger)
     assert ctx.alias_for("child") is not None
