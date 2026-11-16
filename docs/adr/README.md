@@ -1,5 +1,7 @@
 # ArchiBrief — Architecture Decision Records
 
+> **Current implementation status:** [2026-11-16 checkpoint](../current-status.md). ADR-0062 shipped in #67; ADR-0061 remains a proposal with incomplete P2 acceptance. Default-off P3b preview4 lives only in the frozen integration/tools candidates named there, not this deployed-base documentation branch.
+
 One short, atomic file per real decision — Context / Decision /
 Consequences / Status, following the standard ADR format (Michael
 Nygard's original convention; see
