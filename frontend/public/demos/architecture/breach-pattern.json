@@ -2,6 +2,27 @@
   "account_findings": [
     "cb07d6a3-579d-4501-a42c-1b344acbc411"
   ],
+  "analysis_coverage": {
+    "detail_omitted_items": 0,
+    "domains": [
+      "placement",
+      "routing",
+      "retention",
+      "backup_selection",
+      "entry_paths"
+    ],
+    "emitted_bytes": 15296,
+    "facts_emitted": 47,
+    "incomplete_resources": 0,
+    "omitted_items": 0,
+    "omitted_resources": 0,
+    "placement_only_resources": 4,
+    "runtime_verified": false,
+    "scope": "submitted_configuration_only",
+    "token_count": "not_measured",
+    "truncated": false,
+    "version": "terraform-observations@2026-10-23"
+  },
   "edges": [
     {
       "from": "aws_instance.ec2-vulnerable-proxy-server",
@@ -94,7 +115,9 @@
       "type": "aws_iam_role"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-east-1"
+      ],
       "findings": [
         "e0eff08e-bd54-4d2f-bb01-ac17890eb13d",
         "a5c4e002-aa8f-4088-a26e-3ba59830ba84",
@@ -110,7 +133,9 @@
       "type": "aws_instance"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-east-1"
+      ],
       "findings": [],
       "id": "aws_internet_gateway.cg-internet-gateway",
       "label": "internet gateway",
@@ -130,7 +155,9 @@
       "type": "aws_key_pair"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-east-1"
+      ],
       "findings": [],
       "id": "aws_route_table.cg-public-subnet-route-table",
       "label": "route table",
@@ -156,7 +183,9 @@
       "type": "aws_s3_bucket"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-east-1"
+      ],
       "findings": [
         "e7983266-071a-48d5-9208-3b7cac99e75a"
       ],
@@ -168,7 +197,9 @@
       "type": "aws_security_group"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-east-1"
+      ],
       "findings": [
         "e7983266-071a-48d5-9208-3b7cac99e75a"
       ],
@@ -181,6 +212,7 @@
     },
     {
       "details": [
+        "Region: us-east-1",
         "route table association"
       ],
       "findings": [
@@ -195,6 +227,7 @@
     },
     {
       "details": [
+        "Region: us-east-1",
         "route table association"
       ],
       "findings": [
@@ -208,7 +241,9 @@
       "type": "aws_subnet"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-east-1"
+      ],
       "findings": [
         "458d3366-73cc-4245-bc41-bb9f75077e80"
       ],
@@ -222,5 +257,8 @@
   ],
   "review_id": "cd4b6384-30cb-48c9-a779-714b7cb7194e",
   "truncated": false,
+  "unplaced_scopes": {
+    "cb07d6a3-579d-4501-a42c-1b344acbc411": "unresolved-or-design"
+  },
   "version": 1
 }

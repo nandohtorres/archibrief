@@ -40,22 +40,17 @@ export const fixtureProgressStages: ProgressStage[] = [
     description: "Validate and statically parse submitted Terraform",
   },
   {
-    id: "preflight",
-    label: "Preflight",
-    description: "Apply the recorded baseline answers field by field",
-  },
-  {
-    id: "rules",
+    id: "rule_engine",
     label: "Rule checks",
     description: "Run deterministic security and reliability checks",
   },
   {
-    id: "retrieve",
-    label: "Retrieve evidence",
-    description: "Find versioned AWS guidance and exact passages",
+    id: "reasoning",
+    label: "Reason",
+    description: "Find guidance and synthesize bounded, typed findings",
   },
-  { id: "reason", label: "Reason", description: "Synthesize bounded, typed findings" },
   { id: "validate", label: "Validate", description: "Reject malformed or unsupported output" },
+  { id: "audit", label: "Audit", description: "Record the audit trail" },
   { id: "finalize", label: "Finalize", description: "Write the immutable evidence ledger" },
 ];
 

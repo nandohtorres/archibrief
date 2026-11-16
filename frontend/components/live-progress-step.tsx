@@ -4,6 +4,7 @@ import { ArchitectureView } from "./architecture-view";
 import { LoadingFacts } from "./loading-facts";
 
 interface LiveProgressStepProps {
+  preview?: boolean;
   // False while the archive is still uploading and the review doesn't exist yet.
   started: boolean;
   currentStage: string | null;
@@ -16,6 +17,7 @@ interface LiveProgressStepProps {
 // describeProgress() (lib/progress.ts) maps the pipeline's real
 // "currentStage" to a few generic steps; internal stage names stay internal.
 export function LiveProgressStep({
+  preview = false,
   started,
   currentStage,
   elapsedSeconds,
@@ -30,6 +32,7 @@ export function LiveProgressStep({
         Step {progress.stageIndex} of {progress.totalStages}
       </div>
       <h1 id="live-progress-heading">{progress.macroLabel}</h1>
+      {preview && <p>Sample preview. No upload or AI review is running.</p>}
       <LoadingFacts />
       <div
         className="progress-bar-track"
@@ -62,10 +65,14 @@ export function LiveProgressStep({
           <button className="button secondary" type="button" onClick={onCancel}>
             Back to home
           </button>
-          <p>
-            The review keeps running. Reopen it from &ldquo;Previous Reviews&rdquo; on the home
-            page.
-          </p>
+          {preview ? (
+            <p>This preview uses saved sample data.</p>
+          ) : (
+            <p>
+              The review keeps running. Reopen it from &ldquo;Previous Reviews&rdquo; on the home
+              page.
+            </p>
+          )}
         </div>
       )}
     </section>

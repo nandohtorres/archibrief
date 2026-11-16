@@ -3,6 +3,27 @@
     "a2192a0b-4448-40bf-afb3-fbb2414cf994",
     "d65709cc-ff1a-4939-adb8-487b0e5a3fdc"
   ],
+  "analysis_coverage": {
+    "detail_omitted_items": 0,
+    "domains": [
+      "placement",
+      "routing",
+      "retention",
+      "backup_selection",
+      "entry_paths"
+    ],
+    "emitted_bytes": 21505,
+    "facts_emitted": 70,
+    "incomplete_resources": 0,
+    "omitted_items": 0,
+    "omitted_resources": 0,
+    "placement_only_resources": 2,
+    "runtime_verified": false,
+    "scope": "submitted_configuration_only",
+    "token_count": "not_measured",
+    "truncated": false,
+    "version": "terraform-observations@2026-10-23"
+  },
   "edges": [
     {
       "from": "aws_db_subnet_group.rds",
@@ -95,7 +116,9 @@
       "type": "internet"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [],
       "id": "aws_db_parameter_group.fec_default",
       "label": "db parameter group",
@@ -105,7 +128,9 @@
       "type": "aws_db_parameter_group"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [
         "e8b1caad-d6d6-494c-bec7-775c6a9d67b7"
       ],
@@ -129,7 +154,9 @@
       "type": "aws_iam_role"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [],
       "id": "aws_internet_gateway.rds",
       "label": "internet gateway",
@@ -139,7 +166,9 @@
       "type": "aws_internet_gateway"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [
         "dc306f91-1060-49a8-8a13-f828085c9877",
         "bb7583eb-3b42-465d-8e88-118da17c6dbf",
@@ -156,7 +185,9 @@
       "type": "aws_rds_cluster"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [
         "dc306f91-1060-49a8-8a13-f828085c9877",
         "bb7583eb-3b42-465d-8e88-118da17c6dbf",
@@ -173,7 +204,9 @@
       "type": "aws_rds_cluster"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [
         "dc306f91-1060-49a8-8a13-f828085c9877",
         "bb7583eb-3b42-465d-8e88-118da17c6dbf",
@@ -191,7 +224,9 @@
     },
     {
       "copies": 2,
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [
         "d89d7166-f861-44af-9d84-2cd0ecc5b048"
       ],
@@ -204,7 +239,9 @@
     },
     {
       "copies": 3,
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [
         "e3ebb27e-03c8-436b-9a64-e6cae1f0b1b0"
       ],
@@ -217,7 +254,9 @@
     },
     {
       "copies": 2,
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [
         "e8e69ea5-4b46-4bf0-bb12-154e54867dca"
       ],
@@ -229,7 +268,9 @@
       "type": "aws_rds_cluster_instance"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [],
       "id": "aws_route_table.rds",
       "label": "route table",
@@ -239,7 +280,9 @@
       "type": "aws_route_table"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [
         "eaaf6979-2db2-4f5c-9f49-9027b8fcbd99",
         "5b7be8d8-05f5-46f4-b216-41d31f80b57e"
@@ -253,6 +296,8 @@
     },
     {
       "details": [
+        "Region: us-gov-west-1",
+        "Declared AZs: us-gov-west-1a",
         "route table association"
       ],
       "findings": [],
@@ -265,6 +310,8 @@
     },
     {
       "details": [
+        "Region: us-gov-west-1",
+        "Declared AZs: us-gov-west-1b",
         "route table association"
       ],
       "findings": [],
@@ -276,7 +323,9 @@
       "type": "aws_subnet"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-gov-west-1"
+      ],
       "findings": [],
       "id": "aws_vpc.rds",
       "label": "vpc",
@@ -288,5 +337,9 @@
   ],
   "review_id": "b7f2a3e7-641d-47a3-a579-31fc637b0cc6",
   "truncated": false,
+  "unplaced_scopes": {
+    "a2192a0b-4448-40bf-afb3-fbb2414cf994": "unresolved-or-design",
+    "d65709cc-ff1a-4939-adb8-487b0e5a3fdc": "unresolved-or-design"
+  },
   "version": 1
 }

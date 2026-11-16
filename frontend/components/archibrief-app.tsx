@@ -7,7 +7,6 @@ import { FailurePanel } from "./state-panel";
 import { LandingClosing, LandingIntro } from "./landing-intro";
 import { LiveProgressStep } from "./live-progress-step";
 import { PreflightStep } from "./preflight-step";
-import { ProgressStep } from "./progress-step";
 import { ReportWorkspace } from "./report-workspace";
 import { regulatoryAnswerText, SubmissionStep, type SubmissionValues } from "./submission-step";
 import {
@@ -568,20 +567,21 @@ export function ArchiBriefApp() {
             onContinue={handlePreflightComplete}
           />
         )}
-        {screen === "progress" && progressMode === "live" && (
+        {screen === "progress" && (
           <LiveProgressStep
-            started={Boolean(liveReviewId)}
-            currentStage={liveCurrentStage}
-            elapsedSeconds={liveElapsedSeconds}
-            architecture={liveArchitecture}
+            preview={progressMode === "fixture"}
+            started={progressMode === "fixture" || Boolean(liveReviewId)}
+            currentStage={
+              progressMode === "fixture"
+                ? fixtureProgressStages[Math.min(progressIndex, fixtureProgressStages.length - 1)]
+                    .id
+                : liveCurrentStage
+            }
+            elapsedSeconds={
+              progressMode === "fixture" ? Math.floor(progressIndex * 0.65) : liveElapsedSeconds
+            }
+            architecture={progressMode === "fixture" ? null : liveArchitecture}
             onCancel={goHome}
-          />
-        )}
-        {screen === "progress" && progressMode === "fixture" && (
-          <ProgressStep
-            activeIndex={Math.min(progressIndex, fixtureProgressStages.length - 1)}
-            stages={fixtureProgressStages}
-            onSkip={() => setScreen("report")}
           />
         )}
         {screen === "report" && (

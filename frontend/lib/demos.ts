@@ -14,7 +14,7 @@ import {
 //   public/demos/chats/<id>.json     pregenerated suggested answers
 //   public/demos/architecture/<id>.json  the diagram, built from the code
 //                                    (scripts/build_demo_architectures.py)
-//   public/demos/stakeholder/<id>.json   plain terms, costs and budget
+//   public/demos/stakeholder/<id>.json   plain terms and assessment metadata
 //                                    (scripts/build_demo_stakeholder.py)
 
 export interface ReviewerNote {
