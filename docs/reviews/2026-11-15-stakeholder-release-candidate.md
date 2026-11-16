@@ -82,15 +82,22 @@ Not run: hosted CI, `terraform plan`, a deploy, a live smoke test.
 
 ## Deploy notes (need approval at each step)
 
-1. Commit and push the branch, then open a PR. CI runs on the PR.
-2. Merge. The frontend deploys from `main` through the existing workflow,
-   with its post-deploy smoke test.
-3. Backend: build the zips, then `terraform plan` for the dev environment.
-   **The plan must change only the four functions' code (`source_code_hash`
-   and `filename`).** Anything else, stop.
-4. Order: Lambdas first, then the frontend. The new frontend handles
-   reports from the old backend and the reverse (ADR-0062 §9), so a gap
-   between the two is safe either way.
+The default branch is `master`. Merging is the frontend release:
+`.github/workflows/deploy-frontend.yml` deploys to the `production`
+environment after CI passes on `master`, and that environment has no
+required-reviewer gate. So there is no separate frontend approval after the
+merge, and the backend goes first:
+
+1. PR #67 open; hosted CI green on its head commit.
+2. Backend, before merging: build the four zips from this branch, run
+   `terraform plan` for the dev environment. **The plan must change only the
+   four functions' code (`source_code_hash` and `filename`).** Anything else,
+   stop. Apply only with approval.
+3. Merge PR #67 with approval. This deploys the frontend, followed by the
+   workflow's own smoke test.
+4. If the merge has to wait after the backend is applied, that's safe: the
+   old frontend handles the new backend's reports and the reverse
+   (ADR-0062 §9).
 5. Rollback: the frontend redeploys from `e063dfd`; the Lambdas from zips
    built at `e063dfd`.
 6. Smoke test: `node scripts/smoke_live.mjs https://archibrief.dev https://api.archibrief.dev`,
@@ -98,6 +105,14 @@ Not run: hosted CI, `terraform plan`, a deploy, a live smoke test.
 
 ## Known limits carried into this release
 
-From the brief handoff: the conditional wording on 17 concerns; prices
-removed on output, not prevented; dollar patterns only; `get_review` still
-returns raw stored fields; unused pricing code. None is a release blocker.
+From the brief handoff: the conditional wording on 17 concerns; unused
+pricing code. None is a release blocker.
+
+Scope of the no-prices change, stated exactly: generated chat answers and
+transcripts (new, cached, suggested and read back) are filtered on the server,
+and the displayed brief and both downloads are filtered in the browser. Raw
+saved review data is preserved, and `get_review` still returns raw finding
+fields. The model can still write a price; it is removed on output, not
+prevented. The filter matches dollar patterns only, and keeps a bare `$`
+plus a whole number in code as a likely positional variable. It is not a
+guarantee that no amount can ever appear.
