@@ -3,6 +3,8 @@
 import hashlib
 from copy import deepcopy
 
+import pytest
+
 from backend.shared.finding_verification import (
     select_verification,
     verification_input,
@@ -178,3 +180,57 @@ def test_product_checks_the_subset_that_fits_and_keeps_the_oversized_finding():
     checks = {r["finding_id"]: r for r in result["additional_verification"]["findings"]}
     assert checks["f00"]["reason_code"] == "request_size"
     assert checks["f01"]["status"] == "supported"
+
+
+@pytest.mark.parametrize(
+    "facts,evidence,removed",
+    [
+        (["resource:aws_s3_bucket.store_0"], [], True),
+        ([], ["c0"], True),
+        ([], [], False),
+        (["foreign"], ["c0"], False),
+    ],
+)
+def test_contradiction_accepts_facts_or_sources_only(facts, evidence, removed):
+    value = state()
+    value["reasoned_findings"] = value["reasoned_findings"][:1]
+    original = deepcopy(value["reasoned_findings"])
+    result = verify_with_dispatch(
+        value,
+        lambda **kwargs: {
+            "verdicts": [
+                {
+                    "finding_id": "f00",
+                    "verdict": "contradicted",
+                    "fact_ids": facts,
+                    "evidence_ids": evidence,
+                    "remediation_applicable": False,
+                    "reason": "Synthetic contrary configuration",
+                }
+            ]
+        },
+    )
+    assert result["reasoned_findings"] == ([] if removed else original)
+
+
+def test_supported_cited_detection_still_requires_its_passage():
+    value = state()
+    value["reasoned_findings"] = value["reasoned_findings"][:1]
+    original = deepcopy(value["reasoned_findings"])
+    result = verify_with_dispatch(
+        value,
+        lambda **kwargs: {
+            "verdicts": [
+                {
+                    "finding_id": "f00",
+                    "verdict": "supported",
+                    "fact_ids": ["resource:aws_s3_bucket.store_0"],
+                    "evidence_ids": [],
+                    "remediation_applicable": True,
+                    "reason": "Synthetic support",
+                }
+            ]
+        },
+    )
+    assert result["reasoned_findings"] == original
+    assert result["additional_verification"]["unverified"] == 1
