@@ -65,7 +65,7 @@ _CONDITIONAL_LOCK = re.compile(
     r"\b(?:immutab\w*|write.once|worm|legal requirement|regulatory requirement)\b",
     re.IGNORECASE,
 )
-REMEDIATION_POLICY_VERSION = "remediation_checks@2026-11-15b"
+REMEDIATION_POLICY_VERSION = "remediation_checks@2026-11-16a"
 _REBUTTAL = re.compile(
     r"\b(?:incorrect|false|wrong)\s+(?:to (?:say|claim)|that)\b.{0,90}$"
     r"|\b(?:do not|don't) assume\b.{0,90}$",
@@ -255,11 +255,21 @@ def context_remediation_reasons(
             ]
         for function in named:
             paths = (function.get("details") or {}).get("invocation_paths") or {}
-            if paths.get("asynchronous_invoker") == "not_established":
+            declared = paths.get("declared_paths", [])
+            synchronous_or_polled = any(
+                path.get("mode")
+                in {"synchronous_function_url", "synchronous_api_gateway", "polled_event_source"}
+                for path in declared
+            )
+            asynchronous = any(
+                str(path.get("mode", "")).startswith("asynchronous_") for path in declared
+            ) or str(paths.get("asynchronous_invoker", "")).startswith("declared_")
+            if synchronous_or_polled and not asynchronous:
                 errors.append("function_dlq_async_path_not_established")
                 break
-            if re.search(r"\ball invocation paths\b", actions, re.IGNORECASE) and any(
-                path.get("mode") != "asynchronous_sns" for path in paths.get("declared_paths", [])
+            if (
+                re.search(r"\ball invocation paths\b", actions, re.IGNORECASE)
+                and synchronous_or_polled
             ):
                 errors.append("function_dlq_does_not_cover_all_paths")
                 break
