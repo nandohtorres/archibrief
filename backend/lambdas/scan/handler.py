@@ -263,7 +263,7 @@ def trusted_results(
         (rest if concern in seen else first).append(result)
         seen.add(concern)
     ordered = first + rest
-    return ordered[:MAX_RESULTS] if bounded else ordered
+    return ordered
 
 
 def scan_files(scan_dir: str, files: list[str], trivy_path: str | None = None) -> dict:
@@ -281,9 +281,9 @@ def scan_files(scan_dir: str, files: list[str], trivy_path: str | None = None) -
         "version": os.environ.get("TRIVY_VERSION", "unknown"),
         "neutralized_sources": neutralized,
         "neutralized_ignores": defused,
-        "results": results[:MAX_RESULTS],
+        "results": results,
         "results_total": len(results),
-        "truncated": len(results) > MAX_RESULTS,
+        "truncated": False,
     }
 
 

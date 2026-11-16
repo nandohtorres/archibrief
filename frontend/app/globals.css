@@ -2640,8 +2640,8 @@ h4 {
 .chat-log {
   display: grid;
   gap: var(--space-2);
-  min-height: 150px;
-  max-height: 400px;
+  min-height: 320px;
+  max-height: 640px;
   overflow-y: auto;
   padding: var(--space-2);
   border: 1px solid var(--border);
@@ -3805,6 +3805,16 @@ h4 {
     display: none;
   }
 
+  .chat-log {
+    min-height: 280px;
+    max-height: 60vh;
+  }
+
+  .header-new-review {
+    min-height: 40px;
+    padding-inline: var(--space-3);
+  }
+
   /* 16px inputs stop iOS Safari zooming the page on focus. */
   input,
   select,
@@ -4192,4 +4202,95 @@ input::placeholder,
 textarea::placeholder {
   color: var(--text-muted);
   opacity: 1;
+}
+
+.disproved-findings {
+  border-color: var(--critical);
+  background: var(--critical-bg);
+  margin-top: var(--space-3);
+}
+.disproved-findings .unverified-badge {
+  color: var(--critical);
+}
+
+.header-new-review {
+  white-space: nowrap;
+}
+
+.download-menu {
+  position: relative;
+}
+
+.download-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  display: grid;
+  min-width: 15rem;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.download-menu-list[hidden] {
+  display: none;
+}
+
+.download-menu-list button {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.download-menu-list button small {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.download-menu-list button:hover,
+.download-menu-list button:focus-visible {
+  background: var(--surface-2);
+}
+
+.chat-model-note {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* The download menu drops below the title card; let it escape the card's clip. */
+.report-summary > .report-header {
+  position: relative;
+  z-index: 5;
+  overflow: visible;
+}
+
+/* Phones: actions stack full width, and the menu opens under Download at the same width. */
+@media (max-width: 680px) {
+  .report-header-actions {
+    align-self: stretch;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .download-menu {
+    width: 100%;
+  }
+
+  .download-menu-list {
+    left: 0;
+    min-width: 0;
+  }
 }

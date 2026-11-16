@@ -39,13 +39,15 @@ test.describe("demo reviews from saved files", () => {
         .filter({ hasText: "SSE-S3" }),
     ).toBeVisible();
     const htmlWait = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Download report", exact: true }).click();
+    await page.getByRole("button", { name: "Download", exact: true }).click();
+    await page.locator(".download-menu").getByRole("button", { name: "Download report" }).click();
     const htmlDownload = await htmlWait;
     const html = await readFile((await htmlDownload.path())!, "utf8");
     expect(html).toContain("Reviewer note");
     expect(html).toContain("SSE-S3");
     const jsonWait = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Export JSON", exact: true }).click();
+    await page.getByRole("button", { name: "Download", exact: true }).click();
+    await page.locator(".download-menu").getByRole("button", { name: "Export JSON" }).click();
     const jsonDownload = await jsonWait;
     const data = JSON.parse(await readFile((await jsonDownload.path())!, "utf8"));
     expect(data.demo_review.reviewer_notes).toHaveLength(5);

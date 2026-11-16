@@ -11,7 +11,6 @@ from backend.lambdas.finalize.handler import assemble_evidence_ledger
 from backend.lambdas.validate.handler import handler as validate
 from backend.shared.report import build_review_report
 from backend.shared.unverified import (
-    MAX_UNVERIFIED,
     unverified_finding,
     unverified_findings,
 )
@@ -80,7 +79,7 @@ def test_unverified_record_is_bounded_and_does_not_trust_shapes_or_reason_text()
     assert "WITHHELD" not in json.dumps(value) and "unsafe reason" not in json.dumps(
         value
     )
-    assert len(unverified_findings([value] * 100)) == MAX_UNVERIFIED
+    assert len(unverified_findings([value] * 100)) == 100
     assert unverified_findings(None) == []
 
 

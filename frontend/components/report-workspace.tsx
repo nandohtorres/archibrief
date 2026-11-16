@@ -41,6 +41,7 @@ import { FindingDetail } from "./finding-detail";
 import { StakeholderBrief } from "./stakeholder-brief";
 import { ReportQuestions } from "./report-questions";
 import { AssessmentTag } from "./assessment-tag";
+import { DownloadMenu } from "./download-menu";
 import { declarationScopeMessage, qualityMessage, scopeMessage } from "@/lib/analysis-quality";
 
 interface ReportWorkspaceProps {
@@ -53,7 +54,6 @@ interface ReportWorkspaceProps {
   // A demo's diagram, from its saved file. Other reports carry their own
   // (report.architecture); a report without one shows no diagram.
   architecture?: ArchitectureGraph | null;
-  onNewReview: () => void;
 }
 
 const DEFAULT_DETAIL_PANE_WIDTH = 75;
@@ -69,7 +69,6 @@ export function ReportWorkspace({
   demo = null,
   demoChat = null,
   architecture: demoArchitecture = null,
-  onNewReview,
 }: ReportWorkspaceProps) {
   const [report, setReport] = useState(initialReport);
   const reviewerNotes = useMemo(() => reviewerNotesById(demo), [demo]);
@@ -429,20 +428,12 @@ export function ReportWorkspace({
             >
               Ask questions ↓
             </button>
-            <button className="button primary" type="button" onClick={downloadReport}>
-              Download report
-            </button>
-            <button className="button secondary" type="button" onClick={exportLedger}>
-              Export JSON
-            </button>
             {source === "live" && canChange && getApiBaseUrl() && (
               <button className="button secondary" type="button" onClick={() => void copyLink()}>
                 Share link
               </button>
             )}
-            <button className="button secondary" type="button" onClick={onNewReview}>
-              New review
-            </button>
+            <DownloadMenu onReport={downloadReport} onJson={exportLedger} />
           </div>
         </header>
         {!canChange && (

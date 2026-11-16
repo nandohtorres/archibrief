@@ -72,6 +72,46 @@ test("AI failure is disclosed in the same section", async ({ page }) => {
   await expect(section).toContainText("AI analysis failed or timed out");
 });
 
+test("disproved claims retain evidence and checks without becoming actionable", async ({
+  page,
+}) => {
+  await page.route("**/mock-api/**", (route) => route.fulfill({ status: 500, body: "" }));
+  await page.route("**/demos/reports/breach-pattern.json", (route) =>
+    route.fulfill({
+      json: {
+        ...fixtureReport,
+        disproved_findings: [
+          {
+            finding_id: "synthetic-disproved",
+            finding: "Disproved database claim",
+            reason_code: "contradicted",
+            recommendation: "WITHHELD_FIX",
+            checks: [
+              { name: "format", status: "passed" },
+              { name: "verification", status: "failed" },
+            ],
+            supporting_evidence: [{ id: "c1", kind: "passage", text: "Original supporting quote" }],
+            contradicting_evidence: [{ id: "resource:a", kind: "fact", text: "encryption=true" }],
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(`${LIVE_URL}/?demo=breach-pattern`);
+  const section = page.locator("details.disproved-findings");
+  await expect(section).toBeVisible();
+  await expect(section).not.toHaveAttribute("open", "");
+  await section.locator("summary").click();
+  await expect(section).toContainText("Original supporting quote");
+  await expect(section).toContainText("encryption=true");
+  await expect(section).toContainText("1 of 2 checks passed");
+  await expect(section).toContainText("Recommendation withheld");
+  await expect(section.getByRole("button")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("WITHHELD_FIX");
+  await page.getByRole("tab", { name: /^Stakeholder/ }).click();
+  await expect(page.locator("#stakeholder-panel")).not.toContainText("Disproved database claim");
+});
+
 test("saved unsupported chat statements are explicitly labelled", async ({ page }) => {
   await page.route("**/mock-api/**", (route) => route.fulfill({ status: 500, body: "" }));
   await page.route("**/demos/reports/breach-pattern.json", (route) =>

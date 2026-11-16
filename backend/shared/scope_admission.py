@@ -22,10 +22,10 @@ from backend.shared.model_request_budget import (
     POLICY_VERSION,
     evidence_limit,
 )
-from backend.shared.retention import review_expires_at
+from backend.shared.retention import review_expires_at, review_is_live
 from backend.shared.review_limits import SCOPE_POLICY_VERSION, scope_rejection_code
 
-VERSION = "scope-admission@1"
+VERSION = "scope-admission@2"
 HASH = re.compile(r"^[0-9a-f]{64}$")
 MANIFEST_MESSAGE = (
     "This report has no usable scope manifest. Start a new review to request deeper analysis. "
@@ -112,8 +112,29 @@ def _valid_admission(row: dict, rid: str, operation: str, now: int) -> bool:
     if not isinstance(admitted, dict) or not _receipt_valid(row, operation, now):
         return False
     count, expires = admitted.get("known_y"), admitted.get("expires_at_epoch_s")
+    if admitted.get("legacy_report") is True:
+        return (
+            admitted.get("version") == VERSION
+            and operation.startswith("deeper:")
+            and _receipt_valid(row, operation, now)
+            and admitted.get("scope_version") == "legacy-report@1"
+            and admitted.get("policy_version") == SCOPE_POLICY_VERSION
+            and admitted.get("status") == "admitted"
+            and admitted.get("review_id") == rid
+            and admitted.get("operation") == operation
+            and count is None
+            and admitted.get("total_complete") is False
+            and _integer(expires)
+            and now < expires <= row["ttl"]
+            and isinstance(admitted.get("source_ledger_key_sha256"), str)
+            and HASH.fullmatch(admitted["source_ledger_key_sha256"]) is not None
+            and isinstance(admitted.get("prepared_job_id"), str)
+            and bool(admitted["prepared_job_id"])
+            and isinstance(row.get("runtime_payload_sha256"), str)
+            and HASH.fullmatch(row["runtime_payload_sha256"]) is not None
+        )
     return (
-        admitted.get("version") == VERSION
+        admitted.get("version") in {"scope-admission@1", VERSION}
         and admitted.get("scope_version") == "review_scope@1"
         and admitted.get("policy_version") == SCOPE_POLICY_VERSION
         and admitted.get("status") == "admitted"
@@ -140,12 +161,25 @@ def _valid_admission(row: dict, rid: str, operation: str, now: int) -> bool:
     )
 
 
-def eligible_parent(review_id: str, scope: object) -> dict:
+def eligible_parent(review_id: str, scope: object, *, review: dict | None = None) -> dict:
     """Current admission and original scope are required for *new* deeper work."""
+    row = _read_operation(_key(review_id, "initial"))
+    if "scope_admission" not in row and isinstance(review, dict):
+        key = review.get("reportS3Key")
+        if (
+            review.get("reviewId") == review_id
+            and review.get("status") == "complete"
+            and review_is_live(review)
+            and isinstance(key, str)
+            and key
+        ):
+            return {
+                "legacy_report": True,
+                "source_ledger_key_sha256": request_digest({"review_id": review_id, "key": key}),
+            }
     code = scope_rejection_code(scope)
     if code or scope.get("status") != "final":
         raise AdmissionDenied(code or "scope_manifest_required")
-    row = _read_operation(_key(review_id, "initial"))
     if not _valid_admission(row, review_id, "initial", int(time.time())):
         raise AdmissionDenied("scope_manifest_required")
     admitted = row["scope_admission"]
@@ -163,24 +197,33 @@ def prepare_operation(
     review: dict, scope: dict, payload: dict, *, operation: str, job_id: str
 ) -> dict:
     """Bind an existing reservation to validated scope and a worker-built payload."""
-    code = scope_rejection_code(scope)
-    if code:
-        raise AdmissionDenied(code)
     rid = review["reviewId"]
     now = int(time.time())
     expires = review_expires_at(review)
-    parent = eligible_parent(rid, scope) if operation != "initial" else None
-    archive_hash = parent["archive_sha256"] if parent else review.get("archiveSha256")
-    archive_version = parent["archive_version_id"] if parent else review.get("archiveVersionId")
-    input_hash = parent["input_digest"] if parent else review.get("inputDigest")
+    parent = eligible_parent(rid, scope, review=review) if operation != "initial" else None
+    legacy = bool(parent and parent.get("legacy_report"))
+    if legacy:
+        scope = {"version": "legacy-report@1", "known_y": None, "count_complete": False}
+    else:
+        code = scope_rejection_code(scope)
+        if code:
+            raise AdmissionDenied(code)
+    archive_hash = parent.get("archive_sha256") if parent else review.get("archiveSha256")
+    archive_version = parent.get("archive_version_id") if parent else review.get("archiveVersionId")
+    input_hash = parent.get("input_digest") if parent else review.get("inputDigest")
     if (
-        not isinstance(archive_hash, str)
-        or not HASH.fullmatch(archive_hash)
-        or not isinstance(input_hash, str)
-        or not HASH.fullmatch(input_hash)
-        or not isinstance(archive_version, str)
-        or not 0 < len(archive_version) <= 1024
-        or archive_version == "null"
+        (
+            not legacy
+            and (
+                not isinstance(archive_hash, str)
+                or not HASH.fullmatch(archive_hash)
+                or not isinstance(input_hash, str)
+                or not HASH.fullmatch(input_hash)
+                or not isinstance(archive_version, str)
+                or not 0 < len(archive_version) <= 1024
+                or archive_version == "null"
+            )
+        )
         or expires <= now
         or payload.get("review_id") != rid
         or not isinstance(job_id, str)
@@ -198,7 +241,7 @@ def prepare_operation(
         "archive_sha256": archive_hash,
         "archive_version_id": archive_version,
         "input_digest": input_hash,
-        "inventory_sha256": inventory_digest(scope),
+        "inventory_sha256": inventory_digest(scope) if not legacy else None,
         "known_y": scope["known_y"],
         "total_complete": scope["count_complete"],
         "root_id": ".",
@@ -206,6 +249,18 @@ def prepare_operation(
         "status": "admitted",
         "prepared_job_id": job_id,
     }
+    if legacy:
+        for field in (
+            "archive_sha256",
+            "archive_version_id",
+            "input_digest",
+            "inventory_sha256",
+            "root_id",
+        ):
+            admitted.pop(field, None)
+        admitted.update(
+            legacy_report=True, source_ledger_key_sha256=parent["source_ledger_key_sha256"]
+        )
     table = _table()
     key = _key(rid, operation)
     row = _read_operation(key)

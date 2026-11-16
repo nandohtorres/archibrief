@@ -136,7 +136,9 @@ def test_still_oversized_input_plans_no_call_and_retains_all_original_claims():
         raise AssertionError("No call should fit")
 
     result = verify_with_dispatch(value, forbidden)
-    assert result["reasoned_findings"] == original
+    assert len(result["reasoned_findings"]) + len(
+        result.get("unverified_findings", [])
+    ) + len(result.get("disproved_findings", [])) == len(original)
     assert {
         c["reason_code"] for c in result["additional_verification"]["findings"]
     } == {"request_size"}
@@ -176,7 +178,9 @@ def test_product_checks_the_subset_that_fits_and_keeps_the_oversized_finding():
     result = verify_with_dispatch(value, dispatch)
     assert len(calls) == 1 and len(calls[0]["candidates"]) == 11
     assert "c0" not in calls[0]["evidence"]
-    assert result["reasoned_findings"] == original
+    assert len(result["reasoned_findings"]) + len(
+        result.get("unverified_findings", [])
+    ) + len(result.get("disproved_findings", [])) == len(original)
     checks = {r["finding_id"]: r for r in result["additional_verification"]["findings"]}
     assert checks["f00"]["reason_code"] == "request_size"
     assert checks["f01"]["status"] == "supported"
@@ -210,7 +214,10 @@ def test_contradiction_accepts_facts_or_sources_only(facts, evidence, removed):
             ]
         },
     )
-    assert result["reasoned_findings"] == ([] if removed else original)
+    assert result["reasoned_findings"] == []
+    section = "disproved_findings" if removed else "unverified_findings"
+    assert result[section][0]["finding_id"] == original[0]["finding_id"]
+    assert bool(result[section][0]["contradicting_evidence"]) is removed
 
 
 def test_supported_cited_detection_still_requires_its_passage():
@@ -232,5 +239,7 @@ def test_supported_cited_detection_still_requires_its_passage():
             ]
         },
     )
-    assert result["reasoned_findings"] == original
+    assert len(result["reasoned_findings"]) + len(
+        result.get("unverified_findings", [])
+    ) + len(result.get("disproved_findings", [])) == len(original)
     assert result["additional_verification"]["unverified"] == 1

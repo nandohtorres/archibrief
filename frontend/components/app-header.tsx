@@ -25,7 +25,6 @@ const previews: Array<{ screen: AppScreen; label: string }> = [
 const sections: Array<{ id: string; label: string }> = [
   { id: "how", label: "How it works" },
   { id: "samples", label: "Demo" },
-  { id: "submit", label: "Submit yours" },
 ];
 
 const nextTheme: Record<ThemeChoice, ThemeChoice> = {
@@ -132,6 +131,14 @@ export function AppHeader({
               </a>
             ))}
           </nav>
+          {/* The one way to start a review from any screen; kept visible on phones. */}
+          <button
+            type="button"
+            className="button primary header-new-review"
+            onClick={() => onSection("submit")}
+          >
+            New review
+          </button>
           <button
             type="button"
             className="theme-toggle"
