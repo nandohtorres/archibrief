@@ -468,11 +468,15 @@ describe("brief model", () => {
 
   it("never implies complete coverage without a recorded scope", () => {
     const missing = briefCoverage(report(findings));
-    expect(missing.headline).toMatch(/no recorded review scope/);
+    expect(missing.headline).toMatch(
+      /saved before ArchiBrief recorded review scope/,
+    );
     expect(missing.headline).toMatch(/Do not read it as complete coverage/);
     expect(missing.details[0]).toMatch(/was not recorded/);
     const recorded = briefCoverage(report(findings, { review_scope: scope }));
-    expect(recorded.headline).not.toMatch(/no recorded review scope/);
+    expect(recorded.headline).not.toMatch(
+      /saved before ArchiBrief recorded review scope/,
+    );
     expect(recorded.details[0]).toMatch(
       /Included 12 of 12 resource declarations/,
     );

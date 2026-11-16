@@ -128,7 +128,7 @@ flowchart LR
    for any reason the review continues without it and says the scanner
    didn't run (ADR-0048).
 6. **RuleEngine** — deterministic checks against the parsed Terraform,
-   independent of any model call: Trivy's 17 trusted checks when Scan
+   independent of any model call: Trivy's 18 trusted checks when Scan
    ran, plus ArchiBrief's own rules for what Trivy misses (and for
    everything, if Scan didn't run). It also builds a sanitized resource
    summary (allowlisted settings, documented defaults, values restricted

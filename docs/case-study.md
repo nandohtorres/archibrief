@@ -1,6 +1,6 @@
 # ArchiBrief engineering case study
 
-> **2026-11-16 update:** The first accuracy batch reduced wrong claims and unsafe fixes in R1, but recall fell. New deterministic checks and a default-off verifier are local candidates, not measured improvements. See [current evidence, decisions and next gates](current-status.md); earlier results below retain their original scope.
+> **2026-11-16 update:** The first accuracy repairs reduced wrong claims and unsafe fixes in R1, but recall fell. Five deterministic rules shipped next (PR #69) and are not yet re-measured; the independent verifier is not live yet. See [current status](current-status.md). Earlier results below keep their original scope.
 
 ArchiBrief is an independent portfolio project that reviews an AWS Terraform
 slice against a workload brief. Its output serves two readers: the engineer

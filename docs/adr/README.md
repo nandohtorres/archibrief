@@ -1,6 +1,6 @@
 # ArchiBrief — Architecture Decision Records
 
-> **Current implementation status:** [2026-11-16 checkpoint](../current-status.md). ADR-0062 shipped in #67; ADR-0061 remains a proposal with incomplete P2 acceptance. The additional verification check remains off and is still a local candidate.
+> **Status, 2026-11-16:** ADR-0062 (Stakeholder Brief) shipped in #67. ADR-0061 is built but not live yet. See [current status](../current-status.md).
 
 One short, atomic file per real decision — Context / Decision /
 Consequences / Status, following the standard ADR format (Michael
@@ -81,5 +81,4 @@ File names are `NNNN-title.md`; ADRs reference each other as `ADR-NNNN`.
 | [ADR-0060](0060-rules-for-transport-encryption-nat-and-dead-letter-retention.md) | Rules for database TLS off, a single NAT gateway and a dead-letter queue that expires failures early; Trivy AWS-0047 trusted for outdated load balancer TLS | Accepted, extends 0048 |
 | [ADR-0061](0061-small-workload-accuracy-pilot.md) | Small-workload accuracy pilot: at most 50 resource declarations per root, counted before any paid call; unreadable modules give a labeled partial review; non-AWS resources counted as not analyzed; baseline against answer keys, then a bounded second AI pass that checks each finding | Proposed (direction accepted 2026-11-10) |
 | [ADR-0062](0062-stakeholder-brief.md) | Stakeholder Brief: severity-first rows with Risk / Work proposed / Helps prevent / Still exposed; farm analogies only for supported rule concerns; commitment tiers ($ Light, $$ Moderate, $$$ Major, Needs scoping) instead of prices; dollar amounts filtered from the view, chat answers and downloads (raw saved data kept); reviewer corrections beside the finding | Accepted (shipped 2026-11-16, PR #67), supersedes 0051 presentation |
-
-| [0063](0063-bounded-finding-verification.md) | Bounded default-off verification experiment; shared cost/time/output limits; citation integrity and semantic support | Local preview (2026-11-16), evaluation required |
+| [ADR-0063](0063-bounded-finding-verification.md) | Bounded independent verification of model findings; shared cost/time/output limits; citation integrity and semantic support; ships switched off | Accepted (built; switched off until evaluated) |
