@@ -25,8 +25,18 @@ test.describe("fixture/demo critical path (no live API)", () => {
     await page.getByRole("button", { name: "Accept shown default" }).click();
     await page.getByRole("button", { name: "Start fixture review" }).click();
 
+    await expect(page.locator("#live-progress-heading")).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "Review progress" })).toBeVisible();
+    await expect(
+      page.getByText("Sample preview. No upload or AI review is running."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Building a reproducible evidence ledger" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("The review keeps running.", { exact: false })).toHaveCount(0);
+
     // The fixture progress animation auto-advances every 650ms through
-    // 7 stages (archibrief-app.tsx) before switching to the report
+    // real stage identifiers before switching to the report
     // screen - no real work happens, this just exercises that the
     // state machine itself reaches "report".
     await expect(page.locator("#report-heading")).toBeVisible({ timeout: 15_000 });

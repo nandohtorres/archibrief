@@ -110,7 +110,7 @@ one line.
 
 Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo reviews without an account.
 
-![Opening a demo review: landing, demo cards, report, architecture diagram, reviewer note, guided report and chat](docs/screenshots/demo.gif)
+![Opening a demo review: landing, demo cards, report, architecture diagram, reviewer note, Stakeholder Brief and chat](docs/screenshots/demo.gif)
 
 | | |
 |---|---|
@@ -118,8 +118,8 @@ Live at **[archibrief.dev](https://archibrief.dev)**: open any of the three demo
 | **Landing.** Know what's wrong with your AWS design, and why it matters. | **Real demos.** Three reviews of real public Terraform, checked by hand. |
 | ![Architecture diagram drawn from the code](docs/screenshots/03-diagram.png) | ![A finding with a reviewer note](docs/screenshots/04-reviewer-note.png) |
 | **Diagram.** Drawn from the code without a model; each finding sits on the resource it names. | **Evidence.** Each finding shows its evidence, confidence and source; the hand check's note marks one the model got wrong. |
-| ![Historical guided report screenshot, before the Stakeholder Brief redesign](docs/screenshots/05-stakeholder.png) | ![Report chat with cited answers](docs/screenshots/06-chat.png) |
-| **Historical guided report.** This screenshot predates #67. The current Stakeholder Brief uses Risk, Work proposed, Helps prevent and Still exposed, with commitment tiers instead of price estimates. | **Chat.** Answers cite this review's findings or AWS guidance. |
+| ![Stakeholder Brief with a reviewer correction](docs/screenshots/05-stakeholder.png) | ![Report chat with cited answers](docs/screenshots/06-chat.png) |
+| **Stakeholder Brief.** The same findings in plain language: Risk, Work proposed, Helps prevent and Still exposed, with commitment tiers instead of price estimates. | **Chat.** Answers cite this review's findings or AWS guidance. Runs on Claude Sonnet 4.6 on Amazon Bedrock. |
 | ![Phone layout, dark theme](docs/screenshots/07-phone.png) | |
 | **Phone, dark theme.** | |
 

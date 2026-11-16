@@ -3,6 +3,27 @@
     "4c93e0fb-6304-4d22-9aa0-966623888c6d",
     "ade46b43-d232-4874-aee0-631426150e03"
   ],
+  "analysis_coverage": {
+    "detail_omitted_items": 0,
+    "domains": [
+      "placement",
+      "routing",
+      "retention",
+      "backup_selection",
+      "entry_paths"
+    ],
+    "emitted_bytes": 38741,
+    "facts_emitted": 114,
+    "incomplete_resources": 0,
+    "omitted_items": 0,
+    "omitted_resources": 0,
+    "placement_only_resources": 0,
+    "runtime_verified": false,
+    "scope": "submitted_configuration_only",
+    "token_count": "not_measured",
+    "truncated": false,
+    "version": "terraform-observations@2026-10-23"
+  },
   "edges": [
     {
       "from": "aws_ssm_parameter.services/bucket-access-logs/bucket_access_logs",
@@ -19,6 +40,7 @@
   "nodes": [
     {
       "details": [
+        "Region: us-east-1",
         "backup selection"
       ],
       "findings": [
@@ -91,6 +113,7 @@
     },
     {
       "details": [
+        "Region: us-east-1",
         "vpc security group ingress rule"
       ],
       "findings": [],
@@ -103,6 +126,7 @@
     },
     {
       "details": [
+        "Region: us-east-1",
         "vpc security group egress rule"
       ],
       "findings": [],
@@ -115,6 +139,7 @@
     },
     {
       "details": [
+        "Region: us-east-1",
         "vpc security group ingress rule"
       ],
       "findings": [
@@ -128,7 +153,9 @@
       "type": "aws_security_group"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-east-1"
+      ],
       "findings": [
         "c89a5c02-0b75-407b-b71c-fd379e931602"
       ],
@@ -140,7 +167,9 @@
       "type": "aws_security_group"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-east-1"
+      ],
       "findings": [
         "c89a5c02-0b75-407b-b71c-fd379e931602"
       ],
@@ -162,7 +191,9 @@
       "type": "aws_ssm_parameter"
     },
     {
-      "details": [],
+      "details": [
+        "Region: us-east-1"
+      ],
       "findings": [],
       "id": "aws_vpc_endpoint.services/020-vpc-network/s3",
       "label": "vpc endpoint",
@@ -211,5 +242,9 @@
   ],
   "review_id": "8d46136d-e14f-4010-aaa4-e2bf0408b06d",
   "truncated": false,
+  "unplaced_scopes": {
+    "4c93e0fb-6304-4d22-9aa0-966623888c6d": "unresolved-or-design",
+    "ade46b43-d232-4874-aee0-631426150e03": "unresolved-or-design"
+  },
   "version": 1
 }

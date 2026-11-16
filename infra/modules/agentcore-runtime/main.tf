@@ -204,6 +204,7 @@ resource "aws_bedrockagentcore_agent_runtime" "review" {
     ARCHIBRIEF_VECTOR_INDEX         = var.vector_index_name
     ARCHIBRIEF_REASONING_MODEL_ID   = var.reasoning_model_id
     ARCHIBRIEF_REASONING_MAX_TOKENS = tostring(var.reasoning_max_tokens)
+    ARCHIBRIEF_VERIFY_FINDINGS      = var.verify_findings ? "true" : "false"
     AWS_REGION                      = data.aws_region.current.name
     # AgentCore caches the ZIP it read at creation and does not re-read the
     # S3 key when its content changes, so a new upload alone runs stale
