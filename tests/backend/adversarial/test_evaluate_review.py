@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.agent.nodes.retrieve import MAX_RETRIEVAL_CALLS
+from backend.lambdas.rule_engine.handler import RULE_VERSION
 from tests.backend.adversarial import evaluate_review as runner
 from tests.backend.agent.nodes.test_reason import _chunk, _valid_finding_item
 
@@ -155,7 +156,7 @@ def test_integrated_fake_service_run_retains_failed_and_successful_cases(
     assert len(searches) // 2 >= 2
     assert delivered["audit_persisted"] is False
     assert (
-        delivered["audit_entry"]["deterministicRuleVersion"] == "rule_engine@2026-11-15b"
+        delivered["audit_entry"]["deterministicRuleVersion"] == RULE_VERSION
     )
     assert delivered["report"]["analysis_scope"]
     assert delivered["semantic_verdict"] == "not_scored"

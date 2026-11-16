@@ -137,3 +137,41 @@ every review must name the concrete failure it prevents.
 **Why it matters:** this is the scope trade-off made on evidence: a tool
 that is right about 50 resources is more useful than one that is vague
 about 150.
+
+## 8. Explaining risk without prices, and shipping in slices (November 15 to 16)
+
+The stakeholder view had shown dollar figures since October (ADR-0051). They
+were sourced, but they were list prices for one region at a guessed size,
+and a budget holder could easily read them as quotes. ADR-0062 replaced them
+with the **Stakeholder Brief**: findings ordered by severity, each with the
+risk, the work proposed, what the work helps prevent and what stays exposed,
+and a commitment label ($ Light to $$$ Major, or Needs scoping) instead of a
+price. Wording says only what the submitted files show. Dollar amounts are
+filtered out of the view, chat answers and downloads.
+
+Two AI assistants built in parallel: one wrote the brief, the other the
+accuracy repairs and request budgeting (P2). A review of both found the
+combined version wasn't deployment-ready, because P2 still needed an
+administrator-enabled token check. Rather than hold the finished brief
+back, the owner split the release: the brief, a theme fix (saved dark mode
+now applies before the first paint, which also fixed a contrast test) and
+a phone layout fix shipped alone as PR #67, after an independent review by
+the other assistant.
+
+The rollout had one useful surprise. The Terraform plan showed 14 changes
+where five were expected. Before applying, each extra one was checked: seven
+were functions with identical code whose live packages had been built with
+Windows line endings, two were IAM policies listed only because they name
+those functions, and one was a missing local file. The apply went ahead
+backend first, because merging deploys the frontend with no further
+approval, and the final plan showed no drift.
+
+**Why it matters:** shipping the finished half kept it from waiting on the
+unfinished half, and reading the plan line by line instead of trusting the
+count is what made applying a 14-change plan safe.
+
+Next is the accuracy work, measured with a fixed scorecard: the baseline is
+5.2 wrong claims and 1.0 unsafe fix per review, with every Critical and High
+issue caught, at about $0.15 and 48 seconds a review. Each round reruns the
+same development cases, adds new cases kept from the agent tuning the rules,
+and runs the live version alongside the candidate on the same day.

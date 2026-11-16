@@ -58,7 +58,7 @@ from backend.shared.trivy_checks import (
     TRUSTED_CHECKS,
 )
 
-RULE_VERSION = "rule_engine@2026-11-15b"
+RULE_VERSION = "rule_engine@2026-11-16a"
 
 ADMIN_PORTS = {22, 3389}
 SENSITIVE_PORTS = {22, 3389, 3306, 5432, 1433, 6379, 9200, 27017}
@@ -1228,7 +1228,213 @@ def rule_sqs_dlq_retention(parsed: dict, review_id: str) -> list[Finding]:
     return findings
 
 
+# --- Narrow declared-configuration checks ------------------------------------
+
+
+def _declared_route_path(kind: str, body: dict, parsed: dict) -> str | None:
+    if kind == "aws_apigatewayv2_route":
+        route = resolve(body.get("route_key"), parsed, module_of(body))
+        if isinstance(route, str) and "${" not in route:
+            return route.split(" ", 1)[-1]
+        return None
+    # REST methods refer to API resources rather than carrying their path.
+    key = _referenced_key(body.get("resource_id"), body, parsed, "aws_api_gateway_resource")
+    resource_id = resolve(body.get("resource_id"), parsed, module_of(body))
+    if isinstance(resource_id, str) and re.fullmatch(
+        r"\$\{aws_api_gateway_rest_api\.[A-Za-z0-9_-]+\.root_resource_id\}", resource_id
+    ):
+        return "/"
+    parts = []
+    seen = set()
+    resources = dict(_resources(parsed, "aws_api_gateway_resource"))
+    while key and key not in seen and len(seen) < 16:
+        seen.add(key)
+        resource = resources.get(key, {})
+        part = resolve(resource.get("path_part"), parsed, module_of(resource))
+        if not isinstance(part, str) or "${" in part:
+            return None
+        parts.append(part)
+        parent = resource.get("parent_id")
+        key = _referenced_key(parent, resource, parsed, "aws_api_gateway_resource")
+        if not key:
+            if isinstance(parent, str) and re.fullmatch(
+                r"\$\{aws_api_gateway_rest_api\.[A-Za-z0-9_-]+\.root_resource_id\}", parent
+            ):
+                return "/" + "/".join(reversed(parts))
+            return None
+    return None
+
+
+@concern("api_route_no_authorization")
+def rule_api_route_no_authorization(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    for kind, field in (
+        ("aws_apigatewayv2_route", "authorization_type"),
+        ("aws_api_gateway_method", "authorization"),
+    ):
+        for key, body in _resources(parsed, kind):
+            if resolve(body.get(field), parsed, module_of(body)) != "NONE":
+                continue
+            path = _declared_route_path(kind, body, parsed)
+            if path is None or path.rstrip("/").lower() in {
+                "/health",
+                "/healthz",
+                "/status",
+                "/ready",
+                "/readyz",
+                "/live",
+                "/livez",
+            }:
+                continue
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.EXPOSURE,
+                    f"API route '{display_name(key)}' declares no API Gateway authorization",
+                    f'resource "{kind}" "{display_name(key)}" declares {field} = "NONE"',
+                    "API Gateway does not require an authorizer on this route. Backend checks, "
+                    "API keys and network controls may still restrict access.",
+                    "Confirm this route is meant to be public; otherwise configure appropriate "
+                    "authorization and test both authorized and unauthorized requests.",
+                    ["AWS Well-Architected: Security Pillar"],
+                )
+            )
+    return findings
+
+
+@concern("messaging_public_publish")
+def rule_messaging_public_publish(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    for kind, action in (
+        ("aws_sqs_queue_policy", "sqs:sendmessage"),
+        ("aws_sns_topic_policy", "sns:publish"),
+    ):
+        for key, body in _resources(parsed, kind):
+            statements = policy_statements(body.get("policy"), parsed, module_of(body)) or []
+            if not any(
+                statement.get("Effect") == "Allow"
+                and _is_public_principal(statement.get("Principal"))
+                and not statement.get("Condition")
+                and any(str(a).lower() in {action, "*"} for a in _as_list(statement.get("Action")))
+                for statement in statements
+            ):
+                continue
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.EXPOSURE,
+                    f"Messaging policy '{display_name(key)}' allows public-principal publishing",
+                    f'resource "{kind}" "{display_name(key)}" allows {action} or * '
+                    'to Principal "*" without a condition',
+                    "The shown statement permits anyone to submit messages for matching requests; "
+                    "explicit denies and other effective controls can still restrict access.",
+                    "Confirm whether public publishing is intended. Restrict publishers to trusted "
+                    "identities or service sources and test the resulting access.",
+                    ["AWS Well-Architected: Security Pillar"],
+                )
+            )
+    return findings
+
+
+@concern("iam_administrator_access_attachment")
+def rule_iam_administrator_attachment(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    for target in ("user", "group", "role"):
+        kind = f"aws_iam_{target}_policy_attachment"
+        for key, body in _resources(parsed, kind):
+            arn = resolve(body.get("policy_arn"), parsed, module_of(body))
+            if not isinstance(arn, str) or not re.fullmatch(
+                r"arn:aws(?:-us-gov|-cn)?:iam::aws:policy/AdministratorAccess", arn
+            ):
+                continue
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.IAM,
+                    f"IAM {target} attachment '{display_name(key)}' attaches AdministratorAccess",
+                    f'resource "{kind}" "{display_name(key)}" attaches the AWS-managed AdministratorAccess policy',
+                    "This policy grants broad administrative permissions. Effective access also "
+                    "depends on permissions boundaries, organization policies and explicit denies.",
+                    "Confirm the administrative need and replace with scoped permissions where "
+                    "possible; test required operations before removing access.",
+                    ["AWS Well-Architected: Security Pillar"],
+                )
+            )
+    return findings
+
+
+@concern("cloudfront_plain_http")
+def rule_cloudfront_plain_http(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    for key, body in _resources(parsed, "aws_cloudfront_distribution"):
+        behaviors = _as_list(body.get("default_cache_behavior")) + _as_list(
+            body.get("ordered_cache_behavior")
+        )
+        if not any(
+            isinstance(b, dict)
+            and resolve(b.get("viewer_protocol_policy"), parsed, module_of(body)) == "allow-all"
+            for b in behaviors
+        ):
+            continue
+        findings.append(
+            _finding(
+                review_id,
+                FindingCategory.ENCRYPTION,
+                f"CloudFront distribution '{display_name(key)}' allows plain HTTP in a cache behavior",
+                f'resource "aws_cloudfront_distribution" "{display_name(key)}" declares viewer_protocol_policy = "allow-all"',
+                "The declared behavior accepts unencrypted viewer requests. Actual traffic may use "
+                "HTTPS, but this setting does not enforce it.",
+                "Confirm client compatibility, then use redirect-to-https or https-only on the "
+                "affected behavior and test viewer requests.",
+                ["AWS Well-Architected: Security Pillar"],
+            )
+        )
+    return findings
+
+
+@concern("database_literal_password")
+def rule_database_literal_password(parsed: dict, review_id: str) -> list[Finding]:
+    findings = []
+    for kind in ("aws_db_instance", "aws_rds_cluster"):
+        for key, body in _resources(parsed, kind):
+            if (
+                resolve(body.get("manage_master_user_password"), parsed, module_of(body))
+                is not False
+                and "manage_master_user_password" in body
+            ):
+                continue
+            # Inspect syntax, not resolved defaults: references are outside this narrow rule.
+            if not any(
+                isinstance(body.get(field), str)
+                and body[field].strip()
+                and not re.search(
+                    r"\$\{|%\{|^(?:var|local|data|random_password|module)\.", body[field]
+                )
+                for field in ("password", "master_password")
+            ):
+                continue
+            findings.append(
+                _finding(
+                    review_id,
+                    FindingCategory.IAM,
+                    f"Database '{display_name(key)}' declares a literal password in its configuration",
+                    f'resource "{kind}" "{display_name(key)}" contains a nonempty literal password field; value withheld',
+                    "A credential stored directly in configuration can be exposed through source "
+                    "access or copied files. This check does not establish who can read them.",
+                    "Use managed credentials or an approved secret source. If this is a real "
+                    "credential, rotate it and review source history and state access.",
+                    ["AWS Well-Architected: Security Pillar"],
+                )
+            )
+    return findings
+
+
 ALL_RULES: list[Callable[[dict, str], list[Finding]]] = [
+    rule_api_route_no_authorization,
+    rule_messaging_public_publish,
+    rule_iam_administrator_attachment,
+    rule_cloudfront_plain_http,
+    rule_database_literal_password,
     rule_s3_public_access_block,
     rule_s3_encryption,
     rule_s3_versioning,

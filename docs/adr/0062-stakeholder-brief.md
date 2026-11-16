@@ -1,6 +1,7 @@
 # ADR 0062: The Stakeholder Brief Explains Work, Not Prices
 
-**Status:** Proposed (2026-11-15). Supersedes the presentation in ADR-0051
+**Status:** Accepted. Proposed 2026-11-15; shipped 2026-11-16 in PR #67
+(live at `8c90443`), released on its own ahead of the accuracy work. Supersedes the presentation in ADR-0051
 (prices, budget summary, cost of not fixing). ADR-0051's price table and
 recipes stay in code until the P1 schema work removes them.
 
@@ -69,3 +70,7 @@ it prevents and what stays exposed, in that order.
   and the frontend applies the same rules (`money-policy.ts`, shared test
   cases with `backend/shared/money_policy.py`) to old saved answers,
   the view and both downloads. Stored answers are not changed.
+- `get_review` still returns raw finding fields, and the filter matches
+  dollar patterns only (a bare `$` plus a whole number in code is kept as a
+  likely positional variable). It removes prices from what readers see; it
+  is not a guarantee that no amount can ever appear.

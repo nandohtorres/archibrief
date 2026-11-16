@@ -89,6 +89,68 @@ export interface BriefEntry {
 // checks can emit. tests/frontend/stakeholder-brief.test.ts reads the
 // backend catalogs and fails if one is missing here.
 export const BRIEF_ENTRIES: Record<string, BriefEntry> = {
+  api_route_no_authorization: {
+    title: "An API route has no gateway authorization check",
+    analogy: null,
+    scene: null,
+    risk: "The plans explicitly set authorization to NONE on this route. The application or network may still check access; this does not prove private data is public.",
+    work: "Confirm this route is meant to be public. Otherwise add the right access check and test allowed and blocked requests.",
+    prevents: "Requests using this route without the intended gateway authorization check.",
+    stillExposed: "Application flaws, stolen credentials and access allowed by other routes.",
+    tier: "needs-scoping",
+    biggerIf: "the change affects existing clients, publishers or access that the service needs.",
+    principle: "Least privilege",
+  },
+  messaging_public_publish: {
+    title: "A messaging policy allows anyone to send messages",
+    analogy: null,
+    scene: null,
+    risk: "The plans allow anyone to send to a queue or publish to a topic without a policy condition. Other effective controls may still block requests.",
+    work: "Confirm whether public sending is intended. Limit publishers to trusted identities or service sources and test the change.",
+    prevents: "Untrusted messages accepted through this public permission.",
+    stillExposed: "Bad messages from trusted publishers and permissions granted elsewhere.",
+    tier: "needs-scoping",
+    biggerIf: "the change affects existing clients, publishers or access that the service needs.",
+    principle: "Least privilege",
+  },
+  iam_administrator_access_attachment: {
+    title: "An identity is assigned the broad AdministratorAccess policy",
+    analogy: null,
+    scene: null,
+    risk: "The plans attach an AWS policy granting broad administrative permissions. Boundaries, organization policies and explicit denies may limit effective access.",
+    work: "Confirm why administrative access is needed. Replace it with narrower permissions where possible, testing required work before removing access.",
+    prevents: "Operations allowed only by unnecessary administrative permissions.",
+    stillExposed: "Misuse of permissions that remain and access granted through other identities.",
+    tier: "needs-scoping",
+    biggerIf: "the change affects existing clients, publishers or access that the service needs.",
+    principle: "Least privilege",
+  },
+  cloudfront_plain_http: {
+    title: "A website delivery setting accepts unencrypted connections",
+    analogy: null,
+    scene: null,
+    risk: "A CloudFront behavior in the plans allows plain HTTP. Visitors may already use HTTPS, but this setting does not require it.",
+    work: "Check client compatibility, then redirect affected requests to HTTPS or require HTTPS and test the change.",
+    prevents: "Unencrypted viewer connections accepted by the affected behavior.",
+    stillExposed: "Application attacks and the separate connection from CloudFront to its origin.",
+    tier: "needs-scoping",
+    biggerIf: "the change affects existing clients, publishers or access that the service needs.",
+    principle: "Confidentiality",
+  },
+  database_literal_password: {
+    title: "A database password is written directly in the plans",
+    analogy: null,
+    scene: null,
+    risk: "A database password field contains a literal value. If it is a real credential, people with access to these files or copies could learn it. The value is withheld here.",
+    work: "Use managed credentials or an approved secret source. Rotate a real exposed credential and check access to source history and state.",
+    prevents: "Future direct storage of this credential in the configuration.",
+    stillExposed:
+      "Copies already made, old credentials until rotated, and access to state or the secret source.",
+    tier: "needs-scoping",
+    biggerIf: "the change affects existing clients, publishers or access that the service needs.",
+    principle: "Confidentiality",
+  },
+
   s3_public_access: {
     title: "The plans don't show all of a storage bucket's public-access blocks turned on",
     analogy:

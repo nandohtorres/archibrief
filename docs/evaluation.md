@@ -127,6 +127,33 @@ What the three show so far:
 - **A brief is an attack surface even when it isn't an attack.** Guardrails
   passed test 2's brief because it was polite; the model then followed it.
 
+## Small-workload baseline (P1, 2026-11-14 to 15)
+
+Twelve reviews on the live site, owner-submitted, against answer keys written
+before any run (ADR-0061). Cases are synthetic Terraform of at most 50
+declarations, with Critical/High issues to find and safe configurations that
+must not be reported. Scored by hand: a *false claim* is a finding the
+configuration doesn't support; an *unsafe fix* is a remediation that would
+break the stated workload.
+
+| Rules version | Reviews | Critical/High caught | All-severity recall | False claims per review | Unsafe fixes per review | Cost per review (median) | Model time (median) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 2026-10-30 | 5 | 29/31 | 92.5% | 6.4 | 1.2 | $0.151 | 58 s |
+| 2026-11-14 (live since PR #66) | 5 | 31/31 | 97.5% | 5.2 | 1.0 | $0.149 | 48 s |
+
+Recall on these cases is at its ceiling; the weakness is wrong claims and
+unsafe fixes, which is what the next accuracy work targets. Limits: costs are
+settled estimates rather than measured usage; repeated cases (T1 and T2 were
+each run twice) are not independent samples; the only held-out case has now
+been seen, so it no longer counts as held out.
+
+How later rounds are compared: the same development cases every round, new
+held-out cases written by someone other than the agent tuning the rules and
+kept from it until scoring, the live version run on the same cases the same
+day as a control, results per review, and a spending cap approved before the
+first submission. A version counts as better only if it beats that day's
+control.
+
 ## Model traps: what was actually measured
 
 The current [`TRAP_BRIEFS`](../backend/agent/trap_eval.py) has 10 briefs;
